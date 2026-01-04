@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DivertScan">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="DivertScan™ - AI-Powered LEED v5 MRp2 Construction Waste Carbon Auditor">
+    
+    <title>DivertScan™ | LEED v5 Carbon Auditor</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2310b981' rx='20' width='100' height='100'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>♻</text></svg>">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-500: #64748b;
+            --slate-400: #94a3b8;
+            --emerald-500: #10b981;
+            --emerald-400: #34d399;
+            --emerald-600: #059669;
+            --sky-500: #0ea5e9;
+            --sky-400: #38bdf8;
+            --sky-600: #0284c7;
+            --amber-500: #f59e0b;
+            --red-500: #ef4444;
+        }
+        
+        html {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--slate-900) 0%, var(--slate-800) 50%, var(--slate-900) 100%);
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            min-height: 100vh;
+            padding: 16px;
+            padding-bottom: 32px;
+            color: white;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .logo-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--emerald-500);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .logo-icon svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+        
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .tagline {
+            color: var(--emerald-400);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .project-name {
+            color: var(--slate-400);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        /* Action Buttons */
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .action-btn {
+            border: none;
+            font-family: inherit;
+            font-weight: 700;
+            padding: 20px 16px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .action-btn:active {
+            transform: scale(0.96);
+        }
+        
+        .action-btn.scan {
+            background: linear-gradient(135deg, var(--emerald-500) 0%, var(--emerald-600) 100%);
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+            color: white;
+        }
+        
+        .action-btn.scan:hover {
+            background: linear-gradient(135deg, var(--emerald-400) 0%, var(--emerald-500) 100%);
+        }
+        
+        .action-btn.generate {
+            background: linear-gradient(135deg, var(--sky-500) 0%, var(--sky-600) 100%);
+            box-shadow: 0 8px 24px rgba(14, 165, 233, 0.3);
+            color: white;
+        }
+        
+        .action-btn.generate:hover {
+            background: linear-gradient(135deg, var(--sky-400) 0%, var(--sky-500) 100%);
+        }
+        
+        .action-btn svg {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .action-btn span {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .action-btn.loading svg {
+            animation: pulse 1s infinite;
+        }
+        
+        .action-btn.loading.generate svg {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Cards */
+        .card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        
+        .card-title {
+            color: var(--slate-400);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        /* Gauge */
+        .gauge-container {
+            display: flex;
+            justify-content: center;
+        }
+        
+        .gauge {
+            position: relative;
+            width: 192px;
+            height: 192px;
+        }
+        
+        .gauge svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        
+        .gauge-bg {
+            fill: none;
+            stroke: var(--slate-700);
+            stroke-width: 12;
+        }
+        
+        .gauge-progress {
+            fill: none;
+            stroke: url(#gaugeGradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1.5s ease-out;
+        }
+        
+        .gauge-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .gauge-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+        
+        .gauge-unit {
+            color: var(--slate-400);
+            font-size: 14px;
+        }
+        
+        .gauge-percent {
+            color: var(--emerald-400);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        /* Hotspots */
+        .hotspot-item {
+            margin-bottom: 16px;
+        }
+        
+        .hotspot-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .hotspot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .hotspot-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .hotspot-percent {
+            color: var(--slate-400);
+            font-size: 14px;
+        }
+        
+        .hotspot-bar-bg {
+            height: 12px;
+            background: var(--slate-700);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .hotspot-bar {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 1.2s ease-out;
+        }
+        
+        .hotspot-bar.concrete { background: var(--slate-500); }
+        .hotspot-bar.aluminum { background: var(--sky-500); }
+        .hotspot-bar.steel { background: var(--amber-500); }
+        
+        .hotspot-mt {
+            text-align: right;
+            margin-top: 4px;
+            color: var(--slate-500);
+            font-size: 11px;
+        }
+        
+        /* Audit */
+        .audit-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .audit-header svg {
+            width: 16px;
+            height: 16px;
+            color: var(--emerald-400);
+        }
+        
+        .audit-title {
+            color: var(--slate-400);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .verified-badge {
+            margin-left: auto;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--emerald-400);
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 10px;
+            border-radius: 100px;
+        }
+        
+        .hash-box {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid rgba(51, 65, 85, 0.3);
+        }
+        
+        .hash-label {
+            color: var(--slate-500);
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        
+        .hash-value {
+            color: var(--sky-400);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            line-height: 1.6;
+        }
+        
+        .audit-footer {
+            color: var(--slate-600);
+            font-size: 11px;
+            text-align: center;
+            margin-top: 12px;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--slate-600);
+            font-size: 11px;
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--slate-800);
+            border: 1px solid var(--slate-700);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-color: var(--emerald-500);
+            color: var(--emerald-400);
+        }
+        
+        .toast.info {
+            border-color: var(--sky-500);
+            color: var(--sky-400);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo-row">
+            <div class="logo-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+            </div>
+            <h1 class="logo-text">DivertScan™</h1>
+        </div>
+        <p class="tagline">LEED v5 MRp2 Carbon Auditor</p>
+        <p class="project-name" id="projectName">Evergreen Commercial Tower</p>
+    </header>
+
+    <!-- Action Buttons -->
+    <div class="button-grid">
+        <button class="action-btn scan" id="scanBtn" onclick="handleScan()">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+            </svg>
+            <span id="scanText">Scan Scale Ticket</span>
+        </button>
+        
+        <button class="action-btn generate" id="generateBtn" onclick="handleGenerate()">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span id="generateText">Generate LEED PDF</span>
+        </button>
+    </div>
+
+    <!-- Carbon Gauge -->
+    <div class="card">
+        <h2 class="card-title">Total Embodied Carbon</h2>
+        <div class="gauge-container">
+            <div class="gauge">
+                <svg viewBox="0 0 200 200">
+                    <defs>
+                        <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#10b981"/>
+                            <stop offset="50%" stop-color="#f59e0b"/>
+                            <stop offset="100%" stop-color="#ef4444"/>
+                        </linearGradient>
+                    </defs>
+                    <circle class="gauge-bg" cx="100" cy="100" r="85"/>
+                    <circle class="gauge-progress" id="gaugeProgress" cx="100" cy="100" r="85"/>
+                </svg>
+                <div class="gauge-center">
+                    <span class="gauge-value" id="gaugeValue">0</span>
+                    <span class="gauge-unit">MT CO₂e</span>
+                    <span class="gauge-percent" id="gaugePercent">0% of target</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hotspots -->
+    <div class="card">
+        <h2 class="card-title">Carbon Hotspots</h2>
+        
+        <div class="hotspot-item">
+            <div class="hotspot-header">
+                <span class="hotspot-name">Concrete-Mix-A</span>
+                <span class="hotspot-percent">43.95%</span>
+            </div>
+            <div class="hotspot-bar-bg">
+                <div class="hotspot-bar concrete" id="bar1" style="width: 0%"></div>
+            </div>
+            <div class="hotspot-mt">2,249.75 MT</div>
+        </div>
+        
+        <div class="hotspot-item">
+            <div class="hotspot-header">
+                <span class="hotspot-name">Aluminum</span>
+                <span class="hotspot-percent">33.21%</span>
+            </div>
+            <div class="hotspot-bar-bg">
+                <div class="hotspot-bar aluminum" id="bar2" style="width: 0%"></div>
+            </div>
+            <div class="hotspot-mt">1,700.18 MT</div>
+        </div>
+        
+        <div class="hotspot-item">
+            <div class="hotspot-header">
+                <span class="hotspot-name">Steel</span>
+                <span class="hotspot-percent">19.53%</span>
+            </div>
+            <div class="hotspot-bar-bg">
+                <div class="hotspot-bar steel" id="bar3" style="width: 0%"></div>
+            </div>
+            <div class="hotspot-mt">999.84 MT</div>
+        </div>
+    </div>
+
+    <!-- Audit Verification -->
+    <div class="card" style="padding: 20px;">
+        <div class="audit-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <span class="audit-title">Audit Verification</span>
+            <span class="verified-badge">VERIFIED</span>
+        </div>
+        <div class="hash-box">
+            <p class="hash-label">SHA-256 Hash</p>
+            <p class="hash-value" id="hashValue">a432559da62482f4e1aff6d372c1c596...</p>
+        </div>
+        <p class="audit-footer">Tamper-proof audit trail for LEED v5 compliance</p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>DivertScan™ © Dalmex Recycling LLC</p>
+    </footer>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Project Data
+        const projectData = {
+            name: "Evergreen Commercial Tower",
+            totalCO2e: 5119.50,
+            maxCO2e: 8000,
+            auditHash: "a432559da62482f4e1aff6d372c1c596",
+            hotspots: [
+                { material: "Concrete-Mix-A", percentage: 43.95, co2e: 2249.75 },
+                { material: "Aluminum", percentage: 33.21, co2e: 1700.18 },
+                { material: "Steel", percentage: 19.53, co2e: 999.84 }
+            ]
+        };
+
+        // Gauge calculations
+        const circumference = 2 * Math.PI * 85;
+        const gaugePercentage = Math.min((projectData.totalCO2e / projectData.maxCO2e) * 100, 100);
+        const strokeDashoffset = circumference - (gaugePercentage / 100) * circumference;
+
+        // Initialize gauge
+        const gaugeProgress = document.getElementById('gaugeProgress');
+        gaugeProgress.style.strokeDasharray = circumference;
+        gaugeProgress.style.strokeDashoffset = circumference;
+
+        // Animate on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                // Animate gauge
+                gaugeProgress.style.strokeDashoffset = strokeDashoffset;
+                
+                // Animate counter
+                animateValue('gaugeValue', 0, projectData.totalCO2e, 1500);
+                
+                // Update percent
+                document.getElementById('gaugePercent').textContent = `${gaugePercentage.toFixed(1)}% of target`;
+                
+                // Animate bars
+                setTimeout(() => {
+                    document.getElementById('bar1').style.width = '43.95%';
+                }, 200);
+                setTimeout(() => {
+                    document.getElementById('bar2').style.width = '33.21%';
+                }, 400);
+                setTimeout(() => {
+                    document.getElementById('bar3').style.width = '19.53%';
+                }, 600);
+            }, 300);
+        });
+
+        // Animate number counter
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            const range = end - start;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                const current = start + (range * easeOut);
+                obj.textContent = current.toLocaleString('en-US', { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                });
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            requestAnimationFrame(update);
+        }
+
+        // Button handlers
+        function handleScan() {
+            const btn = document.getElementById('scanBtn');
+            const text = document.getElementById('scanText');
+            
+            if (btn.classList.contains('loading')) return;
+            
+            btn.classList.add('loading');
+            text.textContent = 'Scanning...';
+            
+            setTimeout(() => {
+                btn.classList.remove('loading');
+                text.textContent = 'Scan Scale Ticket';
+                showToast('Scale ticket scanned successfully', 'success');
+            }, 2000);
+        }
+
+        function handleGenerate() {
+            const btn = document.getElementById('generateBtn');
+            const text = document.getElementById('generateText');
+            
+            if (btn.classList.contains('loading')) return;
+            
+            btn.classList.add('loading');
+            text.textContent = 'Generating...';
+            
+            setTimeout(() => {
+                btn.classList.remove('loading');
+                text.textContent = 'Generate LEED PDF';
+                showToast('LEED PDF generated', 'info');
+            }, 2500);
+        }
+
+        // Toast notification
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>
