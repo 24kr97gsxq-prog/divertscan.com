@@ -1,82 +1,564 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DivertScan Test</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>DivertScan™</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-body{font-family:sans-serif;background:#0f172a;color:#f1f5f9;padding:20px;text-align:center}
-.box{background:#1e293b;border-radius:12px;padding:20px;margin:20px auto;max-width:400px}
-.btn{background:#10b981;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:16px;cursor:pointer;margin:10px}
-#status{margin:20px 0;padding:15px;border-radius:8px;background:#334155}
-.error{background:#7f1d1d !important;color:#fecaca}
-.success{background:#14532d !important;color:#bbf7d0}
+:root{--s9:#0f172a;--s8:#1e293b;--s7:#334155;--s6:#475569;--s4:#94a3b8;--s3:#cbd5e1;--s1:#f1f5f9;--em:#10b981;--em6:#059669;--em4:#34d399;--rd:#ef4444}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--s9);color:var(--s1);min-height:100vh}
+.hidden{display:none!important}
+.mt-4{margin-top:16px}
+.btn{padding:12px 20px;border-radius:10px;font-size:15px;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-primary{background:linear-gradient(135deg,var(--em),var(--em6));color:#fff}
+.btn-secondary{background:var(--s7);color:var(--s1)}
+.btn-danger{background:var(--rd);color:#fff}
+.btn-sm{padding:8px 14px;font-size:13px}
+.btn-block{width:100%}
+.btn-group{display:flex;gap:8px;margin-top:16px}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:13px;font-weight:600;color:var(--s3);margin-bottom:6px}
+.form-input,.form-select{width:100%;padding:12px;background:var(--s7);border:1px solid var(--s6);border-radius:10px;color:var(--s1);font-size:15px}
+.form-input:focus{outline:none;border-color:var(--em)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--s8);border-radius:16px;padding:20px;margin-bottom:16px;border:1px solid var(--s7)}
+.card-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.card-subtitle{font-size:14px;color:var(--s4)}
+.nav{background:var(--s8);padding:16px 20px;border-bottom:1px solid var(--s7);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.nav-brand{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px}
+.nav-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--em),var(--em6));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.main-content{flex:1;padding:20px;padding-bottom:100px;max-width:800px;margin:0 auto;width:100%}
+.page{display:none}.page.active{display:block}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+.stat-card{background:var(--s7);border-radius:12px;padding:16px;text-align:center}
+.stat-value{font-size:28px;font-weight:800;color:var(--em4)}
+.stat-label{font-size:12px;color:var(--s4);margin-top:4px}
+.quick-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
+.action-card{background:var(--s7);border-radius:14px;padding:20px;text-align:center;cursor:pointer;border:2px solid transparent}
+.action-card:hover{border-color:var(--em)}
+.action-icon{width:50px;height:50px;margin:0 auto 12px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.action-title{font-size:14px;font-weight:700}
+.action-desc{font-size:12px;color:var(--s4);margin-top:4px}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--s8);border-top:1px solid var(--s7);display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom));z-index:100}
+.nav-item{display:flex;flex-direction:column;align-items:center;padding:8px 12px;color:var(--s4);cursor:pointer;background:none;border:none}
+.nav-item.active{color:var(--em4)}
+.nav-item svg{width:24px;height:24px;margin-bottom:4px}
+.nav-item span{font-size:11px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal-backdrop.active{display:flex}
+.modal{background:var(--s8);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;border:1px solid var(--s7)}
+.modal-header{padding:20px;border-bottom:1px solid var(--s7);display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-size:18px;font-weight:700}
+.modal-close{background:var(--s7);border:none;width:32px;height:32px;border-radius:8px;color:var(--s3);cursor:pointer;font-size:18px}
+.modal-body{padding:20px}
+.ticket-item{background:var(--s7);border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer}
+.ticket-item:hover{background:var(--s6)}
+.ticket-badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-success{background:rgba(16,185,129,.2);color:var(--em4)}
+.badge-warning{background:rgba(245,158,11,.2);color:#f59e0b}
+.badge-danger{background:rgba(239,68,68,.2);color:var(--rd)}
+.project-selector{background:var(--s7);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:16px}
+.project-selector:hover{background:var(--s6)}
+.project-item{background:var(--s7);border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer}
+.project-item:hover{background:var(--s6)}
+.project-item.selected{border:2px solid var(--em)}
+.upload-zone{border:2px dashed var(--s6);border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer}
+.upload-zone:hover{border-color:var(--em)}
+.material-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.material-item{background:var(--s6);border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center}
+.material-input{width:60px;padding:6px;background:var(--s7);border:1px solid var(--s6);border-radius:6px;color:#fff;text-align:right}
+.report-menu{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.report-card{background:var(--s7);border-radius:12px;padding:16px;cursor:pointer;text-align:center}
+.report-card:hover{background:var(--s6)}
+.report-card-icon{width:48px;height:48px;margin:0 auto 10px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.report-card-title{font-size:14px;font-weight:600}
+.report-card-desc{font-size:11px;color:var(--s4);margin-top:4px}
+.toast-container{position:fixed;top:80px;right:20px;z-index:2000}
+.toast{background:var(--s7);border-radius:10px;padding:14px 18px;margin-bottom:10px;border-left:4px solid var(--em);animation:slideIn .3s}
+.toast.error{border-left-color:var(--rd)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.auth-container{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-box{background:var(--s8);border-radius:20px;padding:32px;width:100%;max-width:400px;border:1px solid var(--s7)}
+.auth-logo{width:60px;height:60px;background:linear-gradient(135deg,var(--em),var(--em6));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 20px}
+.auth-title{font-size:24px;font-weight:800;text-align:center;margin-bottom:8px}
+.auth-subtitle{text-align:center;color:var(--s4);margin-bottom:24px}
+.auth-toggle{text-align:center;margin-top:20px;color:var(--s4)}
+.auth-toggle a{color:var(--em4);cursor:pointer}
+.empty-state{text-align:center;padding:40px;color:var(--s4)}
+.image-preview{width:100%;max-height:200px;object-fit:contain;border-radius:12px;margin-top:12px}
+.analysis-result{background:var(--s7);border-radius:12px;padding:16px;margin-top:16px}
+.app-container{display:flex;flex-direction:column;min-height:100vh}
+.db-error{background:#7f1d1d;border:1px solid #dc2626;border-radius:12px;padding:16px;margin:16px 0;color:#fecaca;font-size:13px}
 </style>
 </head>
 <body>
-<div class="box">
-<h1>♻️ DivertScan</h1>
-<h2>Connection Test</h2>
-<div id="status">Loading...</div>
-<button class="btn" onclick="testConnection()">Test Again</button>
+<div class="auth-container" id="authContainer">
+<div class="auth-box">
+<div class="auth-logo">♻️</div>
+<h1 class="auth-title">DivertScan™</h1>
+<p class="auth-subtitle">LEED Waste Diversion Platform</p>
+<div id="loginForm">
+<div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="loginEmail" placeholder="you@company.com"></div>
+<div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="loginPassword" placeholder="••••••••"></div>
+<button class="btn btn-primary btn-block" onclick="login()">Sign In</button>
+<p class="auth-toggle">No account? <a onclick="showSignup()">Sign up</a></p>
+</div>
+<div id="signupForm" class="hidden">
+<div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="signupName"></div>
+<div class="form-group"><label class="form-label">Company</label><input type="text" class="form-input" id="signupCompany"></div>
+<div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="signupEmail"></div>
+<div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="signupPassword"></div>
+<button class="btn btn-primary btn-block" onclick="signup()">Create Account</button>
+<p class="auth-toggle">Have account? <a onclick="showLogin()">Sign in</a></p>
+</div>
+<div id="authError" class="db-error hidden"></div>
+</div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<div class="app-container hidden" id="appContainer">
+<nav class="nav"><div class="nav-brand"><div class="nav-logo">♻️</div><span>DivertScan™</span></div><div id="userAvatar" style="width:36px;height:36px;background:var(--s6);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer">👤</div></nav>
+<main class="main-content">
+<div id="dbErrorBanner" class="db-error hidden"></div>
+<div class="page active" id="page-dashboard">
+<div class="project-selector" onclick="openModal('projectSelectModal')"><div><div class="project-name" id="currentProjectName">Select Project</div><div class="project-meta" id="currentProjectMeta">Tap to choose</div></div><span>▼</span></div>
+<div class="card"><div class="card-title">📊 Summary</div>
+<div class="stats-grid">
+<div class="stat-card"><div class="stat-value" id="statTotalTons">0</div><div class="stat-label">Total Tons</div></div>
+<div class="stat-card"><div class="stat-value" id="statDiversionRate">0%</div><div class="stat-label">Diversion</div></div>
+<div class="stat-card"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
+<div class="stat-card"><div class="stat-value" id="statLEEDStatus">--</div><div class="stat-label">LEED</div></div>
+</div></div>
+<div class="quick-actions">
+<div class="action-card" onclick="openModal('scanModal')"><div class="action-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">📷</div><div class="action-title">Scan Ticket</div><div class="action-desc">OCR scale ticket</div></div>
+<div class="action-card" onclick="openModal('debrisModal')"><div class="action-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">🔬</div><div class="action-title">Analyze Debris</div><div class="action-desc">AI material scan</div></div>
+<div class="action-card" onclick="openNewTicket()"><div class="action-icon" style="background:linear-gradient(135deg,#10b981,#059669)">✏️</div><div class="action-title">Manual Entry</div><div class="action-desc">Add ticket data</div></div>
+<div class="action-card" onclick="navTo('tickets')"><div class="action-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">📋</div><div class="action-title">View Tickets</div><div class="action-desc">Browse records</div></div>
+</div></div>
+<div class="page" id="page-tickets"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:20px;font-weight:800">📋 Tickets</h2><button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Add</button></div><div id="ticketsList"></div></div>
+<div class="page" id="page-reports"><h2 style="font-size:20px;font-weight:800;margin-bottom:20px">📊 Reports</h2>
+<div class="card"><div class="card-title">Export</div><div class="report-menu mt-4">
+<div class="report-card" onclick="exportExcel()"><div class="report-card-icon" style="background:linear-gradient(135deg,#10b981,#059669)">📊</div><div class="report-card-title">Excel</div><div class="report-card-desc">Dalmex format</div></div>
+<div class="report-card" onclick="exportLEED()"><div class="report-card-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">🏆</div><div class="report-card-title">LEED PDF</div><div class="report-card-desc">MRp2/MRc5</div></div>
+<div class="report-card" onclick="exportAuditor()"><div class="report-card-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">📁</div><div class="report-card-title">Auditor</div><div class="report-card-desc">Full docs</div></div>
+<div class="report-card" onclick="exportCSV()"><div class="report-card-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">📋</div><div class="report-card-title">CSV</div><div class="report-card-desc">Raw data</div></div>
+</div></div></div>
+<div class="page" id="page-projects"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:20px;font-weight:800">🏗️ Projects</h2><button class="btn btn-primary btn-sm" onclick="openModal('newProjectModal')">+ New</button></div><div id="projectsList"></div></div>
+<div class="page" id="page-settings"><h2 style="font-size:20px;font-weight:800;margin-bottom:20px">⚙️ Settings</h2>
+<div class="card"><div class="card-title">🔑 OpenAI API Key</div><div class="form-group mt-4"><input type="password" class="form-input" id="settingsApiKey" placeholder="sk-..."></div><button class="btn btn-primary" onclick="localStorage.setItem('openai_api_key',document.getElementById('settingsApiKey').value);toast('Saved')">Save</button></div>
+<div class="card"><div class="card-title">🏢 Organization</div><div class="form-group mt-4"><input type="text" class="form-input" id="settingsCompany" placeholder="Company name"></div><button class="btn btn-primary" onclick="localStorage.setItem('company_name',document.getElementById('settingsCompany').value);toast('Saved')">Save</button></div>
+<div class="card"><div class="card-title">👤 Account</div><div class="card-subtitle" id="accountEmail"></div><button class="btn btn-danger mt-4" onclick="logout()">Sign Out</button></div></div>
+</main>
+<nav class="bottom-nav">
+<button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>Home</span></button>
+<button class="nav-item" data-page="tickets" onclick="navTo('tickets')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><span>Tickets</span></button>
+<button class="nav-item" data-page="reports" onclick="navTo('reports')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><span>Reports</span></button>
+<button class="nav-item" data-page="projects" onclick="navTo('projects')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg><span>Projects</span></button>
+<button class="nav-item" data-page="settings" onclick="navTo('settings')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg><span>Settings</span></button>
+</nav></div>
+
+<!-- Modals -->
+<div class="modal-backdrop" id="projectSelectModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">Select Project</h3><button class="modal-close" onclick="closeModal('projectSelectModal')">✕</button></div><div class="modal-body" id="projectSelectList"></div></div></div>
+<div class="modal-backdrop" id="newProjectModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">New Project</h3><button class="modal-close" onclick="closeModal('newProjectModal')">✕</button></div><div class="modal-body">
+<div class="form-group"><label class="form-label">Project Name *</label><input type="text" class="form-input" id="newProjectName"></div>
+<div class="form-group"><label class="form-label">Client</label><input type="text" class="form-input" id="newProjectClient"></div>
+<div class="form-group"><label class="form-label">Location</label><input type="text" class="form-input" id="newProjectLocation"></div>
+<button class="btn btn-primary btn-block" onclick="saveProject()">Create</button></div></div></div>
+<div class="modal-backdrop" id="ticketModal"><div class="modal" style="max-width:600px"><div class="modal-header"><h3 class="modal-title" id="ticketModalTitle">New Ticket</h3><button class="modal-close" onclick="closeModal('ticketModal')">✕</button></div><div class="modal-body">
+<div class="form-row"><div class="form-group"><label class="form-label">Ticket #</label><input type="text" class="form-input" id="ticketNumber"></div><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="ticketDate"></div></div>
+<div class="form-row"><div class="form-group"><label class="form-label">Gross (lbs)</label><input type="number" class="form-input" id="ticketGross" oninput="calcNet()"></div><div class="form-group"><label class="form-label">Tare (lbs)</label><input type="number" class="form-input" id="ticketTare" oninput="calcNet()"></div></div>
+<div class="form-group"><label class="form-label">Net (lbs)</label><input type="number" class="form-input" id="ticketNet" readonly style="background:var(--s6)"></div>
+<div class="card-title mt-4">Materials (%)</div>
+<div class="material-grid">
+<div class="material-item"><span>🪵 Wood</span><input type="number" class="material-input" id="matWood" value="0"></div>
+<div class="material-item"><span>🧱 Gypsum</span><input type="number" class="material-input" id="matGypsum" value="0"></div>
+<div class="material-item"><span>♻️ Plastic</span><input type="number" class="material-input" id="matPlastic" value="0"></div>
+<div class="material-item"><span>📦 OCC</span><input type="number" class="material-input" id="matOCC" value="0"></div>
+<div class="material-item"><span>🔩 Metal</span><input type="number" class="material-input" id="matMetal" value="0"></div>
+<div class="material-item"><span>🪨 Concrete</span><input type="number" class="material-input" id="matConcrete" value="0"></div>
+<div class="material-item"><span>🧱 Block</span><input type="number" class="material-input" id="matBlock" value="0"></div>
+<div class="material-item"><span>🗑️ Landfill</span><input type="number" class="material-input" id="matLandfill" value="0"></div>
+</div>
+<p style="font-size:12px;color:var(--s4);margin-top:8px">Must = 100%</p>
+<div class="btn-group"><button class="btn btn-secondary" onclick="closeModal('ticketModal')">Cancel</button><button class="btn btn-primary" onclick="saveTicket()" style="flex:1">Save</button></div></div></div></div>
+<div class="modal-backdrop" id="scanModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">📷 Scan Ticket</h3><button class="modal-close" onclick="closeScanModal()">✕</button></div><div class="modal-body">
+<div class="upload-zone" onclick="document.getElementById('scanFileInput').click()"><div style="font-size:40px;margin-bottom:12px">📷</div><div style="font-weight:600">Tap to capture</div><input type="file" id="scanFileInput" accept="image/*" capture="environment" style="display:none" onchange="scanTicket(event)"></div>
+<img id="scanPreview" class="image-preview hidden"><div id="scanResult" class="analysis-result hidden"></div><div id="scanLoading" class="hidden" style="text-align:center;margin-top:16px"><p>Analyzing...</p></div></div></div></div>
+<div class="modal-backdrop" id="debrisModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">🔬 Analyze Debris</h3><button class="modal-close" onclick="closeDebrisModal()">✕</button></div><div class="modal-body">
+<div class="upload-zone" onclick="document.getElementById('debrisFileInput').click()"><div style="font-size:40px;margin-bottom:12px">🔬</div><div style="font-weight:600">Tap to capture</div><input type="file" id="debrisFileInput" accept="image/*" capture="environment" style="display:none" onchange="analyzeDebris(event)"></div>
+<img id="debrisPreview" class="image-preview hidden"><div id="debrisResult" class="analysis-result hidden"></div><div id="debrisLoading" class="hidden" style="text-align:center;margin-top:16px"><p>Analyzing...</p></div></div></div></div>
+<div class="toast-container" id="toastContainer"></div>
+
 <script>
 const SUPABASE_URL='https://tkcrnfgnspvaefrqfxgr.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrY3JuZmduc3B2YWVmcnFmeGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4NjI0NjIsImV4cCI6MjA1MzQzODQ2Mn0.L0dKz9T_ynvmKAFIoEsdHZ2o3KSqgmLFGNBCEaFBfJY';
+let supabase,currentUser=null,currentProject=null,projects=[],tickets=[],editingTicketId=null;
 
-function log(msg, isError) {
-    const el = document.getElementById('status');
-    el.innerHTML += '<br>' + msg;
-    if(isError) el.className = 'error';
+// No loading spinner - go straight to auth
+document.addEventListener('DOMContentLoaded', async function() {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    try {
+        const {data:{session}} = await supabase.auth.getSession();
+        if(session && session.user) {
+            currentUser = session.user;
+            showApp();
+        }
+    } catch(e) {
+        console.error('Session check failed:', e);
+    }
+});
+
+function showApp() {
+    document.getElementById('authContainer').classList.add('hidden');
+    document.getElementById('appContainer').classList.remove('hidden');
+    document.getElementById('accountEmail').textContent = currentUser.email;
+    document.getElementById('userAvatar').textContent = currentUser.email[0].toUpperCase();
+    document.getElementById('ticketDate').value = new Date().toISOString().split('T')[0];
+    const key = localStorage.getItem('openai_api_key');
+    if(key) document.getElementById('settingsApiKey').value = key;
+    const co = localStorage.getItem('company_name');
+    if(co) document.getElementById('settingsCompany').value = co;
+    loadProjects();
 }
 
-async function testConnection() {
-    const el = document.getElementById('status');
-    el.innerHTML = 'Starting test...';
-    el.className = '';
-    
+function showSignup() { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('signupForm').classList.remove('hidden'); }
+function showLogin() { document.getElementById('signupForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
+
+async function login() {
+    const email = document.getElementById('loginEmail').value;
+    const pass = document.getElementById('loginPassword').value;
+    if(!email || !pass) { toast('Enter email and password', 'error'); return; }
     try {
-        log('1. Creating Supabase client...');
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        log('✓ Client created');
-        
-        log('2. Testing auth.getSession()...');
-        const {data, error} = await supabase.auth.getSession();
-        
-        if(error) {
-            log('✗ Auth error: ' + error.message, true);
-            return;
-        }
-        
-        log('✓ Auth works!');
-        
-        if(data.session) {
-            log('✓ User logged in: ' + data.session.user.email);
-        } else {
-            log('→ No active session (not logged in)');
-        }
-        
-        log('3. Testing database connection...');
-        const {data: projects, error: dbError} = await supabase.from('projects').select('count');
-        
-        if(dbError) {
-            log('✗ DB error: ' + dbError.message, true);
-            return;
-        }
-        
-        log('✓ Database connected!');
-        el.className = 'success';
-        log('<br><b>ALL TESTS PASSED</b>');
-        
+        const {data, error} = await supabase.auth.signInWithPassword({email, password: pass});
+        if(error) throw error;
+        currentUser = data.user;
+        showApp();
+        toast('Welcome!');
     } catch(e) {
-        log('✗ Exception: ' + e.message, true);
+        document.getElementById('authError').textContent = e.message;
+        document.getElementById('authError').classList.remove('hidden');
     }
 }
 
-// Run on load
-testConnection();
+async function signup() {
+    const name = document.getElementById('signupName').value;
+    const company = document.getElementById('signupCompany').value;
+    const email = document.getElementById('signupEmail').value;
+    const pass = document.getElementById('signupPassword').value;
+    if(!email || !pass) { toast('Fill required fields', 'error'); return; }
+    try {
+        const {data, error} = await supabase.auth.signUp({email, password: pass, options: {data: {full_name: name, company}}});
+        if(error) throw error;
+        if(data.user) {
+            currentUser = data.user;
+            localStorage.setItem('company_name', company);
+            showApp();
+            toast('Account created!');
+        }
+    } catch(e) {
+        document.getElementById('authError').textContent = e.message;
+        document.getElementById('authError').classList.remove('hidden');
+    }
+}
+
+async function logout() {
+    await supabase.auth.signOut();
+    currentUser = null;
+    currentProject = null;
+    projects = [];
+    tickets = [];
+    document.getElementById('appContainer').classList.add('hidden');
+    document.getElementById('authContainer').classList.remove('hidden');
+}
+
+function navTo(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    document.querySelector('.nav-item[data-page="' + page + '"]').classList.add('active');
+    if(page === 'tickets') loadTickets();
+    if(page === 'projects') renderProjects();
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+async function loadProjects() {
+    try {
+        const {data, error} = await supabase.from('projects').select('*').eq('user_id', currentUser.id).order('created_at', {ascending: false});
+        if(error) throw error;
+        projects = data || [];
+        renderProjects();
+        renderProjectSelector();
+        const pid = localStorage.getItem('current_project_id');
+        if(pid) { const p = projects.find(x => x.id === pid); if(p) selectProject(p); }
+    } catch(e) {
+        console.error('Load projects error:', e);
+        document.getElementById('dbErrorBanner').textContent = 'Database error: ' + e.message + '. Please run the SQL schema in Supabase.';
+        document.getElementById('dbErrorBanner').classList.remove('hidden');
+    }
+}
+
+function renderProjects() {
+    const c = document.getElementById('projectsList');
+    if(!projects.length) { c.innerHTML = '<div class="empty-state"><p>No projects yet</p><button class="btn btn-primary mt-4" onclick="openModal(\'newProjectModal\')">Create Project</button></div>'; return; }
+    c.innerHTML = projects.map(p => '<div class="project-item ' + (currentProject?.id === p.id ? 'selected' : '') + '" onclick="selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')"><div style="font-weight:700">' + esc(p.name) + '</div><div style="font-size:13px;color:var(--s4)">' + esc(p.client || '') + '</div></div>').join('');
+}
+
+function renderProjectSelector() {
+    const c = document.getElementById('projectSelectList');
+    if(!projects.length) { c.innerHTML = '<div class="empty-state"><p>No projects</p><button class="btn btn-primary mt-4" onclick="closeModal(\'projectSelectModal\');openModal(\'newProjectModal\')">Create</button></div>'; return; }
+    c.innerHTML = projects.map(p => '<div class="project-item" onclick="selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ');closeModal(\'projectSelectModal\')"><div style="font-weight:700">' + esc(p.name) + '</div></div>').join('');
+}
+
+function selectProject(p) {
+    if(typeof p === 'string') p = JSON.parse(p);
+    currentProject = p;
+    localStorage.setItem('current_project_id', p.id);
+    document.getElementById('currentProjectName').textContent = p.name;
+    document.getElementById('currentProjectMeta').textContent = p.client || '';
+    loadTickets();
+    renderProjects();
+}
+
+async function saveProject() {
+    const name = document.getElementById('newProjectName').value;
+    const client = document.getElementById('newProjectClient').value;
+    const loc = document.getElementById('newProjectLocation').value;
+    if(!name) { toast('Enter name', 'error'); return; }
+    try {
+        const {data, error} = await supabase.from('projects').insert({user_id: currentUser.id, name, client, location: loc}).select().single();
+        if(error) throw error;
+        projects.unshift(data);
+        selectProject(data);
+        closeModal('newProjectModal');
+        toast('Created!');
+        document.getElementById('newProjectName').value = '';
+        document.getElementById('newProjectClient').value = '';
+        document.getElementById('newProjectLocation').value = '';
+    } catch(e) { toast(e.message, 'error'); }
+}
+
+async function loadTickets() {
+    if(!currentProject) { tickets = []; renderTickets(); updateStats(); return; }
+    try {
+        const {data, error} = await supabase.from('tickets').select('*').eq('project_id', currentProject.id).order('ticket_date', {ascending: false});
+        if(error) throw error;
+        tickets = data || [];
+        renderTickets();
+        updateStats();
+    } catch(e) { console.error('Load tickets error:', e); }
+}
+
+function renderTickets() {
+    const c = document.getElementById('ticketsList');
+    if(!tickets.length) { c.innerHTML = '<div class="empty-state"><p>' + (currentProject ? 'No tickets' : 'Select project') + '</p></div>'; return; }
+    c.innerHTML = tickets.map(t => {
+        const dr = 100 - (t.landfill_pct || 0), tons = (t.net_weight || 0) / 2000;
+        const bc = dr >= 75 ? 'badge-success' : dr >= 50 ? 'badge-warning' : 'badge-danger';
+        return '<div class="ticket-item" onclick="editTicket(\'' + t.id + '\')"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><div><div style="font-weight:700">#' + esc(t.ticket_number) + '</div><div style="font-size:12px;color:var(--s4)">' + fmtDate(t.ticket_date) + '</div></div><span class="ticket-badge ' + bc + '">' + dr.toFixed(0) + '%</span></div><div style="font-size:13px;color:var(--s4)">' + tons.toFixed(2) + ' tons</div></div>';
+    }).join('');
+}
+
+function updateStats() {
+    if(!tickets.length) { document.getElementById('statTotalTons').textContent = '0'; document.getElementById('statDiversionRate').textContent = '0%'; document.getElementById('statTickets').textContent = '0'; document.getElementById('statLEEDStatus').textContent = '--'; return; }
+    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
+    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
+    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
+    document.getElementById('statTotalTons').textContent = totalTons.toFixed(1);
+    document.getElementById('statDiversionRate').textContent = avg.toFixed(0) + '%';
+    document.getElementById('statTickets').textContent = tickets.length;
+    document.getElementById('statLEEDStatus').textContent = avg >= 75 ? '✅ 2pts' : avg >= 50 ? '⚠️ 1pt' : '❌ <50%';
+}
+
+function openNewTicket() {
+    if(!currentProject) { toast('Select project first', 'error'); return; }
+    editingTicketId = null;
+    document.getElementById('ticketModalTitle').textContent = 'New Ticket';
+    document.getElementById('ticketNumber').value = '';
+    document.getElementById('ticketDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('ticketGross').value = '';
+    document.getElementById('ticketTare').value = '';
+    document.getElementById('ticketNet').value = '';
+    ['Wood', 'Gypsum', 'Plastic', 'OCC', 'Metal', 'Concrete', 'Block', 'Landfill'].forEach(m => document.getElementById('mat' + m).value = 0);
+    openModal('ticketModal');
+}
+
+function editTicket(id) {
+    const t = tickets.find(x => x.id === id); if(!t) return;
+    editingTicketId = id;
+    document.getElementById('ticketModalTitle').textContent = 'Edit #' + t.ticket_number;
+    document.getElementById('ticketNumber').value = t.ticket_number;
+    document.getElementById('ticketDate').value = t.ticket_date;
+    document.getElementById('ticketGross').value = t.gross_weight || '';
+    document.getElementById('ticketTare').value = t.tare_weight || '';
+    document.getElementById('ticketNet').value = t.net_weight || '';
+    document.getElementById('matWood').value = t.wood_pct || 0;
+    document.getElementById('matGypsum').value = t.gypsum_pct || 0;
+    document.getElementById('matPlastic').value = t.plastic_pct || 0;
+    document.getElementById('matOCC').value = t.occ_pct || 0;
+    document.getElementById('matMetal').value = t.metal_pct || 0;
+    document.getElementById('matConcrete').value = t.concrete_pct || 0;
+    document.getElementById('matBlock').value = t.block_pct || 0;
+    document.getElementById('matLandfill').value = t.landfill_pct || 0;
+    openModal('ticketModal');
+}
+
+function calcNet() { document.getElementById('ticketNet').value = (parseFloat(document.getElementById('ticketGross').value) || 0) - (parseFloat(document.getElementById('ticketTare').value) || 0); }
+
+async function saveTicket() {
+    const d = {
+        project_id: currentProject.id, user_id: currentUser.id,
+        ticket_number: document.getElementById('ticketNumber').value,
+        ticket_date: document.getElementById('ticketDate').value,
+        gross_weight: parseFloat(document.getElementById('ticketGross').value) || 0,
+        tare_weight: parseFloat(document.getElementById('ticketTare').value) || 0,
+        net_weight: parseFloat(document.getElementById('ticketNet').value) || 0,
+        wood_pct: parseFloat(document.getElementById('matWood').value) || 0,
+        gypsum_pct: parseFloat(document.getElementById('matGypsum').value) || 0,
+        plastic_pct: parseFloat(document.getElementById('matPlastic').value) || 0,
+        occ_pct: parseFloat(document.getElementById('matOCC').value) || 0,
+        metal_pct: parseFloat(document.getElementById('matMetal').value) || 0,
+        concrete_pct: parseFloat(document.getElementById('matConcrete').value) || 0,
+        block_pct: parseFloat(document.getElementById('matBlock').value) || 0,
+        landfill_pct: parseFloat(document.getElementById('matLandfill').value) || 0
+    };
+    if(!d.ticket_number || !d.ticket_date) { toast('Fill required fields', 'error'); return; }
+    const total = d.wood_pct + d.gypsum_pct + d.plastic_pct + d.occ_pct + d.metal_pct + d.concrete_pct + d.block_pct + d.landfill_pct;
+    if(Math.abs(total - 100) > 0.5) { toast('Must = 100% (now ' + total.toFixed(1) + '%)', 'error'); return; }
+    try {
+        if(editingTicketId) { await supabase.from('tickets').update(d).eq('id', editingTicketId); }
+        else { await supabase.from('tickets').insert(d); }
+        closeModal('ticketModal');
+        await loadTickets();
+        toast('Saved!');
+    } catch(e) { toast(e.message, 'error'); }
+}
+
+// OCR & AI
+async function scanTicket(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const key = localStorage.getItem('openai_api_key');
+    if(!key) { toast('Set API key in Settings', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = async ev => {
+        const img = ev.target.result;
+        document.getElementById('scanPreview').src = img;
+        document.getElementById('scanPreview').classList.remove('hidden');
+        document.getElementById('scanLoading').classList.remove('hidden');
+        document.getElementById('scanResult').classList.add('hidden');
+        try {
+            const r = await gptVision(img, 'ticket', key);
+            document.getElementById('scanLoading').classList.add('hidden');
+            document.getElementById('scanResult').classList.remove('hidden');
+            document.getElementById('scanResult').innerHTML = '<b>✅ Extracted:</b><br>Ticket: ' + (r.ticket_number || 'N/A') + '<br>Date: ' + (r.date || 'N/A') + '<br>Net: ' + (r.net_weight || 'N/A') + ' lbs<br><button class="btn btn-primary btn-block mt-4" onclick="useScan(' + JSON.stringify(r).replace(/"/g, '&quot;') + ')">Use Data</button>';
+        } catch(err) { toast(err.message, 'error'); document.getElementById('scanLoading').classList.add('hidden'); }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function analyzeDebris(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const key = localStorage.getItem('openai_api_key');
+    if(!key) { toast('Set API key in Settings', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = async ev => {
+        const img = ev.target.result;
+        document.getElementById('debrisPreview').src = img;
+        document.getElementById('debrisPreview').classList.remove('hidden');
+        document.getElementById('debrisLoading').classList.remove('hidden');
+        document.getElementById('debrisResult').classList.add('hidden');
+        try {
+            const r = await gptVision(img, 'debris', key);
+            document.getElementById('debrisLoading').classList.add('hidden');
+            document.getElementById('debrisResult').classList.remove('hidden');
+            const div = 100 - (r.landfill_pct || 0);
+            document.getElementById('debrisResult').innerHTML = '<b>🔬 Est. Diversion: ' + div + '%</b><br><button class="btn btn-primary btn-block mt-4" onclick="useDebris(' + JSON.stringify(r).replace(/"/g, '&quot;') + ')">Apply</button>';
+        } catch(err) { toast(err.message, 'error'); document.getElementById('debrisLoading').classList.add('hidden'); }
+    };
+    reader.readAsDataURL(file);
+}
+
+async function gptVision(img, type, key) {
+    const prompt = type === 'ticket' ? 'Extract:{ticket_number,date(YYYY-MM-DD),gross_weight,tare_weight,net_weight}. JSON only.' : 'Estimate:{wood_pct,gypsum_pct,plastic_pct,occ_pct,metal_pct,concrete_pct,block_pct,landfill_pct}. Sum=100. JSON only.';
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key},
+        body: JSON.stringify({model: 'gpt-4o', messages: [{role: 'user', content: [{type: 'text', text: prompt}, {type: 'image_url', image_url: {url: img}}]}], max_tokens: 500})
+    });
+    if(!res.ok) { const er = await res.json(); throw new Error(er.error?.message || 'API failed'); }
+    const data = await res.json(), content = data.choices[0].message.content, m = content.match(/\{[\s\S]*\}/);
+    if(m) return JSON.parse(m[0]);
+    throw new Error('Parse failed');
+}
+
+function useScan(d) { closeScanModal(); openNewTicket(); if(d.ticket_number) document.getElementById('ticketNumber').value = d.ticket_number; if(d.date) document.getElementById('ticketDate').value = d.date; if(d.gross_weight) document.getElementById('ticketGross').value = d.gross_weight; if(d.tare_weight) document.getElementById('ticketTare').value = d.tare_weight; if(d.net_weight) document.getElementById('ticketNet').value = d.net_weight; }
+function useDebris(d) { closeDebrisModal(); openNewTicket(); document.getElementById('matWood').value = d.wood_pct || 0; document.getElementById('matGypsum').value = d.gypsum_pct || 0; document.getElementById('matPlastic').value = d.plastic_pct || 0; document.getElementById('matOCC').value = d.occ_pct || 0; document.getElementById('matMetal').value = d.metal_pct || 0; document.getElementById('matConcrete').value = d.concrete_pct || 0; document.getElementById('matBlock').value = d.block_pct || 0; document.getElementById('matLandfill').value = d.landfill_pct || 0; }
+function closeScanModal() { closeModal('scanModal'); document.getElementById('scanPreview').classList.add('hidden'); document.getElementById('scanResult').classList.add('hidden'); document.getElementById('scanFileInput').value = ''; }
+function closeDebrisModal() { closeModal('debrisModal'); document.getElementById('debrisPreview').classList.add('hidden'); document.getElementById('debrisResult').classList.add('hidden'); document.getElementById('debrisFileInput').value = ''; }
+
+// Exports
+function exportExcel() {
+    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
+    const co = localStorage.getItem('company_name') || 'Company', wb = XLSX.utils.book_new();
+    const ws = [['Waste Diversion Report - ' + currentProject.name], ['Company: ' + co], ['Generated: ' + new Date().toLocaleDateString()], [], ['Date', 'Ticket', 'GVW', 'Tare', 'Net', 'Tons', 'Wood%', 'Gypsum%', 'Plastic%', 'OCC%', 'Metal%', 'Concrete%', 'Block%', 'Landfill%', 'Diversion%']];
+    tickets.forEach(t => { const tons = (t.net_weight || 0) / 2000, dp = 100 - (t.landfill_pct || 0); ws.push([t.ticket_date, t.ticket_number, t.gross_weight, t.tare_weight, t.net_weight, tons.toFixed(2), t.wood_pct, t.gypsum_pct, t.plastic_pct, t.occ_pct, t.metal_pct, t.concrete_pct, t.block_pct, t.landfill_pct, dp]); });
+    const sheet = XLSX.utils.aoa_to_sheet(ws);
+    XLSX.utils.book_append_sheet(wb, sheet, 'Diversion');
+    XLSX.writeFile(wb, 'DivertScan_' + currentProject.name.replace(/\s+/g, '_') + '.xlsx');
+    toast('Downloaded');
+}
+
+function exportCSV() {
+    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
+    const h = ['Date', 'Ticket', 'Gross', 'Tare', 'Net', 'Tons', 'Wood%', 'Gypsum%', 'Plastic%', 'OCC%', 'Metal%', 'Concrete%', 'Block%', 'Landfill%', 'Diversion%'];
+    const rows = tickets.map(t => [t.ticket_date, t.ticket_number, t.gross_weight, t.tare_weight, t.net_weight, ((t.net_weight || 0) / 2000).toFixed(2), t.wood_pct, t.gypsum_pct, t.plastic_pct, t.occ_pct, t.metal_pct, t.concrete_pct, t.block_pct, t.landfill_pct, 100 - (t.landfill_pct || 0)]);
+    const csv = [h.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], {type: 'text/csv'}), url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = 'DivertScan_' + currentProject.name.replace(/\s+/g, '_') + '.csv'; a.click();
+    toast('Exported');
+}
+
+function exportLEED() {
+    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
+    const {jsPDF} = window.jspdf, doc = new jsPDF();
+    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
+    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
+    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
+    doc.setFontSize(18); doc.setTextColor(16, 185, 129); doc.text('LEED MRp2/MRc5 Compliance Report', 20, 25);
+    doc.setFontSize(10); doc.setTextColor(100); doc.text('DivertScan™ | ' + new Date().toLocaleDateString(), 20, 32);
+    doc.setFontSize(12); doc.setTextColor(0); doc.text('Project: ' + currentProject.name, 20, 46);
+    doc.text('Total: ' + totalTons.toFixed(2) + ' tons', 20, 56);
+    doc.text('Diverted: ' + diverted.toFixed(2) + ' tons', 20, 62);
+    doc.text('Rate: ' + avg.toFixed(1) + '%', 20, 68);
+    const pts = avg >= 75 ? 2 : avg >= 50 ? 1 : 0;
+    doc.setFontSize(14); doc.text('LEED Points: ' + pts + ' of 2', 20, 80);
+    doc.save('LEED_Report_' + currentProject.name.replace(/\s+/g, '_') + '.pdf');
+    toast('Downloaded');
+}
+
+function exportAuditor() {
+    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
+    const {jsPDF} = window.jspdf, doc = new jsPDF();
+    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
+    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
+    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
+    doc.setFontSize(16); doc.text('LEED Auditor Package', 20, 20);
+    doc.setFontSize(10); doc.text('Project: ' + currentProject.name, 20, 35);
+    doc.text('Total C&D: ' + totalTons.toFixed(2) + ' tons', 20, 45);
+    doc.text('Diverted: ' + diverted.toFixed(2) + ' tons (' + avg.toFixed(1) + '%)', 20, 55);
+    doc.text('Status: ' + (avg >= 75 ? 'COMPLIANT' : 'BELOW TARGET'), 20, 65);
+    doc.save('Auditor_' + currentProject.name.replace(/\s+/g, '_') + '.pdf');
+    toast('Downloaded');
+}
+
+// Utils
+function toast(msg, type) { const t = document.createElement('div'); t.className = 'toast' + (type === 'error' ? ' error' : ''); t.textContent = msg; document.getElementById('toastContainer').appendChild(t); setTimeout(() => t.remove(), 3000); }
+function fmtDate(d) { if(!d) return ''; return new Date(d + 'T00:00:00').toLocaleDateString(); }
+function esc(t) { if(!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 </script>
 </body>
 </html>
