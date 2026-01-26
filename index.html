@@ -627,19 +627,29 @@
             body: JSON.stringify({
                 model: 'gpt-4o',
                 messages: [{role: 'user', content: [
-                    {type: 'text', text: 'Analyze this construction debris photo for a ' + containerSize + '-yard container. Estimate percentage breakdown. Return ONLY valid JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100,"confidence":0-100,"notes":"brief description"} Percentages MUST total 100.'},
+                    {type: 'text', text: 'You are analyzing construction/demolition debris for LEED waste diversion reporting. Look at this photo of a ' + containerSize + '-yard container and estimate the percentage breakdown of visible materials.\n\nYou MUST respond with ONLY a JSON object (no markdown, no explanation):\n{"wood":25,"gypsum":10,"plastic":5,"occ":15,"metal":5,"concrete":10,"block":10,"landfill":20,"confidence":75,"notes":"brief description"}\n\nCategories:\n- wood: lumber, pallets, plywood, OSB\n- gypsum: drywall, sheetrock\n- plastic: film, wrap, containers\n- occ: cardboard, paper\n- metal: steel, aluminum, copper\n- concrete: concrete pieces\n- block: CMU, cinder blocks, bricks\n- landfill: mixed waste, trash, non-recyclable\n\nPercentages MUST total exactly 100. Respond with JSON only.'},
                     {type: 'image_url', image_url: {url: imageData}}
                 ]}],
                 max_tokens: 500
             })
         }).then(function(r) { return r.json(); }).then(function(data) {
             document.getElementById('debrisAnalyzing').classList.add('hidden');
+            console.log('API Response:', data);
             if (data.error) { showToast('Analysis Error: ' + data.error.message, 'error'); document.getElementById('debrisScanButtons').classList.remove('hidden'); return; }
             var content = data.choices[0].message.content;
+            console.log('Content:', content);
+            // Remove markdown code blocks if present
+            content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
             var jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) { showToast('Could not parse response', 'error'); document.getElementById('debrisScanButtons').classList.remove('hidden'); return; }
-            analyzedDebrisData = JSON.parse(jsonMatch[0]);
-            displayDebrisAnalysis(analyzedDebrisData, containerSize);
+            if (!jsonMatch) { showToast('Could not parse: ' + content.substring(0,100), 'error'); document.getElementById('debrisScanButtons').classList.remove('hidden'); return; }
+            try {
+                analyzedDebrisData = JSON.parse(jsonMatch[0]);
+                console.log('Parsed data:', analyzedDebrisData);
+                displayDebrisAnalysis(analyzedDebrisData, containerSize);
+            } catch(e) {
+                showToast('JSON parse error: ' + e.message, 'error');
+                document.getElementById('debrisScanButtons').classList.remove('hidden');
+            }
         }).catch(function(err) { showToast('Analysis Error: ' + err.message, 'error'); document.getElementById('debrisAnalyzing').classList.add('hidden'); document.getElementById('debrisScanButtons').classList.remove('hidden'); });
     }
 
