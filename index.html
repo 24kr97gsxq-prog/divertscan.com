@@ -1,564 +1,1543 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>DivertScan™</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<style>
-:root{--s9:#0f172a;--s8:#1e293b;--s7:#334155;--s6:#475569;--s4:#94a3b8;--s3:#cbd5e1;--s1:#f1f5f9;--em:#10b981;--em6:#059669;--em4:#34d399;--rd:#ef4444}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--s9);color:var(--s1);min-height:100vh}
-.hidden{display:none!important}
-.mt-4{margin-top:16px}
-.btn{padding:12px 20px;border-radius:10px;font-size:15px;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.btn-primary{background:linear-gradient(135deg,var(--em),var(--em6));color:#fff}
-.btn-secondary{background:var(--s7);color:var(--s1)}
-.btn-danger{background:var(--rd);color:#fff}
-.btn-sm{padding:8px 14px;font-size:13px}
-.btn-block{width:100%}
-.btn-group{display:flex;gap:8px;margin-top:16px}
-.form-group{margin-bottom:16px}
-.form-label{display:block;font-size:13px;font-weight:600;color:var(--s3);margin-bottom:6px}
-.form-input,.form-select{width:100%;padding:12px;background:var(--s7);border:1px solid var(--s6);border-radius:10px;color:var(--s1);font-size:15px}
-.form-input:focus{outline:none;border-color:var(--em)}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.card{background:var(--s8);border-radius:16px;padding:20px;margin-bottom:16px;border:1px solid var(--s7)}
-.card-title{font-size:18px;font-weight:700;margin-bottom:4px}
-.card-subtitle{font-size:14px;color:var(--s4)}
-.nav{background:var(--s8);padding:16px 20px;border-bottom:1px solid var(--s7);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.nav-brand{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px}
-.nav-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--em),var(--em6));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
-.main-content{flex:1;padding:20px;padding-bottom:100px;max-width:800px;margin:0 auto;width:100%}
-.page{display:none}.page.active{display:block}
-.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
-.stat-card{background:var(--s7);border-radius:12px;padding:16px;text-align:center}
-.stat-value{font-size:28px;font-weight:800;color:var(--em4)}
-.stat-label{font-size:12px;color:var(--s4);margin-top:4px}
-.quick-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
-.action-card{background:var(--s7);border-radius:14px;padding:20px;text-align:center;cursor:pointer;border:2px solid transparent}
-.action-card:hover{border-color:var(--em)}
-.action-icon{width:50px;height:50px;margin:0 auto 12px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
-.action-title{font-size:14px;font-weight:700}
-.action-desc{font-size:12px;color:var(--s4);margin-top:4px}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--s8);border-top:1px solid var(--s7);display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom));z-index:100}
-.nav-item{display:flex;flex-direction:column;align-items:center;padding:8px 12px;color:var(--s4);cursor:pointer;background:none;border:none}
-.nav-item.active{color:var(--em4)}
-.nav-item svg{width:24px;height:24px;margin-bottom:4px}
-.nav-item span{font-size:11px}
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
-.modal-backdrop.active{display:flex}
-.modal{background:var(--s8);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;border:1px solid var(--s7)}
-.modal-header{padding:20px;border-bottom:1px solid var(--s7);display:flex;justify-content:space-between;align-items:center}
-.modal-title{font-size:18px;font-weight:700}
-.modal-close{background:var(--s7);border:none;width:32px;height:32px;border-radius:8px;color:var(--s3);cursor:pointer;font-size:18px}
-.modal-body{padding:20px}
-.ticket-item{background:var(--s7);border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer}
-.ticket-item:hover{background:var(--s6)}
-.ticket-badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
-.badge-success{background:rgba(16,185,129,.2);color:var(--em4)}
-.badge-warning{background:rgba(245,158,11,.2);color:#f59e0b}
-.badge-danger{background:rgba(239,68,68,.2);color:var(--rd)}
-.project-selector{background:var(--s7);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:16px}
-.project-selector:hover{background:var(--s6)}
-.project-item{background:var(--s7);border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer}
-.project-item:hover{background:var(--s6)}
-.project-item.selected{border:2px solid var(--em)}
-.upload-zone{border:2px dashed var(--s6);border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer}
-.upload-zone:hover{border-color:var(--em)}
-.material-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
-.material-item{background:var(--s6);border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center}
-.material-input{width:60px;padding:6px;background:var(--s7);border:1px solid var(--s6);border-radius:6px;color:#fff;text-align:right}
-.report-menu{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.report-card{background:var(--s7);border-radius:12px;padding:16px;cursor:pointer;text-align:center}
-.report-card:hover{background:var(--s6)}
-.report-card-icon{width:48px;height:48px;margin:0 auto 10px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
-.report-card-title{font-size:14px;font-weight:600}
-.report-card-desc{font-size:11px;color:var(--s4);margin-top:4px}
-.toast-container{position:fixed;top:80px;right:20px;z-index:2000}
-.toast{background:var(--s7);border-radius:10px;padding:14px 18px;margin-bottom:10px;border-left:4px solid var(--em);animation:slideIn .3s}
-.toast.error{border-left-color:var(--rd)}
-@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-.auth-container{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.auth-box{background:var(--s8);border-radius:20px;padding:32px;width:100%;max-width:400px;border:1px solid var(--s7)}
-.auth-logo{width:60px;height:60px;background:linear-gradient(135deg,var(--em),var(--em6));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 20px}
-.auth-title{font-size:24px;font-weight:800;text-align:center;margin-bottom:8px}
-.auth-subtitle{text-align:center;color:var(--s4);margin-bottom:24px}
-.auth-toggle{text-align:center;margin-top:20px;color:var(--s4)}
-.auth-toggle a{color:var(--em4);cursor:pointer}
-.empty-state{text-align:center;padding:40px;color:var(--s4)}
-.image-preview{width:100%;max-height:200px;object-fit:contain;border-radius:12px;margin-top:12px}
-.analysis-result{background:var(--s7);border-radius:12px;padding:16px;margin-top:16px}
-.app-container{display:flex;flex-direction:column;min-height:100vh}
-.db-error{background:#7f1d1d;border:1px solid #dc2626;border-radius:12px;padding:16px;margin:16px 0;color:#fecaca;font-size:13px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DivertScan™ | LEED Waste Diversion Platform</title>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♻️</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;
+            --slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-200:#e2e8f0;
+            --emerald-600:#059669;--emerald-500:#10b981;--emerald-400:#34d399;
+            --blue-600:#2563eb;--blue-500:#3b82f6;--purple-500:#8b5cf6;
+            --amber-500:#f59e0b;--red-500:#ef4444;--teal-500:#14b8a6;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--slate-900);color:var(--slate-200);min-height:100vh}
+        .hidden{display:none!important}
+        
+        /* Loading Screen */
+        .loading-screen{position:fixed;inset:0;background:var(--slate-900);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999}
+        .loading-logo{width:80px;height:80px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+        .loading-logo svg{width:48px;height:48px;color:white}
+        .loading-text{font-size:28px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:24px}
+        .loading-spinner{width:40px;height:40px;border:3px solid var(--slate-700);border-top-color:var(--emerald-500);border-radius:50%;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        
+        /* Auth Screen */
+        .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+        .auth-card{background:var(--slate-800);border-radius:16px;padding:32px;width:100%;max-width:400px;border:1px solid var(--slate-700)}
+        .auth-logo{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
+        .auth-logo-icon{width:48px;height:48px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:12px;display:flex;align-items:center;justify-content:center}
+        .auth-logo-icon svg{width:28px;height:28px;color:white}
+        .auth-logo-text{font-size:24px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .auth-tagline{text-align:center;color:var(--slate-400);font-size:13px;margin-bottom:24px}
+        .auth-title{text-align:center;font-size:20px;margin-bottom:20px}
+        .auth-error{background:rgba(239,68,68,0.1);border:1px solid var(--red-500);color:var(--red-500);padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;display:none}
+        .auth-switch{text-align:center;margin-top:20px;color:var(--slate-400);font-size:14px}
+        .auth-switch a{color:var(--emerald-400);cursor:pointer;text-decoration:none}
+        
+        /* Form Elements */
+        .form-group{margin-bottom:16px}
+        .form-label{display:block;font-size:13px;color:var(--slate-400);margin-bottom:6px}
+        .form-input{width:100%;padding:12px 14px;background:var(--slate-700);border:1px solid var(--slate-600);border-radius:8px;color:white;font-size:15px;outline:none;transition:border-color 0.2s}
+        .form-input:focus{border-color:var(--emerald-500)}
+        .form-input::placeholder{color:var(--slate-500)}
+        
+        /* Buttons */
+        .btn{padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all 0.2s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+        .btn-primary{background:linear-gradient(135deg,var(--emerald-600),var(--teal-500));color:white;width:100%}
+        .btn-primary:hover{opacity:0.9}
+        .btn-primary:active{transform:scale(0.98)}
+        .btn-secondary{background:var(--slate-700);color:var(--slate-200);border:1px solid var(--slate-600)}
+        .btn-danger{background:var(--red-500);color:white}
+        .btn-sm{padding:8px 14px;font-size:13px}
+        
+        /* Navigation */
+        .nav{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:12px 16px;position:sticky;top:0;z-index:100}
+        .nav-content{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+        .nav-brand{display:flex;align-items:center;gap:10px}
+        .nav-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:10px;display:flex;align-items:center;justify-content:center}
+        .nav-logo svg{width:22px;height:22px;color:white}
+        .nav-title{font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .nav-user{font-size:13px;color:var(--slate-400)}
+        .nav-signout{background:none;border:none;color:var(--emerald-400);cursor:pointer;font-size:13px;margin-left:12px}
+        
+        /* Project Bar */
+        .project-bar{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:10px 16px}
+        .project-bar-content{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px}
+        .project-selector{flex:1;padding:10px 12px;background:var(--slate-700);border:1px solid var(--slate-600);border-radius:8px;color:white;font-size:14px}
+        
+        /* Tabs */
+        .tabs{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:0 16px;overflow-x:auto}
+        .tabs-content{max-width:1200px;margin:0 auto;display:flex;gap:4px}
+        .tab{padding:14px 18px;background:none;border:none;color:var(--slate-400);font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+        .tab.active{color:var(--emerald-400);border-bottom-color:var(--emerald-400)}
+        
+        /* Main Content */
+        .main{max-width:1200px;margin:0 auto;padding:20px 16px}
+        .page{display:none}
+        .page.active{display:block}
+        
+        /* Dashboard */
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+        .stat-card{background:var(--slate-800);border-radius:12px;padding:16px;border:1px solid var(--slate-700)}
+        .stat-label{font-size:12px;color:var(--slate-400);margin-bottom:4px}
+        .stat-value{font-size:24px;font-weight:700;color:white}
+        .stat-value.green{color:var(--emerald-400)}
+        .stat-value.blue{color:var(--blue-500)}
+        .stat-value.purple{color:var(--purple-500)}
+        .stat-value.amber{color:var(--amber-500)}
+        
+        /* Cards */
+        .card{background:var(--slate-800);border-radius:12px;padding:20px;border:1px solid var(--slate-700);margin-bottom:16px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+        .card-title{font-size:16px;font-weight:600}
+        
+        /* Table */
+        .table-wrap{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th,td{padding:12px 10px;text-align:left;border-bottom:1px solid var(--slate-700)}
+        th{color:var(--slate-400);font-weight:500;font-size:11px;text-transform:uppercase}
+        tr:hover{background:var(--slate-700)}
+        
+        /* Modal */
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+        .modal-overlay.active{display:flex}
+        .modal{background:var(--slate-800);border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;border:1px solid var(--slate-700)}
+        .modal-header{padding:20px;border-bottom:1px solid var(--slate-700);display:flex;justify-content:space-between;align-items:center}
+        .modal-title{font-size:18px;font-weight:600}
+        .modal-close{background:none;border:none;color:var(--slate-400);font-size:24px;cursor:pointer;line-height:1}
+        .modal-body{padding:20px}
+        .modal-footer{padding:16px 20px;border-top:1px solid var(--slate-700);display:flex;gap:12px;justify-content:flex-end}
+        
+        /* Material Input */
+        .material-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+        .material-item{background:var(--slate-700);border-radius:8px;padding:12px}
+        .material-name{font-size:13px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+        .material-input{display:flex;align-items:center;gap:8px}
+        .material-input input{width:60px;padding:6px 8px;background:var(--slate-800);border:1px solid var(--slate-600);border-radius:6px;color:white;font-size:14px;text-align:center}
+        
+        /* Toast */
+        .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--slate-800);border:1px solid var(--slate-600);padding:12px 20px;border-radius:10px;font-size:14px;z-index:2000;opacity:0;transition:all 0.3s}
+        .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+        .toast.success{border-color:var(--emerald-500);color:var(--emerald-400)}
+        .toast.error{border-color:var(--red-500);color:var(--red-500)}
+        
+        /* Scan Section */
+        .scan-options{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
+        .scan-option{background:var(--slate-700);border:2px solid var(--slate-600);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all 0.2s}
+        .scan-option:hover{border-color:var(--emerald-500)}
+        .scan-option.active{border-color:var(--emerald-500);background:rgba(16,185,129,0.1)}
+        .scan-option-icon{font-size:32px;margin-bottom:8px}
+        .scan-option-title{font-size:14px;font-weight:600}
+        .scan-option-desc{font-size:12px;color:var(--slate-400)}
+        
+        /* Photo Preview */
+        .photo-preview{width:100%;max-height:200px;object-fit:contain;border-radius:8px;margin-bottom:12px;background:var(--slate-900)}
+        
+        /* Progress Bar */
+        .progress-bar{height:8px;background:var(--slate-700);border-radius:4px;overflow:hidden;margin-top:8px}
+        .progress-fill{height:100%;background:linear-gradient(90deg,var(--emerald-500),var(--teal-500));transition:width 0.3s}
+        
+        /* Footer */
+        .footer{text-align:center;padding:24px;color:var(--slate-600);font-size:11px}
+        
+        /* Hide file inputs */
+        input[type="file"]{display:none}
+        
+        /* Loading indicator */
+        .loading{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin 1s linear infinite}
+        
+        /* Responsive */
+        @media(max-width:768px){
+            .stats-grid{grid-template-columns:repeat(2,1fr)}
+            .material-grid{grid-template-columns:1fr}
+        }
+    </style>
 </head>
 <body>
-<div class="auth-container" id="authContainer">
-<div class="auth-box">
-<div class="auth-logo">♻️</div>
-<h1 class="auth-title">DivertScan™</h1>
-<p class="auth-subtitle">LEED Waste Diversion Platform</p>
-<div id="loginForm">
-<div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="loginEmail" placeholder="you@company.com"></div>
-<div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="loginPassword" placeholder="••••••••"></div>
-<button class="btn btn-primary btn-block" onclick="login()">Sign In</button>
-<p class="auth-toggle">No account? <a onclick="showSignup()">Sign up</a></p>
-</div>
-<div id="signupForm" class="hidden">
-<div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="signupName"></div>
-<div class="form-group"><label class="form-label">Company</label><input type="text" class="form-input" id="signupCompany"></div>
-<div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="signupEmail"></div>
-<div class="form-group"><label class="form-label">Password</label><input type="password" class="form-input" id="signupPassword"></div>
-<button class="btn btn-primary btn-block" onclick="signup()">Create Account</button>
-<p class="auth-toggle">Have account? <a onclick="showLogin()">Sign in</a></p>
-</div>
-<div id="authError" class="db-error hidden"></div>
-</div>
-</div>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
+        <div class="loading-text">DivertScan™</div>
+        <div class="loading-spinner"></div>
+    </div>
 
-<div class="app-container hidden" id="appContainer">
-<nav class="nav"><div class="nav-brand"><div class="nav-logo">♻️</div><span>DivertScan™</span></div><div id="userAvatar" style="width:36px;height:36px;background:var(--s6);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer">👤</div></nav>
-<main class="main-content">
-<div id="dbErrorBanner" class="db-error hidden"></div>
-<div class="page active" id="page-dashboard">
-<div class="project-selector" onclick="openModal('projectSelectModal')"><div><div class="project-name" id="currentProjectName">Select Project</div><div class="project-meta" id="currentProjectMeta">Tap to choose</div></div><span>▼</span></div>
-<div class="card"><div class="card-title">📊 Summary</div>
-<div class="stats-grid">
-<div class="stat-card"><div class="stat-value" id="statTotalTons">0</div><div class="stat-label">Total Tons</div></div>
-<div class="stat-card"><div class="stat-value" id="statDiversionRate">0%</div><div class="stat-label">Diversion</div></div>
-<div class="stat-card"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
-<div class="stat-card"><div class="stat-value" id="statLEEDStatus">--</div><div class="stat-label">LEED</div></div>
-</div></div>
-<div class="quick-actions">
-<div class="action-card" onclick="openModal('scanModal')"><div class="action-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">📷</div><div class="action-title">Scan Ticket</div><div class="action-desc">OCR scale ticket</div></div>
-<div class="action-card" onclick="openModal('debrisModal')"><div class="action-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">🔬</div><div class="action-title">Analyze Debris</div><div class="action-desc">AI material scan</div></div>
-<div class="action-card" onclick="openNewTicket()"><div class="action-icon" style="background:linear-gradient(135deg,#10b981,#059669)">✏️</div><div class="action-title">Manual Entry</div><div class="action-desc">Add ticket data</div></div>
-<div class="action-card" onclick="navTo('tickets')"><div class="action-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">📋</div><div class="action-title">View Tickets</div><div class="action-desc">Browse records</div></div>
-</div></div>
-<div class="page" id="page-tickets"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:20px;font-weight:800">📋 Tickets</h2><button class="btn btn-primary btn-sm" onclick="openNewTicket()">+ Add</button></div><div id="ticketsList"></div></div>
-<div class="page" id="page-reports"><h2 style="font-size:20px;font-weight:800;margin-bottom:20px">📊 Reports</h2>
-<div class="card"><div class="card-title">Export</div><div class="report-menu mt-4">
-<div class="report-card" onclick="exportExcel()"><div class="report-card-icon" style="background:linear-gradient(135deg,#10b981,#059669)">📊</div><div class="report-card-title">Excel</div><div class="report-card-desc">Dalmex format</div></div>
-<div class="report-card" onclick="exportLEED()"><div class="report-card-icon" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">🏆</div><div class="report-card-title">LEED PDF</div><div class="report-card-desc">MRp2/MRc5</div></div>
-<div class="report-card" onclick="exportAuditor()"><div class="report-card-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">📁</div><div class="report-card-title">Auditor</div><div class="report-card-desc">Full docs</div></div>
-<div class="report-card" onclick="exportCSV()"><div class="report-card-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">📋</div><div class="report-card-title">CSV</div><div class="report-card-desc">Raw data</div></div>
-</div></div></div>
-<div class="page" id="page-projects"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:20px;font-weight:800">🏗️ Projects</h2><button class="btn btn-primary btn-sm" onclick="openModal('newProjectModal')">+ New</button></div><div id="projectsList"></div></div>
-<div class="page" id="page-settings"><h2 style="font-size:20px;font-weight:800;margin-bottom:20px">⚙️ Settings</h2>
-<div class="card"><div class="card-title">🔑 OpenAI API Key</div><div class="form-group mt-4"><input type="password" class="form-input" id="settingsApiKey" placeholder="sk-..."></div><button class="btn btn-primary" onclick="localStorage.setItem('openai_api_key',document.getElementById('settingsApiKey').value);toast('Saved')">Save</button></div>
-<div class="card"><div class="card-title">🏢 Organization</div><div class="form-group mt-4"><input type="text" class="form-input" id="settingsCompany" placeholder="Company name"></div><button class="btn btn-primary" onclick="localStorage.setItem('company_name',document.getElementById('settingsCompany').value);toast('Saved')">Save</button></div>
-<div class="card"><div class="card-title">👤 Account</div><div class="card-subtitle" id="accountEmail"></div><button class="btn btn-danger mt-4" onclick="logout()">Sign Out</button></div></div>
-</main>
-<nav class="bottom-nav">
-<button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>Home</span></button>
-<button class="nav-item" data-page="tickets" onclick="navTo('tickets')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><span>Tickets</span></button>
-<button class="nav-item" data-page="reports" onclick="navTo('reports')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><span>Reports</span></button>
-<button class="nav-item" data-page="projects" onclick="navTo('projects')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg><span>Projects</span></button>
-<button class="nav-item" data-page="settings" onclick="navTo('settings')"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg><span>Settings</span></button>
-</nav></div>
+    <!-- Auth Screen -->
+    <div class="auth-screen hidden" id="authScreen">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <div class="auth-logo-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
+                <span class="auth-logo-text">DivertScan™</span>
+            </div>
+            <p class="auth-tagline">LEED v5 MRp2 Carbon Auditor</p>
+            <h2 class="auth-title" id="authTitle">Sign In</h2>
+            <div class="auth-error" id="authError"></div>
+            <div class="form-group hidden" id="nameGroup">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-input" id="authName" placeholder="Your name">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="authEmail" placeholder="you@email.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="authPassword" placeholder="••••••••" minlength="6">
+            </div>
+            <button type="button" class="btn btn-primary" id="authSubmit">Sign In</button>
+            <p class="auth-switch"><span id="authSwitchText">Don't have an account?</span> <a id="authSwitchLink">Sign Up</a></p>
+        </div>
+    </div>
 
-<!-- Modals -->
-<div class="modal-backdrop" id="projectSelectModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">Select Project</h3><button class="modal-close" onclick="closeModal('projectSelectModal')">✕</button></div><div class="modal-body" id="projectSelectList"></div></div></div>
-<div class="modal-backdrop" id="newProjectModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">New Project</h3><button class="modal-close" onclick="closeModal('newProjectModal')">✕</button></div><div class="modal-body">
-<div class="form-group"><label class="form-label">Project Name *</label><input type="text" class="form-input" id="newProjectName"></div>
-<div class="form-group"><label class="form-label">Client</label><input type="text" class="form-input" id="newProjectClient"></div>
-<div class="form-group"><label class="form-label">Location</label><input type="text" class="form-input" id="newProjectLocation"></div>
-<button class="btn btn-primary btn-block" onclick="saveProject()">Create</button></div></div></div>
-<div class="modal-backdrop" id="ticketModal"><div class="modal" style="max-width:600px"><div class="modal-header"><h3 class="modal-title" id="ticketModalTitle">New Ticket</h3><button class="modal-close" onclick="closeModal('ticketModal')">✕</button></div><div class="modal-body">
-<div class="form-row"><div class="form-group"><label class="form-label">Ticket #</label><input type="text" class="form-input" id="ticketNumber"></div><div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="ticketDate"></div></div>
-<div class="form-row"><div class="form-group"><label class="form-label">Gross (lbs)</label><input type="number" class="form-input" id="ticketGross" oninput="calcNet()"></div><div class="form-group"><label class="form-label">Tare (lbs)</label><input type="number" class="form-input" id="ticketTare" oninput="calcNet()"></div></div>
-<div class="form-group"><label class="form-label">Net (lbs)</label><input type="number" class="form-input" id="ticketNet" readonly style="background:var(--s6)"></div>
-<div class="card-title mt-4">Materials (%)</div>
-<div class="material-grid">
-<div class="material-item"><span>🪵 Wood</span><input type="number" class="material-input" id="matWood" value="0"></div>
-<div class="material-item"><span>🧱 Gypsum</span><input type="number" class="material-input" id="matGypsum" value="0"></div>
-<div class="material-item"><span>♻️ Plastic</span><input type="number" class="material-input" id="matPlastic" value="0"></div>
-<div class="material-item"><span>📦 OCC</span><input type="number" class="material-input" id="matOCC" value="0"></div>
-<div class="material-item"><span>🔩 Metal</span><input type="number" class="material-input" id="matMetal" value="0"></div>
-<div class="material-item"><span>🪨 Concrete</span><input type="number" class="material-input" id="matConcrete" value="0"></div>
-<div class="material-item"><span>🧱 Block</span><input type="number" class="material-input" id="matBlock" value="0"></div>
-<div class="material-item"><span>🗑️ Landfill</span><input type="number" class="material-input" id="matLandfill" value="0"></div>
-</div>
-<p style="font-size:12px;color:var(--s4);margin-top:8px">Must = 100%</p>
-<div class="btn-group"><button class="btn btn-secondary" onclick="closeModal('ticketModal')">Cancel</button><button class="btn btn-primary" onclick="saveTicket()" style="flex:1">Save</button></div></div></div></div>
-<div class="modal-backdrop" id="scanModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">📷 Scan Ticket</h3><button class="modal-close" onclick="closeScanModal()">✕</button></div><div class="modal-body">
-<div class="upload-zone" onclick="document.getElementById('scanFileInput').click()"><div style="font-size:40px;margin-bottom:12px">📷</div><div style="font-weight:600">Tap to capture</div><input type="file" id="scanFileInput" accept="image/*" capture="environment" style="display:none" onchange="scanTicket(event)"></div>
-<img id="scanPreview" class="image-preview hidden"><div id="scanResult" class="analysis-result hidden"></div><div id="scanLoading" class="hidden" style="text-align:center;margin-top:16px"><p>Analyzing...</p></div></div></div></div>
-<div class="modal-backdrop" id="debrisModal"><div class="modal"><div class="modal-header"><h3 class="modal-title">🔬 Analyze Debris</h3><button class="modal-close" onclick="closeDebrisModal()">✕</button></div><div class="modal-body">
-<div class="upload-zone" onclick="document.getElementById('debrisFileInput').click()"><div style="font-size:40px;margin-bottom:12px">🔬</div><div style="font-weight:600">Tap to capture</div><input type="file" id="debrisFileInput" accept="image/*" capture="environment" style="display:none" onchange="analyzeDebris(event)"></div>
-<img id="debrisPreview" class="image-preview hidden"><div id="debrisResult" class="analysis-result hidden"></div><div id="debrisLoading" class="hidden" style="text-align:center;margin-top:16px"><p>Analyzing...</p></div></div></div></div>
-<div class="toast-container" id="toastContainer"></div>
+    <!-- Main App -->
+    <div class="app hidden" id="mainApp">
+        <!-- File Inputs -->
+        <input type="file" id="ticketCamera" accept="image/*" capture="environment">
+        <input type="file" id="ticketUpload" accept="image/*,.pdf">
+        <input type="file" id="debrisCamera" accept="image/*" capture="environment">
+        <input type="file" id="debrisUpload" accept="image/*">
+        <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
+        
+        <!-- Nav -->
+        <nav class="nav">
+            <div class="nav-content">
+                <div class="nav-brand">
+                    <div class="nav-logo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
+                    <span class="nav-title">DivertScan™</span>
+                </div>
+                <div>
+                    <span class="nav-user" id="navUser"></span>
+                    <button class="nav-signout" id="signOutBtn">Sign Out</button>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Project Bar -->
+        <div class="project-bar">
+            <div class="project-bar-content">
+                <select class="project-selector" id="projectSelector"><option value="">Select Project...</option></select>
+                <button class="btn btn-sm btn-secondary" id="newProjectBtn">+ New</button>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tabs-content">
+                <button class="tab active" data-page="dashboard">Dashboard</button>
+                <button class="tab" data-page="tickets">Tickets</button>
+                <button class="tab" data-page="scan">Scan</button>
+                <button class="tab" data-page="reports">Reports</button>
+                <button class="tab" data-page="settings">Settings</button>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Dashboard Page -->
+            <div class="page active" id="dashboardPage">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Total Tickets</div><div class="stat-value" id="statTickets">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Total Tons</div><div class="stat-value green" id="statTons">0.00</div></div>
+                    <div class="stat-card"><div class="stat-label">Diversion Rate</div><div class="stat-value blue" id="statDiversion">0%</div></div>
+                    <div class="stat-card"><div class="stat-label">CO₂e Saved</div><div class="stat-value purple" id="statCO2">0 MT</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Recent Tickets</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Date</th><th>Ticket #</th><th>Net (tons)</th><th>Diversion</th></tr></thead>
+                            <tbody id="recentTicketsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tickets Page -->
+            <div class="page" id="ticketsPage">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">All Tickets</span>
+                        <button class="btn btn-sm btn-primary" id="addTicketBtn">+ Add Ticket</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Date</th><th>Ticket #</th><th>Gross</th><th>Tare</th><th>Net</th><th>Diversion</th><th>Actions</th></tr></thead>
+                            <tbody id="ticketsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Scan Page -->
+            <div class="page" id="scanPage">
+                <div class="card">
+                    <div class="card-title" style="margin-bottom:16px">Capture Data</div>
+                    <div class="scan-options">
+                        <div class="scan-option" id="scanTicketOption">
+                            <div class="scan-option-icon">📄</div>
+                            <div class="scan-option-title">Scale Ticket</div>
+                            <div class="scan-option-desc">OCR scan ticket</div>
+                        </div>
+                        <div class="scan-option" id="scanDebrisOption">
+                            <div class="scan-option-icon">📸</div>
+                            <div class="scan-option-title">Debris Photo</div>
+                            <div class="scan-option-desc">AI material analysis</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Reports Page -->
+            <div class="page" id="reportsPage">
+                <div class="card">
+                    <div class="card-title" style="margin-bottom:16px">Export Reports</div>
+                    <div style="display:grid;gap:12px">
+                        <button class="btn btn-secondary" id="exportExcelBtn">📊 Excel Export (Dalmex Format)</button>
+                        <button class="btn btn-secondary" id="exportLEEDBtn">📋 LEED MRp2/MRc5 Report (PDF)</button>
+                        <button class="btn btn-secondary" id="exportAuditorBtn">📦 Auditor Package (PDF)</button>
+                        <button class="btn btn-secondary" id="exportCSVBtn">📑 CSV Export</button>
+                        <hr style="border-color:var(--slate-700)">
+                        <button class="btn btn-secondary" id="importExcelBtn">📥 Import from Excel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Page -->
+            <div class="page" id="settingsPage">
+                <div class="card">
+                    <div class="card-title" style="margin-bottom:16px">Settings</div>
+                    <div class="form-group">
+                        <label class="form-label">OpenAI API Key (for OCR/AI)</label>
+                        <input type="password" class="form-input" id="apiKeyInput" placeholder="sk-...">
+                    </div>
+                    <button class="btn btn-primary" id="saveSettingsBtn" style="width:auto">Save Settings</button>
+                </div>
+            </div>
+        </main>
+        
+        <div class="footer">DivertScan™ v1.0 | LEED v5 MRp2 Carbon Auditor | © 2025</div>
+    </div>
 
-<script>
-const SUPABASE_URL='https://tkcrnfgnspvaefrqfxgr.supabase.co';
-const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrY3JuZmduc3B2YWVmcnFmeGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc4NjI0NjIsImV4cCI6MjA1MzQzODQ2Mn0.L0dKz9T_ynvmKAFIoEsdHZ2o3KSqgmLFGNBCEaFBfJY';
-let supabase,currentUser=null,currentProject=null,projects=[],tickets=[],editingTicketId=null;
+    <!-- New Project Modal -->
+    <div class="modal-overlay" id="projectModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">New Project</span>
+                <button class="modal-close" onclick="closeModal('projectModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Project Name *</label>
+                    <input type="text" class="form-input" id="projectName" placeholder="Project name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Client</label>
+                    <input type="text" class="form-input" id="projectClient" placeholder="Client name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-input" id="projectLocation" placeholder="City, State">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">LEED Version</label>
+                    <select class="form-input" id="projectLEED">
+                        <option value="v4">LEED v4</option>
+                        <option value="v4.1">LEED v4.1</option>
+                        <option value="v5" selected>LEED v5</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('projectModal')">Cancel</button>
+                <button class="btn btn-primary" id="saveProjectBtn">Create Project</button>
+            </div>
+        </div>
+    </div>
 
-// No loading spinner - go straight to auth
-document.addEventListener('DOMContentLoaded', async function() {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    try {
-        const {data:{session}} = await supabase.auth.getSession();
-        if(session && session.user) {
-            currentUser = session.user;
-            showApp();
+    <!-- Add/Edit Ticket Modal -->
+    <div class="modal-overlay" id="ticketModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="ticketModalTitle">Add Ticket</span>
+                <button class="modal-close" onclick="closeModal('ticketModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Ticket # *</label>
+                        <input type="text" class="form-input" id="ticketNumber" placeholder="12345">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date *</label>
+                        <input type="date" class="form-input" id="ticketDate">
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Gross (lbs)</label>
+                        <input type="number" class="form-input" id="ticketGross" placeholder="40000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tare (lbs)</label>
+                        <input type="number" class="form-input" id="ticketTare" placeholder="15000">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Hauler</label>
+                    <input type="text" class="form-input" id="ticketHauler" placeholder="Hauler name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Container Size</label>
+                    <select class="form-input" id="ticketContainer">
+                        <option value="20">20 yard</option>
+                        <option value="30" selected>30 yard</option>
+                        <option value="40">40 yard</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Material Breakdown (%)</label>
+                    <div class="material-grid">
+                        <div class="material-item"><div class="material-name">🪵 Wood</div><div class="material-input"><input type="number" id="matWood" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">🧱 Gypsum</div><div class="material-input"><input type="number" id="matGypsum" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">♻️ Plastic</div><div class="material-input"><input type="number" id="matPlastic" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">📦 OCC</div><div class="material-input"><input type="number" id="matOCC" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">🔩 Metal</div><div class="material-input"><input type="number" id="matMetal" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">🪨 Concrete</div><div class="material-input"><input type="number" id="matConcrete" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">🧱 Block</div><div class="material-input"><input type="number" id="matBlock" value="0" min="0" max="100"><span>%</span></div></div>
+                        <div class="material-item"><div class="material-name">🗑️ Landfill</div><div class="material-input"><input type="number" id="matLandfill" value="0" min="0" max="100"><span>%</span></div></div>
+                    </div>
+                    <div style="margin-top:8px;font-size:12px;color:var(--slate-400)">Total: <span id="materialTotal">0</span>%</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('ticketModal')">Cancel</button>
+                <button class="btn btn-primary" id="saveTicketBtn">Save Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Ticket Modal -->
+    <div class="modal-overlay" id="scanTicketModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Scan Scale Ticket</span>
+                <button class="modal-close" onclick="closeModal('scanTicketModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <img id="ticketPreview" class="photo-preview hidden">
+                <div id="ticketScanButtons">
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('ticketCamera').click()">📷 Take Photo</button>
+                    <button class="btn btn-secondary" style="width:100%" onclick="document.getElementById('ticketUpload').click()">📁 Upload Image</button>
+                </div>
+                <div id="ticketAnalyzing" class="hidden" style="text-align:center;padding:20px">
+                    <div class="loading" style="width:32px;height:32px;margin:0 auto 12px"></div>
+                    <div>Analyzing ticket with OCR...</div>
+                </div>
+                <div id="ticketResults" class="hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('scanTicketModal')">Cancel</button>
+                <button class="btn btn-primary hidden" id="saveScannedTicketBtn">Save Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Debris Modal -->
+    <div class="modal-overlay" id="scanDebrisModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Analyze Debris Photo</span>
+                <button class="modal-close" onclick="closeModal('scanDebrisModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Container Size</label>
+                    <select class="form-input" id="debrisContainer">
+                        <option value="20">20 yard</option>
+                        <option value="30" selected>30 yard</option>
+                        <option value="40">40 yard</option>
+                    </select>
+                </div>
+                <img id="debrisPreview" class="photo-preview hidden">
+                <div id="debrisScanButtons">
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('debrisCamera').click()">📷 Take Photo</button>
+                    <button class="btn btn-secondary" style="width:100%" onclick="document.getElementById('debrisUpload').click()">📁 Upload Image</button>
+                </div>
+                <div id="debrisAnalyzing" class="hidden" style="text-align:center;padding:20px">
+                    <div class="loading" style="width:32px;height:32px;margin:0 auto 12px"></div>
+                    <div>Analyzing debris with AI...</div>
+                </div>
+                <div id="debrisResults" class="hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('scanDebrisModal')">Cancel</button>
+                <button class="btn btn-primary hidden" id="applyDebrisBtn">Apply to New Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // ========== CONFIGURATION ==========
+    const SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+    
+    // GWP Coefficients (MT CO2e per ton) - LEED v5 / EPA WARM v15
+    const GWP = {
+        wood: -0.77, gypsum: 0.02, plastic: 1.52, occ: -3.12,
+        metal: -4.21, concrete: 0.01, block: 0.01, landfill: 0.52
+    };
+    
+    // Material densities (lbs/cubic yard)
+    const DENSITY = {
+        wood: 300, gypsum: 500, plastic: 35, occ: 100,
+        metal: 900, concrete: 2400, block: 1200, mixed: 400
+    };
+    
+    // ========== STATE ==========
+    let supabase, currentUser, currentProject;
+    let tickets = [], projects = [];
+    let editingTicketId = null;
+    let scannedTicketData = null;
+    let analyzedDebrisData = null;
+    
+    // ========== INIT ==========
+    async function init() {
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                await showApp();
+            } else {
+                showAuth();
+            }
+        } catch (err) {
+            console.error('Init error:', err);
+            showAuth();
         }
-    } catch(e) {
-        console.error('Session check failed:', e);
     }
-});
-
-function showApp() {
-    document.getElementById('authContainer').classList.add('hidden');
-    document.getElementById('appContainer').classList.remove('hidden');
-    document.getElementById('accountEmail').textContent = currentUser.email;
-    document.getElementById('userAvatar').textContent = currentUser.email[0].toUpperCase();
-    document.getElementById('ticketDate').value = new Date().toISOString().split('T')[0];
-    const key = localStorage.getItem('openai_api_key');
-    if(key) document.getElementById('settingsApiKey').value = key;
-    const co = localStorage.getItem('company_name');
-    if(co) document.getElementById('settingsCompany').value = co;
-    loadProjects();
-}
-
-function showSignup() { document.getElementById('loginForm').classList.add('hidden'); document.getElementById('signupForm').classList.remove('hidden'); }
-function showLogin() { document.getElementById('signupForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
-
-async function login() {
-    const email = document.getElementById('loginEmail').value;
-    const pass = document.getElementById('loginPassword').value;
-    if(!email || !pass) { toast('Enter email and password', 'error'); return; }
-    try {
-        const {data, error} = await supabase.auth.signInWithPassword({email, password: pass});
-        if(error) throw error;
-        currentUser = data.user;
-        showApp();
-        toast('Welcome!');
-    } catch(e) {
-        document.getElementById('authError').textContent = e.message;
-        document.getElementById('authError').classList.remove('hidden');
+    
+    function showAuth() {
+        document.getElementById('loadingScreen').classList.add('hidden');
+        document.getElementById('authScreen').classList.remove('hidden');
+        document.getElementById('mainApp').classList.add('hidden');
     }
-}
-
-async function signup() {
-    const name = document.getElementById('signupName').value;
-    const company = document.getElementById('signupCompany').value;
-    const email = document.getElementById('signupEmail').value;
-    const pass = document.getElementById('signupPassword').value;
-    if(!email || !pass) { toast('Fill required fields', 'error'); return; }
-    try {
-        const {data, error} = await supabase.auth.signUp({email, password: pass, options: {data: {full_name: name, company}}});
-        if(error) throw error;
-        if(data.user) {
-            currentUser = data.user;
-            localStorage.setItem('company_name', company);
-            showApp();
-            toast('Account created!');
+    
+    async function showApp() {
+        document.getElementById('loadingScreen').classList.add('hidden');
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        document.getElementById('navUser').textContent = currentUser.email;
+        
+        // Load settings
+        const apiKey = localStorage.getItem('openai_api_key');
+        if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
+        
+        await loadProjects();
+        setupEventListeners();
+    }
+    
+    // ========== AUTH ==========
+    let isSignUp = false;
+    
+    document.getElementById('authSwitchLink').onclick = () => {
+        isSignUp = !isSignUp;
+        document.getElementById('authTitle').textContent = isSignUp ? 'Sign Up' : 'Sign In';
+        document.getElementById('authSubmit').textContent = isSignUp ? 'Sign Up' : 'Sign In';
+        document.getElementById('authSwitchText').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+        document.getElementById('authSwitchLink').textContent = isSignUp ? 'Sign In' : 'Sign Up';
+        document.getElementById('nameGroup').classList.toggle('hidden', !isSignUp);
+        document.getElementById('authError').style.display = 'none';
+    };
+    
+    document.getElementById('authSubmit').onclick = async () => {
+        const email = document.getElementById('authEmail').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const name = document.getElementById('authName').value.trim();
+        
+        if (!email || !password) {
+            showAuthError('Please enter email and password');
+            return;
         }
-    } catch(e) {
-        document.getElementById('authError').textContent = e.message;
-        document.getElementById('authError').classList.remove('hidden');
+        if (isSignUp && !name) {
+            showAuthError('Please enter your name');
+            return;
+        }
+        
+        const btn = document.getElementById('authSubmit');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Please wait...';
+        
+        try {
+            let result;
+            if (isSignUp) {
+                result = await supabase.auth.signUp({ 
+                    email, password,
+                    options: { data: { full_name: name } }
+                });
+            } else {
+                result = await supabase.auth.signInWithPassword({ email, password });
+            }
+            
+            if (result.error) throw result.error;
+            
+            if (isSignUp && !result.data.session) {
+                showAuthError('Check your email to confirm your account');
+                btn.disabled = false;
+                btn.textContent = 'Sign Up';
+                return;
+            }
+            
+            currentUser = result.data.user;
+            await showApp();
+        } catch (err) {
+            showAuthError(err.message);
+        }
+        
+        btn.disabled = false;
+        btn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
+    };
+    
+    document.getElementById('signOutBtn').onclick = async () => {
+        await supabase.auth.signOut();
+        currentUser = null;
+        currentProject = null;
+        tickets = [];
+        projects = [];
+        showAuth();
+    };
+    
+    function showAuthError(msg) {
+        const el = document.getElementById('authError');
+        el.textContent = msg;
+        el.style.display = 'block';
     }
-}
-
-async function logout() {
-    await supabase.auth.signOut();
-    currentUser = null;
-    currentProject = null;
-    projects = [];
-    tickets = [];
-    document.getElementById('appContainer').classList.add('hidden');
-    document.getElementById('authContainer').classList.remove('hidden');
-}
-
-function navTo(page) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + page).classList.add('active');
-    document.querySelector('.nav-item[data-page="' + page + '"]').classList.add('active');
-    if(page === 'tickets') loadTickets();
-    if(page === 'projects') renderProjects();
-}
-
-function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-async function loadProjects() {
-    try {
-        const {data, error} = await supabase.from('projects').select('*').eq('user_id', currentUser.id).order('created_at', {ascending: false});
-        if(error) throw error;
+    
+    // ========== PROJECTS ==========
+    async function loadProjects() {
+        const { data, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error('Load projects error:', error);
+            return;
+        }
+        
         projects = data || [];
-        renderProjects();
-        renderProjectSelector();
-        const pid = localStorage.getItem('current_project_id');
-        if(pid) { const p = projects.find(x => x.id === pid); if(p) selectProject(p); }
-    } catch(e) {
-        console.error('Load projects error:', e);
-        document.getElementById('dbErrorBanner').textContent = 'Database error: ' + e.message + '. Please run the SQL schema in Supabase.';
-        document.getElementById('dbErrorBanner').classList.remove('hidden');
+        const select = document.getElementById('projectSelector');
+        select.innerHTML = '<option value="">Select Project...</option>';
+        projects.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+        });
+        
+        // Auto-select first project
+        if (projects.length > 0) {
+            select.value = projects[0].id;
+            await selectProject(projects[0].id);
+        }
     }
-}
-
-function renderProjects() {
-    const c = document.getElementById('projectsList');
-    if(!projects.length) { c.innerHTML = '<div class="empty-state"><p>No projects yet</p><button class="btn btn-primary mt-4" onclick="openModal(\'newProjectModal\')">Create Project</button></div>'; return; }
-    c.innerHTML = projects.map(p => '<div class="project-item ' + (currentProject?.id === p.id ? 'selected' : '') + '" onclick="selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')"><div style="font-weight:700">' + esc(p.name) + '</div><div style="font-size:13px;color:var(--s4)">' + esc(p.client || '') + '</div></div>').join('');
-}
-
-function renderProjectSelector() {
-    const c = document.getElementById('projectSelectList');
-    if(!projects.length) { c.innerHTML = '<div class="empty-state"><p>No projects</p><button class="btn btn-primary mt-4" onclick="closeModal(\'projectSelectModal\');openModal(\'newProjectModal\')">Create</button></div>'; return; }
-    c.innerHTML = projects.map(p => '<div class="project-item" onclick="selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ');closeModal(\'projectSelectModal\')"><div style="font-weight:700">' + esc(p.name) + '</div></div>').join('');
-}
-
-function selectProject(p) {
-    if(typeof p === 'string') p = JSON.parse(p);
-    currentProject = p;
-    localStorage.setItem('current_project_id', p.id);
-    document.getElementById('currentProjectName').textContent = p.name;
-    document.getElementById('currentProjectMeta').textContent = p.client || '';
-    loadTickets();
-    renderProjects();
-}
-
-async function saveProject() {
-    const name = document.getElementById('newProjectName').value;
-    const client = document.getElementById('newProjectClient').value;
-    const loc = document.getElementById('newProjectLocation').value;
-    if(!name) { toast('Enter name', 'error'); return; }
-    try {
-        const {data, error} = await supabase.from('projects').insert({user_id: currentUser.id, name, client, location: loc}).select().single();
-        if(error) throw error;
-        projects.unshift(data);
-        selectProject(data);
-        closeModal('newProjectModal');
-        toast('Created!');
-        document.getElementById('newProjectName').value = '';
-        document.getElementById('newProjectClient').value = '';
-        document.getElementById('newProjectLocation').value = '';
-    } catch(e) { toast(e.message, 'error'); }
-}
-
-async function loadTickets() {
-    if(!currentProject) { tickets = []; renderTickets(); updateStats(); return; }
-    try {
-        const {data, error} = await supabase.from('tickets').select('*').eq('project_id', currentProject.id).order('ticket_date', {ascending: false});
-        if(error) throw error;
+    
+    async function selectProject(projectId) {
+        currentProject = projects.find(p => p.id === projectId);
+        if (currentProject) {
+            await loadTickets();
+        }
+    }
+    
+    async function saveProject() {
+        const name = document.getElementById('projectName').value.trim();
+        if (!name) {
+            showToast('Project name is required', 'error');
+            return;
+        }
+        
+        const projectData = {
+            user_id: currentUser.id,
+            name,
+            client: document.getElementById('projectClient').value.trim(),
+            location: document.getElementById('projectLocation').value.trim(),
+            leed_version: document.getElementById('projectLEED').value
+        };
+        
+        const { data, error } = await supabase.from('projects').insert([projectData]).select();
+        
+        if (error) {
+            showToast('Error creating project: ' + error.message, 'error');
+            return;
+        }
+        
+        closeModal('projectModal');
+        showToast('Project created!', 'success');
+        await loadProjects();
+        document.getElementById('projectSelector').value = data[0].id;
+        await selectProject(data[0].id);
+    }
+    
+    // ========== TICKETS ==========
+    async function loadTickets() {
+        if (!currentProject) return;
+        
+        const { data, error } = await supabase
+            .from('tickets')
+            .select('*')
+            .eq('project_id', currentProject.id)
+            .order('ticket_date', { ascending: false });
+        
+        if (error) {
+            console.error('Load tickets error:', error);
+            return;
+        }
+        
         tickets = data || [];
-        renderTickets();
-        updateStats();
-    } catch(e) { console.error('Load tickets error:', e); }
-}
-
-function renderTickets() {
-    const c = document.getElementById('ticketsList');
-    if(!tickets.length) { c.innerHTML = '<div class="empty-state"><p>' + (currentProject ? 'No tickets' : 'Select project') + '</p></div>'; return; }
-    c.innerHTML = tickets.map(t => {
-        const dr = 100 - (t.landfill_pct || 0), tons = (t.net_weight || 0) / 2000;
-        const bc = dr >= 75 ? 'badge-success' : dr >= 50 ? 'badge-warning' : 'badge-danger';
-        return '<div class="ticket-item" onclick="editTicket(\'' + t.id + '\')"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><div><div style="font-weight:700">#' + esc(t.ticket_number) + '</div><div style="font-size:12px;color:var(--s4)">' + fmtDate(t.ticket_date) + '</div></div><span class="ticket-badge ' + bc + '">' + dr.toFixed(0) + '%</span></div><div style="font-size:13px;color:var(--s4)">' + tons.toFixed(2) + ' tons</div></div>';
-    }).join('');
-}
-
-function updateStats() {
-    if(!tickets.length) { document.getElementById('statTotalTons').textContent = '0'; document.getElementById('statDiversionRate').textContent = '0%'; document.getElementById('statTickets').textContent = '0'; document.getElementById('statLEEDStatus').textContent = '--'; return; }
-    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
-    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
-    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
-    document.getElementById('statTotalTons').textContent = totalTons.toFixed(1);
-    document.getElementById('statDiversionRate').textContent = avg.toFixed(0) + '%';
-    document.getElementById('statTickets').textContent = tickets.length;
-    document.getElementById('statLEEDStatus').textContent = avg >= 75 ? '✅ 2pts' : avg >= 50 ? '⚠️ 1pt' : '❌ <50%';
-}
-
-function openNewTicket() {
-    if(!currentProject) { toast('Select project first', 'error'); return; }
-    editingTicketId = null;
-    document.getElementById('ticketModalTitle').textContent = 'New Ticket';
-    document.getElementById('ticketNumber').value = '';
-    document.getElementById('ticketDate').value = new Date().toISOString().split('T')[0];
-    document.getElementById('ticketGross').value = '';
-    document.getElementById('ticketTare').value = '';
-    document.getElementById('ticketNet').value = '';
-    ['Wood', 'Gypsum', 'Plastic', 'OCC', 'Metal', 'Concrete', 'Block', 'Landfill'].forEach(m => document.getElementById('mat' + m).value = 0);
-    openModal('ticketModal');
-}
-
-function editTicket(id) {
-    const t = tickets.find(x => x.id === id); if(!t) return;
-    editingTicketId = id;
-    document.getElementById('ticketModalTitle').textContent = 'Edit #' + t.ticket_number;
-    document.getElementById('ticketNumber').value = t.ticket_number;
-    document.getElementById('ticketDate').value = t.ticket_date;
-    document.getElementById('ticketGross').value = t.gross_weight || '';
-    document.getElementById('ticketTare').value = t.tare_weight || '';
-    document.getElementById('ticketNet').value = t.net_weight || '';
-    document.getElementById('matWood').value = t.wood_pct || 0;
-    document.getElementById('matGypsum').value = t.gypsum_pct || 0;
-    document.getElementById('matPlastic').value = t.plastic_pct || 0;
-    document.getElementById('matOCC').value = t.occ_pct || 0;
-    document.getElementById('matMetal').value = t.metal_pct || 0;
-    document.getElementById('matConcrete').value = t.concrete_pct || 0;
-    document.getElementById('matBlock').value = t.block_pct || 0;
-    document.getElementById('matLandfill').value = t.landfill_pct || 0;
-    openModal('ticketModal');
-}
-
-function calcNet() { document.getElementById('ticketNet').value = (parseFloat(document.getElementById('ticketGross').value) || 0) - (parseFloat(document.getElementById('ticketTare').value) || 0); }
-
-async function saveTicket() {
-    const d = {
-        project_id: currentProject.id, user_id: currentUser.id,
-        ticket_number: document.getElementById('ticketNumber').value,
-        ticket_date: document.getElementById('ticketDate').value,
-        gross_weight: parseFloat(document.getElementById('ticketGross').value) || 0,
-        tare_weight: parseFloat(document.getElementById('ticketTare').value) || 0,
-        net_weight: parseFloat(document.getElementById('ticketNet').value) || 0,
-        wood_pct: parseFloat(document.getElementById('matWood').value) || 0,
-        gypsum_pct: parseFloat(document.getElementById('matGypsum').value) || 0,
-        plastic_pct: parseFloat(document.getElementById('matPlastic').value) || 0,
-        occ_pct: parseFloat(document.getElementById('matOCC').value) || 0,
-        metal_pct: parseFloat(document.getElementById('matMetal').value) || 0,
-        concrete_pct: parseFloat(document.getElementById('matConcrete').value) || 0,
-        block_pct: parseFloat(document.getElementById('matBlock').value) || 0,
-        landfill_pct: parseFloat(document.getElementById('matLandfill').value) || 0
-    };
-    if(!d.ticket_number || !d.ticket_date) { toast('Fill required fields', 'error'); return; }
-    const total = d.wood_pct + d.gypsum_pct + d.plastic_pct + d.occ_pct + d.metal_pct + d.concrete_pct + d.block_pct + d.landfill_pct;
-    if(Math.abs(total - 100) > 0.5) { toast('Must = 100% (now ' + total.toFixed(1) + '%)', 'error'); return; }
-    try {
-        if(editingTicketId) { await supabase.from('tickets').update(d).eq('id', editingTicketId); }
-        else { await supabase.from('tickets').insert(d); }
+        updateDashboard();
+        updateTicketsTable();
+    }
+    
+    function updateDashboard() {
+        document.getElementById('statTickets').textContent = tickets.length;
+        
+        const totalTons = tickets.reduce((sum, t) => sum + (t.net_tons || 0), 0);
+        document.getElementById('statTons').textContent = totalTons.toFixed(2);
+        
+        let totalDiverted = 0, totalWeight = 0;
+        tickets.forEach(t => {
+            const net = t.net_tons || 0;
+            const div = t.diversion_rate || 0;
+            totalDiverted += net * (div / 100);
+            totalWeight += net;
+        });
+        const avgDiversion = totalWeight > 0 ? (totalDiverted / totalWeight * 100) : 0;
+        document.getElementById('statDiversion').textContent = avgDiversion.toFixed(1) + '%';
+        
+        // Calculate CO2e
+        let totalCO2 = 0;
+        tickets.forEach(t => {
+            if (t.material_breakdown) {
+                const mb = typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown;
+                const net = t.net_tons || 0;
+                Object.keys(mb).forEach(mat => {
+                    const pct = mb[mat] / 100;
+                    const tons = net * pct;
+                    totalCO2 += tons * (GWP[mat] || 0);
+                });
+            }
+        });
+        document.getElementById('statCO2').textContent = Math.abs(totalCO2).toFixed(2) + ' MT';
+        
+        // Recent tickets
+        const tbody = document.getElementById('recentTicketsBody');
+        tbody.innerHTML = '';
+        tickets.slice(0, 5).forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${formatDate(t.ticket_date)}</td>
+                <td>${t.ticket_number || '-'}</td>
+                <td>${(t.net_tons || 0).toFixed(2)}</td>
+                <td>${t.diversion_rate || 0}%</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    function updateTicketsTable() {
+        const tbody = document.getElementById('ticketsTableBody');
+        tbody.innerHTML = '';
+        tickets.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${formatDate(t.ticket_date)}</td>
+                <td>${t.ticket_number || '-'}</td>
+                <td>${(t.gross_lbs || 0).toLocaleString()}</td>
+                <td>${(t.tare_lbs || 0).toLocaleString()}</td>
+                <td>${(t.net_tons || 0).toFixed(2)}T</td>
+                <td>${t.diversion_rate || 0}%</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="editTicket('${t.id}')">Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTicket('${t.id}')">Del</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    function openTicketModal(ticket = null) {
+        editingTicketId = ticket?.id || null;
+        document.getElementById('ticketModalTitle').textContent = ticket ? 'Edit Ticket' : 'Add Ticket';
+        
+        document.getElementById('ticketNumber').value = ticket?.ticket_number || '';
+        document.getElementById('ticketDate').value = ticket?.ticket_date || new Date().toISOString().split('T')[0];
+        document.getElementById('ticketGross').value = ticket?.gross_lbs || '';
+        document.getElementById('ticketTare').value = ticket?.tare_lbs || '';
+        document.getElementById('ticketHauler').value = ticket?.hauler || '';
+        document.getElementById('ticketContainer').value = ticket?.container_size || '30';
+        
+        // Material breakdown
+        const mb = ticket?.material_breakdown ? 
+            (typeof ticket.material_breakdown === 'string' ? JSON.parse(ticket.material_breakdown) : ticket.material_breakdown) : {};
+        document.getElementById('matWood').value = mb.wood || 0;
+        document.getElementById('matGypsum').value = mb.gypsum || 0;
+        document.getElementById('matPlastic').value = mb.plastic || 0;
+        document.getElementById('matOCC').value = mb.occ || 0;
+        document.getElementById('matMetal').value = mb.metal || 0;
+        document.getElementById('matConcrete').value = mb.concrete || 0;
+        document.getElementById('matBlock').value = mb.block || 0;
+        document.getElementById('matLandfill').value = mb.landfill || 0;
+        
+        updateMaterialTotal();
+        openModal('ticketModal');
+    }
+    
+    function updateMaterialTotal() {
+        const total = ['Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill']
+            .reduce((sum, m) => sum + parseInt(document.getElementById('mat'+m).value || 0), 0);
+        document.getElementById('materialTotal').textContent = total;
+        document.getElementById('materialTotal').style.color = total === 100 ? 'var(--emerald-400)' : 'var(--red-500)';
+    }
+    
+    async function saveTicket() {
+        if (!currentProject) {
+            showToast('Please select a project first', 'error');
+            return;
+        }
+        
+        const ticketNumber = document.getElementById('ticketNumber').value.trim();
+        const ticketDate = document.getElementById('ticketDate').value;
+        
+        if (!ticketNumber || !ticketDate) {
+            showToast('Ticket # and Date are required', 'error');
+            return;
+        }
+        
+        const grossLbs = parseInt(document.getElementById('ticketGross').value) || 0;
+        const tareLbs = parseInt(document.getElementById('ticketTare').value) || 0;
+        const netLbs = grossLbs - tareLbs;
+        const netTons = netLbs / 2000;
+        
+        const materialBreakdown = {
+            wood: parseInt(document.getElementById('matWood').value) || 0,
+            gypsum: parseInt(document.getElementById('matGypsum').value) || 0,
+            plastic: parseInt(document.getElementById('matPlastic').value) || 0,
+            occ: parseInt(document.getElementById('matOCC').value) || 0,
+            metal: parseInt(document.getElementById('matMetal').value) || 0,
+            concrete: parseInt(document.getElementById('matConcrete').value) || 0,
+            block: parseInt(document.getElementById('matBlock').value) || 0,
+            landfill: parseInt(document.getElementById('matLandfill').value) || 0
+        };
+        
+        const diversionRate = 100 - materialBreakdown.landfill;
+        
+        const ticketData = {
+            project_id: currentProject.id,
+            user_id: currentUser.id,
+            ticket_number: ticketNumber,
+            ticket_date: ticketDate,
+            gross_lbs: grossLbs,
+            tare_lbs: tareLbs,
+            net_lbs: netLbs,
+            net_tons: netTons,
+            hauler: document.getElementById('ticketHauler').value.trim(),
+            container_size: parseInt(document.getElementById('ticketContainer').value),
+            material_breakdown: materialBreakdown,
+            diversion_rate: diversionRate
+        };
+        
+        let result;
+        if (editingTicketId) {
+            result = await supabase.from('tickets').update(ticketData).eq('id', editingTicketId);
+        } else {
+            result = await supabase.from('tickets').insert([ticketData]);
+        }
+        
+        if (result.error) {
+            showToast('Error saving ticket: ' + result.error.message, 'error');
+            return;
+        }
+        
         closeModal('ticketModal');
+        showToast('Ticket saved!', 'success');
         await loadTickets();
-        toast('Saved!');
-    } catch(e) { toast(e.message, 'error'); }
-}
-
-// OCR & AI
-async function scanTicket(e) {
-    const file = e.target.files[0]; if(!file) return;
-    const key = localStorage.getItem('openai_api_key');
-    if(!key) { toast('Set API key in Settings', 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = async ev => {
-        const img = ev.target.result;
-        document.getElementById('scanPreview').src = img;
-        document.getElementById('scanPreview').classList.remove('hidden');
-        document.getElementById('scanLoading').classList.remove('hidden');
-        document.getElementById('scanResult').classList.add('hidden');
+    }
+    
+    function editTicket(id) {
+        const ticket = tickets.find(t => t.id === id);
+        if (ticket) openTicketModal(ticket);
+    }
+    
+    async function deleteTicket(id) {
+        if (!confirm('Delete this ticket?')) return;
+        
+        const { error } = await supabase.from('tickets').delete().eq('id', id);
+        if (error) {
+            showToast('Error deleting ticket', 'error');
+            return;
+        }
+        
+        showToast('Ticket deleted', 'success');
+        await loadTickets();
+    }
+    
+    // ========== OCR / AI SCANNING ==========
+    async function analyzeTicketPhoto(imageData) {
+        const apiKey = localStorage.getItem('openai_api_key');
+        if (!apiKey) {
+            showToast('Please add OpenAI API key in Settings', 'error');
+            return null;
+        }
+        
+        document.getElementById('ticketScanButtons').classList.add('hidden');
+        document.getElementById('ticketAnalyzing').classList.remove('hidden');
+        
         try {
-            const r = await gptVision(img, 'ticket', key);
-            document.getElementById('scanLoading').classList.add('hidden');
-            document.getElementById('scanResult').classList.remove('hidden');
-            document.getElementById('scanResult').innerHTML = '<b>✅ Extracted:</b><br>Ticket: ' + (r.ticket_number || 'N/A') + '<br>Date: ' + (r.date || 'N/A') + '<br>Net: ' + (r.net_weight || 'N/A') + ' lbs<br><button class="btn btn-primary btn-block mt-4" onclick="useScan(' + JSON.stringify(r).replace(/"/g, '&quot;') + ')">Use Data</button>';
-        } catch(err) { toast(err.message, 'error'); document.getElementById('scanLoading').classList.add('hidden'); }
-    };
-    reader.readAsDataURL(file);
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: `Extract scale ticket data from this image. Return ONLY valid JSON with these fields:
+{
+  "ticket_number": "string or null",
+  "date": "YYYY-MM-DD or null",
+  "gross_lbs": number or null,
+  "tare_lbs": number or null,
+  "net_lbs": number or null,
+  "hauler": "string or null",
+  "commodity": "string or null"
 }
-
-async function analyzeDebris(e) {
-    const file = e.target.files[0]; if(!file) return;
-    const key = localStorage.getItem('openai_api_key');
-    if(!key) { toast('Set API key in Settings', 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = async ev => {
-        const img = ev.target.result;
-        document.getElementById('debrisPreview').src = img;
-        document.getElementById('debrisPreview').classList.remove('hidden');
-        document.getElementById('debrisLoading').classList.remove('hidden');
-        document.getElementById('debrisResult').classList.add('hidden');
+If a field is unreadable, use null. For weights, extract the number in pounds.` },
+                            { type: 'image_url', image_url: { url: imageData } }
+                        ]
+                    }],
+                    max_tokens: 500
+                })
+            });
+            
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            
+            const content = data.choices[0].message.content;
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) throw new Error('Could not parse response');
+            
+            scannedTicketData = JSON.parse(jsonMatch[0]);
+            displayScannedTicket(scannedTicketData);
+            return scannedTicketData;
+            
+        } catch (err) {
+            showToast('OCR Error: ' + err.message, 'error');
+            document.getElementById('ticketScanButtons').classList.remove('hidden');
+            return null;
+        } finally {
+            document.getElementById('ticketAnalyzing').classList.add('hidden');
+        }
+    }
+    
+    function displayScannedTicket(data) {
+        const resultsDiv = document.getElementById('ticketResults');
+        resultsDiv.innerHTML = `
+            <div style="background:var(--slate-700);border-radius:8px;padding:16px">
+                <h4 style="margin-bottom:12px;color:var(--emerald-400)">✓ Ticket Scanned</h4>
+                <div style="display:grid;gap:8px;font-size:14px">
+                    <div><strong>Ticket #:</strong> ${data.ticket_number || 'N/A'}</div>
+                    <div><strong>Date:</strong> ${data.date || 'N/A'}</div>
+                    <div><strong>Gross:</strong> ${data.gross_lbs?.toLocaleString() || 'N/A'} lbs</div>
+                    <div><strong>Tare:</strong> ${data.tare_lbs?.toLocaleString() || 'N/A'} lbs</div>
+                    <div><strong>Net:</strong> ${data.net_lbs?.toLocaleString() || 'N/A'} lbs</div>
+                    <div><strong>Hauler:</strong> ${data.hauler || 'N/A'}</div>
+                </div>
+            </div>
+        `;
+        resultsDiv.classList.remove('hidden');
+        document.getElementById('saveScannedTicketBtn').classList.remove('hidden');
+    }
+    
+    async function saveScannedTicket() {
+        if (!scannedTicketData || !currentProject) return;
+        
+        openTicketModal();
+        document.getElementById('ticketNumber').value = scannedTicketData.ticket_number || '';
+        document.getElementById('ticketDate').value = scannedTicketData.date || new Date().toISOString().split('T')[0];
+        document.getElementById('ticketGross').value = scannedTicketData.gross_lbs || '';
+        document.getElementById('ticketTare').value = scannedTicketData.tare_lbs || '';
+        document.getElementById('ticketHauler').value = scannedTicketData.hauler || '';
+        
+        closeModal('scanTicketModal');
+        scannedTicketData = null;
+    }
+    
+    async function analyzeDebrisPhoto(imageData) {
+        const apiKey = localStorage.getItem('openai_api_key');
+        if (!apiKey) {
+            showToast('Please add OpenAI API key in Settings', 'error');
+            return null;
+        }
+        
+        const containerSize = document.getElementById('debrisContainer').value;
+        
+        document.getElementById('debrisScanButtons').classList.add('hidden');
+        document.getElementById('debrisAnalyzing').classList.remove('hidden');
+        
         try {
-            const r = await gptVision(img, 'debris', key);
-            document.getElementById('debrisLoading').classList.add('hidden');
-            document.getElementById('debrisResult').classList.remove('hidden');
-            const div = 100 - (r.landfill_pct || 0);
-            document.getElementById('debrisResult').innerHTML = '<b>🔬 Est. Diversion: ' + div + '%</b><br><button class="btn btn-primary btn-block mt-4" onclick="useDebris(' + JSON.stringify(r).replace(/"/g, '&quot;') + ')">Apply</button>';
-        } catch(err) { toast(err.message, 'error'); document.getElementById('debrisLoading').classList.add('hidden'); }
-    };
-    reader.readAsDataURL(file);
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: `Analyze this construction/demolition debris photo for a ${containerSize}-yard container. Estimate the percentage breakdown of visible materials. Return ONLY valid JSON:
+{
+  "wood": 0-100,
+  "gypsum": 0-100,
+  "plastic": 0-100,
+  "occ": 0-100,
+  "metal": 0-100,
+  "concrete": 0-100,
+  "block": 0-100,
+  "landfill": 0-100,
+  "confidence": 0-100,
+  "notes": "brief description"
 }
-
-async function gptVision(img, type, key) {
-    const prompt = type === 'ticket' ? 'Extract:{ticket_number,date(YYYY-MM-DD),gross_weight,tare_weight,net_weight}. JSON only.' : 'Estimate:{wood_pct,gypsum_pct,plastic_pct,occ_pct,metal_pct,concrete_pct,block_pct,landfill_pct}. Sum=100. JSON only.';
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key},
-        body: JSON.stringify({model: 'gpt-4o', messages: [{role: 'user', content: [{type: 'text', text: prompt}, {type: 'image_url', image_url: {url: img}}]}], max_tokens: 500})
-    });
-    if(!res.ok) { const er = await res.json(); throw new Error(er.error?.message || 'API failed'); }
-    const data = await res.json(), content = data.choices[0].message.content, m = content.match(/\{[\s\S]*\}/);
-    if(m) return JSON.parse(m[0]);
-    throw new Error('Parse failed');
-}
-
-function useScan(d) { closeScanModal(); openNewTicket(); if(d.ticket_number) document.getElementById('ticketNumber').value = d.ticket_number; if(d.date) document.getElementById('ticketDate').value = d.date; if(d.gross_weight) document.getElementById('ticketGross').value = d.gross_weight; if(d.tare_weight) document.getElementById('ticketTare').value = d.tare_weight; if(d.net_weight) document.getElementById('ticketNet').value = d.net_weight; }
-function useDebris(d) { closeDebrisModal(); openNewTicket(); document.getElementById('matWood').value = d.wood_pct || 0; document.getElementById('matGypsum').value = d.gypsum_pct || 0; document.getElementById('matPlastic').value = d.plastic_pct || 0; document.getElementById('matOCC').value = d.occ_pct || 0; document.getElementById('matMetal').value = d.metal_pct || 0; document.getElementById('matConcrete').value = d.concrete_pct || 0; document.getElementById('matBlock').value = d.block_pct || 0; document.getElementById('matLandfill').value = d.landfill_pct || 0; }
-function closeScanModal() { closeModal('scanModal'); document.getElementById('scanPreview').classList.add('hidden'); document.getElementById('scanResult').classList.add('hidden'); document.getElementById('scanFileInput').value = ''; }
-function closeDebrisModal() { closeModal('debrisModal'); document.getElementById('debrisPreview').classList.add('hidden'); document.getElementById('debrisResult').classList.add('hidden'); document.getElementById('debrisFileInput').value = ''; }
-
-// Exports
-function exportExcel() {
-    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
-    const co = localStorage.getItem('company_name') || 'Company', wb = XLSX.utils.book_new();
-    const ws = [['Waste Diversion Report - ' + currentProject.name], ['Company: ' + co], ['Generated: ' + new Date().toLocaleDateString()], [], ['Date', 'Ticket', 'GVW', 'Tare', 'Net', 'Tons', 'Wood%', 'Gypsum%', 'Plastic%', 'OCC%', 'Metal%', 'Concrete%', 'Block%', 'Landfill%', 'Diversion%']];
-    tickets.forEach(t => { const tons = (t.net_weight || 0) / 2000, dp = 100 - (t.landfill_pct || 0); ws.push([t.ticket_date, t.ticket_number, t.gross_weight, t.tare_weight, t.net_weight, tons.toFixed(2), t.wood_pct, t.gypsum_pct, t.plastic_pct, t.occ_pct, t.metal_pct, t.concrete_pct, t.block_pct, t.landfill_pct, dp]); });
-    const sheet = XLSX.utils.aoa_to_sheet(ws);
-    XLSX.utils.book_append_sheet(wb, sheet, 'Diversion');
-    XLSX.writeFile(wb, 'DivertScan_' + currentProject.name.replace(/\s+/g, '_') + '.xlsx');
-    toast('Downloaded');
-}
-
-function exportCSV() {
-    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
-    const h = ['Date', 'Ticket', 'Gross', 'Tare', 'Net', 'Tons', 'Wood%', 'Gypsum%', 'Plastic%', 'OCC%', 'Metal%', 'Concrete%', 'Block%', 'Landfill%', 'Diversion%'];
-    const rows = tickets.map(t => [t.ticket_date, t.ticket_number, t.gross_weight, t.tare_weight, t.net_weight, ((t.net_weight || 0) / 2000).toFixed(2), t.wood_pct, t.gypsum_pct, t.plastic_pct, t.occ_pct, t.metal_pct, t.concrete_pct, t.block_pct, t.landfill_pct, 100 - (t.landfill_pct || 0)]);
-    const csv = [h.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], {type: 'text/csv'}), url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = 'DivertScan_' + currentProject.name.replace(/\s+/g, '_') + '.csv'; a.click();
-    toast('Exported');
-}
-
-function exportLEED() {
-    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
-    const {jsPDF} = window.jspdf, doc = new jsPDF();
-    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
-    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
-    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
-    doc.setFontSize(18); doc.setTextColor(16, 185, 129); doc.text('LEED MRp2/MRc5 Compliance Report', 20, 25);
-    doc.setFontSize(10); doc.setTextColor(100); doc.text('DivertScan™ | ' + new Date().toLocaleDateString(), 20, 32);
-    doc.setFontSize(12); doc.setTextColor(0); doc.text('Project: ' + currentProject.name, 20, 46);
-    doc.text('Total: ' + totalTons.toFixed(2) + ' tons', 20, 56);
-    doc.text('Diverted: ' + diverted.toFixed(2) + ' tons', 20, 62);
-    doc.text('Rate: ' + avg.toFixed(1) + '%', 20, 68);
-    const pts = avg >= 75 ? 2 : avg >= 50 ? 1 : 0;
-    doc.setFontSize(14); doc.text('LEED Points: ' + pts + ' of 2', 20, 80);
-    doc.save('LEED_Report_' + currentProject.name.replace(/\s+/g, '_') + '.pdf');
-    toast('Downloaded');
-}
-
-function exportAuditor() {
-    if(!currentProject || !tickets.length) { toast('No data', 'error'); return; }
-    const {jsPDF} = window.jspdf, doc = new jsPDF();
-    const totalTons = tickets.reduce((s, t) => s + (t.net_weight || 0) / 2000, 0);
-    const diverted = tickets.reduce((s, t) => { const tons = (t.net_weight || 0) / 2000, rate = (100 - (t.landfill_pct || 0)) / 100; return s + tons * rate; }, 0);
-    const avg = totalTons > 0 ? diverted / totalTons * 100 : 0;
-    doc.setFontSize(16); doc.text('LEED Auditor Package', 20, 20);
-    doc.setFontSize(10); doc.text('Project: ' + currentProject.name, 20, 35);
-    doc.text('Total C&D: ' + totalTons.toFixed(2) + ' tons', 20, 45);
-    doc.text('Diverted: ' + diverted.toFixed(2) + ' tons (' + avg.toFixed(1) + '%)', 20, 55);
-    doc.text('Status: ' + (avg >= 75 ? 'COMPLIANT' : 'BELOW TARGET'), 20, 65);
-    doc.save('Auditor_' + currentProject.name.replace(/\s+/g, '_') + '.pdf');
-    toast('Downloaded');
-}
-
-// Utils
-function toast(msg, type) { const t = document.createElement('div'); t.className = 'toast' + (type === 'error' ? ' error' : ''); t.textContent = msg; document.getElementById('toastContainer').appendChild(t); setTimeout(() => t.remove(), 3000); }
-function fmtDate(d) { if(!d) return ''; return new Date(d + 'T00:00:00').toLocaleDateString(); }
-function esc(t) { if(!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-</script>
+Percentages MUST total 100. Include landfill for non-recyclable waste.` },
+                            { type: 'image_url', image_url: { url: imageData } }
+                        ]
+                    }],
+                    max_tokens: 500
+                })
+            });
+            
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            
+            const content = data.choices[0].message.content;
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) throw new Error('Could not parse response');
+            
+            analyzedDebrisData = JSON.parse(jsonMatch[0]);
+            displayDebrisAnalysis(analyzedDebrisData, containerSize);
+            return analyzedDebrisData;
+            
+        } catch (err) {
+            showToast('Analysis Error: ' + err.message, 'error');
+            document.getElementById('debrisScanButtons').classList.remove('hidden');
+            return null;
+        } finally {
+            document.getElementById('debrisAnalyzing').classList.add('hidden');
+        }
+    }
+    
+    function displayDebrisAnalysis(data, containerSize) {
+        const diversionRate = 100 - (data.landfill || 0);
+        const materials = ['wood','gypsum','plastic','occ','metal','concrete','block','landfill'];
+        const icons = {wood:'🪵',gypsum:'🧱',plastic:'♻️',occ:'📦',metal:'🔩',concrete:'🪨',block:'🧱',landfill:'🗑️'};
+        const recyclable = ['wood','gypsum','plastic','occ','metal','concrete','block'];
+        
+        let html = `
+            <div style="background:var(--slate-700);border-radius:8px;padding:16px">
+                <h4 style="margin-bottom:12px;color:var(--emerald-400)">✓ Analysis Complete</h4>
+                <div style="margin-bottom:12px">
+                    <div style="font-size:12px;color:var(--slate-400)">Diversion Potential</div>
+                    <div style="font-size:28px;font-weight:700;color:${diversionRate >= 75 ? 'var(--emerald-400)' : 'var(--amber-500)'}">${diversionRate}%</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${diversionRate}%"></div></div>
+                    <div style="font-size:11px;color:var(--slate-500);margin-top:4px">LEED v5 Target: 75%</div>
+                </div>
+                <div style="font-size:14px">
+        `;
+        
+        materials.forEach(mat => {
+            const pct = data[mat] || 0;
+            if (pct > 0) {
+                const isRecyclable = recyclable.includes(mat);
+                html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-600)">
+                    <span>${icons[mat]} ${mat.charAt(0).toUpperCase() + mat.slice(1)}</span>
+                    <span>${pct}% ${isRecyclable ? '♻️' : '🗑️'}</span>
+                </div>`;
+            }
+        });
+        
+        html += `</div>
+                <div style="margin-top:12px;font-size:12px;color:var(--slate-400)">
+                    Confidence: ${data.confidence || 'N/A'}% | ${data.notes || ''}
+                </div>
+            </div>`;
+        
+        document.getElementById('debrisResults').innerHTML = html;
+        document.getElementById('debrisResults').classList.remove('hidden');
+        document.getElementById('applyDebrisBtn').classList.remove('hidden');
+    }
+    
+    function applyDebrisToTicket() {
+        if (!analyzedDebrisData) return;
+        
+        openTicketModal();
+        document.getElementById('ticketContainer').value = document.getElementById('debrisContainer').value;
+        document.getElementById('matWood').value = analyzedDebrisData.wood || 0;
+        document.getElementById('matGypsum').value = analyzedDebrisData.gypsum || 0;
+        document.getElementById('matPlastic').value = analyzedDebrisData.plastic || 0;
+        document.getElementById('matOCC').value = analyzedDebrisData.occ || 0;
+        document.getElementById('matMetal').value = analyzedDebrisData.metal || 0;
+        document.getElementById('matConcrete').value = analyzedDebrisData.concrete || 0;
+        document.getElementById('matBlock').value = analyzedDebrisData.block || 0;
+        document.getElementById('matLandfill').value = analyzedDebrisData.landfill || 0;
+        updateMaterialTotal();
+        
+        closeModal('scanDebrisModal');
+        analyzedDebrisData = null;
+    }
+    
+    // ========== EXPORTS ==========
+    function exportExcel() {
+        if (tickets.length === 0) {
+            showToast('No tickets to export', 'error');
+            return;
+        }
+        
+        // Dalmex format columns
+        const headers = [
+            'Date', 'Ticket No', 'GVW (lbs)', 'GVW (NT)', 'Tare (lbs)', 'Tare (NT)', 'Net (lbs)', 'Tons',
+            'Wood %', 'Wood', 'Gypsum %', 'Gypsum', 'Plastic %', 'Plastic', 'OCC %', 'OCC',
+            'Metal %', 'Metal', 'Concrete %', 'Concrete', 'Block %', 'Block',
+            'Landfill %', 'Landfill', 'Total Diverted', 'Diverted %'
+        ];
+        
+        const data = [headers];
+        
+        tickets.forEach(t => {
+            const mb = t.material_breakdown ? 
+                (typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown) : {};
+            const netTons = t.net_tons || 0;
+            
+            const row = [
+                formatDate(t.ticket_date),
+                t.ticket_number || '',
+                t.gross_lbs || 0,
+                ((t.gross_lbs || 0) / 2000).toFixed(4),
+                t.tare_lbs || 0,
+                ((t.tare_lbs || 0) / 2000).toFixed(4),
+                t.net_lbs || 0,
+                netTons.toFixed(4),
+                mb.wood || 0, (netTons * (mb.wood || 0) / 100).toFixed(4),
+                mb.gypsum || 0, (netTons * (mb.gypsum || 0) / 100).toFixed(4),
+                mb.plastic || 0, (netTons * (mb.plastic || 0) / 100).toFixed(4),
+                mb.occ || 0, (netTons * (mb.occ || 0) / 100).toFixed(4),
+                mb.metal || 0, (netTons * (mb.metal || 0) / 100).toFixed(4),
+                mb.concrete || 0, (netTons * (mb.concrete || 0) / 100).toFixed(4),
+                mb.block || 0, (netTons * (mb.block || 0) / 100).toFixed(4),
+                mb.landfill || 0, (netTons * (mb.landfill || 0) / 100).toFixed(4),
+                (netTons * (100 - (mb.landfill || 0)) / 100).toFixed(4),
+                (100 - (mb.landfill || 0)) + '%'
+            ];
+            data.push(row);
+        });
+        
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Diversion Report');
+        XLSX.writeFile(wb, `DivertScan_${currentProject?.name || 'Export'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Excel exported!', 'success');
+    }
+    
+    function exportLEEDReport() {
+        if (tickets.length === 0) {
+            showToast('No tickets to export', 'error');
+            return;
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(20);
+        doc.setTextColor(16, 185, 129);
+        doc.text('DivertScan™ LEED MRp2/MRc5 Report', 20, 20);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text(`Project: ${currentProject?.name || 'N/A'}`, 20, 32);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 40);
+        doc.text(`LEED Version: ${currentProject?.leed_version || 'v5'}`, 20, 48);
+        
+        // Summary stats
+        const totalTons = tickets.reduce((sum, t) => sum + (t.net_tons || 0), 0);
+        let totalDiverted = 0;
+        tickets.forEach(t => {
+            totalDiverted += (t.net_tons || 0) * ((t.diversion_rate || 0) / 100);
+        });
+        const avgDiversion = totalTons > 0 ? (totalDiverted / totalTons * 100) : 0;
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text('Summary', 20, 65);
+        
+        doc.setFontSize(11);
+        doc.text(`Total Tickets: ${tickets.length}`, 25, 75);
+        doc.text(`Total Weight: ${totalTons.toFixed(2)} tons`, 25, 83);
+        doc.text(`Total Diverted: ${totalDiverted.toFixed(2)} tons`, 25, 91);
+        doc.text(`Diversion Rate: ${avgDiversion.toFixed(1)}%`, 25, 99);
+        doc.text(`LEED Target: 75%`, 25, 107);
+        doc.text(`Status: ${avgDiversion >= 75 ? 'COMPLIANT ✓' : 'BELOW TARGET'}`, 25, 115);
+        
+        // Material breakdown table
+        doc.setFontSize(14);
+        doc.text('Material Breakdown', 20, 135);
+        
+        const materials = ['wood','gypsum','plastic','occ','metal','concrete','block','landfill'];
+        const matTotals = {};
+        materials.forEach(m => matTotals[m] = 0);
+        
+        tickets.forEach(t => {
+            const mb = t.material_breakdown ? 
+                (typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown) : {};
+            materials.forEach(m => {
+                matTotals[m] += (t.net_tons || 0) * ((mb[m] || 0) / 100);
+            });
+        });
+        
+        let y = 145;
+        doc.setFontSize(10);
+        materials.forEach(m => {
+            const tons = matTotals[m];
+            const pct = totalTons > 0 ? (tons / totalTons * 100) : 0;
+            doc.text(`${m.charAt(0).toUpperCase() + m.slice(1)}: ${tons.toFixed(2)} tons (${pct.toFixed(1)}%)`, 25, y);
+            y += 8;
+        });
+        
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('Generated by DivertScan™ | Point-of-Capture Verification Technology', 20, 280);
+        
+        doc.save(`LEED_Report_${currentProject?.name || 'Project'}_${new Date().toISOString().split('T')[0]}.pdf`);
+        showToast('LEED Report exported!', 'success');
+    }
+    
+    function exportAuditorPackage() {
+        if (tickets.length === 0) {
+            showToast('No tickets to export', 'error');
+            return;
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Cover page
+        doc.setFontSize(24);
+        doc.setTextColor(16, 185, 129);
+        doc.text('LEED Auditor Package', 20, 40);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text(`Project: ${currentProject?.name || 'N/A'}`, 20, 60);
+        doc.text(`Client: ${currentProject?.client || 'N/A'}`, 20, 70);
+        doc.text(`Location: ${currentProject?.location || 'N/A'}`, 20, 80);
+        doc.text(`LEED Version: ${currentProject?.leed_version || 'v5'}`, 20, 90);
+        doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 20, 100);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text('This package contains verified waste diversion documentation', 20, 120);
+        doc.text('for LEED MRp2 (Construction and Demolition Waste Management)', 20, 128);
+        doc.text('and MRc5 (Construction and Demolition Waste Management) credits.', 20, 136);
+        
+        // Chain of custody certification
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.setTextColor(0);
+        doc.text('Chain of Custody Certification', 20, 20);
+        
+        doc.setFontSize(10);
+        doc.text('All waste diversion data has been captured using DivertScan™', 20, 35);
+        doc.text('Point-of-Capture Verification technology, which requires:', 20, 43);
+        doc.text('• GPS coordinate verification at time of data entry', 25, 55);
+        doc.text('• Timestamp verification for all transactions', 25, 63);
+        doc.text('• Photographic documentation of materials', 25, 71);
+        doc.text('• AI-powered material composition analysis', 25, 79);
+        
+        // Ticket summary
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.text('Ticket Register', 20, 20);
+        
+        let y = 35;
+        doc.setFontSize(8);
+        tickets.slice(0, 30).forEach((t, i) => {
+            if (y > 270) {
+                doc.addPage();
+                y = 20;
+            }
+            doc.text(`${i+1}. ${formatDate(t.ticket_date)} | #${t.ticket_number} | ${(t.net_tons||0).toFixed(2)}T | ${t.diversion_rate||0}% diverted`, 20, y);
+            y += 7;
+        });
+        
+        if (tickets.length > 30) {
+            doc.text(`... and ${tickets.length - 30} more tickets`, 20, y + 10);
+        }
+        
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('Generated by DivertScan™ | Patent Pending | © 2025 All Rights Reserved', 20, 280);
+        
+        doc.save(`Auditor_Package_${currentProject?.name || 'Project'}_${new Date().toISOString().split('T')[0]}.pdf`);
+        showToast('Auditor Package exported!', 'success');
+    }
+    
+    function exportCSV() {
+        if (tickets.length === 0) {
+            showToast('No tickets to export', 'error');
+            return;
+        }
+        
+        const headers = ['Date','Ticket #','Gross (lbs)','Tare (lbs)','Net (lbs)','Net (tons)','Diversion Rate','Hauler'];
+        const rows = tickets.map(t => [
+            t.ticket_date, t.ticket_number, t.gross_lbs, t.tare_lbs, t.net_lbs, 
+            (t.net_tons||0).toFixed(4), (t.diversion_rate||0)+'%', t.hauler||''
+        ]);
+        
+        const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `DivertScan_${currentProject?.name || 'Export'}_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('CSV exported!', 'success');
+    }
+    
+    function importExcel() {
+        document.getElementById('importFile').click();
+    }
+    
+    async function processImportFile(file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                
+                if (rows.length < 2) {
+                    showToast('No data found in file', 'error');
+                    return;
+                }
+                
+                // Find columns by header
+                const headers = rows[0].map(h => (h||'').toString().toLowerCase());
+                const findCol = (names) => headers.findIndex(h => names.some(n => h.includes(n)));
+                
+                const dateCol = findCol(['date']);
+                const ticketCol = findCol(['ticket', 'number', '#']);
+                const grossCol = findCol(['gross', 'gvw']);
+                const tareCol = findCol(['tare']);
+                
+                let imported = 0;
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || row.length === 0) continue;
+                    
+                    const ticketData = {
+                        project_id: currentProject.id,
+                        user_id: currentUser.id,
+                        ticket_number: ticketCol >= 0 ? String(row[ticketCol] || '') : `IMP-${i}`,
+                        ticket_date: dateCol >= 0 ? parseExcelDate(row[dateCol]) : new Date().toISOString().split('T')[0],
+                        gross_lbs: grossCol >= 0 ? parseInt(row[grossCol]) || 0 : 0,
+                        tare_lbs: tareCol >= 0 ? parseInt(row[tareCol]) || 0 : 0,
+                        net_lbs: 0,
+                        net_tons: 0,
+                        material_breakdown: { wood: 40, gypsum: 15, metal: 10, concrete: 10, landfill: 25 },
+                        diversion_rate: 75
+                    };
+                    
+                    ticketData.net_lbs = ticketData.gross_lbs - ticketData.tare_lbs;
+                    ticketData.net_tons = ticketData.net_lbs / 2000;
+                    
+                    const { error } = await supabase.from('tickets').insert([ticketData]);
+                    if (!error) imported++;
+                }
+                
+                showToast(`Imported ${imported} tickets!`, 'success');
+                await loadTickets();
+                
+            } catch (err) {
+                showToast('Import error: ' + err.message, 'error');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    
+    function parseExcelDate(value) {
+        if (!value) return new Date().toISOString().split('T')[0];
+        if (typeof value === 'number') {
+            // Excel serial date
+            const date = new Date((value - 25569) * 86400 * 1000);
+            return date.toISOString().split('T')[0];
+        }
+        const d = new Date(value);
+        return isNaN(d) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
+    }
+    
+    // ========== EVENT LISTENERS ==========
+    function setupEventListeners() {
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.page + 'Page').classList.add('active');
+            };
+        });
+        
+        // Project selector
+        document.getElementById('projectSelector').onchange = (e) => selectProject(e.target.value);
+        document.getElementById('newProjectBtn').onclick = () => {
+            document.getElementById('projectName').value = '';
+            document.getElementById('projectClient').value = '';
+            document.getElementById('projectLocation').value = '';
+            openModal('projectModal');
+        };
+        document.getElementById('saveProjectBtn').onclick = saveProject;
+        
+        // Tickets
+        document.getElementById('addTicketBtn').onclick = () => openTicketModal();
+        document.getElementById('saveTicketBtn').onclick = saveTicket;
+        
+        // Material inputs
+        ['Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill'].forEach(m => {
+            document.getElementById('mat'+m).oninput = updateMaterialTotal;
+        });
+        
+        // Scan options
+        document.getElementById('scanTicketOption').onclick = () => {
+            document.getElementById('ticketPreview').classList.add('hidden');
+            document.getElementById('ticketResults').classList.add('hidden');
+            document.getElementById('ticketScanButtons').classList.remove('hidden');
+            document.getElementById('saveScannedTicketBtn').classList.add('hidden');
+            openModal('scanTicketModal');
+        };
+        
+        document.getElementById('scanDebrisOption').onclick = () => {
+            document.getElementById('debrisPreview').classList.add('hidden');
+            document.getElementById('debrisResults').classList.add('hidden');
+            document.getElementById('debrisScanButtons').classList.remove('hidden');
+            document.getElementById('applyDebrisBtn').classList.add('hidden');
+            openModal('scanDebrisModal');
+        };
+        
+        // Camera/file inputs
+        document.getElementById('ticketCamera').onchange = handleTicketImage;
+        document.getElementById('ticketUpload').onchange = handleTicketImage;
+        document.getElementById('debrisCamera').onchange = handleDebrisImage;
+        document.getElementById('debrisUpload').onchange = handleDebrisImage;
+        document.getElementById('importFile').onchange = (e) => {
+            if (e.target.files[0]) processImportFile(e.target.files[0]);
+        };
+        
+        // Scan actions
+        document.getElementById('saveScannedTicketBtn').onclick = saveScannedTicket;
+        document.getElementById('applyDebrisBtn').onclick = applyDebrisToTicket;
+        
+        // Reports
+        document.getElementById('exportExcelBtn').onclick = exportExcel;
+        document.getElementById('exportLEEDBtn').onclick = exportLEEDReport;
+        document.getElementById('exportAuditorBtn').onclick = exportAuditorPackage;
+        document.getElementById('exportCSVBtn').onclick = exportCSV;
+        document.getElementById('importExcelBtn').onclick = importExcel;
+        
+        // Settings
+        document.getElementById('saveSettingsBtn').onclick = () => {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (apiKey) {
+                localStorage.setItem('openai_api_key', apiKey);
+                showToast('Settings saved!', 'success');
+            }
+        };
+    }
+    
+    async function handleTicketImage(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const img = document.getElementById('ticketPreview');
+            img.src = ev.target.result;
+            img.classList.remove('hidden');
+            await analyzeTicketPhoto(ev.target.result);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    }
+    
+    async function handleDebrisImage(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const img = document.getElementById('debrisPreview');
+            img.src = ev.target.result;
+            img.classList.remove('hidden');
+            await analyzeDebrisPhoto(ev.target.result);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    }
+    
+    // ========== UTILITIES ==========
+    function openModal(id) {
+        document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+    
+    function showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'toast ' + type + ' show';
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+    }
+    
+    // ========== START ==========
+    init();
+    </script>
 </body>
 </html>
