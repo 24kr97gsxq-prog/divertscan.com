@@ -17,14 +17,16 @@
         .auth-title{font-size:20px;text-align:center;margin-bottom:20px}
         .form-group{margin-bottom:16px}
         .form-label{display:block;color:#94a3b8;font-size:12px;margin-bottom:6px}
-        .form-input{width:100%;padding:12px;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#fff;font-size:16px}
-        .btn{width:100%;padding:14px;border:none;border-radius:8px;background:#10b981;color:#fff;font-weight:bold;cursor:pointer;margin-top:10px}
+        .form-input{width:100%;padding:12px;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#fff;font-size:16px;-webkit-appearance:none}
+        .form-input:focus{outline:none;border-color:#10b981}
+        .btn{width:100%;padding:14px;border:none;border-radius:8px;background:#10b981;color:#fff;font-weight:bold;font-size:16px;cursor:pointer;margin-top:10px;-webkit-appearance:none}
+        .btn:active{background:#059669}
         .btn:disabled{opacity:0.5}
         .error-box{background:rgba(239,68,68,0.2);border:1px solid #ef4444;color:#f87171;padding:12px;border-radius:8px;margin-bottom:16px;display:none}
         .error-box.show{display:block}
         .switch{text-align:center;margin-top:16px;color:#94a3b8}
-        .switch a{color:#10b981;cursor:pointer}
-        .hidden{display:none}
+        .switch-link{color:#10b981;cursor:pointer;text-decoration:underline}
+        .hidden{display:none!important}
     </style>
 </head>
 <body>
@@ -36,26 +38,30 @@
     <div class="auth-card" id="authCard">
         <h2 class="auth-title" id="authTitle">Sign In</h2>
         <div class="error-box" id="errorBox"></div>
-        <div class="form-group hidden" id="nameGroup">
-            <label class="form-label">Full Name</label>
-            <input type="text" class="form-input" id="nameInput" placeholder="Your name">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-input" id="emailInput" placeholder="you@email.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Password</label>
-            <input type="password" class="form-input" id="passwordInput" placeholder="••••••••" minlength="6">
-        </div>
-        <button class="btn" id="submitBtn" onclick="handleAuth()">Sign In</button>
-        <p class="switch"><span id="switchText">Don't have an account?</span> <a id="switchLink" onclick="toggleMode()">Sign Up</a></p>
+        
+        <form id="authForm">
+            <div class="form-group hidden" id="nameGroup">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-input" id="nameInput" placeholder="Your name" autocomplete="name">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="emailInput" placeholder="you@email.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="passwordInput" placeholder="••••••••" required minlength="6" autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn" id="submitBtn">Sign In</button>
+        </form>
+        
+        <p class="switch"><span id="switchText">Don't have an account?</span> <span class="switch-link" id="switchLink">Sign Up</span></p>
     </div>
 
     <div class="auth-card hidden" id="dashboard">
         <h2 class="auth-title">✅ Welcome!</h2>
         <p style="text-align:center;color:#94a3b8;margin-bottom:20px">You are signed in as:<br><strong id="userEmailDisplay"></strong></p>
-        <button class="btn" onclick="signOut()">Sign Out</button>
+        <button type="button" class="btn" id="signOutBtn">Sign Out</button>
     </div>
 
     <script>
@@ -65,39 +71,35 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabase;
 let isSignUp = false;
 
-function log(msg, isError = false) {
+function log(msg, isError) {
     const el = document.getElementById('debugLog');
     const div = document.createElement('div');
     div.className = 'debug-msg ' + (isError ? 'debug-error' : 'debug-success');
     div.textContent = new Date().toLocaleTimeString() + ' - ' + msg;
     el.appendChild(div);
-    console.log(msg);
+    el.scrollTop = el.scrollHeight;
 }
 
 async function init() {
     log('Starting init...');
     
     try {
-        log('Creating Supabase client...');
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         log('Supabase client created ✓');
         
-        log('Checking session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
             log('Session error: ' + error.message, true);
             return;
         }
         
-        if (session) {
-            log('User is logged in: ' + session.user.email);
-            showDashboard(session.user.email);
+        if (data.session) {
+            log('User logged in: ' + data.session.user.email);
+            showDashboard(data.session.user.email);
         } else {
-            log('No session - showing auth form');
+            log('No session - ready for auth');
         }
-        
-        log('Init complete ✓');
     } catch (e) {
         log('Init error: ' + e.message, true);
     }
@@ -114,33 +116,51 @@ function showAuth() {
     document.getElementById('dashboard').classList.add('hidden');
 }
 
-function toggleMode() {
+// Toggle between Sign In and Sign Up
+document.getElementById('switchLink').addEventListener('click', function() {
     isSignUp = !isSignUp;
     document.getElementById('authTitle').textContent = isSignUp ? 'Create Account' : 'Sign In';
     document.getElementById('submitBtn').textContent = isSignUp ? 'Sign Up' : 'Sign In';
     document.getElementById('switchText').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
     document.getElementById('switchLink').textContent = isSignUp ? 'Sign In' : 'Sign Up';
     document.getElementById('nameGroup').classList.toggle('hidden', !isSignUp);
-}
+    document.getElementById('errorBox').classList.remove('show');
+    log('Switched to ' + (isSignUp ? 'Sign Up' : 'Sign In') + ' mode');
+});
 
-async function handleAuth() {
-    const email = document.getElementById('emailInput').value;
+// Form submit
+document.getElementById('authForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('emailInput').value.trim();
     const password = document.getElementById('passwordInput').value;
-    const name = document.getElementById('nameInput').value;
+    const name = document.getElementById('nameInput').value.trim();
     const errorBox = document.getElementById('errorBox');
     const btn = document.getElementById('submitBtn');
     
+    if (!email || !password) {
+        errorBox.textContent = 'Please enter email and password';
+        errorBox.classList.add('show');
+        return;
+    }
+    
+    if (password.length < 6) {
+        errorBox.textContent = 'Password must be at least 6 characters';
+        errorBox.classList.add('show');
+        return;
+    }
+    
     errorBox.classList.remove('show');
     btn.disabled = true;
-    btn.textContent = isSignUp ? 'Creating...' : 'Signing in...';
+    btn.textContent = isSignUp ? 'Creating account...' : 'Signing in...';
     
-    log(isSignUp ? 'Attempting sign up...' : 'Attempting sign in...');
+    log(isSignUp ? 'Attempting sign up for: ' + email : 'Attempting sign in for: ' + email);
     
     try {
         if (isSignUp) {
             const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
+                email: email,
+                password: password,
                 options: { data: { full_name: name } }
             });
             
@@ -149,25 +169,30 @@ async function handleAuth() {
             log('Sign up successful!');
             
             if (data.user) {
-                // Create default org
                 log('Creating organization...');
                 const { data: org, error: orgError } = await supabase
                     .from('organizations')
-                    .insert({ name: 'My Organization', slug: data.user.id.slice(0, 8) })
+                    .insert({ name: name || 'My Organization', slug: data.user.id.slice(0, 8) })
                     .select()
                     .single();
                 
                 if (orgError) {
-                    log('Org error: ' + orgError.message, true);
+                    log('Org note: ' + orgError.message, true);
                 } else {
                     log('Organization created ✓');
-                    await supabase.from('users').update({ organization_id: org.id, role: 'admin' }).eq('id', data.user.id);
+                    await supabase.from('users').update({ 
+                        organization_id: org.id, 
+                        role: 'admin' 
+                    }).eq('id', data.user.id);
                 }
                 
                 showDashboard(data.user.email);
             }
         } else {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            const { data, error } = await supabase.auth.signInWithPassword({ 
+                email: email, 
+                password: password 
+            });
             
             if (error) throw error;
             
@@ -182,14 +207,15 @@ async function handleAuth() {
     
     btn.disabled = false;
     btn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
-}
+});
 
-async function signOut() {
+// Sign out
+document.getElementById('signOutBtn').addEventListener('click', async function() {
     log('Signing out...');
     await supabase.auth.signOut();
     log('Signed out ✓');
     showAuth();
-}
+});
 
 // Start
 init();
