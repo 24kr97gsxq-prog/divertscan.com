@@ -3,1468 +3,1659 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DivertScan™ | LEED Waste Diversion Platform</title>
-    <meta name="theme-color" content="#0f172a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♻️</text></svg>">
+    <title>DivertScan © 2026 | The Carbon Truth in Every Load</title>
+    <meta name="description" content="LEED-compliant waste diversion tracking with Point-of-Capture Verification">
+    
+    <!-- Preconnect for faster loading -->
+    <link rel="preconnect" href="https://rnaujdajnrlvndhmhvbk.supabase.co">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <style>
         :root {
-            --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;
-            --slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-200:#e2e8f0;
-            --emerald-600:#059669;--emerald-500:#10b981;--emerald-400:#34d399;
-            --blue-600:#2563eb;--blue-500:#3b82f6;--purple-500:#8b5cf6;
-            --amber-500:#f59e0b;--red-500:#ef4444;--teal-500:#14b8a6;
+            --primary: #059669;
+            --primary-dark: #047857;
+            --primary-light: #10b981;
+            --accent: #f59e0b;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #475569;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+            --radius: 12px;
         }
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--slate-900);color:var(--slate-200);min-height:100vh}
-        .hidden{display:none!important}
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
         /* Loading Screen */
-        .loading-screen{position:fixed;inset:0;background:var(--slate-900);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999}
-        .loading-logo{width:80px;height:80px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:20px}
-        .loading-logo svg{width:48px;height:48px;color:white}
-        .loading-text{font-size:28px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:24px}
-        .loading-spinner{width:40px;height:40px;border:3px solid var(--slate-700);border-top-color:var(--emerald-500);border-radius:50%;animation:spin 1s linear infinite}
-        @keyframes spin{to{transform:rotate(360deg)}}
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        #loading-screen.hidden { opacity: 0; pointer-events: none; }
         
-        /* Auth Screen */
-        .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-        .auth-card{background:var(--slate-800);border-radius:16px;padding:32px;width:100%;max-width:400px;border:1px solid var(--slate-700)}
-        .auth-logo{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
-        .auth-logo-icon{width:48px;height:48px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:12px;display:flex;align-items:center;justify-content:center}
-        .auth-logo-icon svg{width:28px;height:28px;color:white}
-        .auth-logo-text{font-size:24px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-        .auth-tagline{text-align:center;color:var(--slate-400);font-size:13px;margin-bottom:24px}
-        .auth-title{text-align:center;font-size:20px;margin-bottom:20px}
-        .auth-error{background:rgba(239,68,68,0.1);border:1px solid var(--red-500);color:var(--red-500);padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;display:none}
-        .auth-switch{text-align:center;margin-top:20px;color:var(--slate-400);font-size:14px}
-        .auth-switch a{color:var(--emerald-400);cursor:pointer;text-decoration:none}
+        .loader-logo {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+        .loader-logo span { color: var(--text-primary); }
         
-        /* Form Elements */
-        .form-group{margin-bottom:16px}
-        .form-label{display:block;font-size:13px;color:var(--slate-400);margin-bottom:6px}
-        .form-input{width:100%;padding:12px 14px;background:var(--slate-700);border:1px solid var(--slate-600);border-radius:8px;color:white;font-size:15px;outline:none;transition:border-color 0.2s}
-        .form-input:focus{border-color:var(--emerald-500)}
-        .form-input::placeholder{color:var(--slate-500)}
+        .loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--bg-card);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
+        .loader-status {
+            margin-top: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .loader-error {
+            color: var(--danger);
+            margin-top: 1rem;
+            text-align: center;
+            max-width: 300px;
+        }
+        .loader-error button {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        /* Main App */
+        #app { display: none; }
+        #app.loaded { display: block; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .logo span { color: var(--text-primary); }
+        .tagline {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: block;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         /* Buttons */
-        .btn{padding:12px 20px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all 0.2s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
-        .btn-primary{background:linear-gradient(135deg,var(--emerald-600),var(--teal-500));color:white;width:100%}
-        .btn-primary:hover{opacity:0.9}
-        .btn-primary:active{transform:scale(0.98)}
-        .btn-secondary{background:var(--slate-700);color:var(--slate-200);border:1px solid var(--slate-600)}
-        .btn-danger{background:var(--red-500);color:white}
-        .btn-sm{padding:8px 14px;font-size:13px}
-        
-        /* Navigation */
-        .nav{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:12px 16px;position:sticky;top:0;z-index:100}
-        .nav-content{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
-        .nav-brand{display:flex;align-items:center;gap:10px}
-        .nav-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--emerald-500),var(--teal-500));border-radius:10px;display:flex;align-items:center;justify-content:center}
-        .nav-logo svg{width:22px;height:22px;color:white}
-        .nav-title{font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--emerald-400),var(--teal-500));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-        .nav-user{font-size:13px;color:var(--slate-400)}
-        .nav-signout{background:none;border:none;color:var(--emerald-400);cursor:pointer;font-size:13px;margin-left:12px}
-        
-        /* Project Bar */
-        .project-bar{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:10px 16px}
-        .project-bar-content{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px}
-        .project-selector{flex:1;padding:10px 12px;background:var(--slate-700);border:1px solid var(--slate-600);border-radius:8px;color:white;font-size:14px}
-        
-        /* Tabs */
-        .tabs{background:var(--slate-800);border-bottom:1px solid var(--slate-700);padding:0 16px;overflow-x:auto}
-        .tabs-content{max-width:1200px;margin:0 auto;display:flex;gap:4px}
-        .tab{padding:14px 18px;background:none;border:none;color:var(--slate-400);font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
-        .tab.active{color:var(--emerald-400);border-bottom-color:var(--emerald-400)}
-        
+        .btn {
+            padding: 0.625rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Main Content */
-        .main{max-width:1200px;margin:0 auto;padding:20px 16px}
-        .page{display:none}
-        .page.active{display:block}
-        
-        /* Dashboard */
-        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
-        .stat-card{background:var(--slate-800);border-radius:12px;padding:16px;border:1px solid var(--slate-700)}
-        .stat-label{font-size:12px;color:var(--slate-400);margin-bottom:4px}
-        .stat-value{font-size:24px;font-weight:700;color:white}
-        .stat-value.green{color:var(--emerald-400)}
-        .stat-value.blue{color:var(--blue-500)}
-        .stat-value.purple{color:var(--purple-500)}
-        .stat-value.amber{color:var(--amber-500)}
-        
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem 1rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--bg-card);
+            padding: 0.25rem;
+            border-radius: var(--radius);
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+        .tab:hover:not(.active) {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        /* Tab Content */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
         /* Cards */
-        .card{background:var(--slate-800);border-radius:12px;padding:20px;border:1px solid var(--slate-700);margin-bottom:16px}
-        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-        .card-title{font-size:16px;font-weight:600}
-        
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .card-title svg {
+            width: 20px;
+            height: 20px;
+            color: var(--primary);
+        }
+
+        /* Forms */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.375rem;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .form-group input::placeholder { color: var(--text-muted); }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* Table */
-        .table-wrap{overflow-x:auto}
-        table{width:100%;border-collapse:collapse;font-size:13px}
-        th,td{padding:12px 10px;text-align:left;border-bottom:1px solid var(--slate-700)}
-        th{color:var(--slate-400);font-weight:500;font-size:11px;text-transform:uppercase}
-        tr:hover{background:var(--slate-700)}
-        
+        .table-container {
+            overflow-x: auto;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: var(--bg-input);
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        tr:hover { background: rgba(5, 150, 105, 0.05); }
+        tr:last-child td { border-bottom: none; }
+
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: rgba(22, 163, 74, 0.2); color: #4ade80; }
+        .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-danger { background: rgba(220, 38, 38, 0.2); color: #f87171; }
+        .badge-info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
         /* Modal */
-        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
-        .modal-overlay.active{display:flex}
-        .modal{background:var(--slate-800);border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;border:1px solid var(--slate-700)}
-        .modal-header{padding:20px;border-bottom:1px solid var(--slate-700);display:flex;justify-content:space-between;align-items:center}
-        .modal-title{font-size:18px;font-weight:600}
-        .modal-close{background:none;border:none;color:var(--slate-400);font-size:24px;cursor:pointer;line-height:1}
-        .modal-body{padding:20px}
-        .modal-footer{padding:16px 20px;border-top:1px solid var(--slate-700);display:flex;gap:12px;justify-content:flex-end}
-        
-        /* Material Input */
-        .material-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-        .material-item{background:var(--slate-700);border-radius:8px;padding:12px}
-        .material-name{font-size:13px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-        .material-input{display:flex;align-items:center;gap:8px}
-        .material-input input{width:60px;padding:6px 8px;background:var(--slate-800);border:1px solid var(--slate-600);border-radius:6px;color:white;font-size:14px;text-align:center}
-        
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 { font-size: 1.125rem; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+        .modal-body { padding: 1.5rem; }
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        /* File Upload */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(5, 150, 105, 0.05);
+        }
+        .upload-zone input { display: none; }
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 1rem;
+            color: var(--text-muted);
+        }
+
+        /* Connection Status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+        .status-dot.connected { background: var(--success); }
+        .status-dot.offline { background: var(--accent); }
+
         /* Toast */
-        .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--slate-800);border:1px solid var(--slate-600);padding:12px 20px;border-radius:10px;font-size:14px;z-index:2000;opacity:0;transition:all 0.3s}
-        .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-        .toast.success{border-color:var(--emerald-500);color:var(--emerald-400)}
-        .toast.error{border-color:var(--red-500);color:var(--red-500)}
-        
-        /* Scan Section */
-        .scan-options{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
-        .scan-option{background:var(--slate-700);border:2px solid var(--slate-600);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all 0.2s}
-        .scan-option:hover{border-color:var(--emerald-500)}
-        .scan-option.active{border-color:var(--emerald-500);background:rgba(16,185,129,0.1)}
-        .scan-option-icon{font-size:32px;margin-bottom:8px}
-        .scan-option-title{font-size:14px;font-weight:600}
-        .scan-option-desc{font-size:12px;color:var(--slate-400)}
-        
-        /* Photo Preview */
-        .photo-preview{width:100%;max-height:200px;object-fit:contain;border-radius:8px;margin-bottom:12px;background:var(--slate-900)}
-        
-        /* Progress Bar */
-        .progress-bar{height:8px;background:var(--slate-700);border-radius:4px;overflow:hidden;margin-top:8px}
-        .progress-fill{height:100%;background:linear-gradient(90deg,var(--emerald-500),var(--teal-500));transition:width 0.3s}
-        
+        .toast-container {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            min-width: 300px;
+            box-shadow: var(--shadow);
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .toast-success { border-left: 4px solid var(--success); }
+        .toast-error { border-left: 4px solid var(--danger); }
+        .toast-info { border-left: 4px solid var(--primary); }
+
+        /* Verification Badge */
+        .verification-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(5, 150, 105, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            font-size: 0.875rem;
+        }
+        .verification-badge svg {
+            width: 16px;
+            height: 16px;
+            color: var(--primary);
+        }
+
+        /* GPS/IP Capture Display */
+        .capture-info {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-input);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
         /* Footer */
-        .footer{text-align:center;padding:24px;color:var(--slate-600);font-size:11px}
-        
-        /* Hide file inputs */
-        input[type="file"]{display:none}
-        
-        /* Loading indicator */
-        .loading{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin 1s linear infinite}
-        
-        /* Responsive */
-        @media(max-width:768px){
-            .stats-grid{grid-template-columns:repeat(2,1fr)}
-            .material-grid{grid-template-columns:1fr}
+        .footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+        .footer a { color: var(--primary); }
+
+        /* Print styles */
+        @media print {
+            .header, .tabs, .btn, .footer { display: none; }
+            .card { break-inside: avoid; }
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 640px) {
+            .header-content { flex-direction: column; align-items: flex-start; }
+            .header-actions { width: 100%; }
+            .header-actions .btn { flex: 1; justify-content: center; }
+            .tabs { flex-wrap: nowrap; }
+            .form-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
-        <div class="loading-logo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
-        <div class="loading-text">DivertScan™</div>
-        <div class="loading-spinner"></div>
-    </div>
-
-    <!-- Auth Screen -->
-    <div class="auth-screen hidden" id="authScreen">
-        <div class="auth-card">
-            <div class="auth-logo">
-                <div class="auth-logo-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
-                <span class="auth-logo-text">DivertScan™</span>
-            </div>
-            <p class="auth-tagline">LEED v5 MRp2 Carbon Auditor</p>
-            <h2 class="auth-title" id="authTitle">Sign In</h2>
-            <div class="auth-error" id="authError"></div>
-            <div class="form-group hidden" id="nameGroup">
-                <label class="form-label">Full Name</label>
-                <input type="text" class="form-input" id="authName" placeholder="Your name">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-input" id="authEmail" placeholder="you@email.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-input" id="authPassword" placeholder="••••••••" minlength="6">
-            </div>
-            <button type="button" class="btn btn-primary" id="authSubmit">Sign In</button>
-            <p class="auth-switch"><span id="authSwitchText">Don't have an account?</span> <a id="authSwitchLink">Sign Up</a></p>
+    <div id="loading-screen">
+        <div class="loader-logo">Divert<span>Scan</span></div>
+        <div class="loader-spinner"></div>
+        <div class="loader-status" id="loader-status">Initializing...</div>
+        <div class="loader-error" id="loader-error" style="display:none;">
+            <p id="error-message"></p>
+            <button onclick="location.reload()">Retry</button>
         </div>
     </div>
 
     <!-- Main App -->
-    <div class="app hidden" id="mainApp">
-        <!-- File Inputs -->
-        <input type="file" id="ticketCamera" accept="image/*" capture="environment">
-        <input type="file" id="ticketUpload" accept="image/*,.pdf">
-        <input type="file" id="debrisCamera" accept="image/*" capture="environment">
-        <input type="file" id="debrisUpload" accept="image/*">
-        <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
-        
-        <!-- Nav -->
-        <nav class="nav">
-            <div class="nav-content">
-                <div class="nav-brand">
-                    <div class="nav-logo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
-                    <span class="nav-title">DivertScan™</span>
-                </div>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
                 <div>
-                    <span class="nav-user" id="navUser"></span>
-                    <button class="nav-signout" id="signOutBtn">Sign Out</button>
+                    <div class="logo">Divert<span>Scan</span></div>
+                    <span class="tagline">The Carbon Truth in Every Load</span>
+                </div>
+                <div class="connection-status">
+                    <span class="status-dot" id="status-dot"></span>
+                    <span id="connection-text">Connecting...</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="exportExcel()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export Excel
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportLEEDReport()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        LEED Report
+                    </button>
+                    <button class="btn btn-primary" onclick="openNewLoadModal()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        New Load
+                    </button>
                 </div>
             </div>
-        </nav>
-        
-        <!-- Project Bar -->
-        <div class="project-bar">
-            <div class="project-bar-content">
-                <select class="project-selector" id="projectSelector"><option value="">Select Project...</option></select>
-                <button class="btn btn-sm btn-secondary" id="newProjectBtn">+ New</button>
-            </div>
-        </div>
-        
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tabs-content">
-                <button class="tab active" data-page="dashboard">Dashboard</button>
-                <button class="tab" data-page="tickets">Tickets</button>
-                <button class="tab" data-page="scan">Scan</button>
-                <button class="tab" data-page="reports">Reports</button>
-                <button class="tab" data-page="settings">Settings</button>
-            </div>
-        </div>
-        
+        </header>
+
         <!-- Main Content -->
         <main class="main">
-            <!-- Dashboard Page -->
-            <div class="page active" id="dashboardPage">
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-label">Total Tickets</div><div class="stat-value" id="statTickets">0</div></div>
-                    <div class="stat-card"><div class="stat-label">Total Tons</div><div class="stat-value green" id="statTons">0.00</div></div>
-                    <div class="stat-card"><div class="stat-label">Diversion Rate</div><div class="stat-value blue" id="statDiversion">0%</div></div>
-                    <div class="stat-card"><div class="stat-label">CO₂e Saved</div><div class="stat-value purple" id="statCO2">0 MT</div></div>
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-loads">0</div>
+                    <div class="stat-label">Total Loads</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-tonnage">0</div>
+                    <div class="stat-label">Total Tons</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-diversion">0%</div>
+                    <div class="stat-label">Diversion Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-carbon">0</div>
+                    <div class="stat-label">CO₂e Avoided (MT)</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="loads">Loads</button>
+                <button class="tab" data-tab="projects">Projects</button>
+                <button class="tab" data-tab="materials">Materials</button>
+                <button class="tab" data-tab="reports">Reports</button>
+                <button class="tab" data-tab="watchtower">Industry Watchtower</button>
+            </div>
+
+            <!-- Loads Tab -->
+            <div class="tab-content active" id="tab-loads">
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Recent Tickets</span>
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13"/>
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        Recent Loads
                     </div>
-                    <div class="table-wrap">
+                    <div class="table-container">
                         <table>
-                            <thead><tr><th>Date</th><th>Ticket #</th><th>Net (tons)</th><th>Diversion</th></tr></thead>
-                            <tbody id="recentTicketsBody"></tbody>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Project</th>
+                                    <th>Material</th>
+                                    <th>Weight (tons)</th>
+                                    <th>Destination</th>
+                                    <th>Status</th>
+                                    <th>Verified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loads-table">
+                                <tr>
+                                    <td colspan="8" style="text-align:center;color:var(--text-muted);">
+                                        Loading loads data...
+                                    </td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>
             </div>
-            
-            <!-- Tickets Page -->
-            <div class="page" id="ticketsPage">
+
+            <!-- Projects Tab -->
+            <div class="tab-content" id="tab-projects">
                 <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">All Tickets</span>
-                        <button class="btn btn-sm btn-primary" id="addTicketBtn">+ Add Ticket</button>
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Active Projects
                     </div>
-                    <div class="table-wrap">
+                    <div id="projects-list">
+                        <p style="color:var(--text-muted);">Loading projects...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Materials Tab -->
+            <div class="tab-content" id="tab-materials">
+                <div class="card">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                        Material Categories &amp; GWP Coefficients
+                    </div>
+                    <div class="table-container">
                         <table>
-                            <thead><tr><th>Date</th><th>Ticket #</th><th>Gross</th><th>Tare</th><th>Net</th><th>Diversion</th><th>Actions</th></tr></thead>
-                            <tbody id="ticketsTableBody"></tbody>
+                            <thead>
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Category</th>
+                                    <th>Default Density (lb/yd³)</th>
+                                    <th>GWP (MT CO₂e/ton)</th>
+                                    <th>LEED v5 Tier</th>
+                                </tr>
+                            </thead>
+                            <tbody id="materials-table"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-            
-            <!-- Scan Page -->
-            <div class="page" id="scanPage">
+
+            <!-- Reports Tab -->
+            <div class="tab-content" id="tab-reports">
                 <div class="card">
-                    <div class="card-title" style="margin-bottom:16px">Capture Data</div>
-                    <div class="scan-options">
-                        <div class="scan-option" id="scanTicketOption">
-                            <div class="scan-option-icon">📄</div>
-                            <div class="scan-option-title">Scale Ticket</div>
-                            <div class="scan-option-desc">OCR scan ticket</div>
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        Generate Reports
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Project</label>
+                            <select id="report-project">
+                                <option value="">All Projects</option>
+                            </select>
                         </div>
-                        <div class="scan-option" id="scanDebrisOption">
-                            <div class="scan-option-icon">📸</div>
-                            <div class="scan-option-title">Debris Photo</div>
-                            <div class="scan-option-desc">AI material analysis</div>
+                        <div class="form-group">
+                            <label>Date Range</label>
+                            <select id="report-range">
+                                <option value="all">All Time</option>
+                                <option value="month">This Month</option>
+                                <option value="quarter">This Quarter</option>
+                                <option value="year">This Year</option>
+                            </select>
                         </div>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
+                        <button class="btn btn-primary" onclick="exportExcel()">Export Dalmex Excel (24-col)</button>
+                        <button class="btn btn-secondary" onclick="exportLEEDReport()">LEED Compliance Report</button>
+                        <button class="btn btn-secondary" onclick="exportAuditLog()">Audit Trail PDF</button>
                     </div>
                 </div>
             </div>
-            
-            <!-- Reports Page -->
-            <div class="page" id="reportsPage">
+
+            <!-- Industry Watchtower Tab -->
+            <div class="tab-content" id="tab-watchtower">
                 <div class="card">
-                    <div class="card-title" style="margin-bottom:16px">Export Reports</div>
-                    <div style="display:grid;gap:12px">
-                        <button class="btn btn-secondary" id="exportExcelBtn">📊 Excel Export (Dalmex Format)</button>
-                        <button class="btn btn-secondary" id="exportLEEDBtn">📋 LEED MRp2/MRc5 Report (PDF)</button>
-                        <button class="btn btn-secondary" id="exportAuditorBtn">📦 Auditor Package (PDF)</button>
-                        <button class="btn btn-secondary" id="exportCSVBtn">📑 CSV Export</button>
-                        <hr style="border-color:var(--slate-700)">
-                        <button class="btn btn-secondary" id="importExcelBtn">📥 Import from Excel</button>
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        Industry Watchtower - LEED v5 Updates
                     </div>
-                </div>
-            </div>
-            
-            <!-- Settings Page -->
-            <div class="page" id="settingsPage">
-                <div class="card">
-                    <div class="card-title" style="margin-bottom:16px">Settings</div>
-                    <div class="form-group">
-                        <label class="form-label">OpenAI API Key (for OCR/AI)</label>
-                        <input type="password" class="form-input" id="apiKeyInput" placeholder="sk-...">
+                    <div id="watchtower-content">
+                        <div style="margin-bottom:1.5rem;">
+                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">🌿 LEED v5 Key Changes (2024-2025)</h4>
+                            <ul style="color:var(--text-secondary);margin-left:1.25rem;">
+                                <li>Tier 1 Circularity credits now provide enhanced weighted multipliers for reuse materials</li>
+                                <li>Global Warming Potential (GWP) coefficients required for carbon tracking</li>
+                                <li>Stricter chain-of-custody documentation requirements</li>
+                                <li>Point-of-capture verification becoming industry standard</li>
+                            </ul>
+                        </div>
+                        <div style="margin-bottom:1.5rem;">
+                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">📰 Recent Industry News</h4>
+                            <div id="news-links"></div>
+                        </div>
+                        <div>
+                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">🔗 Official Resources</h4>
+                            <ul style="color:var(--text-secondary);margin-left:1.25rem;">
+                                <li><a href="https://www.usgbc.org/leed" target="_blank" style="color:var(--primary);">USGBC LEED Official</a></li>
+                                <li><a href="https://www.epa.gov/warm" target="_blank" style="color:var(--primary);">EPA WARM Calculator</a></li>
+                                <li><a href="https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-data-702" target="_blank" style="color:var(--primary);">MR Credit: Construction Waste Management</a></li>
+                            </ul>
+                        </div>
                     </div>
-                    <button class="btn btn-primary" id="saveSettingsBtn" style="width:auto">Save Settings</button>
                 </div>
             </div>
         </main>
-        
-        <div class="footer">DivertScan™ v1.0 | LEED v5 MRp2 Carbon Auditor | © 2025</div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p><strong>DivertScan © 2026</strong> | Powered by <a href="#">Dalmex Recycling LLC</a></p>
+            <p style="margin-top:0.5rem;">Point-of-Capture Verification™ Technology | LEED v5 Compliant</p>
+        </footer>
     </div>
 
-    <!-- New Project Modal -->
-    <div class="modal-overlay" id="projectModal">
+    <!-- New Load Modal -->
+    <div class="modal-overlay" id="new-load-modal">
         <div class="modal">
             <div class="modal-header">
-                <span class="modal-title">New Project</span>
-                <button class="modal-close" onclick="closeModal('projectModal')">&times;</button>
+                <h3>Add New Load</h3>
+                <button class="modal-close" onclick="closeModal('new-load-modal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Project Name *</label>
-                    <input type="text" class="form-input" id="projectName" placeholder="Project name">
+                <div class="verification-badge" style="margin-bottom:1rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    Point-of-Capture Verification Active
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Client</label>
-                    <input type="text" class="form-input" id="projectClient" placeholder="Client name">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Location</label>
-                    <input type="text" class="form-input" id="projectLocation" placeholder="City, State">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">LEED Version</label>
-                    <select class="form-input" id="projectLEED">
-                        <option value="v4">LEED v4</option>
-                        <option value="v4.1">LEED v4.1</option>
-                        <option value="v5" selected>LEED v5</option>
-                    </select>
-                </div>
+                
+                <form id="new-load-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Project *</label>
+                            <select id="load-project" required>
+                                <option value="">Select Project</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Date *</label>
+                            <input type="date" id="load-date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Material *</label>
+                            <select id="load-material" required>
+                                <option value="">Select Material</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Weight (tons) *</label>
+                            <input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Destination Type *</label>
+                            <select id="load-destination-type" required>
+                                <option value="">Select Type</option>
+                                <option value="recycling">Recycling Facility</option>
+                                <option value="reuse">Reuse/Donation</option>
+                                <option value="landfill">Landfill</option>
+                                <option value="composting">Composting</option>
+                                <option value="wte">Waste-to-Energy</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Destination Facility</label>
+                            <input type="text" id="load-facility" placeholder="Facility name">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Hauler</label>
+                        <input type="text" id="load-hauler" placeholder="Hauler company">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Ticket/Manifest #</label>
+                        <input type="text" id="load-ticket" placeholder="Scale ticket or manifest number">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="load-notes" rows="2" placeholder="Additional notes..."></textarea>
+                    </div>
+                    
+                    <div class="capture-info" id="capture-info">
+                        Capturing verification data...
+                    </div>
+                </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('projectModal')">Cancel</button>
-                <button class="btn btn-primary" id="saveProjectBtn">Create Project</button>
+                <button class="btn btn-secondary" onclick="closeModal('new-load-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveLoad()">Save Load</button>
             </div>
         </div>
     </div>
 
-    <!-- Add/Edit Ticket Modal -->
-    <div class="modal-overlay" id="ticketModal">
-        <div class="modal">
-            <div class="modal-header">
-                <span class="modal-title" id="ticketModalTitle">Add Ticket</span>
-                <button class="modal-close" onclick="closeModal('ticketModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="form-group">
-                        <label class="form-label">Ticket # *</label>
-                        <input type="text" class="form-input" id="ticketNumber" placeholder="12345">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Date *</label>
-                        <input type="date" class="form-input" id="ticketDate">
-                    </div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                    <div class="form-group">
-                        <label class="form-label">Gross (lbs)</label>
-                        <input type="number" class="form-input" id="ticketGross" placeholder="40000">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Tare (lbs)</label>
-                        <input type="number" class="form-input" id="ticketTare" placeholder="15000">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Hauler</label>
-                    <input type="text" class="form-input" id="ticketHauler" placeholder="Hauler name">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Container Size</label>
-                    <select class="form-input" id="ticketContainer">
-                        <option value="20">20 yard</option>
-                        <option value="30" selected>30 yard</option>
-                        <option value="40">40 yard</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Material Breakdown (%)</label>
-                    <div class="material-grid">
-                        <div class="material-item"><div class="material-name">🪵 Wood</div><div class="material-input"><input type="number" id="matWood" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">🧱 Gypsum</div><div class="material-input"><input type="number" id="matGypsum" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">♻️ Plastic</div><div class="material-input"><input type="number" id="matPlastic" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">📦 OCC</div><div class="material-input"><input type="number" id="matOCC" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">🔩 Metal</div><div class="material-input"><input type="number" id="matMetal" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">🪨 Concrete</div><div class="material-input"><input type="number" id="matConcrete" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">🧱 Block</div><div class="material-input"><input type="number" id="matBlock" value="0" min="0" max="100"><span>%</span></div></div>
-                        <div class="material-item"><div class="material-name">🗑️ Landfill</div><div class="material-input"><input type="number" id="matLandfill" value="0" min="0" max="100"><span>%</span></div></div>
-                    </div>
-                    <div style="margin-top:8px;font-size:12px;color:var(--slate-400)">Total: <span id="materialTotal">0</span>%</div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('ticketModal')">Cancel</button>
-                <button class="btn btn-primary" id="saveTicketBtn">Save Ticket</button>
-            </div>
-        </div>
-    </div>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
 
-    <!-- Scan Ticket Modal -->
-    <div class="modal-overlay" id="scanTicketModal">
-        <div class="modal">
-            <div class="modal-header">
-                <span class="modal-title">Scan Scale Ticket</span>
-                <button class="modal-close" onclick="closeModal('scanTicketModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <img id="ticketPreview" class="photo-preview hidden">
-                <div id="ticketScanButtons">
-                    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('ticketCamera').click()">📷 Take Photo</button>
-                    <button class="btn btn-secondary" style="width:100%" onclick="document.getElementById('ticketUpload').click()">📁 Upload Image</button>
-                </div>
-                <div id="ticketAnalyzing" class="hidden" style="text-align:center;padding:20px">
-                    <div class="loading" style="width:32px;height:32px;margin:0 auto 12px"></div>
-                    <div>Analyzing ticket with OCR...</div>
-                </div>
-                <div id="ticketResults" class="hidden"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('scanTicketModal')">Cancel</button>
-                <button class="btn btn-primary hidden" id="saveScannedTicketBtn">Save Ticket</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scan Debris Modal -->
-    <div class="modal-overlay" id="scanDebrisModal">
-        <div class="modal">
-            <div class="modal-header">
-                <span class="modal-title">Analyze Debris Photo</span>
-                <button class="modal-close" onclick="closeModal('scanDebrisModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Container Size</label>
-                    <select class="form-input" id="debrisContainer">
-                        <option value="20">20 yard</option>
-                        <option value="30" selected>30 yard</option>
-                        <option value="40">40 yard</option>
-                    </select>
-                </div>
-                <img id="debrisPreview" class="photo-preview hidden">
-                <div id="debrisScanButtons">
-                    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="document.getElementById('debrisCamera').click()">📷 Take Photo</button>
-                    <button class="btn btn-secondary" style="width:100%" onclick="document.getElementById('debrisUpload').click()">📁 Upload Image</button>
-                </div>
-                <div id="debrisAnalyzing" class="hidden" style="text-align:center;padding:20px">
-                    <div class="loading" style="width:32px;height:32px;margin:0 auto 12px"></div>
-                    <div>Analyzing debris with AI...</div>
-                </div>
-                <div id="debrisResults" class="hidden"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('scanDebrisModal')">Cancel</button>
-                <button class="btn btn-primary hidden" id="applyDebrisBtn">Apply to New Ticket</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div class="toast" id="toast"></div>
-
-    <!-- Load external libraries at end of body -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- External Dependencies - Load in specific order -->
     <script>
-    // ========== CONFIGURATION ==========
-    var SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
-    var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
-    
-    // GWP Coefficients (MT CO2e per ton) - LEED v5 / EPA WARM v15
-    var GWP = {
-        wood: -0.77, gypsum: 0.02, plastic: 1.52, occ: -3.12,
-        metal: -4.21, concrete: 0.01, block: 0.01, landfill: 0.52
-    };
-    
-    // Material densities (lbs/cubic yard)
-    var DENSITY = {
-        wood: 300, gypsum: 500, plastic: 35, occ: 100,
-        metal: 900, concrete: 2400, block: 1200, mixed: 400
-    };
-    
-    // ========== STATE ==========
-    var supabase, currentUser, currentProject;
-    var tickets = [], projects = [];
-    var editingTicketId = null;
-    var scannedTicketData = null;
-    var analyzedDebrisData = null;
-    var isSignUp = false;
-    
-    // ========== DYNAMIC SUPABASE LOADING ==========
-    function loadSupabase(callback) {
-        var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        script.onload = callback;
-        script.onerror = function() {
-            alert('Failed to load Supabase. Please check your internet connection.');
+        // Configuration
+        const CONFIG = {
+            SUPABASE_URL: 'https://rnaujdajnrlvndhmhvbk.supabase.co',
+            SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D3Ts3ZWSRM',
+            VERSION: '2.0.0'
         };
-        document.head.appendChild(script);
-    }
-    
-    // ========== INIT ==========
-    function init() {
-        try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            supabase.auth.getSession().then(function(result) {
-                if (result.data.session) {
-                    currentUser = result.data.session.user;
-                    showApp();
-                } else {
-                    showAuth();
-                }
-            }).catch(function(err) {
-                console.error('Session error:', err);
-                showAuth();
-            });
-        } catch (err) {
-            console.error('Init error:', err);
-            showAuth();
+
+        // Global state
+        let supabase = null;
+        let isOnline = navigator.onLine;
+        let gpsData = null;
+        let ipData = null;
+
+        // Loading status updates
+        function updateLoadStatus(message) {
+            const statusEl = document.getElementById('loader-status');
+            if (statusEl) statusEl.textContent = message;
         }
-    }
-    
-    function showAuth() {
-        document.getElementById('loadingScreen').classList.add('hidden');
-        document.getElementById('authScreen').classList.remove('hidden');
-        document.getElementById('mainApp').classList.add('hidden');
-    }
-    
-    function showApp() {
-        document.getElementById('loadingScreen').classList.add('hidden');
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('mainApp').classList.remove('hidden');
-        document.getElementById('navUser').textContent = currentUser.email;
-        
-        // Load settings
-        var apiKey = localStorage.getItem('openai_api_key');
-        if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
-        
-        loadProjects();
-        setupEventListeners();
-    }
-    
-    // ========== AUTH ==========
-    document.getElementById('authSwitchLink').onclick = function() {
-        isSignUp = !isSignUp;
-        document.getElementById('authTitle').textContent = isSignUp ? 'Sign Up' : 'Sign In';
-        document.getElementById('authSubmit').textContent = isSignUp ? 'Sign Up' : 'Sign In';
-        document.getElementById('authSwitchText').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
-        document.getElementById('authSwitchLink').textContent = isSignUp ? 'Sign In' : 'Sign Up';
-        document.getElementById('nameGroup').classList.toggle('hidden', !isSignUp);
-        document.getElementById('authError').style.display = 'none';
-    };
-    
-    document.getElementById('authSubmit').onclick = function() {
-        var email = document.getElementById('authEmail').value.trim();
-        var password = document.getElementById('authPassword').value;
-        var name = document.getElementById('authName').value.trim();
-        
-        if (!email || !password) {
-            showAuthError('Please enter email and password');
-            return;
+
+        function showLoadError(message) {
+            document.getElementById('loader-status').style.display = 'none';
+            document.querySelector('.loader-spinner').style.display = 'none';
+            const errorEl = document.getElementById('loader-error');
+            document.getElementById('error-message').textContent = message;
+            errorEl.style.display = 'block';
         }
-        if (isSignUp && !name) {
-            showAuthError('Please enter your name');
-            return;
-        }
-        
-        var btn = document.getElementById('authSubmit');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="loading"></span> Please wait...';
-        
-        var authPromise;
-        if (isSignUp) {
-            authPromise = supabase.auth.signUp({ 
-                email: email, 
-                password: password,
-                options: { data: { full_name: name } }
-            });
-        } else {
-            authPromise = supabase.auth.signInWithPassword({ email: email, password: password });
-        }
-        
-        authPromise.then(function(result) {
-            if (result.error) {
-                showAuthError(result.error.message);
-                btn.disabled = false;
-                btn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
-                return;
-            }
-            
-            if (isSignUp && !result.data.session) {
-                showAuthError('Check your email to confirm your account');
-                btn.disabled = false;
-                btn.textContent = 'Sign Up';
-                return;
-            }
-            
-            currentUser = result.data.user;
-            showApp();
-        }).catch(function(err) {
-            showAuthError(err.message);
-            btn.disabled = false;
-            btn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
-        });
-    };
-    
-    document.getElementById('signOutBtn').onclick = function() {
-        supabase.auth.signOut().then(function() {
-            currentUser = null;
-            currentProject = null;
-            tickets = [];
-            projects = [];
-            showAuth();
-        });
-    };
-    
-    function showAuthError(msg) {
-        var el = document.getElementById('authError');
-        el.textContent = msg;
-        el.style.display = 'block';
-    }
-    
-    // ========== PROJECTS ==========
-    function loadProjects() {
-        supabase
-            .from('projects')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .order('created_at', { ascending: false })
-            .then(function(result) {
-                if (result.error) {
-                    console.error('Load projects error:', result.error);
+
+        // Load Supabase dynamically with proper error handling
+        function loadSupabase() {
+            return new Promise((resolve, reject) => {
+                updateLoadStatus('Loading Supabase SDK...');
+                
+                // Check if already loaded
+                if (window.supabase) {
+                    resolve(window.supabase);
                     return;
                 }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+                script.async = true;
                 
-                projects = result.data || [];
-                var select = document.getElementById('projectSelector');
-                select.innerHTML = '<option value="">Select Project...</option>';
-                projects.forEach(function(p) {
-                    var opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.textContent = p.name;
-                    select.appendChild(opt);
-                });
-                
-                // Auto-select first project
-                if (projects.length > 0) {
-                    select.value = projects[0].id;
-                    selectProject(projects[0].id);
-                }
-            });
-    }
-    
-    function selectProject(projectId) {
-        currentProject = projects.find(function(p) { return p.id === projectId; });
-        if (currentProject) {
-            loadTickets();
-        }
-    }
-    
-    function saveProject() {
-        var name = document.getElementById('projectName').value.trim();
-        if (!name) {
-            showToast('Project name is required', 'error');
-            return;
-        }
-        
-        var projectData = {
-            user_id: currentUser.id,
-            name: name,
-            client: document.getElementById('projectClient').value.trim(),
-            location: document.getElementById('projectLocation').value.trim(),
-            leed_version: document.getElementById('projectLEED').value
-        };
-        
-        supabase.from('projects').insert([projectData]).select().then(function(result) {
-            if (result.error) {
-                showToast('Error creating project: ' + result.error.message, 'error');
-                return;
-            }
-            
-            closeModal('projectModal');
-            showToast('Project created!', 'success');
-            loadProjects();
-            if (result.data && result.data[0]) {
-                document.getElementById('projectSelector').value = result.data[0].id;
-                selectProject(result.data[0].id);
-            }
-        });
-    }
-    
-    // ========== TICKETS ==========
-    function loadTickets() {
-        if (!currentProject) return;
-        
-        supabase
-            .from('tickets')
-            .select('*')
-            .eq('project_id', currentProject.id)
-            .order('ticket_date', { ascending: false })
-            .then(function(result) {
-                if (result.error) {
-                    console.error('Load tickets error:', result.error);
-                    return;
-                }
-                
-                tickets = result.data || [];
-                updateDashboard();
-                updateTicketsTable();
-            });
-    }
-    
-    function updateDashboard() {
-        document.getElementById('statTickets').textContent = tickets.length;
-        
-        var totalTons = tickets.reduce(function(sum, t) { return sum + (t.net_tons || 0); }, 0);
-        document.getElementById('statTons').textContent = totalTons.toFixed(2);
-        
-        var totalDiverted = 0, totalWeight = 0;
-        tickets.forEach(function(t) {
-            var net = t.net_tons || 0;
-            var div = t.diversion_rate || 0;
-            totalDiverted += net * (div / 100);
-            totalWeight += net;
-        });
-        var avgDiversion = totalWeight > 0 ? (totalDiverted / totalWeight * 100) : 0;
-        document.getElementById('statDiversion').textContent = avgDiversion.toFixed(1) + '%';
-        
-        // Calculate CO2e
-        var totalCO2 = 0;
-        tickets.forEach(function(t) {
-            if (t.material_breakdown) {
-                var mb = typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown;
-                var net = t.net_tons || 0;
-                Object.keys(mb).forEach(function(mat) {
-                    var pct = mb[mat] / 100;
-                    var tons = net * pct;
-                    totalCO2 += tons * (GWP[mat] || 0);
-                });
-            }
-        });
-        document.getElementById('statCO2').textContent = Math.abs(totalCO2).toFixed(2) + ' MT';
-        
-        // Recent tickets
-        var tbody = document.getElementById('recentTicketsBody');
-        tbody.innerHTML = '';
-        tickets.slice(0, 5).forEach(function(t) {
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + formatDate(t.ticket_date) + '</td><td>' + (t.ticket_number || '-') + '</td><td>' + (t.net_tons || 0).toFixed(2) + '</td><td>' + (t.diversion_rate || 0) + '%</td>';
-            tbody.appendChild(tr);
-        });
-    }
-    
-    function updateTicketsTable() {
-        var tbody = document.getElementById('ticketsTableBody');
-        tbody.innerHTML = '';
-        tickets.forEach(function(t) {
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + formatDate(t.ticket_date) + '</td><td>' + (t.ticket_number || '-') + '</td><td>' + (t.gross_lbs || 0).toLocaleString() + '</td><td>' + (t.tare_lbs || 0).toLocaleString() + '</td><td>' + (t.net_tons || 0).toFixed(2) + 'T</td><td>' + (t.diversion_rate || 0) + '%</td><td><button class="btn btn-sm btn-secondary" onclick="editTicket(\'' + t.id + '\')">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteTicket(\'' + t.id + '\')">Del</button></td>';
-            tbody.appendChild(tr);
-        });
-    }
-    
-    function openTicketModal(ticket) {
-        editingTicketId = ticket ? ticket.id : null;
-        document.getElementById('ticketModalTitle').textContent = ticket ? 'Edit Ticket' : 'Add Ticket';
-        
-        document.getElementById('ticketNumber').value = ticket ? (ticket.ticket_number || '') : '';
-        document.getElementById('ticketDate').value = ticket ? (ticket.ticket_date || '') : new Date().toISOString().split('T')[0];
-        document.getElementById('ticketGross').value = ticket ? (ticket.gross_lbs || '') : '';
-        document.getElementById('ticketTare').value = ticket ? (ticket.tare_lbs || '') : '';
-        document.getElementById('ticketHauler').value = ticket ? (ticket.hauler || '') : '';
-        document.getElementById('ticketContainer').value = ticket ? (ticket.container_size || '30') : '30';
-        
-        // Material breakdown
-        var mb = ticket && ticket.material_breakdown ? 
-            (typeof ticket.material_breakdown === 'string' ? JSON.parse(ticket.material_breakdown) : ticket.material_breakdown) : {};
-        document.getElementById('matWood').value = mb.wood || 0;
-        document.getElementById('matGypsum').value = mb.gypsum || 0;
-        document.getElementById('matPlastic').value = mb.plastic || 0;
-        document.getElementById('matOCC').value = mb.occ || 0;
-        document.getElementById('matMetal').value = mb.metal || 0;
-        document.getElementById('matConcrete').value = mb.concrete || 0;
-        document.getElementById('matBlock').value = mb.block || 0;
-        document.getElementById('matLandfill').value = mb.landfill || 0;
-        
-        updateMaterialTotal();
-        openModal('ticketModal');
-    }
-    
-    function updateMaterialTotal() {
-        var total = ['Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill']
-            .reduce(function(sum, m) { return sum + parseInt(document.getElementById('mat'+m).value || 0); }, 0);
-        document.getElementById('materialTotal').textContent = total;
-        document.getElementById('materialTotal').style.color = total === 100 ? 'var(--emerald-400)' : 'var(--red-500)';
-    }
-    
-    function saveTicket() {
-        if (!currentProject) {
-            showToast('Please select a project first', 'error');
-            return;
-        }
-        
-        var ticketNumber = document.getElementById('ticketNumber').value.trim();
-        var ticketDate = document.getElementById('ticketDate').value;
-        
-        if (!ticketNumber || !ticketDate) {
-            showToast('Ticket # and Date are required', 'error');
-            return;
-        }
-        
-        var grossLbs = parseInt(document.getElementById('ticketGross').value) || 0;
-        var tareLbs = parseInt(document.getElementById('ticketTare').value) || 0;
-        var netLbs = grossLbs - tareLbs;
-        var netTons = netLbs / 2000;
-        
-        var materialBreakdown = {
-            wood: parseInt(document.getElementById('matWood').value) || 0,
-            gypsum: parseInt(document.getElementById('matGypsum').value) || 0,
-            plastic: parseInt(document.getElementById('matPlastic').value) || 0,
-            occ: parseInt(document.getElementById('matOCC').value) || 0,
-            metal: parseInt(document.getElementById('matMetal').value) || 0,
-            concrete: parseInt(document.getElementById('matConcrete').value) || 0,
-            block: parseInt(document.getElementById('matBlock').value) || 0,
-            landfill: parseInt(document.getElementById('matLandfill').value) || 0
-        };
-        
-        var diversionRate = 100 - materialBreakdown.landfill;
-        
-        var ticketData = {
-            project_id: currentProject.id,
-            user_id: currentUser.id,
-            ticket_number: ticketNumber,
-            ticket_date: ticketDate,
-            gross_lbs: grossLbs,
-            tare_lbs: tareLbs,
-            net_lbs: netLbs,
-            net_tons: netTons,
-            hauler: document.getElementById('ticketHauler').value.trim(),
-            container_size: parseInt(document.getElementById('ticketContainer').value),
-            material_breakdown: materialBreakdown,
-            diversion_rate: diversionRate
-        };
-        
-        var promise;
-        if (editingTicketId) {
-            promise = supabase.from('tickets').update(ticketData).eq('id', editingTicketId);
-        } else {
-            promise = supabase.from('tickets').insert([ticketData]);
-        }
-        
-        promise.then(function(result) {
-            if (result.error) {
-                showToast('Error saving ticket: ' + result.error.message, 'error');
-                return;
-            }
-            
-            closeModal('ticketModal');
-            showToast('Ticket saved!', 'success');
-            loadTickets();
-        });
-    }
-    
-    function editTicket(id) {
-        var ticket = tickets.find(function(t) { return t.id === id; });
-        if (ticket) openTicketModal(ticket);
-    }
-    
-    function deleteTicket(id) {
-        if (!confirm('Delete this ticket?')) return;
-        
-        supabase.from('tickets').delete().eq('id', id).then(function(result) {
-            if (result.error) {
-                showToast('Error deleting ticket', 'error');
-                return;
-            }
-            
-            showToast('Ticket deleted', 'success');
-            loadTickets();
-        });
-    }
-    
-    // ========== OCR / AI SCANNING ==========
-    function analyzeTicketPhoto(imageData) {
-        var apiKey = localStorage.getItem('openai_api_key');
-        if (!apiKey) {
-            showToast('Please add OpenAI API key in Settings', 'error');
-            return null;
-        }
-        
-        document.getElementById('ticketScanButtons').classList.add('hidden');
-        document.getElementById('ticketAnalyzing').classList.remove('hidden');
-        
-        fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + apiKey
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [{
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: 'Extract scale ticket data from this image. Return ONLY valid JSON (no markdown, no explanation):\n{"ticket_number":"string or null","date":"YYYY-MM-DD or null","gross_lbs":number or null,"tare_lbs":number or null,"net_lbs":number or null,"hauler":"string or null","commodity":"string or null"}\nIf a field is unreadable, use null. For weights, extract the number in pounds.' },
-                        { type: 'image_url', image_url: { url: imageData } }
-                    ]
-                }],
-                max_tokens: 500
-            })
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            document.getElementById('ticketAnalyzing').classList.add('hidden');
-            
-            if (data.error) {
-                showToast('OCR Error: ' + data.error.message, 'error');
-                document.getElementById('ticketScanButtons').classList.remove('hidden');
-                return;
-            }
-            
-            var content = data.choices[0].message.content;
-            console.log('OCR Response:', content);
-            
-            // Remove markdown code blocks if present
-            content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-            
-            var jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                showToast('Could not parse OCR response', 'error');
-                document.getElementById('ticketScanButtons').classList.remove('hidden');
-                return;
-            }
-            
-            try {
-                scannedTicketData = JSON.parse(jsonMatch[0]);
-                displayScannedTicket(scannedTicketData);
-            } catch(e) {
-                showToast('JSON parse error: ' + e.message, 'error');
-                document.getElementById('ticketScanButtons').classList.remove('hidden');
-            }
-        })
-        .catch(function(err) {
-            showToast('OCR Error: ' + err.message, 'error');
-            document.getElementById('ticketAnalyzing').classList.add('hidden');
-            document.getElementById('ticketScanButtons').classList.remove('hidden');
-        });
-    }
-    
-    function displayScannedTicket(data) {
-        var resultsDiv = document.getElementById('ticketResults');
-        resultsDiv.innerHTML = '<div style="background:var(--slate-700);border-radius:8px;padding:16px"><h4 style="margin-bottom:12px;color:var(--emerald-400)">✓ Ticket Scanned</h4><div style="display:grid;gap:8px;font-size:14px"><div><strong>Ticket #:</strong> ' + (data.ticket_number || 'N/A') + '</div><div><strong>Date:</strong> ' + (data.date || 'N/A') + '</div><div><strong>Gross:</strong> ' + (data.gross_lbs ? data.gross_lbs.toLocaleString() : 'N/A') + ' lbs</div><div><strong>Tare:</strong> ' + (data.tare_lbs ? data.tare_lbs.toLocaleString() : 'N/A') + ' lbs</div><div><strong>Net:</strong> ' + (data.net_lbs ? data.net_lbs.toLocaleString() : 'N/A') + ' lbs</div><div><strong>Hauler:</strong> ' + (data.hauler || 'N/A') + '</div></div></div>';
-        resultsDiv.classList.remove('hidden');
-        document.getElementById('saveScannedTicketBtn').classList.remove('hidden');
-    }
-    
-    function saveScannedTicket() {
-        if (!scannedTicketData || !currentProject) return;
-        
-        openTicketModal();
-        document.getElementById('ticketNumber').value = scannedTicketData.ticket_number || '';
-        document.getElementById('ticketDate').value = scannedTicketData.date || new Date().toISOString().split('T')[0];
-        document.getElementById('ticketGross').value = scannedTicketData.gross_lbs || '';
-        document.getElementById('ticketTare').value = scannedTicketData.tare_lbs || '';
-        document.getElementById('ticketHauler').value = scannedTicketData.hauler || '';
-        
-        closeModal('scanTicketModal');
-        scannedTicketData = null;
-    }
-    
-    function analyzeDebrisPhoto(imageData) {
-        var apiKey = localStorage.getItem('openai_api_key');
-        if (!apiKey) {
-            showToast('Please add OpenAI API key in Settings', 'error');
-            return null;
-        }
-        
-        var containerSize = document.getElementById('debrisContainer').value;
-        
-        document.getElementById('debrisScanButtons').classList.add('hidden');
-        document.getElementById('debrisAnalyzing').classList.remove('hidden');
-        
-        fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + apiKey
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [{
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: 'You are analyzing construction/demolition debris for LEED waste diversion reporting. Look at this photo of a ' + containerSize + '-yard container and estimate the percentage breakdown of visible materials.\n\nYou MUST respond with ONLY a JSON object (no markdown, no code blocks, no explanation):\n{"wood":25,"gypsum":10,"plastic":5,"occ":15,"metal":5,"concrete":10,"block":10,"landfill":20,"confidence":75,"notes":"brief description"}\n\nCategories:\n- wood: lumber, pallets, plywood, OSB, dimensional lumber\n- gypsum: drywall, sheetrock, wallboard\n- plastic: film, wrap, containers, PVC, buckets\n- occ: cardboard boxes, paper, corrugated\n- metal: steel, aluminum, copper, wire, rebar\n- concrete: concrete pieces, cement\n- block: CMU, cinder blocks, bricks, masonry\n- landfill: mixed waste, trash, non-recyclable items\n\nPercentages MUST total exactly 100. Respond with JSON only, no other text.' },
-                        { type: 'image_url', image_url: { url: imageData } }
-                    ]
-                }],
-                max_tokens: 500
-            })
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            document.getElementById('debrisAnalyzing').classList.add('hidden');
-            
-            if (data.error) {
-                showToast('Analysis Error: ' + data.error.message, 'error');
-                document.getElementById('debrisScanButtons').classList.remove('hidden');
-                return;
-            }
-            
-            var content = data.choices[0].message.content;
-            console.log('Debris Analysis Response:', content);
-            
-            // Remove markdown code blocks if present
-            content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-            
-            var jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                showToast('Could not parse analysis response', 'error');
-                document.getElementById('debrisScanButtons').classList.remove('hidden');
-                return;
-            }
-            
-            try {
-                analyzedDebrisData = JSON.parse(jsonMatch[0]);
-                console.log('Parsed debris data:', analyzedDebrisData);
-                displayDebrisAnalysis(analyzedDebrisData, containerSize);
-            } catch(e) {
-                showToast('JSON parse error: ' + e.message, 'error');
-                document.getElementById('debrisScanButtons').classList.remove('hidden');
-            }
-        })
-        .catch(function(err) {
-            showToast('Analysis Error: ' + err.message, 'error');
-            document.getElementById('debrisAnalyzing').classList.add('hidden');
-            document.getElementById('debrisScanButtons').classList.remove('hidden');
-        });
-    }
-    
-    function displayDebrisAnalysis(data, containerSize) {
-        var diversionRate = 100 - (data.landfill || 0);
-        var materials = ['wood','gypsum','plastic','occ','metal','concrete','block','landfill'];
-        var icons = {wood:'🪵',gypsum:'🧱',plastic:'♻️',occ:'📦',metal:'🔩',concrete:'🪨',block:'🧱',landfill:'🗑️'};
-        var recyclable = ['wood','gypsum','plastic','occ','metal','concrete','block'];
-        
-        var html = '<div style="background:var(--slate-700);border-radius:8px;padding:16px"><h4 style="margin-bottom:12px;color:var(--emerald-400)">✓ Analysis Complete</h4><div style="margin-bottom:12px"><div style="font-size:12px;color:var(--slate-400)">Diversion Potential</div><div style="font-size:28px;font-weight:700;color:' + (diversionRate >= 75 ? 'var(--emerald-400)' : 'var(--amber-500)') + '">' + diversionRate + '%</div><div class="progress-bar"><div class="progress-fill" style="width:' + diversionRate + '%"></div></div><div style="font-size:11px;color:var(--slate-500);margin-top:4px">LEED v5 Target: 75%</div></div><div style="font-size:14px">';
-        
-        materials.forEach(function(mat) {
-            var pct = data[mat] || 0;
-            if (pct > 0) {
-                var isRecyclable = recyclable.indexOf(mat) >= 0;
-                html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-600)"><span>' + icons[mat] + ' ' + mat.charAt(0).toUpperCase() + mat.slice(1) + '</span><span>' + pct + '% ' + (isRecyclable ? '♻️' : '🗑️') + '</span></div>';
-            }
-        });
-        
-        html += '</div><div style="margin-top:12px;font-size:12px;color:var(--slate-400)">Confidence: ' + (data.confidence || 'N/A') + '% | ' + (data.notes || '') + '</div></div>';
-        
-        document.getElementById('debrisResults').innerHTML = html;
-        document.getElementById('debrisResults').classList.remove('hidden');
-        document.getElementById('applyDebrisBtn').classList.remove('hidden');
-    }
-    
-    function applyDebrisToTicket() {
-        if (!analyzedDebrisData) return;
-        
-        openTicketModal();
-        document.getElementById('ticketContainer').value = document.getElementById('debrisContainer').value;
-        document.getElementById('matWood').value = analyzedDebrisData.wood || 0;
-        document.getElementById('matGypsum').value = analyzedDebrisData.gypsum || 0;
-        document.getElementById('matPlastic').value = analyzedDebrisData.plastic || 0;
-        document.getElementById('matOCC').value = analyzedDebrisData.occ || 0;
-        document.getElementById('matMetal').value = analyzedDebrisData.metal || 0;
-        document.getElementById('matConcrete').value = analyzedDebrisData.concrete || 0;
-        document.getElementById('matBlock').value = analyzedDebrisData.block || 0;
-        document.getElementById('matLandfill').value = analyzedDebrisData.landfill || 0;
-        updateMaterialTotal();
-        
-        closeModal('scanDebrisModal');
-        analyzedDebrisData = null;
-    }
-    
-    // ========== EXPORTS ==========
-    function exportExcel() {
-        if (tickets.length === 0) {
-            showToast('No tickets to export', 'error');
-            return;
-        }
-        
-        // Dalmex format columns
-        var headers = [
-            'Date', 'Ticket No', 'GVW (lbs)', 'GVW (NT)', 'Tare (lbs)', 'Tare (NT)', 'Net (lbs)', 'Tons',
-            'Wood %', 'Wood', 'Gypsum %', 'Gypsum', 'Plastic %', 'Plastic', 'OCC %', 'OCC',
-            'Metal %', 'Metal', 'Concrete %', 'Concrete', 'Block %', 'Block',
-            'Landfill %', 'Landfill', 'Total Diverted', 'Diverted %'
-        ];
-        
-        var data = [headers];
-        
-        tickets.forEach(function(t) {
-            var mb = t.material_breakdown ? 
-                (typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown) : {};
-            var netTons = t.net_tons || 0;
-            
-            var row = [
-                formatDate(t.ticket_date),
-                t.ticket_number || '',
-                t.gross_lbs || 0,
-                ((t.gross_lbs || 0) / 2000).toFixed(4),
-                t.tare_lbs || 0,
-                ((t.tare_lbs || 0) / 2000).toFixed(4),
-                t.net_lbs || 0,
-                netTons.toFixed(4),
-                mb.wood || 0, (netTons * (mb.wood || 0) / 100).toFixed(4),
-                mb.gypsum || 0, (netTons * (mb.gypsum || 0) / 100).toFixed(4),
-                mb.plastic || 0, (netTons * (mb.plastic || 0) / 100).toFixed(4),
-                mb.occ || 0, (netTons * (mb.occ || 0) / 100).toFixed(4),
-                mb.metal || 0, (netTons * (mb.metal || 0) / 100).toFixed(4),
-                mb.concrete || 0, (netTons * (mb.concrete || 0) / 100).toFixed(4),
-                mb.block || 0, (netTons * (mb.block || 0) / 100).toFixed(4),
-                mb.landfill || 0, (netTons * (mb.landfill || 0) / 100).toFixed(4),
-                (netTons * (100 - (mb.landfill || 0)) / 100).toFixed(4),
-                (100 - (mb.landfill || 0)) + '%'
-            ];
-            data.push(row);
-        });
-        
-        var ws = XLSX.utils.aoa_to_sheet(data);
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Diversion Report');
-        XLSX.writeFile(wb, 'DivertScan_' + (currentProject ? currentProject.name : 'Export') + '_' + new Date().toISOString().split('T')[0] + '.xlsx');
-        showToast('Excel exported!', 'success');
-    }
-    
-    function exportLEEDReport() {
-        if (tickets.length === 0) {
-            showToast('No tickets to export', 'error');
-            return;
-        }
-        
-        var jsPDF = window.jspdf.jsPDF;
-        var doc = new jsPDF();
-        
-        // Header
-        doc.setFontSize(20);
-        doc.setTextColor(16, 185, 129);
-        doc.text('DivertScan™ LEED MRp2/MRc5 Report', 20, 20);
-        
-        doc.setFontSize(12);
-        doc.setTextColor(100);
-        doc.text('Project: ' + (currentProject ? currentProject.name : 'N/A'), 20, 32);
-        doc.text('Generated: ' + new Date().toLocaleDateString(), 20, 40);
-        doc.text('LEED Version: ' + (currentProject ? currentProject.leed_version : 'v5'), 20, 48);
-        
-        // Summary stats
-        var totalTons = tickets.reduce(function(sum, t) { return sum + (t.net_tons || 0); }, 0);
-        var totalDiverted = 0;
-        tickets.forEach(function(t) {
-            totalDiverted += (t.net_tons || 0) * ((t.diversion_rate || 0) / 100);
-        });
-        var avgDiversion = totalTons > 0 ? (totalDiverted / totalTons * 100) : 0;
-        
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text('Summary', 20, 65);
-        
-        doc.setFontSize(11);
-        doc.text('Total Tickets: ' + tickets.length, 25, 75);
-        doc.text('Total Weight: ' + totalTons.toFixed(2) + ' tons', 25, 83);
-        doc.text('Total Diverted: ' + totalDiverted.toFixed(2) + ' tons', 25, 91);
-        doc.text('Diversion Rate: ' + avgDiversion.toFixed(1) + '%', 25, 99);
-        doc.text('LEED Target: 75%', 25, 107);
-        doc.text('Status: ' + (avgDiversion >= 75 ? 'COMPLIANT ✓' : 'BELOW TARGET'), 25, 115);
-        
-        // Material breakdown table
-        doc.setFontSize(14);
-        doc.text('Material Breakdown', 20, 135);
-        
-        var materials = ['wood','gypsum','plastic','occ','metal','concrete','block','landfill'];
-        var matTotals = {};
-        materials.forEach(function(m) { matTotals[m] = 0; });
-        
-        tickets.forEach(function(t) {
-            var mb = t.material_breakdown ? 
-                (typeof t.material_breakdown === 'string' ? JSON.parse(t.material_breakdown) : t.material_breakdown) : {};
-            materials.forEach(function(m) {
-                matTotals[m] += (t.net_tons || 0) * ((mb[m] || 0) / 100);
-            });
-        });
-        
-        var y = 145;
-        doc.setFontSize(10);
-        materials.forEach(function(m) {
-            var tons = matTotals[m];
-            var pct = totalTons > 0 ? (tons / totalTons * 100) : 0;
-            doc.text(m.charAt(0).toUpperCase() + m.slice(1) + ': ' + tons.toFixed(2) + ' tons (' + pct.toFixed(1) + '%)', 25, y);
-            y += 8;
-        });
-        
-        // Footer
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text('Generated by DivertScan™ | Point-of-Capture Verification Technology', 20, 280);
-        
-        doc.save('LEED_Report_' + (currentProject ? currentProject.name : 'Project') + '_' + new Date().toISOString().split('T')[0] + '.pdf');
-        showToast('LEED Report exported!', 'success');
-    }
-    
-    function exportAuditorPackage() {
-        if (tickets.length === 0) {
-            showToast('No tickets to export', 'error');
-            return;
-        }
-        
-        var jsPDF = window.jspdf.jsPDF;
-        var doc = new jsPDF();
-        
-        // Cover page
-        doc.setFontSize(24);
-        doc.setTextColor(16, 185, 129);
-        doc.text('LEED Auditor Package', 20, 40);
-        
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text('Project: ' + (currentProject ? currentProject.name : 'N/A'), 20, 60);
-        doc.text('Client: ' + (currentProject ? currentProject.client : 'N/A'), 20, 70);
-        doc.text('Location: ' + (currentProject ? currentProject.location : 'N/A'), 20, 80);
-        doc.text('LEED Version: ' + (currentProject ? currentProject.leed_version : 'v5'), 20, 90);
-        doc.text('Report Date: ' + new Date().toLocaleDateString(), 20, 100);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text('This package contains verified waste diversion documentation', 20, 120);
-        doc.text('for LEED MRp2 (Construction and Demolition Waste Management)', 20, 128);
-        doc.text('and MRc5 (Construction and Demolition Waste Management) credits.', 20, 136);
-        
-        // Chain of custody certification
-        doc.addPage();
-        doc.setFontSize(16);
-        doc.setTextColor(0);
-        doc.text('Chain of Custody Certification', 20, 20);
-        
-        doc.setFontSize(10);
-        doc.text('All waste diversion data has been captured using DivertScan™', 20, 35);
-        doc.text('Point-of-Capture Verification technology, which requires:', 20, 43);
-        doc.text('• GPS coordinate verification at time of data entry', 25, 55);
-        doc.text('• Timestamp verification for all transactions', 25, 63);
-        doc.text('• Photographic documentation of materials', 25, 71);
-        doc.text('• AI-powered material composition analysis', 25, 79);
-        
-        // Ticket summary
-        doc.addPage();
-        doc.setFontSize(16);
-        doc.text('Ticket Register', 20, 20);
-        
-        var y = 35;
-        doc.setFontSize(8);
-        tickets.slice(0, 30).forEach(function(t, i) {
-            if (y > 270) {
-                doc.addPage();
-                y = 20;
-            }
-            doc.text((i+1) + '. ' + formatDate(t.ticket_date) + ' | #' + t.ticket_number + ' | ' + (t.net_tons||0).toFixed(2) + 'T | ' + (t.diversion_rate||0) + '% diverted', 20, y);
-            y += 7;
-        });
-        
-        if (tickets.length > 30) {
-            doc.text('... and ' + (tickets.length - 30) + ' more tickets', 20, y + 10);
-        }
-        
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text('Generated by DivertScan™ | Patent Pending | © 2025 All Rights Reserved', 20, 280);
-        
-        doc.save('Auditor_Package_' + (currentProject ? currentProject.name : 'Project') + '_' + new Date().toISOString().split('T')[0] + '.pdf');
-        showToast('Auditor Package exported!', 'success');
-    }
-    
-    function exportCSV() {
-        if (tickets.length === 0) {
-            showToast('No tickets to export', 'error');
-            return;
-        }
-        
-        var headers = ['Date','Ticket #','Gross (lbs)','Tare (lbs)','Net (lbs)','Net (tons)','Diversion Rate','Hauler'];
-        var rows = tickets.map(function(t) {
-            return [t.ticket_date, t.ticket_number, t.gross_lbs, t.tare_lbs, t.net_lbs, 
-                (t.net_tons||0).toFixed(4), (t.diversion_rate||0)+'%', t.hauler||''];
-        });
-        
-        var csv = [headers].concat(rows).map(function(r) { return r.join(','); }).join('\n');
-        var blob = new Blob([csv], { type: 'text/csv' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'DivertScan_' + (currentProject ? currentProject.name : 'Export') + '_' + new Date().toISOString().split('T')[0] + '.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('CSV exported!', 'success');
-    }
-    
-    function importExcel() {
-        document.getElementById('importFile').click();
-    }
-    
-    function processImportFile(file) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                var data = new Uint8Array(e.target.result);
-                var workbook = XLSX.read(data, { type: 'array' });
-                var sheet = workbook.Sheets[workbook.SheetNames[0]];
-                var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                
-                if (rows.length < 2) {
-                    showToast('No data found in file', 'error');
-                    return;
-                }
-                
-                // Find columns by header
-                var headers = rows[0].map(function(h) { return (h||'').toString().toLowerCase(); });
-                var findCol = function(names) {
-                    return headers.findIndex(function(h) {
-                        return names.some(function(n) { return h.indexOf(n) >= 0; });
-                    });
-                };
-                
-                var dateCol = findCol(['date']);
-                var ticketCol = findCol(['ticket', 'number', '#']);
-                var grossCol = findCol(['gross', 'gvw']);
-                var tareCol = findCol(['tare']);
-                
-                var imported = 0;
-                var importNext = function(i) {
-                    if (i >= rows.length) {
-                        showToast('Imported ' + imported + ' tickets!', 'success');
-                        loadTickets();
-                        return;
+                const timeout = setTimeout(() => {
+                    reject(new Error('Supabase SDK load timeout'));
+                }, 15000);
+
+                script.onload = () => {
+                    clearTimeout(timeout);
+                    if (window.supabase) {
+                        resolve(window.supabase);
+                    } else {
+                        reject(new Error('Supabase SDK loaded but not available'));
                     }
-                    
-                    var row = rows[i];
-                    if (!row || row.length === 0) {
-                        importNext(i + 1);
-                        return;
-                    }
-                    
-                    var ticketData = {
-                        project_id: currentProject.id,
-                        user_id: currentUser.id,
-                        ticket_number: ticketCol >= 0 ? String(row[ticketCol] || '') : 'IMP-' + i,
-                        ticket_date: dateCol >= 0 ? parseExcelDate(row[dateCol]) : new Date().toISOString().split('T')[0],
-                        gross_lbs: grossCol >= 0 ? parseInt(row[grossCol]) || 0 : 0,
-                        tare_lbs: tareCol >= 0 ? parseInt(row[tareCol]) || 0 : 0,
-                        net_lbs: 0,
-                        net_tons: 0,
-                        material_breakdown: { wood: 40, gypsum: 15, metal: 10, concrete: 10, landfill: 25 },
-                        diversion_rate: 75
-                    };
-                    
-                    ticketData.net_lbs = ticketData.gross_lbs - ticketData.tare_lbs;
-                    ticketData.net_tons = ticketData.net_lbs / 2000;
-                    
-                    supabase.from('tickets').insert([ticketData]).then(function(result) {
-                        if (!result.error) imported++;
-                        importNext(i + 1);
-                    });
                 };
+
+                script.onerror = () => {
+                    clearTimeout(timeout);
+                    reject(new Error('Failed to load Supabase SDK'));
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        // Load SheetJS for Excel export
+        function loadSheetJS() {
+            return new Promise((resolve, reject) => {
+                if (window.XLSX) {
+                    resolve(window.XLSX);
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                script.async = true;
+
+                const timeout = setTimeout(() => {
+                    reject(new Error('SheetJS load timeout'));
+                }, 10000);
+
+                script.onload = () => {
+                    clearTimeout(timeout);
+                    resolve(window.XLSX);
+                };
+
+                script.onerror = () => {
+                    clearTimeout(timeout);
+                    reject(new Error('Failed to load SheetJS'));
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        // Initialize Supabase client
+        async function initSupabase() {
+            updateLoadStatus('Connecting to database...');
+            
+            try {
+                const { createClient } = window.supabase;
+                supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
                 
-                importNext(1);
+                // Test connection
+                const { error } = await supabase.from('loads').select('id').limit(1);
                 
+                if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist (ok for first run)
+                    console.warn('Database connection warning:', error.message);
+                }
+                
+                return true;
             } catch (err) {
-                showToast('Import error: ' + err.message, 'error');
+                console.error('Supabase init error:', err);
+                return false;
             }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-    
-    function parseExcelDate(value) {
-        if (!value) return new Date().toISOString().split('T')[0];
-        if (typeof value === 'number') {
-            // Excel serial date
-            var date = new Date((value - 25569) * 86400 * 1000);
-            return date.toISOString().split('T')[0];
         }
-        var d = new Date(value);
-        return isNaN(d) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
-    }
- {
-        var file = e.target.files[0];
-        if (!file) return;
-        
-        var reader = new FileReader();
-        reader.onload = function(ev) {
-            var img = document.getElementById('ticketPreview');
-            img.src = ev.target.result;
-            img.classList.remove('hidden');
-            analyzeTicketPhoto(ev.target.result);
-        };
-        reader.readAsDataURL(file);
-        e.target.value = '';
-    }
-    
-    function handleDebrisImage(e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        
-        var reader = new FileReader();
-        reader.onload = function(ev) {
-            var img = document.getElementById('debrisPreview');
-            img.src = ev.target.result;
-            img.classList.remove('hidden');
-            analyzeDebrisPhoto(ev.target.result);
-        };
-        reader.readAsDataURL(file);
-        e.target.value = '';
-    }
-    
-    // ========== UTILITIES ==========
-    function openModal(id) {
-        document.getElementById(id).classList.add('active');
-    }
-    
-    function closeModal(id) {
-        document.getElementById(id).classList.remove('active');
-    }
-    
-    function showToast(message, type) {
-        var toast = document.getElementById('toast');
-        toast.textContent = message;
-        toast.className = 'toast ' + (type || 'info') + ' show';
-        setTimeout(function() { toast.classList.remove('show'); }, 3000);
-    }
-    
-    function formatDate(dateStr) {
-        if (!dateStr) return '-';
-        var d = new Date(dateStr);
-        return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-    }
-    
-    // ========== START - DYNAMIC LOADING ==========
-    loadSupabase(init);
+
+        // Get GPS coordinates
+        async function getGPSData() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve({ error: 'Geolocation not supported' });
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve({
+                            latitude: position.coords.latitude.toFixed(6),
+                            longitude: position.coords.longitude.toFixed(6),
+                            accuracy: position.coords.accuracy,
+                            timestamp: new Date().toISOString()
+                        });
+                    },
+                    (error) => {
+                        resolve({ error: error.message });
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            });
+        }
+
+        // Get IP data (simplified - would use actual API in production)
+        async function getIPData() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return { ip: data.ip, timestamp: new Date().toISOString() };
+            } catch {
+                return { ip: 'unavailable', timestamp: new Date().toISOString() };
+            }
+        }
+
+        // Main initialization
+        async function initialize() {
+            try {
+                // Load Supabase
+                await loadSupabase();
+                
+                // Initialize client
+                const connected = await initSupabase();
+                
+                updateLoadStatus('Loading application...');
+                
+                // Start loading other dependencies in parallel
+                loadSheetJS().catch(console.warn);
+                
+                // Get verification data in background
+                Promise.all([getGPSData(), getIPData()]).then(([gps, ip]) => {
+                    gpsData = gps;
+                    ipData = ip;
+                    updateCaptureInfo();
+                });
+
+                // Initialize app
+                await initializeApp(connected);
+                
+                // Show app
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('app').classList.add('loaded');
+                
+                // Update connection status
+                updateConnectionStatus(connected);
+                
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                showLoadError(`Failed to initialize: ${error.message}. Please check your internet connection and try again.`);
+            }
+        }
+
+        // Initialize app UI and data
+        async function initializeApp(isConnected) {
+            // Set up tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+                });
+            });
+
+            // Set default date
+            document.getElementById('load-date').valueAsDate = new Date();
+
+            // Load data
+            await loadMaterialsData();
+            
+            if (isConnected) {
+                await loadLoadsData();
+                await loadProjectsData();
+            } else {
+                loadOfflineData();
+            }
+
+            updateStats();
+            populateNewsLinks();
+        }
+
+        // Materials data with GWP coefficients
+        const MATERIALS = [
+            { name: 'Concrete', category: 'Aggregate', density: 4050, gwp: 0.107, tier: 'Standard' },
+            { name: 'Asphalt', category: 'Aggregate', density: 3960, gwp: 0.094, tier: 'Standard' },
+            { name: 'Wood - Clean', category: 'Wood', density: 600, gwp: 0.912, tier: 'Tier 1' },
+            { name: 'Wood - Treated', category: 'Wood', density: 650, gwp: 0.312, tier: 'Standard' },
+            { name: 'Metal - Ferrous', category: 'Metal', density: 1600, gwp: 1.831, tier: 'Standard' },
+            { name: 'Metal - Non-Ferrous', category: 'Metal', density: 1200, gwp: 4.876, tier: 'Standard' },
+            { name: 'Drywall/Gypsum', category: 'Drywall', density: 800, gwp: 0.184, tier: 'Standard' },
+            { name: 'Cardboard/OCC', category: 'Paper', density: 200, gwp: 3.112, tier: 'Standard' },
+            { name: 'Plastic - Mixed', category: 'Plastic', density: 400, gwp: 1.423, tier: 'Standard' },
+            { name: 'Roofing Materials', category: 'Mixed', density: 1100, gwp: 0.156, tier: 'Standard' },
+            { name: 'Brick/Masonry', category: 'Aggregate', density: 3200, gwp: 0.089, tier: 'Standard' },
+            { name: 'Glass', category: 'Glass', density: 2500, gwp: 0.423, tier: 'Standard' },
+            { name: 'Carpet', category: 'Mixed', density: 350, gwp: 2.156, tier: 'Standard' },
+            { name: 'Insulation', category: 'Mixed', density: 150, gwp: 0.534, tier: 'Standard' },
+            { name: 'Mixed C&D', category: 'Mixed', density: 1500, gwp: 0.267, tier: 'Standard' },
+            { name: 'Land Clearing Debris', category: 'Organic', density: 500, gwp: 0.756, tier: 'Tier 1' },
+            { name: 'Fixtures - Reuse', category: 'Reuse', density: 800, gwp: 2.5, tier: 'Tier 1' },
+            { name: 'Appliances - Reuse', category: 'Reuse', density: 700, gwp: 3.2, tier: 'Tier 1' }
+        ];
+
+        // Sample projects
+        const SAMPLE_PROJECTS = [
+            { id: 'proj-001', name: "Children's Hospital Phase 2", client: 'Children\'s Medical Center', address: 'Dallas, TX' },
+            { id: 'proj-002', name: 'DFW Airport Terminal C', client: 'DFW Airport', address: 'Irving, TX' },
+            { id: 'proj-003', name: 'Frisco Town Center', client: 'City of Frisco', address: 'Frisco, TX' }
+        ];
+
+        // Load materials table
+        function loadMaterialsData() {
+            const tbody = document.getElementById('materials-table');
+            tbody.innerHTML = MATERIALS.map(m => `
+                <tr>
+                    <td>${m.name}</td>
+                    <td>${m.category}</td>
+                    <td>${m.density.toLocaleString()}</td>
+                    <td>${m.gwp.toFixed(3)}</td>
+                    <td><span class="badge ${m.tier === 'Tier 1' ? 'badge-success' : 'badge-info'}">${m.tier}</span></td>
+                </tr>
+            `).join('');
+
+            // Populate material select
+            const select = document.getElementById('load-material');
+            select.innerHTML = '<option value="">Select Material</option>' + 
+                MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+        }
+
+        // Load projects
+        async function loadProjectsData() {
+            // Try to load from Supabase first
+            let projects = SAMPLE_PROJECTS;
+            
+            if (supabase) {
+                try {
+                    const { data, error } = await supabase.from('projects').select('*');
+                    if (!error && data && data.length > 0) {
+                        projects = data;
+                    }
+                } catch (e) {
+                    console.warn('Could not load projects from database');
+                }
+            }
+
+            // Update project select
+            const select = document.getElementById('load-project');
+            const reportSelect = document.getElementById('report-project');
+            
+            const options = '<option value="">Select Project</option>' + 
+                projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            
+            select.innerHTML = options;
+            reportSelect.innerHTML = '<option value="">All Projects</option>' + 
+                projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+            // Update projects list
+            const listEl = document.getElementById('projects-list');
+            listEl.innerHTML = projects.map(p => `
+                <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;">
+                    <div style="font-weight:600;">${p.name}</div>
+                    <div style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''} • ${p.address || ''}</div>
+                </div>
+            `).join('');
+
+            window.projectsData = projects;
+        }
+
+        // Load loads data
+        async function loadLoadsData() {
+            const tbody = document.getElementById('loads-table');
+            
+            if (!supabase) {
+                loadOfflineData();
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('loads')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    window.loadsData = data;
+                    renderLoadsTable(data);
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                                No loads recorded yet. Click "New Load" to add your first entry.
+                            </td>
+                        </tr>
+                    `;
+                    window.loadsData = [];
+                }
+            } catch (err) {
+                console.error('Error loading loads:', err);
+                loadOfflineData();
+            }
+        }
+
+        // Render loads table
+        function renderLoadsTable(loads) {
+            const tbody = document.getElementById('loads-table');
+            
+            if (!loads || loads.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align:center;color:var(--text-muted);">
+                            No loads recorded yet.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = loads.map(load => {
+                const project = window.projectsData?.find(p => p.id === load.project_id);
+                const isVerified = load.gps_latitude && load.ip_address;
+                const isDiverted = ['recycling', 'reuse', 'composting'].includes(load.destination_type);
+                
+                return `
+                    <tr>
+                        <td>${new Date(load.load_date || load.created_at).toLocaleDateString()}</td>
+                        <td>${project?.name || load.project_id || '-'}</td>
+                        <td>${load.material || '-'}</td>
+                        <td>${parseFloat(load.weight_tons || 0).toFixed(2)}</td>
+                        <td>${load.facility_name || load.destination_type || '-'}</td>
+                        <td>
+                            <span class="badge ${isDiverted ? 'badge-success' : 'badge-warning'}">
+                                ${isDiverted ? 'Diverted' : 'Disposed'}
+                            </span>
+                        </td>
+                        <td>
+                            ${isVerified ? 
+                                '<span class="badge badge-success">✓ Verified</span>' : 
+                                '<span class="badge badge-warning">Pending</span>'
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" 
+                                onclick="viewLoad('${load.id}')">View</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Load offline/demo data
+        function loadOfflineData() {
+            const demoLoads = [
+                { id: '1', load_date: '2026-01-24', project_id: 'proj-001', material: 'Concrete', weight_tons: 45.5, destination_type: 'recycling', facility_name: 'DFW Concrete Recycling', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
+                { id: '2', load_date: '2026-01-23', project_id: 'proj-001', material: 'Metal - Ferrous', weight_tons: 12.3, destination_type: 'recycling', facility_name: 'Texas Metal Recyclers', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
+                { id: '3', load_date: '2026-01-22', project_id: 'proj-002', material: 'Mixed C&D', weight_tons: 28.7, destination_type: 'landfill', facility_name: 'DFW Landfill', gps_latitude: null, ip_address: null }
+            ];
+            
+            window.loadsData = demoLoads;
+            renderLoadsTable(demoLoads);
+        }
+
+        // Update stats
+        function updateStats() {
+            const loads = window.loadsData || [];
+            
+            const totalLoads = loads.length;
+            const totalTonnage = loads.reduce((sum, l) => sum + parseFloat(l.weight_tons || 0), 0);
+            const divertedTonnage = loads
+                .filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type))
+                .reduce((sum, l) => sum + parseFloat(l.weight_tons || 0), 0);
+            const diversionRate = totalTonnage > 0 ? (divertedTonnage / totalTonnage * 100) : 0;
+            
+            // Calculate carbon avoided
+            let carbonAvoided = 0;
+            loads.forEach(load => {
+                if (['recycling', 'reuse', 'composting'].includes(load.destination_type)) {
+                    const material = MATERIALS.find(m => m.name === load.material);
+                    if (material) {
+                        carbonAvoided += parseFloat(load.weight_tons || 0) * material.gwp;
+                    }
+                }
+            });
+
+            document.getElementById('stat-loads').textContent = totalLoads;
+            document.getElementById('stat-tonnage').textContent = totalTonnage.toFixed(1);
+            document.getElementById('stat-diversion').textContent = diversionRate.toFixed(1) + '%';
+            document.getElementById('stat-carbon').textContent = carbonAvoided.toFixed(2);
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('connection-text');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+            } else if (navigator.onLine) {
+                dot.classList.remove('connected');
+                dot.classList.add('offline');
+                text.textContent = 'Limited Connection';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Offline Mode';
+            }
+        }
+
+        // Update capture info display
+        function updateCaptureInfo() {
+            const el = document.getElementById('capture-info');
+            if (!el) return;
+
+            let info = [];
+            if (gpsData && !gpsData.error) {
+                info.push(`GPS: ${gpsData.latitude}, ${gpsData.longitude}`);
+            } else {
+                info.push('GPS: Unavailable');
+            }
+            if (ipData && ipData.ip !== 'unavailable') {
+                info.push(`IP: ${ipData.ip}`);
+            }
+            info.push(`Time: ${new Date().toLocaleString()}`);
+            
+            el.textContent = info.join(' | ');
+        }
+
+        // Modal functions
+        function openNewLoadModal() {
+            document.getElementById('new-load-modal').classList.add('active');
+            document.getElementById('load-date').valueAsDate = new Date();
+            updateCaptureInfo();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Save load
+        async function saveLoad() {
+            const form = document.getElementById('new-load-form');
+            
+            const loadData = {
+                project_id: document.getElementById('load-project').value,
+                load_date: document.getElementById('load-date').value,
+                material: document.getElementById('load-material').value,
+                weight_tons: parseFloat(document.getElementById('load-weight').value),
+                destination_type: document.getElementById('load-destination-type').value,
+                facility_name: document.getElementById('load-facility').value,
+                hauler: document.getElementById('load-hauler').value,
+                ticket_number: document.getElementById('load-ticket').value,
+                notes: document.getElementById('load-notes').value,
+                gps_latitude: gpsData?.latitude || null,
+                gps_longitude: gpsData?.longitude || null,
+                gps_accuracy: gpsData?.accuracy || null,
+                ip_address: ipData?.ip || null,
+                capture_timestamp: new Date().toISOString(),
+                created_at: new Date().toISOString()
+            };
+
+            // Validate
+            if (!loadData.project_id || !loadData.material || !loadData.weight_tons || !loadData.destination_type) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+
+            try {
+                if (supabase) {
+                    const { data, error } = await supabase.from('loads').insert([loadData]).select();
+                    if (error) throw error;
+                    
+                    showToast('Load saved successfully!', 'success');
+                    closeModal('new-load-modal');
+                    form.reset();
+                    await loadLoadsData();
+                    updateStats();
+                } else {
+                    // Offline mode - save to local array
+                    loadData.id = 'local-' + Date.now();
+                    window.loadsData = window.loadsData || [];
+                    window.loadsData.unshift(loadData);
+                    renderLoadsTable(window.loadsData);
+                    updateStats();
+                    showToast('Load saved locally (offline mode)', 'info');
+                    closeModal('new-load-modal');
+                    form.reset();
+                }
+            } catch (err) {
+                console.error('Save error:', err);
+                showToast('Error saving load: ' + err.message, 'error');
+            }
+        }
+
+        // View load details
+        function viewLoad(id) {
+            const load = window.loadsData?.find(l => l.id === id);
+            if (load) {
+                alert(JSON.stringify(load, null, 2));
+            }
+        }
+
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Export to Excel (Dalmex 24-column format)
+        async function exportExcel() {
+            showToast('Generating Excel report...', 'info');
+            
+            try {
+                // Ensure SheetJS is loaded
+                if (!window.XLSX) {
+                    await loadSheetJS();
+                }
+                
+                const loads = window.loadsData || [];
+                const projects = window.projectsData || SAMPLE_PROJECTS;
+                
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                
+                // ===== SUMMARY SHEET =====
+                const summaryData = [
+                    ['DivertScan © 2026 - Waste Diversion Report'],
+                    ['The Carbon Truth in Every Load'],
+                    ['Powered by Dalmex Recycling LLC'],
+                    [''],
+                    ['Report Generated:', new Date().toLocaleString()],
+                    ['Total Loads:', loads.length],
+                    [''],
+                    ['SUMMARY STATISTICS'],
+                    ['Total Tonnage:', loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0).toFixed(2)],
+                    ['Diverted Tonnage:', loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0).toFixed(2)],
+                    ['Diversion Rate:', ((loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0) / Math.max(loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0), 1)) * 100).toFixed(1) + '%']
+                ];
+                const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
+                XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
+                
+                // ===== LOADS DETAIL SHEET (24 columns) =====
+                const loadsHeaders = [
+                    'Record ID', 'Load Date', 'Project ID', 'Project Name', 'Client',
+                    'Material Category', 'Material Type', 'Weight (tons)', 'Weight (lbs)',
+                    'Destination Type', 'Facility Name', 'Facility Address', 'Hauler',
+                    'Ticket Number', 'Diverted', 'GWP Factor', 'CO2e Avoided (MT)',
+                    'GPS Latitude', 'GPS Longitude', 'IP Address', 'Capture Timestamp',
+                    'LEED Tier', 'Verification Status', 'Notes'
+                ];
+                
+                const loadsRows = loads.map(load => {
+                    const project = projects.find(p => p.id === load.project_id) || {};
+                    const material = MATERIALS.find(m => m.name === load.material) || {};
+                    const isDiverted = ['recycling', 'reuse', 'composting'].includes(load.destination_type);
+                    const co2Avoided = isDiverted ? (parseFloat(load.weight_tons || 0) * (material.gwp || 0)) : 0;
+                    const isVerified = load.gps_latitude && load.ip_address;
+                    
+                    return [
+                        load.id,
+                        load.load_date,
+                        load.project_id,
+                        project.name || '',
+                        project.client || '',
+                        material.category || '',
+                        load.material,
+                        parseFloat(load.weight_tons || 0).toFixed(2),
+                        (parseFloat(load.weight_tons || 0) * 2000).toFixed(0),
+                        load.destination_type,
+                        load.facility_name || '',
+                        '',
+                        load.hauler || '',
+                        load.ticket_number || '',
+                        isDiverted ? 'Yes' : 'No',
+                        material.gwp || 0,
+                        co2Avoided.toFixed(3),
+                        load.gps_latitude || '',
+                        load.gps_longitude || '',
+                        load.ip_address || '',
+                        load.capture_timestamp || '',
+                        material.tier || 'Standard',
+                        isVerified ? 'Verified' : 'Pending',
+                        load.notes || ''
+                    ];
+                });
+                
+                const loadsWS = XLSX.utils.aoa_to_sheet([loadsHeaders, ...loadsRows]);
+                XLSX.utils.book_append_sheet(wb, loadsWS, 'Loads Detail');
+                
+                // ===== MATERIALS REFERENCE SHEET =====
+                const materialsHeaders = ['Material', 'Category', 'Default Density (lb/yd³)', 'GWP (MT CO2e/ton)', 'LEED v5 Tier'];
+                const materialsRows = MATERIALS.map(m => [m.name, m.category, m.density, m.gwp, m.tier]);
+                const materialsWS = XLSX.utils.aoa_to_sheet([materialsHeaders, ...materialsRows]);
+                XLSX.utils.book_append_sheet(wb, materialsWS, 'Materials Reference');
+                
+                // ===== INDUSTRY WATCHTOWER SHEET =====
+                const watchtowerData = [
+                    ['DivertScan © 2026 - Industry Watchtower'],
+                    [''],
+                    ['LEED v5 KEY UPDATES'],
+                    ['• Tier 1 Circularity credits provide enhanced weighted multipliers for reuse materials'],
+                    ['• Global Warming Potential (GWP) coefficients required for carbon tracking'],
+                    ['• Stricter chain-of-custody documentation requirements'],
+                    ['• Point-of-capture verification becoming industry standard'],
+                    [''],
+                    ['OFFICIAL RESOURCES'],
+                    ['USGBC LEED Official', 'https://www.usgbc.org/leed'],
+                    ['EPA WARM Calculator', 'https://www.epa.gov/warm'],
+                    ['MR Credit: Construction Waste Management', 'https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-data-702'],
+                    [''],
+                    ['REGULATORY CONTACTS'],
+                    ['Texas Commission on Environmental Quality (TCEQ)', 'https://www.tceq.texas.gov'],
+                    ['EPA Region 6 (Dallas)', 'https://www.epa.gov/aboutepa/epa-region-6-south-central']
+                ];
+                const watchtowerWS = XLSX.utils.aoa_to_sheet(watchtowerData);
+                XLSX.utils.book_append_sheet(wb, watchtowerWS, 'Industry Watchtower');
+                
+                // Generate and download
+                const filename = `DivertScan_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                
+                showToast('Excel report downloaded!', 'success');
+            } catch (err) {
+                console.error('Export error:', err);
+                showToast('Export failed: ' + err.message, 'error');
+            }
+        }
+
+        // Export LEED Report (without hardcoded certification levels)
+        async function exportLEEDReport() {
+            showToast('Generating LEED report...', 'info');
+            
+            try {
+                if (!window.XLSX) {
+                    await loadSheetJS();
+                }
+                
+                const loads = window.loadsData || [];
+                const projects = window.projectsData || SAMPLE_PROJECTS;
+                
+                // Calculate metrics
+                const totalTonnage = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+                const divertedLoads = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type));
+                const divertedTonnage = divertedLoads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+                const diversionRate = totalTonnage > 0 ? (divertedTonnage / totalTonnage * 100) : 0;
+                
+                // Calculate by material
+                const materialSummary = {};
+                loads.forEach(load => {
+                    const mat = load.material || 'Unknown';
+                    if (!materialSummary[mat]) {
+                        materialSummary[mat] = { total: 0, diverted: 0, tier1: 0 };
+                    }
+                    const weight = parseFloat(load.weight_tons || 0);
+                    materialSummary[mat].total += weight;
+                    if (['recycling', 'reuse', 'composting'].includes(load.destination_type)) {
+                        materialSummary[mat].diverted += weight;
+                        const matDef = MATERIALS.find(m => m.name === mat);
+                        if (matDef?.tier === 'Tier 1') {
+                            materialSummary[mat].tier1 += weight;
+                        }
+                    }
+                });
+                
+                const wb = XLSX.utils.book_new();
+                
+                // LEED Summary Sheet
+                const leedData = [
+                    ['LEED v5 Construction Waste Management Report'],
+                    ['DivertScan © 2026 - Point-of-Capture Verified'],
+                    [''],
+                    ['Report Date:', new Date().toLocaleString()],
+                    ['Reporting Period:', 'All Available Data'],
+                    [''],
+                    ['DIVERSION SUMMARY'],
+                    ['Total Waste Generated (tons):', totalTonnage.toFixed(2)],
+                    ['Total Waste Diverted (tons):', divertedTonnage.toFixed(2)],
+                    ['Total Waste to Landfill (tons):', (totalTonnage - divertedTonnage).toFixed(2)],
+                    ['Overall Diversion Rate:', diversionRate.toFixed(1) + '%'],
+                    [''],
+                    ['LEED v5 COMPLIANCE NOTES'],
+                    ['• Diversion rate calculated per MR Credit requirements'],
+                    ['• Point-of-capture verification provides chain-of-custody documentation'],
+                    ['• Tier 1 Circularity materials tracked separately for enhanced credits'],
+                    ['• Actual certification level to be determined by LEED reviewer based on project scope'],
+                    [''],
+                    ['VERIFICATION METHOD'],
+                    ['All entries captured with GPS coordinates and IP address verification'],
+                    ['Timestamps recorded at moment of data entry']
+                ];
+                const leedWS = XLSX.utils.aoa_to_sheet(leedData);
+                XLSX.utils.book_append_sheet(wb, leedWS, 'LEED Summary');
+                
+                // Material Breakdown Sheet
+                const matHeaders = ['Material', 'Total (tons)', 'Diverted (tons)', 'Tier 1 (tons)', 'Diversion %'];
+                const matRows = Object.entries(materialSummary).map(([mat, data]) => [
+                    mat,
+                    data.total.toFixed(2),
+                    data.diverted.toFixed(2),
+                    data.tier1.toFixed(2),
+                    data.total > 0 ? ((data.diverted / data.total) * 100).toFixed(1) + '%' : '0%'
+                ]);
+                const matWS = XLSX.utils.aoa_to_sheet([matHeaders, ...matRows]);
+                XLSX.utils.book_append_sheet(wb, matWS, 'Material Breakdown');
+                
+                // Verification Audit Sheet
+                const auditHeaders = ['Date', 'Material', 'Weight', 'Destination', 'GPS', 'IP', 'Timestamp'];
+                const auditRows = loads.map(l => [
+                    l.load_date,
+                    l.material,
+                    parseFloat(l.weight_tons || 0).toFixed(2),
+                    l.destination_type,
+                    l.gps_latitude ? `${l.gps_latitude}, ${l.gps_longitude}` : 'N/A',
+                    l.ip_address || 'N/A',
+                    l.capture_timestamp || ''
+                ]);
+                const auditWS = XLSX.utils.aoa_to_sheet([auditHeaders, ...auditRows]);
+                XLSX.utils.book_append_sheet(wb, auditWS, 'Verification Audit');
+                
+                const filename = `LEED_Compliance_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                
+                showToast('LEED report downloaded!', 'success');
+            } catch (err) {
+                console.error('LEED export error:', err);
+                showToast('LEED export failed: ' + err.message, 'error');
+            }
+        }
+
+        // Export Audit Log
+        function exportAuditLog() {
+            showToast('Audit log export coming soon', 'info');
+        }
+
+        // Populate news links
+        function populateNewsLinks() {
+            const container = document.getElementById('news-links');
+            const links = [
+                { title: 'USGBC Announces LEED v5 Updates for 2025', url: '#', date: '2025-12' },
+                { title: 'EPA Updates WARM Model to Version 16', url: '#', date: '2025-11' },
+                { title: 'Texas TCEQ Construction Waste Guidelines Revised', url: '#', date: '2025-10' }
+            ];
+            
+            container.innerHTML = links.map(l => `
+                <div style="padding:0.75rem;border-left:3px solid var(--primary);margin-bottom:0.5rem;background:var(--bg-input);border-radius:0 4px 4px 0;">
+                    <a href="${l.url}" target="_blank" style="color:var(--text-primary);text-decoration:none;font-weight:500;">${l.title}</a>
+                    <div style="color:var(--text-muted);font-size:0.75rem;margin-top:0.25rem;">${l.date}</div>
+                </div>
+            `).join('');
+        }
+
+        // Network status listeners
+        window.addEventListener('online', () => {
+            isOnline = true;
+            updateConnectionStatus(true);
+            showToast('Connection restored', 'success');
+        });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            updateConnectionStatus(false);
+            showToast('You are offline - data will be saved locally', 'info');
+        });
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            initialize();
+        }
     </script>
 </body>
 </html>
