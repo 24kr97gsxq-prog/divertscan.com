@@ -157,6 +157,11 @@
         .resource-link:hover { background: var(--border); }
         .resource-link span { color: var(--text-muted); font-size: 0.75rem; display: block; }
 
+        .weight-source-btn { transition: all 0.2s; }
+        .weight-source-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .weight-source-panel { animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         @media (max-width: 640px) {
             .header-content { flex-direction: column; align-items: stretch; }
             .header-actions { flex-direction: column; }
@@ -345,7 +350,7 @@
                     <div class="card-title">⚙️ Settings</div>
                     
                     <div class="form-group">
-                        <label>OpenAI API Key (for AI Debris Analysis)</label>
+                        <label>OpenAI API Key (for AI Analysis & OCR)</label>
                         <div style="display:flex;gap:0.5rem;">
                             <input type="password" id="settings-api-key" placeholder="sk-..." style="flex:1;">
                             <button class="btn btn-primary" onclick="saveApiKey()">Save</button>
@@ -364,9 +369,45 @@
 
                     <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
 
+                    <div class="card-title" style="font-size:1rem;">⚖️ Scale Connection</div>
+                    <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem;">Connect directly to your Avery Weigh-Tronix scale via USB/Serial</p>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Scale Model</label>
+                            <select id="scale-model">
+                                <option value="avery-1310">Avery Weigh-Tronix 1310</option>
+                                <option value="avery-zm303">Avery Weigh-Tronix ZM303</option>
+                                <option value="rice-lake">Rice Lake</option>
+                                <option value="other">Other (9600 baud)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Baud Rate</label>
+                            <select id="scale-baud">
+                                <option value="9600" selected>9600</option>
+                                <option value="19200">19200</option>
+                                <option value="38400">38400</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="background:var(--bg-input);padding:1rem;border-radius:8px;margin-bottom:1rem;">
+                        <div style="font-weight:600;margin-bottom:0.5rem;">Connection Requirements:</div>
+                        <ul style="font-size:0.875rem;color:var(--text-muted);margin-left:1.5rem;">
+                            <li>Chrome or Edge browser (Web Serial API)</li>
+                            <li>USB-to-Serial adapter connected to scale</li>
+                            <li>Scale configured for continuous output or polling</li>
+                        </ul>
+                    </div>
+
+                    <button class="btn btn-secondary" onclick="testScaleConnection()">🔌 Test Connection</button>
+
+                    <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
+
                     <div class="form-group">
                         <label>App Version</label>
-                        <p style="color:var(--text-muted);">DivertScan © 2026 v2.1.0</p>
+                        <p style="color:var(--text-muted);">DivertScan © 2026 v2.2.0</p>
                     </div>
 
                     <div class="form-group">
@@ -385,52 +426,116 @@
 
     <!-- New Load Modal -->
     <div class="modal-overlay" id="new-load-modal">
-        <div class="modal">
+        <div class="modal" style="max-width:700px;">
             <div class="modal-header"><h3>Add New Load</h3><button class="modal-close" onclick="closeModal('new-load-modal')">×</button></div>
             <div class="modal-body">
                 <div class="verification-badge">🛡️ Point-of-Capture Verification Active</div>
                 
-                <!-- Photo Upload - Multiple -->
-                <div class="upload-zone" id="photo-zone">
-                    <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhotoUpload(this)">
-                    <input type="file" id="photo-input-multi" accept="image/*" multiple onchange="handleMultiPhotoUpload(this)" style="display:none;">
-                    <div id="photo-placeholder">
-                        <div style="font-size:2rem;margin-bottom:0.5rem;">📷</div>
-                        <div style="margin-bottom:1rem;"><strong>Debris Photo Analysis</strong></div>
-                        <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-                            <button type="button" class="btn btn-primary" onclick="document.getElementById('photo-input').click()">📷 Take Photo</button>
-                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('photo-input-multi').click()">📁 Upload Multiple</button>
-                        </div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;">AI analyzes materials & percentages for LEED</div>
+                <!-- Step 1: Weight Source Selection -->
+                <div style="margin-bottom:1.5rem;">
+                    <div style="font-weight:600;margin-bottom:0.75rem;">📊 Step 1: Get Weight</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
+                        <button type="button" class="btn btn-secondary weight-source-btn active" data-source="ticket" onclick="selectWeightSource('ticket')">
+                            🎫 Scale Ticket
+                        </button>
+                        <button type="button" class="btn btn-secondary weight-source-btn" data-source="scale" onclick="selectWeightSource('scale')">
+                            ⚖️ Live Scale
+                        </button>
+                        <button type="button" class="btn btn-secondary weight-source-btn" data-source="manual" onclick="selectWeightSource('manual')">
+                            ✏️ Manual Entry
+                        </button>
                     </div>
-                    <div id="photo-previews" style="display:none;"></div>
                 </div>
-                <div id="ai-suggestion" style="display:none;padding:0.75rem;background:rgba(5,150,105,0.1);border-radius:8px;margin-bottom:1rem;">
-                    <strong style="color:var(--primary);">🤖 AI Analysis:</strong>
+
+                <!-- Ticket Upload (default) -->
+                <div id="weight-source-ticket" class="weight-source-panel">
+                    <div class="upload-zone" id="ticket-zone">
+                        <input type="file" id="ticket-input-camera" accept="image/*" capture="environment" onchange="handleTicketScan(this)" style="display:none;">
+                        <input type="file" id="ticket-input-upload" accept="image/*,.pdf" onchange="handleTicketScan(this)" style="display:none;">
+                        <div id="ticket-placeholder">
+                            <div style="font-size:2rem;margin-bottom:0.5rem;">🎫</div>
+                            <div style="margin-bottom:0.75rem;"><strong>Scan Scale Ticket</strong></div>
+                            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-primary" onclick="document.getElementById('ticket-input-camera').click()">📷 Camera</button>
+                                <button type="button" class="btn btn-secondary" onclick="document.getElementById('ticket-input-upload').click()">📁 Upload</button>
+                            </div>
+                        </div>
+                        <img id="ticket-preview" class="upload-preview" style="display:none;">
+                    </div>
+                    <div id="ocr-status" style="display:none;" class="ocr-loading">
+                        <div class="loader-spinner" style="width:20px;height:20px;border-width:2px;"></div>
+                        <span>Reading ticket...</span>
+                    </div>
+                    <div id="ocr-result" class="ocr-result" style="display:none;"></div>
+                </div>
+
+                <!-- Live Scale Connection -->
+                <div id="weight-source-scale" class="weight-source-panel" style="display:none;">
+                    <div class="card" style="margin-bottom:0;background:var(--bg-input);">
+                        <div style="text-align:center;padding:1rem;">
+                            <div style="font-size:2.5rem;margin-bottom:0.5rem;">⚖️</div>
+                            <div style="font-weight:600;margin-bottom:0.5rem;">Avery Weigh-Tronix Scale</div>
+                            <div id="scale-status" style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem;">Not connected</div>
+                            <div id="scale-reading" style="font-size:2rem;font-weight:700;color:var(--primary);display:none;">
+                                <span id="scale-weight-display">0</span> <span style="font-size:1rem;">lbs</span>
+                            </div>
+                            <div style="margin-top:1rem;">
+                                <button type="button" class="btn btn-primary" onclick="connectScale()">🔌 Connect Scale</button>
+                                <button type="button" class="btn btn-secondary" onclick="captureScaleWeight()" id="capture-scale-btn" disabled>📥 Capture Weight</button>
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:1rem;">
+                                Requires Web Serial API (Chrome/Edge)<br>
+                                Configure in Settings → Scale Connection
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Entry -->
+                <div id="weight-source-manual" class="weight-source-panel" style="display:none;">
+                    <div style="background:var(--bg-input);padding:1rem;border-radius:8px;text-align:center;">
+                        <div style="font-size:1.5rem;margin-bottom:0.5rem;">✏️</div>
+                        <div style="font-weight:600;margin-bottom:0.75rem;">Enter Weight Manually</div>
+                        <div style="display:flex;gap:0.5rem;justify-content:center;align-items:center;">
+                            <input type="number" id="manual-weight-lbs" step="1" min="0" placeholder="Weight" style="width:120px;text-align:center;font-size:1.25rem;">
+                            <select id="manual-weight-unit" style="width:80px;">
+                                <option value="lbs">lbs</option>
+                                <option value="tons">tons</option>
+                            </select>
+                            <button type="button" class="btn btn-primary" onclick="applyManualWeight()">Apply</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
+
+                <!-- Step 2: Debris Photo (Optional) -->
+                <div style="margin-bottom:1rem;">
+                    <div style="font-weight:600;margin-bottom:0.75rem;">📷 Step 2: Debris Analysis <span style="font-weight:400;color:var(--text-muted);">(Optional - improves LEED reporting)</span></div>
+                    <div class="upload-zone" id="photo-zone" style="padding:1rem;">
+                        <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhotoUpload(this)" style="display:none;">
+                        <input type="file" id="photo-input-multi" accept="image/*" multiple onchange="handleMultiPhotoUpload(this)" style="display:none;">
+                        <div id="photo-placeholder">
+                            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;align-items:center;">
+                                <span style="font-size:1.25rem;">📷</span>
+                                <span>Add debris photos for AI material analysis</span>
+                                <button type="button" class="btn btn-secondary" style="padding:0.375rem 0.75rem;" onclick="document.getElementById('photo-input').click()">Take Photo</button>
+                                <button type="button" class="btn btn-secondary" style="padding:0.375rem 0.75rem;" onclick="document.getElementById('photo-input-multi').click()">Upload Multiple</button>
+                            </div>
+                        </div>
+                        <div id="photo-previews" style="display:none;"></div>
+                    </div>
+                </div>
+                <div id="ai-suggestion" style="display:none;padding:1rem;background:var(--bg-input);border-radius:8px;margin-bottom:1rem;">
                     <div id="ai-material"></div>
                 </div>
 
-                <!-- Scale Ticket - Camera or Upload -->
-                <div class="upload-zone" id="ticket-zone">
-                    <input type="file" id="ticket-input-camera" accept="image/*" capture="environment" onchange="handleTicketScan(this)" style="display:none;">
-                    <input type="file" id="ticket-input-upload" accept="image/*,.pdf" onchange="handleTicketScan(this)" style="display:none;">
-                    <div id="ticket-placeholder">
-                        <div style="font-size:2rem;margin-bottom:0.5rem;">🎫</div>
-                        <div style="margin-bottom:1rem;"><strong>Scale Ticket OCR</strong></div>
-                        <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-                            <button type="button" class="btn btn-primary" onclick="document.getElementById('ticket-input-camera').click()">📷 Take Photo</button>
-                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('ticket-input-upload').click()">📁 Upload File</button>
-                        </div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;">Extracts weight, ticket #, date automatically</div>
-                    </div>
-                    <img id="ticket-preview" class="upload-preview" style="display:none;">
-                </div>
-                <div id="ocr-status" style="display:none;" class="ocr-loading">
-                    <div class="loader-spinner" style="width:20px;height:20px;border-width:2px;"></div>
-                    <span>Reading ticket...</span>
-                </div>
-                <div id="ocr-result" class="ocr-result" style="display:none;"></div>
+                <!-- Divider -->
+                <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
 
+                <!-- Step 3: Load Details -->
+                <div style="font-weight:600;margin-bottom:0.75rem;">📋 Step 3: Load Details</div>
                 <form id="new-load-form">
                     <div class="form-grid">
                         <div class="form-group"><label>Project *</label><select id="load-project" required><option value="">Select Project</option></select></div>
@@ -438,7 +543,11 @@
                     </div>
                     <div class="form-grid">
                         <div class="form-group"><label>Material *</label><select id="load-material" required><option value="">Select Material</option></select></div>
-                        <div class="form-group"><label>Weight (tons) *</label><input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00"></div>
+                        <div class="form-group">
+                            <label>Weight (tons) *</label>
+                            <input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00">
+                            <div id="weight-source-label" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem;"></div>
+                        </div>
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
@@ -737,6 +846,110 @@
         catch { return { ip: 'unavailable' }; }
     }
 
+    // ========== WEIGHT SOURCE SELECTION ==========
+    let currentWeightSource = 'ticket';
+    let scalePort = null;
+    let scaleReader = null;
+
+    function selectWeightSource(source) {
+        currentWeightSource = source;
+        document.querySelectorAll('.weight-source-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.source === source);
+        });
+        document.querySelectorAll('.weight-source-panel').forEach(panel => {
+            panel.style.display = 'none';
+        });
+        document.getElementById('weight-source-' + source).style.display = 'block';
+    }
+
+    function applyManualWeight() {
+        const value = parseFloat(document.getElementById('manual-weight-lbs').value);
+        const unit = document.getElementById('manual-weight-unit').value;
+        if (!value || value <= 0) { showToast('Enter a valid weight', 'error'); return; }
+        
+        const tons = unit === 'tons' ? value : value / 2000;
+        document.getElementById('load-weight').value = tons.toFixed(2);
+        document.getElementById('weight-source-label').textContent = '✓ Manual entry: ' + value + ' ' + unit;
+        showToast('Weight: ' + tons.toFixed(2) + ' tons', 'success');
+    }
+
+    // ========== SCALE CONNECTION (Web Serial API) ==========
+    async function connectScale() {
+        if (!('serial' in navigator)) {
+            showToast('Web Serial not supported. Use Chrome or Edge.', 'error');
+            return;
+        }
+
+        try {
+            document.getElementById('scale-status').textContent = 'Requesting port...';
+            scalePort = await navigator.serial.requestPort();
+            
+            // Avery Weigh-Tronix typically uses 9600 baud, 8N1
+            await scalePort.open({ 
+                baudRate: 9600,
+                dataBits: 8,
+                stopBits: 1,
+                parity: 'none'
+            });
+
+            document.getElementById('scale-status').innerHTML = '<span style="color:var(--success);">✅ Connected</span>';
+            document.getElementById('scale-reading').style.display = 'block';
+            document.getElementById('capture-scale-btn').disabled = false;
+            showToast('Scale connected!', 'success');
+
+            // Start reading
+            readScaleData();
+        } catch (err) {
+            console.error('Scale connection error:', err);
+            document.getElementById('scale-status').textContent = '❌ ' + err.message;
+            showToast('Connection failed: ' + err.message, 'error');
+        }
+    }
+
+    async function readScaleData() {
+        if (!scalePort || !scalePort.readable) return;
+
+        const decoder = new TextDecoderStream();
+        const inputDone = scalePort.readable.pipeTo(decoder.writable);
+        scaleReader = decoder.readable.getReader();
+
+        let buffer = '';
+        try {
+            while (true) {
+                const { value, done } = await scaleReader.read();
+                if (done) break;
+                
+                buffer += value;
+                // Parse weight from common formats: "7580 LB" or "7580" or "GS,7580,LB"
+                const match = buffer.match(/(\d+\.?\d*)\s*(LB|KG|lb|kg)?/);
+                if (match) {
+                    const weight = parseFloat(match[1]);
+                    document.getElementById('scale-weight-display').textContent = weight.toLocaleString();
+                    window.lastScaleWeight = weight;
+                    buffer = '';
+                }
+                
+                // Prevent buffer overflow
+                if (buffer.length > 100) buffer = buffer.slice(-50);
+            }
+        } catch (err) {
+            console.error('Scale read error:', err);
+        }
+    }
+
+    function captureScaleWeight() {
+        const weight = window.lastScaleWeight;
+        if (!weight) {
+            showToast('No weight reading available', 'error');
+            return;
+        }
+        
+        const tons = weight / 2000;
+        document.getElementById('load-weight').value = tons.toFixed(2);
+        document.getElementById('weight-source-label').textContent = '✓ Live scale: ' + weight.toLocaleString() + ' lbs';
+        showToast('Captured: ' + tons.toFixed(2) + ' tons', 'success');
+    }
+
     // ========== PHOTO & OCR ==========
     let debrisPhotos = []; // Store multiple photos for analysis
 
@@ -1009,10 +1222,12 @@ Look for: Ticket #, Date, Time, Gross weight, Tare weight, Net weight. If weight
     function applyTicketData(ticket) {
         if (ticket.net_tons) {
             document.getElementById('load-weight').value = ticket.net_tons.toFixed(2);
+            document.getElementById('weight-source-label').textContent = '✓ From ticket: ' + ticket.net_tons.toFixed(2) + ' tons';
             showToast('Weight: ' + ticket.net_tons.toFixed(2) + ' tons', 'success');
         } else if (ticket.net_lbs) {
             const tons = ticket.net_lbs / 2000;
             document.getElementById('load-weight').value = tons.toFixed(2);
+            document.getElementById('weight-source-label').textContent = '✓ From ticket: ' + ticket.net_lbs.toLocaleString() + ' lbs';
             showToast('Weight: ' + tons.toFixed(2) + ' tons', 'success');
         }
         if (ticket.ticket_number) document.getElementById('load-ticket').value = ticket.ticket_number;
@@ -1285,12 +1500,21 @@ Look for: Ticket #, Date, Time, Gross weight, Tare weight, Net weight. If weight
                 statusEl.innerHTML = '<span style="color:var(--success);">✅ API key configured</span><br><small style="color:var(--text-muted);">Key: ' + OPENAI_KEY.substring(0,7) + '...' + OPENAI_KEY.slice(-4) + '</small>';
                 if (inputEl) inputEl.value = OPENAI_KEY;
             } else {
-                statusEl.innerHTML = '<span style="color:var(--accent);">⚠️ No API key set</span><br><small style="color:var(--text-muted);">AI debris analysis will not work without a key</small>';
+                statusEl.innerHTML = '<span style="color:var(--accent);">⚠️ No API key set</span><br><small style="color:var(--text-muted);">AI debris analysis and OCR will not work without a key</small>';
             }
         }
         if (userEl && currentUser) {
             userEl.textContent = currentUser.name + ' (' + currentUser.role + ') - ' + currentUser.company;
         }
+    }
+
+    async function testScaleConnection() {
+        if (!('serial' in navigator)) {
+            showToast('Web Serial not supported. Use Chrome or Edge.', 'error');
+            return;
+        }
+        showToast('Select your scale port in the popup...', 'info');
+        await connectScale();
     }
 
     // ========== START ==========
