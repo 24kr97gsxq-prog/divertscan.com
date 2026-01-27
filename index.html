@@ -4,9 +4,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v3.1</title>
+<title>DivertScan™ v3.2</title>
 <meta name="theme-color" content="#0f172a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-600:#475569;--slate-500:#64748b;--slate-400:#94a3b8;--slate-300:#cbd5e1;--slate-200:#e2e8f0;--emerald-500:#10b981;--emerald-400:#34d399;--amber-500:#f59e0b;--amber-400:#fbbf24;--red-500:#ef4444;--red-400:#f87171;--blue-500:#3b82f6}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -18,10 +21,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .nav-item{display:flex;flex-direction:column;align-items:center;padding:8px 12px;color:var(--slate-500);font-size:10px;cursor:pointer}
 .nav-item.active{color:var(--emerald-400)}
 .nav-item svg{width:22px;height:22px;margin-bottom:3px}
-.tab-content{display:none;padding:16px;max-width:600px;margin:0 auto}
+.tab-content{display:none;padding:16px;max-width:700px;margin:0 auto}
 .tab-content.active{display:block}
 .card{background:var(--slate-800);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid var(--slate-700)}
-.card-title{font-size:13px;color:var(--slate-400);margin-bottom:12px;text-transform:uppercase}
+.card-title{font-size:13px;color:var(--slate-400);margin-bottom:12px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
 .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .stat-card{background:var(--slate-700);border-radius:8px;padding:12px;text-align:center}
 .stat-value{font-size:22px;font-weight:700;color:var(--emerald-400)}
@@ -30,6 +33,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .btn-primary{background:var(--emerald-500);color:white}
 .btn-secondary{background:var(--slate-700);color:var(--slate-300)}
 .btn-danger{background:var(--red-500);color:white}
+.btn-blue{background:var(--blue-500);color:white}
 .btn-sm{padding:8px 12px;font-size:12px}
 .btn-lg{padding:16px 24px;font-size:16px}
 .btn-row{display:flex;gap:8px}
@@ -45,7 +49,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .progress-fill.danger{background:var(--red-500)}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:flex-end;justify-content:center}
 .modal.active{display:flex}
-.modal-content{background:var(--slate-800);width:100%;max-width:500px;max-height:90vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column}
+.modal-content{background:var(--slate-800);width:100%;max-width:600px;max-height:90vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column}
 .modal-header{padding:16px;border-bottom:1px solid var(--slate-700);display:flex;justify-content:space-between;align-items:center}
 .modal-title{font-size:18px;font-weight:600;color:var(--slate-200)}
 .modal-close{width:32px;height:32px;border-radius:50%;background:var(--slate-700);border:none;color:var(--slate-400);cursor:pointer;font-size:20px}
@@ -91,6 +95,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .project-item h4{color:var(--slate-200);font-size:14px;margin-bottom:4px}
 .project-item p{color:var(--slate-400);font-size:12px}
 .project-selector{background:var(--slate-700);padding:12px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.project-card{background:var(--slate-700);border-radius:12px;padding:16px;margin-bottom:16px;border:2px solid transparent;cursor:pointer;transition:all 0.2s}
+.project-card:hover{border-color:var(--slate-500)}
+.project-card.expanded{border-color:var(--emerald-500)}
+.project-card h3{color:var(--slate-200);font-size:16px;margin-bottom:4px}
+.project-card .meta{color:var(--slate-400);font-size:12px;margin-bottom:12px}
+.project-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.project-stat{text-align:center;padding:8px;background:var(--slate-800);border-radius:6px}
+.project-stat .value{font-size:16px;font-weight:700;color:var(--emerald-400)}
+.project-stat .label{font-size:9px;color:var(--slate-500);text-transform:uppercase}
+.project-actions{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--slate-600)}
+.project-card.expanded .project-actions{display:block}
 .diversion-badge{font-size:28px;font-weight:700}
 .diversion-badge.good{color:var(--emerald-400)}
 .diversion-badge.warning{color:var(--amber-400)}
@@ -105,11 +120,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
 .empty-state{text-align:center;padding:40px;color:var(--slate-500)}
+.audit-section{margin-top:12px;padding:12px;background:var(--slate-800);border-radius:8px}
+.audit-section h4{font-size:12px;color:var(--slate-400);margin-bottom:8px}
+.audit-photos{display:flex;gap:8px;overflow-x:auto;padding:8px 0}
+.audit-photo{width:60px;height:60px;border-radius:6px;object-fit:cover;flex-shrink:0;border:2px solid var(--slate-600)}
+.report-preview{background:var(--slate-700);border-radius:8px;padding:16px;margin-bottom:16px}
+.report-preview h4{color:var(--slate-200);margin-bottom:12px}
+.report-table{width:100%;font-size:11px;border-collapse:collapse}
+.report-table th,.report-table td{padding:6px 4px;text-align:left;border-bottom:1px solid var(--slate-600)}
+.report-table th{color:var(--slate-400);font-weight:600}
+.report-table td{color:var(--slate-300)}
+.report-table .num{text-align:right}
 </style>
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v3.1</span></div>
+<div class="logo">DivertScan™ <span>v3.2</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -145,7 +171,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div class="stat-card"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
 <div class="stat-card"><div class="stat-value" id="statTons">0</div><div class="stat-label">Total Tons</div></div>
 <div class="stat-card"><div class="stat-value" id="statDiversion">0%</div><div class="stat-label">Diversion</div></div>
-<div class="stat-card"><div class="stat-value" id="statCO2">0</div><div class="stat-label">CO₂e</div></div>
+<div class="stat-card"><div class="stat-value" id="statCO2">0</div><div class="stat-label">CO₂e Avoided</div></div>
 </div>
 <div class="card" style="margin-top:16px">
 <div class="card-title">LEED v5 Progress (75% Target)</div>
@@ -171,21 +197,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div id="projectListFull"><div class="loading"><div class="spinner"></div></div></div>
 </div>
 
-<!-- Tickets Tab -->
-<div id="ticketsTab" class="tab-content">
-<h2 style="font-size:18px;margin-bottom:16px">All Tickets</h2>
-<div class="ticket-list" id="allTicketsList"><div class="loading"><div class="spinner"></div></div></div>
-</div>
-
-<!-- Reports Tab -->
+<!-- Reports Tab - NEW PROJECT-BASED REPORTS -->
 <div id="reportsTab" class="tab-content">
-<h2 style="font-size:18px;margin-bottom:16px">LEED Reports</h2>
-<div class="card">
-<div class="card-title">Export Project Report</div>
-<p style="font-size:11px;color:var(--slate-400);margin-bottom:12px">Dalmex format with 7-stream breakdown</p>
-<button class="btn btn-secondary" style="margin-bottom:8px" onclick="exportAllTickets()">📊 All Tickets</button>
-<button class="btn btn-primary" onclick="exportClosedTickets()">✅ Finalized Only</button>
-</div>
+<h2 style="font-size:18px;margin-bottom:8px">LEED Reports</h2>
+<p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">Select a project to view tickets and generate reports</p>
+<div id="projectReportList"><div class="loading"><div class="spinner"></div></div></div>
 </div>
 
 <!-- Settings Tab -->
@@ -207,8 +223,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <nav class="nav">
 <div class="nav-item active" onclick="showTab('dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</div>
 <div class="nav-item" onclick="showTab('projects')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</div>
-<div class="nav-item" onclick="showTab('tickets')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Tickets</div>
-<div class="nav-item" onclick="showTab('reports')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Reports</div>
+<div class="nav-item" onclick="showTab('reports')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Reports</div>
 <div class="nav-item" onclick="showTab('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2"/></svg>Settings</div>
 </nav>
 
@@ -347,6 +362,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div style="font-size:11px;color:var(--slate-400)">Diversion</div>
 <div style="font-size:20px;font-weight:700" id="editDiversionRate">0%</div>
 </div>
+<!-- Audit Section with Debris Photos -->
+<div class="audit-section" id="editAuditSection">
+<h4>📷 Debris Photos (Audit Trail)</h4>
+<div class="audit-photos" id="editAuditPhotos"></div>
+<p style="font-size:10px;color:var(--slate-500);margin-top:8px">Audit ID: <span id="editAuditId">-</span></p>
+</div>
 </div>
 </div>
 <div class="modal-footer" id="editFooter">
@@ -383,6 +404,67 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </div>
 </div>
 
+<!-- Project Report Modal - NEW -->
+<div id="projectReportModal" class="modal">
+<div class="modal-content" style="max-height:95vh">
+<div class="modal-header">
+<div class="modal-title" id="reportProjectName">Project Report</div>
+<button class="modal-close" onclick="closeModal('projectReportModal')">×</button>
+</div>
+<div class="modal-body">
+<div id="reportProjectMeta" style="color:var(--slate-400);font-size:12px;margin-bottom:16px"></div>
+
+<!-- Project Summary Stats -->
+<div class="project-stats" id="reportProjectStats"></div>
+
+<!-- Diversion Status -->
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div><div style="font-size:11px;color:var(--slate-400)">Overall Diversion</div><div class="diversion-badge" id="reportDiversionRate">0%</div></div>
+<div style="text-align:right"><div style="font-size:11px;color:var(--slate-400)">LEED v5 Target</div><div style="font-size:20px;font-weight:700">75%</div></div>
+</div>
+<div class="progress-bar" style="margin-top:12px"><div class="progress-fill" id="reportProgressBar" style="width:0%"></div></div>
+<div style="margin-top:8px;font-size:12px;text-align:center" id="reportLeedStatus"></div>
+</div>
+
+<!-- Export Buttons -->
+<div class="card">
+<div class="card-title">Export Reports</div>
+<div class="btn-row" style="margin-bottom:8px">
+<button class="btn btn-blue" onclick="exportPDF()">📄 LEED PDF</button>
+<button class="btn btn-primary" onclick="exportExcel()">📊 Excel</button>
+</div>
+<div class="btn-row">
+<button class="btn btn-secondary" onclick="exportAuditPDF()">🔍 Audit Report</button>
+<button class="btn btn-secondary" onclick="exportCSV()">📋 CSV</button>
+</div>
+</div>
+
+<!-- Ticket Preview Table -->
+<div class="report-preview">
+<h4>Tickets (<span id="reportTicketCount">0</span>)</h4>
+<div style="overflow-x:auto">
+<table class="report-table" id="reportTicketTable">
+<thead>
+<tr><th>Date</th><th>Ticket #</th><th class="num">Net (T)</th><th class="num">Div %</th><th>Photos</th></tr>
+</thead>
+<tbody id="reportTicketBody"></tbody>
+</table>
+</div>
+</div>
+
+<!-- Material Breakdown -->
+<div class="report-preview">
+<h4>Material Breakdown (Tons)</h4>
+<div id="reportMaterialBreakdown"></div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" onclick="closeModal('projectReportModal')">Close</button>
+</div>
+</div>
+</div>
+
 <script>
 // © 2024-2025 DivertScan™. Confidential and Proprietary.
 const SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
@@ -392,12 +474,15 @@ const MATERIALS = {
     wood: {name:'Wood',icon:'🪵',gwp:0.03},
     gypsum: {name:'Gypsum',icon:'🧱',gwp:0.12},
     plastic: {name:'Plastic',icon:'♻️',gwp:2.5},
-    occ: {name:'OCC',icon:'📦',gwp:0.94},
+    occ: {name:'OCC/Cardboard',icon:'📦',gwp:0.94},
     metal: {name:'Metal',icon:'🔩',gwp:1.85},
     concrete: {name:'Concrete',icon:'🪨',gwp:0.159},
-    block: {name:'Block',icon:'🧱',gwp:0.159},
+    block: {name:'Block/Masonry',icon:'🧱',gwp:0.159},
     landfill: {name:'Landfill',icon:'🗑️',gwp:0.52}
 };
+
+const REPORT_FOOTER = 'This report represents a project-specific sort of commingled construction and demolition waste. All materials reported as diverted have been recycled or salvaged; no diverted tons include Alternative Daily Cover (ADC). Data processed via DivertScan™ AI Volumetric Analysis.';
+const COPYRIGHT = '© 2024-2025 DivertScan™. Confidential and Proprietary.';
 
 let sb = null;
 let currentUser = null;
@@ -411,6 +496,8 @@ let selectedContainer = 30;
 let debrisPhotos = [null, null, null];
 let currentPhotoSlot = 0;
 let signatureCanvas, signatureCtx, isDrawing = false;
+let reportProject = null;
+let reportTickets = [];
 
 function toast(msg, type = 'info') {
     const el = document.getElementById('toast');
@@ -419,13 +506,16 @@ function toast(msg, type = 'info') {
     setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-function getCurrentDate() {
-    return new Date().toISOString().split('T')[0];
-}
+function getCurrentDate() { return new Date().toISOString().split('T')[0]; }
 
 function formatDate(d) {
     if (!d) return '';
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'2-digit',day:'2-digit',year:'2-digit'});
+}
+
+function formatDateLong(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
 }
 
 function formatDateDB(s) {
@@ -497,18 +587,12 @@ async function initialize() {
     try {
         await initSupabase();
         const { data: { session } } = await sb.auth.getSession();
-        if (session) {
-            currentUser = session.user;
-            showApp();
-        }
+        if (session) { currentUser = session.user; showApp(); }
         sb.auth.onAuthStateChange((e, s) => {
             if (s) { currentUser = s.user; showApp(); }
             else { currentUser = null; showAuth(); }
         });
-    } catch (e) {
-        console.error(e);
-        toast('Init failed', 'error');
-    }
+    } catch (e) { console.error(e); toast('Init failed', 'error'); }
 }
 
 async function signIn() {
@@ -532,10 +616,7 @@ async function signUp() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-async function signOut() {
-    await sb.auth.signOut();
-    showAuth();
-}
+async function signOut() { await sb.auth.signOut(); showAuth(); }
 
 function showAuth() {
     document.getElementById('authScreen').classList.add('active');
@@ -556,10 +637,10 @@ function showTab(tab) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById(tab + 'Tab').classList.add('active');
-    const idx = ['dashboard','projects','tickets','reports','settings'].indexOf(tab);
+    const idx = ['dashboard','projects','reports','settings'].indexOf(tab);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     if (tab === 'projects') loadProjectListFull();
-    if (tab === 'tickets') loadAllTickets();
+    if (tab === 'reports') loadProjectReportList();
 }
 
 async function loadProjectsAndData() {
@@ -601,23 +682,9 @@ async function loadDashboard() {
     } catch (e) { console.error(e); }
 }
 
-async function loadAllTickets() {
-    if (!currentProject) {
-        document.getElementById('allTicketsList').innerHTML = '<div class="empty-state">Select a project</div>';
-        return;
-    }
-    try {
-        const { data } = await sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date', {ascending:false});
-        renderTicketList(data || [], 'allTicketsList');
-    } catch (e) { console.error(e); }
-}
-
 function renderTicketList(tickets, containerId) {
     const list = document.getElementById(containerId);
-    if (!tickets.length) {
-        list.innerHTML = '<div class="empty-state">No tickets</div>';
-        return;
-    }
+    if (!tickets.length) { list.innerHTML = '<div class="empty-state">No tickets</div>'; return; }
     list.innerHTML = tickets.map(t => `
         <div class="ticket-item ${t.is_closed ? 'closed' : ''}" onclick="openEditTicket('${t.id}')">
             <div class="ticket-row">
@@ -637,17 +704,11 @@ function renderTicketList(tickets, containerId) {
 
 <script>
 // Project Management
-function showProjectModal() {
-    openModal('projectModal');
-    loadProjectList();
-}
+function showProjectModal() { openModal('projectModal'); loadProjectList(); }
 
 async function loadProjectList() {
     const list = document.getElementById('projectList');
-    if (!projects.length) {
-        list.innerHTML = '<div class="empty-state">No projects</div>';
-        return;
-    }
+    if (!projects.length) { list.innerHTML = '<div class="empty-state">No projects</div>'; return; }
     list.innerHTML = projects.map(p => `
         <div class="project-item ${currentProject?.id === p.id ? 'selected' : ''}" onclick="selectProject('${p.id}')" style="${currentProject?.id === p.id ? 'border:2px solid var(--emerald-500)' : ''}">
             <h4>${p.name}</h4>
@@ -659,10 +720,7 @@ async function loadProjectList() {
 
 async function loadProjectListFull() {
     const list = document.getElementById('projectListFull');
-    if (!projects.length) {
-        list.innerHTML = '<div class="empty-state">No projects yet</div>';
-        return;
-    }
+    if (!projects.length) { list.innerHTML = '<div class="empty-state">No projects yet</div>'; return; }
     list.innerHTML = projects.map(p => `
         <div class="project-item">
             <h4>${p.name}</h4>
@@ -746,55 +804,487 @@ async function deleteProject(id) {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-// New Ticket Flow
-function populateProjectDropdown() {
-    const sel = document.getElementById('ticketProject');
-    sel.innerHTML = '<option value="">Select Project...</option>' + 
-        projects.map(p => `<option value="${p.id}" ${p.id === currentProject?.id ? 'selected' : ''}>${p.name}</option>`).join('');
-}
+// ==========================================
+// PROJECT-BASED REPORTS - NEW SECTION
+// ==========================================
 
-function onProjectChange() {
-    const id = document.getElementById('ticketProject').value;
-    const p = projects.find(x => x.id === id);
-    if (p) {
-        ticketSession.projectId = p.id;
-        ticketSession.hauler = p.waste_hauler || '';
-        document.getElementById('haulerName').value = p.waste_hauler || '';
-    }
-}
-
-function startNewTicket() {
-    if (!projects.length) { toast('Create a project first', 'error'); return; }
-    initSession();
-    currentStep = 1;
-    debrisPhotos = [null, null, null];
+async function loadProjectReportList() {
+    const container = document.getElementById('projectReportList');
     
-    document.getElementById('ticketModalTitle').textContent = 'New Ticket';
-    document.getElementById('ticketImagePreview').innerHTML = '<span>Use buttons below to scan ticket</span>';
-    document.getElementById('ticketImagePreview').classList.remove('filled');
-    document.getElementById('serviceDate').value = getCurrentDate();
-    document.getElementById('ticketNumber').value = '';
-    document.getElementById('grossLbs').value = '';
-    document.getElementById('tareLbs').value = '';
-    document.getElementById('netWeightDisplay').textContent = '0.00 tons';
-    document.getElementById('haulerName').value = currentProject?.waste_hauler || '';
+    if (!projects.length) {
+        container.innerHTML = '<div class="empty-state">No projects yet. Create a project first.</div>';
+        return;
+    }
     
-    populateProjectDropdown();
-    showStep(1);
-    resetDebrisGrid();
-    openModal('ticketModal');
+    // Load ticket counts for each project
+    let html = '';
+    for (const p of projects) {
+        const { data: tickets } = await sb.from('tickets').select('*').eq('project_id', p.id);
+        const tks = tickets || [];
+        const tons = tks.reduce((s,t) => s + (+t.net_tons||0), 0);
+        const diverted = tks.reduce((s,t) => s + (+t.diverted_tons||0), 0);
+        const avgDiv = tons > 0 ? (diverted/tons*100) : 0;
+        
+        html += `
+        <div class="project-card" onclick="openProjectReport('${p.id}')">
+            <h3>${p.name}</h3>
+            <div class="meta">${p.address || 'No address'} • ${p.waste_hauler || 'No hauler'}</div>
+            <div class="project-stats">
+                <div class="project-stat"><div class="value">${tks.length}</div><div class="label">Tickets</div></div>
+                <div class="project-stat"><div class="value">${tons.toFixed(1)}</div><div class="label">Tons</div></div>
+                <div class="project-stat"><div class="value" style="color:${avgDiv >= 75 ? 'var(--emerald-400)' : avgDiv >= 50 ? 'var(--amber-400)' : 'var(--red-400)'}">${avgDiv.toFixed(0)}%</div><div class="label">Diversion</div></div>
+                <div class="project-stat"><div class="value">${avgDiv >= 75 ? '✓' : '—'}</div><div class="label">LEED</div></div>
+            </div>
+            <div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap to view tickets & export reports →</div>
+        </div>
+        `;
+    }
+    
+    container.innerHTML = html;
 }
 
-function showStep(step) {
-    currentStep = step;
-    for (let i = 1; i <= 4; i++) {
-        document.getElementById('ticketStep' + i).classList.toggle('hidden', i !== step);
-        document.getElementById('step' + i).className = 'step' + (i < step ? ' complete' : i === step ? ' active' : '');
+async function openProjectReport(projectId) {
+    const proj = projects.find(p => p.id === projectId);
+    if (!proj) return;
+    
+    reportProject = proj;
+    
+    // Load all tickets for this project
+    const { data: tickets } = await sb.from('tickets').select('*').eq('project_id', projectId).order('service_date', {ascending: true});
+    reportTickets = tickets || [];
+    
+    // Calculate totals
+    const totals = calculateProjectTotals(reportTickets);
+    
+    // Populate modal
+    document.getElementById('reportProjectName').textContent = proj.name;
+    document.getElementById('reportProjectMeta').innerHTML = `
+        ${proj.address ? '<strong>Address:</strong> ' + proj.address + '<br>' : ''}
+        ${proj.waste_hauler ? '<strong>Hauler:</strong> ' + proj.waste_hauler + '<br>' : ''}
+        <strong>Generated:</strong> ${new Date().toLocaleDateString()}
+    `;
+    
+    // Stats
+    document.getElementById('reportProjectStats').innerHTML = `
+        <div class="project-stat"><div class="value">${reportTickets.length}</div><div class="label">Tickets</div></div>
+        <div class="project-stat"><div class="value">${totals.totalTons.toFixed(2)}</div><div class="label">Total Tons</div></div>
+        <div class="project-stat"><div class="value">${totals.divertedTons.toFixed(2)}</div><div class="label">Diverted</div></div>
+        <div class="project-stat"><div class="value">${totals.co2e.toFixed(1)}</div><div class="label">CO₂e Avoided</div></div>
+    `;
+    
+    // Diversion rate
+    const divRate = totals.diversionRate;
+    document.getElementById('reportDiversionRate').textContent = divRate.toFixed(1) + '%';
+    document.getElementById('reportDiversionRate').className = 'diversion-badge ' + (divRate >= 75 ? 'good' : divRate >= 50 ? 'warning' : 'bad');
+    document.getElementById('reportProgressBar').style.width = Math.min(divRate, 100) + '%';
+    document.getElementById('reportProgressBar').className = 'progress-fill' + (divRate >= 75 ? '' : divRate >= 50 ? ' warning' : ' danger');
+    document.getElementById('reportLeedStatus').innerHTML = divRate >= 75 
+        ? '<span style="color:var(--emerald-400)">✓ LEED v5 MRc5 Achieved (75% threshold)</span>'
+        : '<span style="color:var(--amber-400)">⚠ Below LEED v5 75% threshold (' + (75 - divRate).toFixed(1) + '% needed)</span>';
+    
+    // Ticket count
+    document.getElementById('reportTicketCount').textContent = reportTickets.length;
+    
+    // Ticket table
+    const tbody = document.getElementById('reportTicketBody');
+    tbody.innerHTML = reportTickets.map(t => {
+        const photos = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
+        return `
+        <tr>
+            <td>${formatDate(t.service_date)}</td>
+            <td>${t.ticket_number || '-'}</td>
+            <td class="num">${(t.net_tons||0).toFixed(3)}</td>
+            <td class="num">${t.diversion_pct||0}%</td>
+            <td>${photos.length > 0 ? '📷' + photos.length : '-'}</td>
+        </tr>
+        `;
+    }).join('');
+    
+    // Material breakdown
+    document.getElementById('reportMaterialBreakdown').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+            ${MATERIAL_KEYS.map(k => {
+                const m = MATERIALS[k];
+                const tons = totals.materials[k] || 0;
+                const pct = totals.totalTons > 0 ? (tons / totals.totalTons * 100) : 0;
+                return `<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--slate-800);border-radius:4px;">
+                    <span>${m.icon} ${m.name}</span>
+                    <span style="color:${k === 'landfill' ? 'var(--red-400)' : 'var(--emerald-400)'}">${tons.toFixed(3)} T (${pct.toFixed(1)}%)</span>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
+    
+    openModal('projectReportModal');
+}
+
+function calculateProjectTotals(tickets) {
+    const totals = {
+        totalTons: 0,
+        divertedTons: 0,
+        landfillTons: 0,
+        co2e: 0,
+        diversionRate: 0,
+        materials: {}
+    };
+    
+    MATERIAL_KEYS.forEach(k => totals.materials[k] = 0);
+    
+    for (const t of tickets) {
+        totals.totalTons += +t.net_tons || 0;
+        totals.divertedTons += +t.diverted_tons || 0;
+        totals.landfillTons += +t.landfill_tons || 0;
+        totals.co2e += +t.co2e_avoided || 0;
+        
+        MATERIAL_KEYS.forEach(k => {
+            totals.materials[k] += +t[k + '_tons'] || 0;
+        });
     }
-    for (let i = 1; i <= 3; i++) {
-        document.getElementById('stepLine' + i).className = 'step-line' + (step > i ? ' complete' : '');
+    
+    totals.diversionRate = totals.totalTons > 0 ? (totals.divertedTons / totals.totalTons * 100) : 0;
+    
+    return totals;
+}
+</script>
+
+<script>
+// ==========================================
+// EXPORT FUNCTIONS - PDF, EXCEL, CSV, AUDIT
+// ==========================================
+
+function exportPDF() {
+    if (!reportProject || !reportTickets.length) { toast('No data', 'error'); return; }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const totals = calculateProjectTotals(reportTickets);
+    
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(16, 185, 129);
+    doc.text('LEED WASTE DIVERSION REPORT', 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('Generated by DivertScan™', 105, 27, { align: 'center' });
+    
+    // Project Info
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text('Project: ' + reportProject.name, 14, 40);
+    let y = 47;
+    if (reportProject.address) { doc.text('Address: ' + reportProject.address, 14, y); y += 7; }
+    if (reportProject.waste_hauler) { doc.text('Hauler: ' + reportProject.waste_hauler, 14, y); y += 7; }
+    doc.text('Report Date: ' + new Date().toLocaleDateString(), 14, y);
+    
+    // Summary Box
+    y += 15;
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, y, 182, 35, 'F');
+    doc.setFontSize(11);
+    doc.text('SUMMARY', 20, y + 8);
+    doc.setFontSize(10);
+    doc.text('Total Generated: ' + totals.totalTons.toFixed(2) + ' tons', 20, y + 16);
+    doc.text('Total Diverted: ' + totals.divertedTons.toFixed(2) + ' tons', 20, y + 23);
+    doc.text('Landfill: ' + totals.landfillTons.toFixed(2) + ' tons', 20, y + 30);
+    
+    doc.text('Diversion Rate: ' + totals.diversionRate.toFixed(1) + '%', 110, y + 16);
+    doc.text('LEED v5 Target: 75%', 110, y + 23);
+    doc.text('Status: ' + (totals.diversionRate >= 75 ? 'ACHIEVED ✓' : 'NOT MET'), 110, y + 30);
+    
+    y += 45;
+    
+    // Material Breakdown Table
+    doc.setFontSize(11);
+    doc.text('MATERIAL BREAKDOWN', 14, y);
+    y += 5;
+    
+    doc.autoTable({
+        startY: y,
+        head: [['Material', 'Tons', '% of Total', 'Status']],
+        body: MATERIAL_KEYS.map(k => {
+            const m = MATERIALS[k];
+            const tons = totals.materials[k] || 0;
+            const pct = totals.totalTons > 0 ? (tons / totals.totalTons * 100) : 0;
+            return [m.name, tons.toFixed(3), pct.toFixed(1) + '%', k === 'landfill' ? 'Disposed' : 'Diverted'];
+        }),
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] }
+    });
+    
+    y = doc.lastAutoTable.finalY + 15;
+    
+    // Ticket Detail Table
+    doc.setFontSize(11);
+    doc.text('TICKET DETAILS (' + reportTickets.length + ' tickets)', 14, y);
+    y += 5;
+    
+    doc.autoTable({
+        startY: y,
+        head: [['Date', 'Ticket #', 'Gross', 'Tare', 'Net (T)', 'Div %', 'Audit ID']],
+        body: reportTickets.map(t => [
+            formatDate(t.service_date),
+            t.ticket_number || '-',
+            (t.gross_lbs || 0).toLocaleString(),
+            (t.tare_lbs || 0).toLocaleString(),
+            (t.net_tons || 0).toFixed(3),
+            (t.diversion_pct || 0) + '%',
+            t.audit_id || '-'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8 }
+    });
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        
+        // Certification text
+        const footerY = doc.internal.pageSize.height - 25;
+        const lines = doc.splitTextToSize(REPORT_FOOTER, 180);
+        doc.text(lines, 14, footerY);
+        
+        // Copyright
+        doc.text(COPYRIGHT, 14, doc.internal.pageSize.height - 10);
+        doc.text('Page ' + i + ' of ' + pageCount, 196, doc.internal.pageSize.height - 10, { align: 'right' });
     }
-    document.getElementById('prevStepBtn').disabled = step === 1;
+    
+    doc.save('LEED-Report-' + reportProject.name.replace(/\s+/g, '-') + '-' + getCurrentDate() + '.pdf');
+    toast('PDF downloaded!', 'success');
+}
+
+function exportExcel() {
+    if (!reportProject || !reportTickets.length) { toast('No data', 'error'); return; }
+    
+    const totals = calculateProjectTotals(reportTickets);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Summary Sheet
+    const summaryData = [
+        ['LEED WASTE DIVERSION REPORT'],
+        ['Generated by DivertScan™'],
+        [],
+        ['Project:', reportProject.name],
+        ['Address:', reportProject.address || ''],
+        ['Hauler:', reportProject.waste_hauler || ''],
+        ['Report Date:', new Date().toLocaleDateString()],
+        [],
+        ['SUMMARY'],
+        ['Total Generated (tons):', totals.totalTons.toFixed(3)],
+        ['Total Diverted (tons):', totals.divertedTons.toFixed(3)],
+        ['Landfill (tons):', totals.landfillTons.toFixed(3)],
+        ['Diversion Rate:', totals.diversionRate.toFixed(1) + '%'],
+        ['LEED v5 Target:', '75%'],
+        ['Status:', totals.diversionRate >= 75 ? 'ACHIEVED' : 'NOT MET'],
+        [],
+        ['MATERIAL BREAKDOWN'],
+        ['Material', 'Tons', '% of Total']
+    ];
+    
+    MATERIAL_KEYS.forEach(k => {
+        const tons = totals.materials[k] || 0;
+        const pct = totals.totalTons > 0 ? (tons / totals.totalTons * 100) : 0;
+        summaryData.push([MATERIALS[k].name, tons.toFixed(3), pct.toFixed(1) + '%']);
+    });
+    
+    summaryData.push([]);
+    summaryData.push(['CERTIFICATION']);
+    summaryData.push([REPORT_FOOTER]);
+    summaryData.push([COPYRIGHT]);
+    
+    const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
+    
+    // Tickets Sheet (Dalmex format)
+    const ticketHeaders = ['Date', 'Ticket No', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net (tons)', 
+        'Wood', 'Gypsum', 'Plastic', 'OCC', 'Metal', 'Concrete', 'Block', 'Landfill', 
+        'Diverted (tons)', 'Diversion %', 'CO2e Avoided', 'Audit ID', 'Photos'];
+    
+    const ticketData = [ticketHeaders];
+    
+    reportTickets.forEach(t => {
+        const photos = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
+        ticketData.push([
+            formatDate(t.service_date),
+            t.ticket_number || '',
+            t.gross_lbs || 0,
+            t.tare_lbs || 0,
+            t.net_lbs || 0,
+            (t.net_tons || 0).toFixed(3),
+            (t.wood_tons || 0).toFixed(3),
+            (t.gypsum_tons || 0).toFixed(3),
+            (t.plastic_tons || 0).toFixed(3),
+            (t.occ_tons || 0).toFixed(3),
+            (t.metal_tons || 0).toFixed(3),
+            (t.concrete_tons || 0).toFixed(3),
+            (t.block_tons || 0).toFixed(3),
+            (t.landfill_tons || 0).toFixed(3),
+            (t.diverted_tons || 0).toFixed(3),
+            (t.diversion_pct || 0) + '%',
+            (t.co2e_avoided || 0).toFixed(3),
+            t.audit_id || '',
+            photos.length + ' photo(s)'
+        ]);
+    });
+    
+    // Add totals row
+    ticketData.push([
+        'TOTALS', reportTickets.length + ' tickets', 
+        reportTickets.reduce((s,t) => s + (+t.gross_lbs||0), 0),
+        reportTickets.reduce((s,t) => s + (+t.tare_lbs||0), 0),
+        reportTickets.reduce((s,t) => s + (+t.net_lbs||0), 0),
+        totals.totalTons.toFixed(3),
+        totals.materials.wood.toFixed(3),
+        totals.materials.gypsum.toFixed(3),
+        totals.materials.plastic.toFixed(3),
+        totals.materials.occ.toFixed(3),
+        totals.materials.metal.toFixed(3),
+        totals.materials.concrete.toFixed(3),
+        totals.materials.block.toFixed(3),
+        totals.materials.landfill.toFixed(3),
+        totals.divertedTons.toFixed(3),
+        totals.diversionRate.toFixed(1) + '%',
+        totals.co2e.toFixed(3),
+        '', ''
+    ]);
+    
+    const ticketsWS = XLSX.utils.aoa_to_sheet(ticketData);
+    XLSX.utils.book_append_sheet(wb, ticketsWS, 'Tickets');
+    
+    XLSX.writeFile(wb, 'LEED-Report-' + reportProject.name.replace(/\s+/g, '-') + '-' + getCurrentDate() + '.xlsx');
+    toast('Excel downloaded!', 'success');
+}
+
+function exportCSV() {
+    if (!reportProject || !reportTickets.length) { toast('No data', 'error'); return; }
+    
+    const totals = calculateProjectTotals(reportTickets);
+    
+    let csv = 'LEED WASTE DIVERSION REPORT\n';
+    csv += 'Project:,' + reportProject.name + '\n';
+    if (reportProject.address) csv += 'Address:,' + reportProject.address + '\n';
+    if (reportProject.waste_hauler) csv += 'Hauler:,' + reportProject.waste_hauler + '\n';
+    csv += 'Generated:,' + new Date().toLocaleDateString() + '\n\n';
+    
+    csv += 'Date,Ticket No,Gross (lbs),Tare (lbs),Net (lbs),Net (tons),Wood,Gypsum,Plastic,OCC,Metal,Concrete,Block,Landfill,Diverted,Div %,Audit ID\n';
+    
+    reportTickets.forEach(t => {
+        csv += [
+            formatDate(t.service_date),
+            t.ticket_number || '',
+            t.gross_lbs || 0,
+            t.tare_lbs || 0,
+            t.net_lbs || 0,
+            (t.net_tons || 0).toFixed(3),
+            (t.wood_tons || 0).toFixed(3),
+            (t.gypsum_tons || 0).toFixed(3),
+            (t.plastic_tons || 0).toFixed(3),
+            (t.occ_tons || 0).toFixed(3),
+            (t.metal_tons || 0).toFixed(3),
+            (t.concrete_tons || 0).toFixed(3),
+            (t.block_tons || 0).toFixed(3),
+            (t.landfill_tons || 0).toFixed(3),
+            (t.diverted_tons || 0).toFixed(3),
+            (t.diversion_pct || 0) + '%',
+            t.audit_id || ''
+        ].join(',') + '\n';
+    });
+    
+    csv += '\nTOTALS,' + reportTickets.length + ',,,' + totals.totalTons.toFixed(3) + ',' + totals.divertedTons.toFixed(3) + '\n';
+    csv += 'Diversion Rate:,' + totals.diversionRate.toFixed(1) + '%\n';
+    csv += 'LEED v5 Status:,' + (totals.diversionRate >= 75 ? 'ACHIEVED' : 'NOT MET') + '\n\n';
+    csv += 'CERTIFICATION\n"' + REPORT_FOOTER + '"\n';
+    csv += COPYRIGHT + '\n';
+    
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'LEED-Report-' + reportProject.name.replace(/\s+/g, '-') + '-' + getCurrentDate() + '.csv';
+    a.click();
+    toast('CSV downloaded!', 'success');
+}
+
+async function exportAuditPDF() {
+    if (!reportProject || !reportTickets.length) { toast('No data', 'error'); return; }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const totals = calculateProjectTotals(reportTickets);
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(16, 185, 129);
+    doc.text('AUDIT TRAIL REPORT', 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('DivertScan™ Verification Document', 105, 27, { align: 'center' });
+    
+    // Project Info
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text('Project: ' + reportProject.name, 14, 40);
+    let y = 47;
+    if (reportProject.address) { doc.text('Address: ' + reportProject.address, 14, y); y += 6; }
+    if (reportProject.waste_hauler) { doc.text('Hauler: ' + reportProject.waste_hauler, 14, y); y += 6; }
+    doc.text('Audit Date: ' + new Date().toLocaleString(), 14, y);
+    y += 10;
+    
+    // Summary
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, y, 182, 20, 'F');
+    doc.text('Total Tickets: ' + reportTickets.length + '    |    Total Tons: ' + totals.totalTons.toFixed(2) + 
+        '    |    Diversion: ' + totals.diversionRate.toFixed(1) + '%    |    LEED: ' + (totals.diversionRate >= 75 ? 'ACHIEVED' : 'NOT MET'), 20, y + 12);
+    y += 30;
+    
+    // Ticket audit details
+    doc.setFontSize(11);
+    doc.text('TICKET AUDIT TRAIL', 14, y);
+    y += 8;
+    
+    for (let i = 0; i < reportTickets.length && y < 250; i++) {
+        const t = reportTickets[i];
+        const photos = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
+        
+        doc.setFontSize(9);
+        doc.setTextColor(0);
+        doc.text('Ticket #' + (t.ticket_number || 'N/A') + ' | ' + formatDate(t.service_date) + ' | ' + 
+            (t.net_tons || 0).toFixed(3) + ' tons | ' + (t.diversion_pct || 0) + '% div | ' + 
+            photos.length + ' photo(s)', 14, y);
+        doc.setTextColor(100);
+        doc.text('Audit ID: ' + (t.audit_id || 'N/A') + ' | Created: ' + (t.created_at ? new Date(t.created_at).toLocaleString() : 'N/A'), 14, y + 5);
+        if (t.signed_at) doc.text('Signed: ' + new Date(t.signed_at).toLocaleString(), 14, y + 10);
+        
+        y += 18;
+        
+        if (y > 250) {
+            doc.addPage();
+            y = 20;
+        }
+    }
+    
+    // Footer on all pages
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text('This audit report verifies Point-of-Capture data integrity. Photos stored in database for verification.', 14, doc.internal.pageSize.height - 20);
+        doc.text(COPYRIGHT, 14, doc.internal.pageSize.height - 10);
+        doc.text('Page ' + i + ' of ' + pageCount, 196, doc.internal.pageSize.height - 10, { align: 'right' });
+    }
+    
+    doc.save('Audit-Report-' + reportProject.name.replace(/\s+/g, '-') + '-' + getCurrentDate() + '.pdf');
+    toast('Audit PDF downloaded!', 'success');
+}
+</script>
+1;
     document.getElementById('nextStepBtn').textContent = step === 4 ? '✅ Finalize' : 'Next';
     
     if (step === 3) populateReview();
@@ -817,9 +1307,7 @@ function nextStep() {
     showStep(currentStep + 1);
 }
 
-function prevStep() {
-    if (currentStep > 1) showStep(currentStep - 1);
-}
+function prevStep() { if (currentStep > 1) showStep(currentStep - 1); }
 
 // Step 1: Scale Ticket
 async function handleTicketFile(e) {
@@ -841,13 +1329,10 @@ async function handleTicketFile(e) {
                 headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: 'gpt-4o',
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: 'Extract from scale ticket. Return ONLY JSON: {"ticket_number":"string","date":"MM/DD/YY","hauler":"string","gross_lbs":number,"tare_lbs":number}' },
-                            { type: 'image_url', image_url: { url: img } }
-                        ]
-                    }],
+                    messages: [{ role: 'user', content: [
+                        { type: 'text', text: 'Extract from scale ticket. Return ONLY JSON: {"ticket_number":"string","date":"MM/DD/YY","hauler":"string","gross_lbs":number,"tare_lbs":number}' },
+                        { type: 'image_url', image_url: { url: img } }
+                    ]}],
                     max_tokens: 500
                 })
             });
@@ -872,11 +1357,8 @@ async function handleTicketFile(e) {
             document.getElementById('haulerName').value = ticketSession.hauler || '';
             updateWeights();
             toast('Ticket analyzed!', 'success');
-        } catch (err) {
-            toast(err.message, 'error');
-        } finally {
-            document.getElementById('ticketAnalyzing').classList.add('hidden');
-        }
+        } catch (err) { toast(err.message, 'error'); }
+        finally { document.getElementById('ticketAnalyzing').classList.add('hidden'); }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -916,10 +1398,7 @@ function handleDebrisSingle(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-        debrisPhotos[currentPhotoSlot] = ev.target.result;
-        updateDebrisGrid();
-    };
+    reader.onload = (ev) => { debrisPhotos[currentPhotoSlot] = ev.target.result; updateDebrisGrid(); };
     reader.readAsDataURL(file);
     e.target.value = '';
 }
@@ -930,21 +1409,13 @@ function handleDebrisMultiple(e) {
     debrisPhotos = [null, null, null];
     files.forEach((file, i) => {
         const reader = new FileReader();
-        reader.onload = (ev) => {
-            debrisPhotos[i] = ev.target.result;
-            loaded++;
-            if (loaded === files.length) updateDebrisGrid();
-        };
+        reader.onload = (ev) => { debrisPhotos[i] = ev.target.result; loaded++; if (loaded === files.length) updateDebrisGrid(); };
         reader.readAsDataURL(file);
     });
     e.target.value = '';
 }
 
-function removeDebrisPhoto(slot, e) {
-    e.stopPropagation();
-    debrisPhotos[slot] = null;
-    updateDebrisGrid();
-}
+function removeDebrisPhoto(slot, e) { e.stopPropagation(); debrisPhotos[slot] = null; updateDebrisGrid(); }
 
 function updateDebrisGrid() {
     const grid = document.getElementById('debrisPhotoGrid');
@@ -968,19 +1439,13 @@ async function analyzeDebris() {
         const apiKey = localStorage.getItem('divertscan_openai');
         if (!apiKey) throw new Error('Add OpenAI key in Settings');
         
-        const content = [
-            { type: 'text', text: 'Analyze ' + photos.length + ' photo(s) of ' + selectedContainer + '-yard C&D container. Volumetric Mass-Balance: estimate VOLUME % across ALL photos. Return ONLY JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100} MUST total 100.' }
-        ];
+        const content = [{ type: 'text', text: 'Analyze ' + photos.length + ' photo(s) of ' + selectedContainer + '-yard C&D container. Volumetric Mass-Balance: estimate VOLUME % across ALL photos. Return ONLY JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100} MUST total 100.' }];
         photos.forEach(img => content.push({ type: 'image_url', image_url: { url: img } }));
         
         const resp = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [{ role: 'user', content }],
-                max_tokens: 500
-            })
+            body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content }], max_tokens: 500 })
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
@@ -996,16 +1461,10 @@ async function analyzeDebris() {
         
         toast(photos.length + ' photo(s) → ' + ticketSession.diversionRate + '% diversion', 'success');
         showStep(3);
-    } catch (err) {
-        toast(err.message, 'error');
-        document.getElementById('analyzeDebrisBtn').disabled = false;
-    } finally {
-        document.getElementById('debrisAnalyzing').classList.add('hidden');
-    }
+    } catch (err) { toast(err.message, 'error'); document.getElementById('analyzeDebrisBtn').disabled = false; }
+    finally { document.getElementById('debrisAnalyzing').classList.add('hidden'); }
 }
-</script>
 
-<script>
 // Step 3: Review
 function populateReview() {
     const d = ticketSession.diversionRate || 0;
@@ -1013,15 +1472,12 @@ function populateReview() {
     badge.textContent = d + '%';
     badge.className = 'diversion-badge ' + (d >= 75 ? 'good' : d >= 50 ? 'warning' : 'bad');
     
-    const bar = document.getElementById('finalProgressBar');
-    bar.style.width = Math.min(d, 100) + '%';
-    bar.className = 'progress-fill' + (d >= 75 ? '' : d >= 50 ? ' warning' : ' danger');
+    document.getElementById('finalProgressBar').style.width = Math.min(d, 100) + '%';
+    document.getElementById('finalProgressBar').className = 'progress-fill' + (d >= 75 ? '' : d >= 50 ? ' warning' : ' danger');
     
-    const grid = document.getElementById('materialBreakdownEdit');
-    grid.innerHTML = MATERIAL_KEYS.map(k => {
+    document.getElementById('materialBreakdownEdit').innerHTML = MATERIAL_KEYS.map(k => {
         const m = MATERIALS[k];
-        const pct = ticketSession.materialBreakdown[k] || 0;
-        return '<div class="material-item"><div class="material-name">' + m.icon + ' ' + m.name + '</div><div class="material-input"><input type="number" id="mat_' + k + '" value="' + pct + '" min="0" max="100" onchange="updateMatPct(\'' + k + '\')"><span>%</span></div></div>';
+        return '<div class="material-item"><div class="material-name">' + m.icon + ' ' + m.name + '</div><div class="material-input"><input type="number" id="mat_' + k + '" value="' + (ticketSession.materialBreakdown[k]||0) + '" min="0" max="100" onchange="updateMatPct(\'' + k + '\')"><span>%</span></div></div>';
     }).join('');
     
     updateMatTotal();
@@ -1060,18 +1516,8 @@ function setupSignaturePad() {
     signatureCtx.lineWidth = 2;
     signatureCtx.lineCap = 'round';
     
-    signatureCanvas.onpointerdown = (e) => {
-        isDrawing = true;
-        const rect = signatureCanvas.getBoundingClientRect();
-        signatureCtx.beginPath();
-        signatureCtx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-    };
-    signatureCanvas.onpointermove = (e) => {
-        if (!isDrawing) return;
-        const rect = signatureCanvas.getBoundingClientRect();
-        signatureCtx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-        signatureCtx.stroke();
-    };
+    signatureCanvas.onpointerdown = (e) => { isDrawing = true; const rect = signatureCanvas.getBoundingClientRect(); signatureCtx.beginPath(); signatureCtx.moveTo(e.clientX - rect.left, e.clientY - rect.top); };
+    signatureCanvas.onpointermove = (e) => { if (!isDrawing) return; const rect = signatureCanvas.getBoundingClientRect(); signatureCtx.lineTo(e.clientX - rect.left, e.clientY - rect.top); signatureCtx.stroke(); };
     signatureCanvas.onpointerup = () => { isDrawing = false; };
     signatureCanvas.onpointerleave = () => { isDrawing = false; };
 }
@@ -1084,57 +1530,31 @@ function clearSignaturePad() {
 }
 
 async function finalizeTicket() {
-    // Validate materials
     let total = 0;
     MATERIAL_KEYS.forEach(k => { total += parseFloat(ticketSession.materialBreakdown[k]) || 0; });
-    if (Math.abs(total - 100) > 0.5) {
-        toast('Materials must = 100%', 'error');
-        return;
-    }
+    if (Math.abs(total - 100) > 0.5) { toast('Materials must = 100%', 'error'); return; }
     
-    // Get signature
     ticketSession.signature = signatureCanvas ? signatureCanvas.toDataURL('image/png') : null;
     ticketSession.isClosed = true;
-    
     recalcSession();
     
     try {
         const b = ticketSession;
         const data = {
-            project_id: b.projectId,
-            user_id: currentUser?.id,
-            ticket_number: b.ticketNumber,
-            service_date: b.serviceDate || getCurrentDate(),
-            ticket_date: b.serviceDate || getCurrentDate(),
-            hauler: b.hauler,
-            container_size: b.containerSize,
-            gross_lbs: b.grossLbs,
-            tare_lbs: b.tareLbs,
-            net_lbs: b.netLbs,
-            net_tons: b.netTons,
-            wood_pct: b.materialBreakdown.wood || 0,
-            gypsum_pct: b.materialBreakdown.gypsum || 0,
-            plastic_pct: b.materialBreakdown.plastic || 0,
-            occ_pct: b.materialBreakdown.occ || 0,
-            metal_pct: b.materialBreakdown.metal || 0,
-            concrete_pct: b.materialBreakdown.concrete || 0,
-            block_pct: b.materialBreakdown.block || 0,
-            landfill_pct: b.materialBreakdown.landfill || 0,
-            wood_tons: (b.materialBreakdown.wood/100) * b.netTons || 0,
-            gypsum_tons: (b.materialBreakdown.gypsum/100) * b.netTons || 0,
-            plastic_tons: (b.materialBreakdown.plastic/100) * b.netTons || 0,
-            occ_tons: (b.materialBreakdown.occ/100) * b.netTons || 0,
-            metal_tons: (b.materialBreakdown.metal/100) * b.netTons || 0,
-            concrete_tons: (b.materialBreakdown.concrete/100) * b.netTons || 0,
-            block_tons: (b.materialBreakdown.block/100) * b.netTons || 0,
-            landfill_tons: (b.materialBreakdown.landfill/100) * b.netTons || 0,
-            diversion_pct: b.diversionRate,
-            diverted_tons: b.netTons * (b.diversionRate / 100),
-            co2e_avoided: b.co2eAvoided,
-            signature: b.signature,
-            signed_at: new Date().toISOString(),
-            is_closed: true,
-            closed_at: new Date().toISOString(),
+            project_id: b.projectId, user_id: currentUser?.id,
+            ticket_number: b.ticketNumber, service_date: b.serviceDate || getCurrentDate(), ticket_date: b.serviceDate || getCurrentDate(),
+            hauler: b.hauler, container_size: b.containerSize,
+            gross_lbs: b.grossLbs, tare_lbs: b.tareLbs, net_lbs: b.netLbs, net_tons: b.netTons,
+            wood_pct: b.materialBreakdown.wood || 0, gypsum_pct: b.materialBreakdown.gypsum || 0, plastic_pct: b.materialBreakdown.plastic || 0,
+            occ_pct: b.materialBreakdown.occ || 0, metal_pct: b.materialBreakdown.metal || 0, concrete_pct: b.materialBreakdown.concrete || 0,
+            block_pct: b.materialBreakdown.block || 0, landfill_pct: b.materialBreakdown.landfill || 0,
+            wood_tons: (b.materialBreakdown.wood/100) * b.netTons, gypsum_tons: (b.materialBreakdown.gypsum/100) * b.netTons,
+            plastic_tons: (b.materialBreakdown.plastic/100) * b.netTons, occ_tons: (b.materialBreakdown.occ/100) * b.netTons,
+            metal_tons: (b.materialBreakdown.metal/100) * b.netTons, concrete_tons: (b.materialBreakdown.concrete/100) * b.netTons,
+            block_tons: (b.materialBreakdown.block/100) * b.netTons, landfill_tons: (b.materialBreakdown.landfill/100) * b.netTons,
+            diversion_pct: b.diversionRate, diverted_tons: b.netTons * (b.diversionRate / 100), co2e_avoided: b.co2eAvoided,
+            scale_ticket_image: b.scaleTicketImage, debris_images: JSON.stringify(b.debrisImages || []),
+            signature: b.signature, signed_at: new Date().toISOString(), is_closed: true, closed_at: new Date().toISOString(),
             audit_id: 'DS-' + Date.now()
         };
         
@@ -1142,12 +1562,15 @@ async function finalizeTicket() {
         closeModal('ticketModal');
         toast('Ticket finalized!', 'success');
         loadDashboard();
-    } catch (err) {
-        toast(err.message, 'error');
-    }
+    } catch (err) { toast(err.message, 'error'); }
 }
+</script>
 
-// Edit Ticket
+<script>
+// ==========================================
+// EDIT TICKET
+// ==========================================
+
 async function openEditTicket(id) {
     try {
         const { data: t } = await sb.from('tickets').select('*').eq('id', id).single();
@@ -1156,7 +1579,7 @@ async function openEditTicket(id) {
         
         const closed = t.is_closed;
         document.getElementById('editClosedWarning').classList.toggle('hidden', !closed);
-        // Allow editing even if closed - just show info message
+        // Allow editing even if closed
         document.getElementById('editFields').style.opacity = '1';
         document.getElementById('editFields').style.pointerEvents = 'auto';
         document.getElementById('editFooter').style.display = 'flex';
@@ -1168,33 +1591,32 @@ async function openEditTicket(id) {
         document.getElementById('editNetDisplay').textContent = (t.net_tons || 0).toFixed(2) + ' tons';
         
         ticketSession.materialBreakdown = {
-            wood: t.wood_pct || 0,
-            gypsum: t.gypsum_pct || 0,
-            plastic: t.plastic_pct || 0,
-            occ: t.occ_pct || 0,
-            metal: t.metal_pct || 0,
-            concrete: t.concrete_pct || 0,
-            block: t.block_pct || 0,
-            landfill: t.landfill_pct || 0
+            wood: t.wood_pct || 0, gypsum: t.gypsum_pct || 0, plastic: t.plastic_pct || 0, occ: t.occ_pct || 0,
+            metal: t.metal_pct || 0, concrete: t.concrete_pct || 0, block: t.block_pct || 0, landfill: t.landfill_pct || 0
         };
         
-        const grid = document.getElementById('editMaterialGrid');
-        grid.innerHTML = MATERIAL_KEYS.map(k => {
+        document.getElementById('editMaterialGrid').innerHTML = MATERIAL_KEYS.map(k => {
             const m = MATERIALS[k];
             return '<div class="material-item"><div class="material-name">' + m.icon + ' ' + m.name + '</div><div class="material-input"><input type="number" id="edit_' + k + '" value="' + (ticketSession.materialBreakdown[k]||0) + '" min="0" max="100" onchange="updateEditCalcs()"><span>%</span></div></div>';
         }).join('');
         
+        // Show debris photos in audit section
+        const photos = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
+        const auditPhotos = document.getElementById('editAuditPhotos');
+        if (photos.length > 0) {
+            auditPhotos.innerHTML = photos.map(p => '<img class="audit-photo" src="' + p + '">').join('');
+        } else {
+            auditPhotos.innerHTML = '<span style="color:var(--slate-500);font-size:11px">No photos</span>';
+        }
+        document.getElementById('editAuditId').textContent = t.audit_id || 'N/A';
+        
         updateEditCalcs();
         openModal('editModal');
-    } catch (e) {
-        toast('Load failed', 'error');
-    }
+    } catch (e) { toast('Load failed', 'error'); }
 }
 
 function updateEditCalcs() {
-    MATERIAL_KEYS.forEach(k => {
-        ticketSession.materialBreakdown[k] = parseFloat(document.getElementById('edit_' + k).value) || 0;
-    });
+    MATERIAL_KEYS.forEach(k => { ticketSession.materialBreakdown[k] = parseFloat(document.getElementById('edit_' + k).value) || 0; });
     
     ticketSession.grossLbs = parseFloat(document.getElementById('editGrossLbs').value) || 0;
     ticketSession.tareLbs = parseFloat(document.getElementById('editTareLbs').value) || 0;
@@ -1214,10 +1636,7 @@ function updateEditCalcs() {
 async function saveEditedTicket() {
     let total = 0;
     MATERIAL_KEYS.forEach(k => { total += ticketSession.materialBreakdown[k]; });
-    if (Math.abs(total - 100) > 0.5) {
-        toast('Materials must = 100%', 'error');
-        return;
-    }
+    if (Math.abs(total - 100) > 0.5) { toast('Materials must = 100%', 'error'); return; }
     
     recalcSession();
     
@@ -1225,18 +1644,12 @@ async function saveEditedTicket() {
         const data = {
             service_date: document.getElementById('editServiceDate').value,
             ticket_number: document.getElementById('editTicketNumber').value,
-            gross_lbs: ticketSession.grossLbs,
-            tare_lbs: ticketSession.tareLbs,
-            net_lbs: ticketSession.netLbs,
-            net_tons: ticketSession.netTons,
-            wood_pct: ticketSession.materialBreakdown.wood,
-            gypsum_pct: ticketSession.materialBreakdown.gypsum,
-            plastic_pct: ticketSession.materialBreakdown.plastic,
-            occ_pct: ticketSession.materialBreakdown.occ,
-            metal_pct: ticketSession.materialBreakdown.metal,
-            concrete_pct: ticketSession.materialBreakdown.concrete,
-            block_pct: ticketSession.materialBreakdown.block,
-            landfill_pct: ticketSession.materialBreakdown.landfill,
+            gross_lbs: ticketSession.grossLbs, tare_lbs: ticketSession.tareLbs,
+            net_lbs: ticketSession.netLbs, net_tons: ticketSession.netTons,
+            wood_pct: ticketSession.materialBreakdown.wood, gypsum_pct: ticketSession.materialBreakdown.gypsum,
+            plastic_pct: ticketSession.materialBreakdown.plastic, occ_pct: ticketSession.materialBreakdown.occ,
+            metal_pct: ticketSession.materialBreakdown.metal, concrete_pct: ticketSession.materialBreakdown.concrete,
+            block_pct: ticketSession.materialBreakdown.block, landfill_pct: ticketSession.materialBreakdown.landfill,
             wood_tons: (ticketSession.materialBreakdown.wood/100) * ticketSession.netTons,
             gypsum_tons: (ticketSession.materialBreakdown.gypsum/100) * ticketSession.netTons,
             plastic_tons: (ticketSession.materialBreakdown.plastic/100) * ticketSession.netTons,
@@ -1256,10 +1669,7 @@ async function saveEditedTicket() {
         closeModal('editModal');
         toast('Saved!', 'success');
         loadDashboard();
-        loadAllTickets();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteCurrentTicket() {
@@ -1269,58 +1679,7 @@ async function deleteCurrentTicket() {
         closeModal('editModal');
         toast('Deleted', 'success');
         loadDashboard();
-        loadAllTickets();
     } catch (e) { toast(e.message, 'error'); }
-}
-
-// Reports
-async function exportAllTickets() {
-    if (!currentProject) { toast('Select project', 'error'); return; }
-    try {
-        const { data } = await sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date');
-        if (!data?.length) { toast('No tickets', 'error'); return; }
-        downloadReport(data);
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-async function exportClosedTickets() {
-    if (!currentProject) { toast('Select project', 'error'); return; }
-    try {
-        const { data } = await sb.from('tickets').select('*').eq('project_id', currentProject.id).eq('is_closed', true).order('service_date');
-        if (!data?.length) { toast('No finalized tickets', 'error'); return; }
-        downloadReport(data);
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-function downloadReport(tickets) {
-    const h = ['Date','Ticket No','Gross','Tare','Net (lbs)','Net (T)','Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill','Diverted','Div %'];
-    let csv = 'LEED WASTE DIVERSION REPORT\n';
-    csv += 'Project: ' + currentProject.name + '\n';
-    if (currentProject.address) csv += 'Address: ' + currentProject.address + '\n';
-    if (currentProject.waste_hauler) csv += 'Hauler: ' + currentProject.waste_hauler + '\n';
-    csv += 'Generated: ' + new Date().toLocaleDateString() + '\n\n';
-    csv += h.join(',') + '\n';
-    
-    let tot = {g:0,t:0,n:0,nt:0,w:0,gy:0,pl:0,oc:0,me:0,co:0,bl:0,lf:0,dv:0};
-    tickets.forEach(tk => {
-        csv += [formatDate(tk.service_date),tk.ticket_number||'',tk.gross_lbs||0,tk.tare_lbs||0,tk.net_lbs||0,(tk.net_tons||0).toFixed(3),(tk.wood_tons||0).toFixed(3),(tk.gypsum_tons||0).toFixed(3),(tk.plastic_tons||0).toFixed(3),(tk.occ_tons||0).toFixed(3),(tk.metal_tons||0).toFixed(3),(tk.concrete_tons||0).toFixed(3),(tk.block_tons||0).toFixed(3),(tk.landfill_tons||0).toFixed(3),(tk.diverted_tons||0).toFixed(3),(tk.diversion_pct||0)+'%'].join(',') + '\n';
-        tot.g+=+tk.gross_lbs||0;tot.t+=+tk.tare_lbs||0;tot.n+=+tk.net_lbs||0;tot.nt+=+tk.net_tons||0;
-        tot.w+=+tk.wood_tons||0;tot.gy+=+tk.gypsum_tons||0;tot.pl+=+tk.plastic_tons||0;tot.oc+=+tk.occ_tons||0;
-        tot.me+=+tk.metal_tons||0;tot.co+=+tk.concrete_tons||0;tot.bl+=+tk.block_tons||0;tot.lf+=+tk.landfill_tons||0;tot.dv+=+tk.diverted_tons||0;
-    });
-    
-    const ovr = tot.nt > 0 ? ((tot.dv/tot.nt)*100).toFixed(1) : '0';
-    csv += '\nTOTALS,' + tickets.length + ',' + tot.g + ',' + tot.t + ',' + tot.n + ',' + tot.nt.toFixed(3) + ',' + tot.w.toFixed(3) + ',' + tot.gy.toFixed(3) + ',' + tot.pl.toFixed(3) + ',' + tot.oc.toFixed(3) + ',' + tot.me.toFixed(3) + ',' + tot.co.toFixed(3) + ',' + tot.bl.toFixed(3) + ',' + tot.lf.toFixed(3) + ',' + tot.dv.toFixed(3) + ',' + ovr + '%\n';
-    csv += '\nDiversion Rate: ' + ovr + '%\nLEED v5 (75%): ' + (parseFloat(ovr) >= 75 ? 'ACHIEVED' : 'NOT MET') + '\n';
-    csv += '\nThis report represents a project-specific sort of commingled construction and demolition waste. All materials reported as diverted have been recycled or salvaged; no diverted tons include Alternative Daily Cover (ADC). Data processed via DivertScan AI Volumetric Analysis.\n';
-    csv += '\n© 2024-2025 DivertScan™\n';
-    
-    const blob = new Blob([csv], {type: 'text/csv'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'LEED-' + currentProject.name.replace(/\s+/g, '-') + '-' + getCurrentDate() + '.csv';
-    a.click();
-    toast('Downloaded!', 'success');
 }
 
 // Utilities
