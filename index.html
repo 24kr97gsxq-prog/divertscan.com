@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v3.2</title>
+<title>DivertScan™ v3.3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -126,7 +126,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v3.2</span></div>
+<div class="logo">DivertScan™ <span>v3.3</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -416,15 +416,36 @@ const SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
 const MATERIAL_KEYS = ['wood', 'gypsum', 'plastic', 'occ', 'metal', 'concrete', 'block', 'landfill'];
 const MATERIALS = {
-    wood: {name:'Wood',icon:'🪵',gwp:0.03},
-    gypsum: {name:'Gypsum',icon:'🧱',gwp:0.12},
-    plastic: {name:'Plastic',icon:'♻️',gwp:2.5},
-    occ: {name:'OCC',icon:'📦',gwp:0.94},
-    metal: {name:'Metal',icon:'🔩',gwp:1.85},
-    concrete: {name:'Concrete',icon:'🪨',gwp:0.159},
-    block: {name:'Block',icon:'🧱',gwp:0.159},
-    landfill: {name:'Landfill',icon:'🗑️',gwp:0.52}
+    wood: {name:'Wood',icon:'🪵',gwp:0.03,density:25},
+    gypsum: {name:'Gypsum',icon:'🧱',gwp:0.12,density:50},
+    plastic: {name:'Plastic',icon:'♻️',gwp:2.5,density:30},
+    occ: {name:'OCC',icon:'📦',gwp:0.94,density:12},
+    metal: {name:'Metal',icon:'🔩',gwp:1.85,density:490},
+    concrete: {name:'Concrete',icon:'🪨',gwp:0.159,density:150},
+    block: {name:'Block',icon:'🧱',gwp:0.159,density:125},
+    landfill: {name:'Landfill',icon:'🗑️',gwp:0.52,density:45}
 };
+
+// Convert volume % to weight % using material densities
+function volumeToWeight(volPcts) {
+    let totalWt = 0;
+    const wts = {};
+    for (const k of MATERIAL_KEYS) {
+        const v = volPcts[k] || 0;
+        wts[k] = v * MATERIALS[k].density;
+        totalWt += wts[k];
+    }
+    const wtPcts = {};
+    for (const k of MATERIAL_KEYS) {
+        wtPcts[k] = totalWt > 0 ? Math.round((wts[k] / totalWt) * 100) : 0;
+    }
+    // Ensure = 100%
+    let sum = Object.values(wtPcts).reduce((a,b) => a+b, 0);
+    if (sum !== 100 && sum > 0) {
+        wtPcts.landfill = Math.max(0, (wtPcts.landfill || 0) + (100 - sum));
+    }
+    return wtPcts;
+}
 
 let sb = null;
 let currentUser = null;
@@ -997,7 +1018,7 @@ async function analyzeDebris() {
         if (!apiKey) throw new Error('Add OpenAI key in Settings');
         
         const content = [
-            { type: 'text', text: 'Analyze ' + photos.length + ' photo(s) of ' + selectedContainer + '-yard C&D container. Volumetric Mass-Balance: estimate VOLUME % across ALL photos. Return ONLY JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100} MUST total 100.' }
+            { type: 'text', text: 'Analyze ' + photos.length + ' C&D debris photo(s) from ' + selectedContainer + '-yard roll-off. Estimate visible VOLUME % accurately. Categories: wood (lumber/plywood/pallets), gypsum (drywall), plastic (film/pipe), occ (cardboard), metal (steel/aluminum), concrete (cement), block (CMU/brick), landfill (mixed/contaminated/trash). If uncertain, use landfill. Return ONLY JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100} MUST total exactly 100.' }
         ];
         photos.forEach(img => content.push({ type: 'image_url', image_url: { url: img } }));
         
@@ -1018,8 +1039,10 @@ async function analyzeDebris() {
         const res = JSON.parse(match[0]);
         
         ticketSession.debrisImages = photos;
-        ticketSession.materialBreakdown = {};
-        MATERIAL_KEYS.forEach(k => { ticketSession.materialBreakdown[k] = res[k] || 0; });
+        // Convert AI volume % to weight % using densities
+        const volPcts = {};
+        MATERIAL_KEYS.forEach(k => { volPcts[k] = res[k] || 0; });
+        ticketSession.materialBreakdown = volumeToWeight(volPcts);
         recalcSession();
         
         toast(photos.length + ' photo(s) → ' + ticketSession.diversionRate + '% diversion', 'success');
@@ -1373,13 +1396,19 @@ async function loadReportList() {
     const el = document.getElementById('projectReportList');
     if (!projects.length) { el.innerHTML = '<div class="empty-state">No projects</div>'; return; }
     let html = '';
+    // Batch fetch summaries for all projects at once
+    const { data: allTks } = await sb.from('tickets').select('project_id, net_tons, diverted_tons');
+    const tksByProj = {};
+    (allTks || []).forEach(t => {
+        if (!tksByProj[t.project_id]) tksByProj[t.project_id] = { count: 0, tons: 0, div: 0 };
+        tksByProj[t.project_id].count++;
+        tksByProj[t.project_id].tons += +t.net_tons || 0;
+        tksByProj[t.project_id].div += +t.diverted_tons || 0;
+    });
     for (const p of projects) {
-        const { data: tks } = await sb.from('tickets').select('*').eq('project_id', p.id);
-        const t = tks || [];
-        const tons = t.reduce((s,x) => s + (+x.net_tons||0), 0);
-        const div = t.reduce((s,x) => s + (+x.diverted_tons||0), 0);
-        const rate = tons > 0 ? (div/tons*100) : 0;
-        html += '<div class="project-card" onclick="openReport(\'' + p.id + '\')"><h3>' + p.name + '</h3><div class="meta">' + (p.address||'') + ' • ' + (p.waste_hauler||'') + '</div><div class="project-stats"><div class="project-stat"><div class="value">' + t.length + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + tons.toFixed(1) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value" style="color:' + (rate>=75?'var(--emerald-400)':rate>=50?'var(--amber-400)':'var(--red-400)') + '">' + rate.toFixed(0) + '%</div><div class="label">Div</div></div><div class="project-stat"><div class="value">' + (rate>=75?'✓':'—') + '</div><div class="label">LEED</div></div></div><div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap for reports →</div></div>';
+        const s = tksByProj[p.id] || { count: 0, tons: 0, div: 0 };
+        const rate = s.tons > 0 ? (s.div/s.tons*100) : 0;
+        html += '<div class="project-card" onclick="openReport(\'' + p.id + '\')"><h3>' + p.name + '</h3><div class="meta">' + (p.address||'') + ' • ' + (p.waste_hauler||'') + '</div><div class="project-stats"><div class="project-stat"><div class="value">' + s.count + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + s.tons.toFixed(1) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value" style="color:' + (rate>=75?'var(--emerald-400)':rate>=50?'var(--amber-400)':'var(--red-400)') + '">' + rate.toFixed(0) + '%</div><div class="label">Div</div></div><div class="project-stat"><div class="value">' + (rate>=75?'✓':'—') + '</div><div class="label">LEED</div></div></div><div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap for reports →</div></div>';
     }
     el.innerHTML = html;
 }
