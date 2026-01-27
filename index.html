@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v3.3.1</title>
+<title>DivertScan™ v3.4</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -122,11 +122,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .btn-blue{background:var(--blue-500);color:white}
 .audit-section{margin-top:12px;padding:12px;background:var(--slate-800);border-radius:8px}
 .audit-photos{display:flex;gap:8px;overflow-x:auto}.audit-photo{width:60px;height:60px;border-radius:6px;object-fit:cover}
+
+.leed-toggle{display:flex;gap:4px;margin-bottom:16px}
+.leed-btn{flex:1;padding:10px;background:var(--slate-700);border:2px solid var(--slate-600);border-radius:8px;text-align:center;cursor:pointer;font-size:12px;color:var(--slate-300)}
+.leed-btn.active{border-color:var(--emerald-500);background:rgba(16,185,129,0.1);color:var(--emerald-400)}
+.ticket-detail{background:var(--slate-700);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.ticket-header{padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-bottom:1px solid var(--slate-600)}
+.ticket-header h4{color:var(--slate-200);font-size:14px}
+.ticket-body{display:none;padding:12px;background:var(--slate-800)}
+.ticket-detail.expanded .ticket-body{display:block}
+.ticket-detail.expanded .ticket-header{background:var(--slate-600)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}
+.detail-item{padding:8px;background:var(--slate-700);border-radius:6px}
+.detail-label{color:var(--slate-500);font-size:10px;text-transform:uppercase}
+.detail-value{color:var(--slate-200);font-weight:600;margin-top:2px}
+.photo-viewer{display:flex;gap:8px;margin-top:12px;overflow-x:auto;padding:8px 0}
+.photo-thumb{width:80px;height:80px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid var(--slate-600)}
+.photo-thumb:hover{border-color:var(--emerald-500)}
+.photo-modal{position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:300;display:none;align-items:center;justify-content:center}
+.photo-modal.active{display:flex}
+.photo-modal img{max-width:90%;max-height:90%;border-radius:8px}
+.photo-modal-close{position:absolute;top:20px;right:20px;width:40px;height:40px;background:var(--slate-700);border:none;border-radius:50%;color:white;font-size:24px;cursor:pointer}
+.scale-ticket-preview{max-width:100%;max-height:200px;border-radius:8px;margin-top:8px}
+.material-bar{display:flex;height:24px;border-radius:4px;overflow:hidden;margin:8px 0}
+.material-segment{display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:600}
+
 </style>
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v3.3.1</span></div>
+<div class="logo">DivertScan™ <span>v3.4</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -197,6 +222,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <!-- Reports Tab -->
 <div id="reportsTab" class="tab-content">
 <h2 style="font-size:18px;margin-bottom:8px">LEED Reports</h2>
+<div class="leed-toggle">
+<div class="leed-btn active" id="leedV4Btn" onclick="setLeedVersion(4)">LEED v4<br><span style="font-size:10px">50%=1pt, 75%=2pt</span></div>
+<div class="leed-btn" id="leedV5Btn" onclick="setLeedVersion(5)">LEED v5<br><span style="font-size:10px">75%=2pt</span></div>
+</div>
 <p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">Tap a project to view tickets and export reports</p>
 <div id="projectReportList"><div class="loading"><div class="spinner"></div></div></div>
 </div>
@@ -667,20 +696,87 @@ function renderTicketList(tickets, containerId) {
         list.innerHTML = '<div class="empty-state">No tickets</div>';
         return;
     }
-    list.innerHTML = tickets.map(t => `
-        <div class="ticket-item ${t.is_closed ? 'closed' : ''}" onclick="openEditTicket('${t.id}')">
-            <div class="ticket-row">
-                <div class="ticket-info">
-                    <h4>#${t.ticket_number || 'N/A'}${t.is_closed ? '<span class="badge badge-closed">CLOSED</span>' : '<span class="badge badge-open">OPEN</span>'}</h4>
-                    <p>${formatDate(t.service_date)} • ${t.hauler || 'Unknown'}</p>
-                </div>
+    list.innerHTML = tickets.map(t => {
+        const photos = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
+        const hasScale = t.scale_ticket_image ? true : false;
+        const divColor = t.diversion_pct >= 75 ? 'var(--emerald-400)' : t.diversion_pct >= 50 ? 'var(--amber-400)' : 'var(--red-400)';
+        return `
+        <div class="ticket-detail" id="tk_${t.id}">
+            <div class="ticket-header" onclick="toggleTicket('${t.id}')">
                 <div>
-                    <div class="ticket-tons">${(t.net_tons||0).toFixed(2)}T</div>
-                    <div class="ticket-div">${t.diversion_pct||0}%</div>
+                    <h4>#${t.ticket_number || 'N/A'} ${t.is_closed ? '<span class="badge badge-closed">CLOSED</span>' : '<span class="badge badge-open">OPEN</span>'}</h4>
+                    <p style="font-size:11px;color:var(--slate-400)">${formatDate(t.service_date)} • ${t.hauler || ''}</p>
+                </div>
+                <div style="text-align:right">
+                    <div style="font-size:18px;font-weight:700;color:var(--emerald-400)">${(t.net_tons||0).toFixed(2)}T</div>
+                    <div style="font-size:12px;color:${divColor}">${t.diversion_pct||0}% div</div>
                 </div>
             </div>
-        </div>
-    `).join('');
+            <div class="ticket-body">
+                <div class="detail-grid">
+                    <div class="detail-item"><div class="detail-label">Gross</div><div class="detail-value">${(t.gross_lbs||0).toLocaleString()} lbs</div></div>
+                    <div class="detail-item"><div class="detail-label">Tare</div><div class="detail-value">${(t.tare_lbs||0).toLocaleString()} lbs</div></div>
+                    <div class="detail-item"><div class="detail-label">Net</div><div class="detail-value">${(t.net_tons||0).toFixed(3)} tons</div></div>
+                    <div class="detail-item"><div class="detail-label">Diverted</div><div class="detail-value">${(t.diverted_tons||0).toFixed(3)} tons</div></div>
+                </div>
+                <div style="margin-top:12px">
+                    <div style="font-size:11px;color:var(--slate-400);margin-bottom:4px">MATERIALS</div>
+                    <div class="material-bar">${renderMaterialBar(t)}</div>
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;margin-top:4px">
+                        ${MATERIAL_KEYS.map(k => '<div style="text-align:center"><div>'+MATERIALS[k].icon+'</div><div style="color:var(--slate-400)">'+(t[k+'_pct']||0)+'%</div></div>').join('')}
+                    </div>
+                </div>
+                ${photos.length > 0 ? `
+                <div style="margin-top:12px">
+                    <div style="font-size:11px;color:var(--slate-400);margin-bottom:4px">📷 DEBRIS PHOTOS (${photos.length})</div>
+                    <div class="photo-viewer">${photos.map(p => '<img class="photo-thumb" src="'+p+'" onclick="viewPhoto(this.src);event.stopPropagation()">').join('')}</div>
+                </div>` : ''}
+                ${hasScale ? `
+                <div style="margin-top:12px">
+                    <div style="font-size:11px;color:var(--slate-400);margin-bottom:4px">📄 SCALE TICKET</div>
+                    <img class="scale-ticket-preview" src="${t.scale_ticket_image}" onclick="viewPhoto(this.src);event.stopPropagation()">
+                </div>` : ''}
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--slate-600)">
+                    <div style="font-size:10px;color:var(--slate-500)">Audit: ${t.audit_id||'N/A'} • Created: ${t.created_at ? new Date(t.created_at).toLocaleDateString() : 'N/A'}</div>
+                </div>
+                <div class="btn-row" style="margin-top:12px">
+                    <button class="btn btn-secondary btn-sm" onclick="openEditTicket('${t.id}');event.stopPropagation()">✏️ Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="quickDelete('${t.id}');event.stopPropagation()">🗑️ Delete</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderMaterialBar(t) {
+    const colors = {wood:'#8B4513',gypsum:'#A8A8A8',plastic:'#3B82F6',occ:'#D97706',metal:'#6B7280',concrete:'#9CA3AF',block:'#78716C',landfill:'#EF4444'};
+    return MATERIAL_KEYS.map(k => {
+        const pct = t[k+'_pct'] || 0;
+        if (pct < 2) return '';
+        return '<div class="material-segment" style="width:'+pct+'%;background:'+colors[k]+'" title="'+MATERIALS[k].name+': '+pct+'%">'+(pct>=5?pct:'')+'</div>';
+    }).join('');
+}
+
+function toggleTicket(id) {
+    document.getElementById('tk_'+id).classList.toggle('expanded');
+}
+
+function viewPhoto(src) {
+    document.getElementById('photoViewerImg').src = src;
+    document.getElementById('photoViewerModal').classList.add('active');
+}
+
+function closePhotoViewer() {
+    document.getElementById('photoViewerModal').classList.remove('active');
+}
+
+async function quickDelete(id) {
+    if (!confirm('Delete this ticket?')) return;
+    try {
+        await sb.from('tickets').delete().eq('id', id);
+        toast('Deleted', 'success');
+        loadDashboard();
+    } catch(e) { toast(e.message, 'error'); }
 }
 </script>
 
@@ -1408,7 +1504,8 @@ async function loadReportList() {
     for (const p of projects) {
         const s = tksByProj[p.id] || { count: 0, tons: 0, div: 0 };
         const rate = s.tons > 0 ? (s.div/s.tons*100) : 0;
-        html += '<div class="project-card" onclick="openReport(\'' + p.id + '\')"><h3>' + p.name + '</h3><div class="meta">' + (p.address||'') + ' • ' + (p.waste_hauler||'') + '</div><div class="project-stats"><div class="project-stat"><div class="value">' + s.count + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + s.tons.toFixed(1) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value" style="color:' + (rate>=75?'var(--emerald-400)':rate>=50?'var(--amber-400)':'var(--red-400)') + '">' + rate.toFixed(0) + '%</div><div class="label">Div</div></div><div class="project-stat"><div class="value">' + (rate>=75?'✓':'—') + '</div><div class="label">LEED</div></div></div><div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap for reports →</div></div>';
+        const ls = getLeedStatus(rate);
+        html += '<div class="project-card" onclick="openReport(\'' + p.id + '\')"><h3>' + p.name + '</h3><div class="meta">' + (p.address||'') + ' • ' + (p.waste_hauler||'') + '</div><div class="project-stats"><div class="project-stat"><div class="value">' + s.count + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + s.tons.toFixed(1) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value" style="color:' + ls.color + '">' + rate.toFixed(0) + '%</div><div class="label">Div</div></div><div class="project-stat"><div class="value" style="color:' + ls.color + '">' + (ls.met?'✓':'—') + '</div><div class="label">LEED v'+leedVersion+'</div></div></div><div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap for reports →</div></div>';
     }
     el.innerHTML = html;
 }
@@ -1428,7 +1525,8 @@ async function openReport(pid) {
     document.getElementById('rptDiv').className = 'diversion-badge ' + (rate>=75?'good':rate>=50?'warning':'bad');
     document.getElementById('rptBar').style.width = Math.min(rate,100) + '%';
     document.getElementById('rptBar').className = 'progress-fill' + (rate>=75?'':rate>=50?' warning':' danger');
-    document.getElementById('rptLeed').innerHTML = rate>=75 ? '<span style="color:var(--emerald-400)">✓ LEED v5 Achieved</span>' : '<span style="color:var(--amber-400)">⚠ Below 75%</span>';
+    const leedSt = getLeedStatus(rate);
+    document.getElementById('rptLeed').innerHTML = '<span style="color:' + leedSt.color + '">' + (leedSt.met ? '✓ ' : '⚠ ') + 'LEED v' + leedVersion + ': ' + leedSt.status + '</span>';
     document.getElementById('rptCount').textContent = rptTks.length;
     document.getElementById('rptBody').innerHTML = rptTks.map(t => {
         const ph = t.debris_images ? (typeof t.debris_images === 'string' ? JSON.parse(t.debris_images) : t.debris_images) : [];
@@ -1478,8 +1576,8 @@ function exportPDF() {
     doc.text('Diverted: ' + tot.div.toFixed(2) + ' tons', 20, y+18);
     doc.text('Landfill: ' + tot.lf.toFixed(2) + ' tons', 20, y+26);
     doc.text('Diversion: ' + tot.rate.toFixed(1) + '%', 110, y+10);
-    doc.text('LEED Target: 75%', 110, y+18);
-    doc.text('Status: ' + (tot.rate>=75?'ACHIEVED':'NOT MET'), 110, y+26);
+    doc.text('LEED v' + leedVersion + ' Target: ' + getLeedTarget(), 110, y+18);
+    const pdfLeed = getLeedStatus(tot.rate); doc.text('Status: ' + pdfLeed.status, 110, y+26);
     y += 45;
     doc.autoTable({startY:y, head:[['Material','Tons','%']], body:MATERIAL_KEYS.map(k=>[MATERIALS[k].name,(tot.mats[k]||0).toFixed(3),(tot.tons>0?(tot.mats[k]/tot.tons*100):0).toFixed(1)+'%']), theme:'striped', headStyles:{fillColor:[16,185,129]}});
     y = doc.lastAutoTable.finalY + 10;
@@ -1495,7 +1593,7 @@ function exportExcel() {
     if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
     const tot = calcTotals(rptTks);
     const wb = XLSX.utils.book_new();
-    const sum = [['LEED WASTE DIVERSION REPORT'],['Project:',rptProj.name],['Address:',rptProj.address||''],['Hauler:',rptProj.waste_hauler||''],['Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED:',tot.rate>=75?'ACHIEVED':'NOT MET'],[],['MATERIALS']];
+    const sum = [['LEED WASTE DIVERSION REPORT'],['Project:',rptProj.name],['Address:',rptProj.address||''],['Hauler:',rptProj.waste_hauler||''],['Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED v'+leedVersion+':',getLeedStatus(tot.rate).status],[],['MATERIALS']];
     MATERIAL_KEYS.forEach(k => sum.push([MATERIALS[k].name, (tot.mats[k]||0).toFixed(3)]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Summary');
     const th = ['Date','Ticket','Gross','Tare','Net(T)','Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill','Diverted','Div%','Audit'];
@@ -1510,7 +1608,7 @@ function exportCSV() {
     if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
     const tot = calcTotals(rptTks);
     let csv = 'LEED REPORT\nProject:,' + rptProj.name + '\n';
-    csv += 'Diversion:,' + tot.rate.toFixed(1) + '%\nLEED:,' + (tot.rate>=75?'ACHIEVED':'NOT MET') + '\n\n';
+    csv += 'Diversion:,' + tot.rate.toFixed(1) + '%\nLEED:,' + getLeedStatus(tot.rate).status + '\n\n';
     csv += 'Date,Ticket,Net(T),Wood,Gypsum,Plastic,OCC,Metal,Concrete,Block,Landfill,Div%,Audit\n';
     rptTks.forEach(t => csv += [formatDate(t.service_date),t.ticket_number||'',(t.net_tons||0).toFixed(3),(t.wood_tons||0).toFixed(3),(t.gypsum_tons||0).toFixed(3),(t.plastic_tons||0).toFixed(3),(t.occ_tons||0).toFixed(3),(t.metal_tons||0).toFixed(3),(t.concrete_tons||0).toFixed(3),(t.block_tons||0).toFixed(3),(t.landfill_tons||0).toFixed(3),(t.diversion_pct||0)+'%',t.audit_id||''].join(',') + '\n');
     const blob = new Blob([csv], {type:'text/csv'});
@@ -1545,7 +1643,41 @@ function exportAudit() {
     DivertScan.toast('Audit PDF saved!', 'success');
 }
 
+
+// LEED Version (4 or 5)
+let leedVersion = 4;
+
+function setLeedVersion(v) {
+    leedVersion = v;
+    document.getElementById('leedV4Btn').classList.toggle('active', v === 4);
+    document.getElementById('leedV5Btn').classList.toggle('active', v === 5);
+    loadReportList();
+}
+
+function getLeedStatus(rate) {
+    if (leedVersion === 4) {
+        if (rate >= 75) return { status: '2 POINTS', color: 'var(--emerald-400)', met: true };
+        if (rate >= 50) return { status: '1 POINT', color: 'var(--amber-400)', met: true };
+        return { status: 'NOT MET', color: 'var(--red-400)', met: false };
+    } else {
+        if (rate >= 75) return { status: 'ACHIEVED', color: 'var(--emerald-400)', met: true };
+        return { status: 'NOT MET', color: 'var(--red-400)', met: false };
+    }
+}
+
+function getLeedTarget() {
+    return leedVersion === 4 ? '50%/75%' : '75%';
+}
+
+
 document.addEventListener('DOMContentLoaded', initialize);
 </script>
+
+<!-- Photo Viewer Modal -->
+<div id="photoViewerModal" class="photo-modal" onclick="closePhotoViewer()">
+<button class="photo-modal-close" onclick="closePhotoViewer()">×</button>
+<img id="photoViewerImg" src="" alt="Photo">
+</div>
+
 </body>
 </html>
