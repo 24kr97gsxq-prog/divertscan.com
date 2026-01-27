@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v3.5</title>
+<title>DivertScan™ v4.0</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -153,11 +153,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .loading-overlay .spinner{width:50px;height:50px;border:4px solid var(--slate-700);border-top-color:var(--emerald-500);border-radius:50%;animation:spin 1s linear infinite}
 .loading-overlay p{margin-top:16px;color:var(--slate-300);font-size:14px}
 .btn:disabled{opacity:0.5;cursor:not-allowed}
+
+.confidence-badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.confidence-high{background:var(--emerald-500);color:white}
+.confidence-medium{background:var(--amber-500);color:white}
+.confidence-low{background:var(--red-500);color:white}
+.verification-box{background:var(--slate-700);border:2px solid var(--slate-600);border-radius:8px;padding:12px;margin:12px 0}
+.verification-box.verified{border-color:var(--emerald-500);background:rgba(16,185,129,0.1)}
+.verification-check{display:flex;align-items:center;gap:10px;cursor:pointer}
+.verification-check input{width:20px;height:20px;accent-color:var(--emerald-500)}
+.gps-badge{font-size:10px;color:var(--slate-400);display:flex;align-items:center;gap:4px}
+.ai-raw-toggle{font-size:11px;color:var(--blue-500);cursor:pointer;text-decoration:underline}
+.ai-raw-data{background:var(--slate-800);padding:8px;border-radius:4px;font-family:monospace;font-size:10px;margin-top:8px;display:none}
+.ai-raw-data.show{display:block}
+.photo-required{border:2px dashed var(--red-500)!important}
+.photo-required.filled{border:2px solid var(--emerald-500)!important}
 </style>
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v3.5</span></div>
+<div class="logo">DivertScan™ <span>v4.0</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -192,10 +207,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </div>
 </div>
 <div class="stats-grid">
-<div class="stat-card"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
+<div class="stat-card" onclick="showTab('projects')" style="cursor:pointer"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
 <div class="stat-card"><div class="stat-value" id="statTons">0</div><div class="stat-label">Total Tons</div></div>
 <div class="stat-card"><div class="stat-value" id="statDiversion">0%</div><div class="stat-label">Diversion</div></div>
-<div class="stat-card"><div class="stat-value" id="statCO2">0</div><div class="stat-label">CO₂e</div></div>
+<div class="stat-card"><div class="stat-value" id="statCO2">0</div><div class="stat-label">CO₂e Avoided</div></div>
 </div>
 <div class="card" style="margin-top:16px">
 <div class="card-title">LEED v5 Progress (75% Target)</div>
@@ -244,9 +259,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <!-- Reports Tab -->
 <div id="reportsTab" class="tab-content">
 <h2 style="font-size:18px;margin-bottom:8px">LEED Reports</h2>
-<div class="leed-toggle">
-<div class="leed-btn active" id="leedV4Btn" onclick="setLeedVersion(4)">LEED v4<br><span style="font-size:10px">50%=1pt, 75%=2pt</span></div>
-<div class="leed-btn" id="leedV5Btn" onclick="setLeedVersion(5)">LEED v5<br><span style="font-size:10px">75%=2pt</span></div>
+<div style="background:var(--slate-700);padding:10px;border-radius:8px;margin-bottom:12px;font-size:11px">
+<span style="color:var(--emerald-400)">●</span> <strong>50%+</strong> = LEED v4 (1pt) | <span style="color:var(--emerald-400)">●●</span> <strong>75%+</strong> = LEED v4 (2pt) / v5 (2pt)
 </div>
 <p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">Tap a project to view tickets and export reports</p>
 <div id="projectReportList"><div class="loading"><div class="spinner"></div></div></div>
@@ -264,6 +278,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div class="card-title">Account</div>
 <p style="color:var(--slate-300);margin-bottom:8px" id="userEmail">-</p>
 <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+
+<div class="card">
+<div class="card-title">🔌 Scale Integration (Coming Soon)</div>
+<p style="font-size:12px;color:var(--slate-400);margin-bottom:8px">Direct connection to truck scales</p>
+<div style="display:grid;gap:6px">
+<div style="padding:8px;background:var(--slate-700);border-radius:6px;font-size:11px"><span style="color:var(--amber-400)">⏳</span> Avery Weigh-Tronix RS-232</div>
+<div style="padding:8px;background:var(--slate-700);border-radius:6px;font-size:11px"><span style="color:var(--slate-500)">○</span> Web Serial API</div>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">📰 Industry Resources</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<a href="https://www.usgbc.org/credits/new-construction-core-and-shell/v4/mrc5" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:12px">🏛️ USGBC MRc5 Credit Guide →</a>
+<a href="https://www.epa.gov/smm/sustainable-management-construction-and-demolition-materials" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:12px">🌿 EPA C&D Materials →</a>
+<a href="https://www.tceq.texas.gov/permitting/waste_permits/msw_permits" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:12px">📋 TCEQ Waste Permits →</a>
+<a href="https://www.cdrecycling.org/" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:12px">♻️ CD Recycling Association →</a>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">📊 LEED Thresholds</div>
+<div style="font-size:12px">
+<div style="padding:8px;background:var(--slate-700);border-radius:6px;margin-bottom:6px">
+<div style="color:var(--slate-400);font-size:10px">LEED v4 BD+C</div>
+<div><span style="color:var(--amber-400)">50%</span> = 1 point | <span style="color:var(--emerald-400)">75%</span> = 2 points</div>
+</div>
+<div style="padding:8px;background:var(--slate-700);border-radius:6px">
+<div style="color:var(--slate-400);font-size:10px">LEED v4.1 / v5</div>
+<div><span style="color:var(--emerald-400)">75%</span> = 2 points</div>
+</div>
+</div>
 </div>
 </div>
 </main>
@@ -465,7 +511,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div id="rptMeta" style="color:var(--slate-400);font-size:12px;margin-bottom:16px"></div>
 <div class="project-stats" id="rptStats"></div>
 <div class="card"><div style="display:flex;justify-content:space-between"><div><div style="font-size:11px;color:var(--slate-400)">Diversion</div><div class="diversion-badge" id="rptDiv">0%</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--slate-400)">LEED v5</div><div style="font-size:20px;font-weight:700">75%</div></div></div><div class="progress-bar" style="margin-top:12px"><div class="progress-fill" id="rptBar" style="width:0%"></div></div><div style="margin-top:8px;text-align:center;font-size:12px" id="rptLeed"></div></div>
-<div class="card"><div class="card-title">Export Reports</div><div class="btn-row" style="margin-bottom:8px"><button class="btn btn-blue" onclick="exportPDF()">📄 PDF</button><button class="btn btn-primary" onclick="exportExcel()">📊 Excel</button></div><div class="btn-row"><button class="btn btn-secondary" onclick="exportAudit()">🔍 Audit</button><button class="btn btn-secondary" onclick="exportCSV()">📋 CSV</button></div></div>
+<div class="card"><div class="card-title">Export Reports</div><div class="btn-row" style="margin-bottom:8px"><button class="btn btn-blue" onclick="exportPDF()">📄 LEED Report</button><button class="btn btn-primary" onclick="exportExcel()">📊 Excel</button></div><div class="btn-row" style="margin-bottom:8px"><button class="btn btn-secondary" onclick="exportAuditPackage()">📁 Audit Package</button><button class="btn btn-secondary" onclick="exportCSV()">📋 CSV</button></div></div>
 <div style="background:var(--slate-700);border-radius:8px;padding:16px"><h4 style="margin-bottom:12px">Tickets (<span id="rptCount">0</span>)</h4><div style="overflow-x:auto"><table class="report-table"><thead><tr><th>Date</th><th>Ticket</th><th class="num">Tons</th><th class="num">Div%</th><th>📷</th></tr></thead><tbody id="rptBody"></tbody></table></div></div>
 <div style="background:var(--slate-700);border-radius:8px;padding:16px;margin-top:16px"><h4 style="margin-bottom:12px">Materials</h4><div id="rptMats"></div></div>
 </div>
@@ -770,7 +816,19 @@ function renderTicketList(tickets, containerId) {
                     <img class="scale-ticket-preview" src="${t.scale_ticket_image}" onclick="viewPhoto(this.src);event.stopPropagation()">
                 </div>` : ''}
                 <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--slate-600)">
-                    <div style="font-size:10px;color:var(--slate-500)">Audit: ${t.audit_id||'N/A'} • Created: ${t.created_at ? new Date(t.created_at).toLocaleDateString() : 'N/A'}</div>
+                    <div style="background:var(--slate-800);padding:10px;border-radius:6px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                        <div style="font-size:12px;color:var(--emerald-400);font-weight:700">🔒 ${t.audit_id||'N/A'}</div>
+                        <span class="confidence-badge confidence-${t.ai_confidence||'medium'}" style="font-size:9px">${(t.ai_confidence||'medium').toUpperCase()}</span>
+                    </div>
+                    <div style="font-size:10px;color:var(--slate-400);display:grid;gap:2px">
+                        <div>📷 ${photos.length} photo(s) + ${hasScale?'scale ticket':'-'}</div>
+                        <div>✅ Human verified: ${t.human_verified ? 'Yes' : 'No'}</div>
+                        <div>📍 GPS: ${t.gps_coords ? 'Captured' : 'N/A'}</div>
+                        <div>🕐 ${t.created_at ? new Date(t.created_at).toLocaleString() : ''}</div>
+                    </div>
+                    ${t.operator_notes ? '<div style="margin-top:6px;font-size:10px;color:var(--slate-300);font-style:italic">"'+t.operator_notes+'"</div>' : ''}
+                </div>
                 </div>
                 <div class="btn-row" style="margin-top:12px">
                     <button class="btn btn-secondary btn-sm" onclick="openEditTicket('${t.id}');event.stopPropagation()">✏️ Edit</button>
@@ -1055,21 +1113,31 @@ async function handleTicketFile(e) {
             const apiKey = localStorage.getItem('divertscan_openai');
             if (!apiKey) throw new Error('Add OpenAI key in Settings');
             
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+            
             const resp = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     model: 'gpt-4o',
                     messages: [{
                         role: 'user',
                         content: [
-                            { type: 'text', text: 'Extract from scale ticket. Return ONLY JSON: {"ticket_number":"string","date":"MM/DD/YY","hauler":"string","gross_lbs":number,"tare_lbs":number}' },
-                            { type: 'image_url', image_url: { url: img } }
+                            { type: 'text', text: 'Extract from scale ticket image. Return ONLY valid JSON: {"ticket_number":"string","date":"MM/DD/YY","hauler":"string","gross_lbs":number,"tare_lbs":number}. Use 0 for missing numbers.' },
+                            { type: 'image_url', image_url: { url: img, detail: 'high' } }
                         ]
                     }],
                     max_tokens: 500
                 })
             });
+            clearTimeout(timeoutId);
+            
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error?.message || 'API error: ' + resp.status);
+            }
             const data = await resp.json();
             if (data.error) throw new Error(data.error.message);
             
@@ -1178,18 +1246,30 @@ function updateDebrisGrid() {
 
 async function analyzeDebris() {
     const photos = debrisPhotos.filter(p => p);
-    if (!photos.length) { toast('Add at least 1 photo', 'error'); return; }
+    if (photos.length < 3) { 
+        toast('Minimum 3 photos required for audit compliance', 'error'); 
+        return; 
+    }
     
-    showLoading('🤖 AI Analyzing Debris...');
+    showLoading('📍 Capturing location...');
+    
+    // Capture GPS first
+    const gps = await captureGPS();
+    ticketSession.gpsCoords = gps;
+    
+    showLoading('🤖 AI Analyzing ' + photos.length + ' Photos...');
     document.getElementById('debrisAnalyzing').classList.remove('hidden');
     document.getElementById('analyzeDebrisBtn').disabled = true;
+    
+    // Store photo metadata
+    ticketSession.photoMetadata = photos.map((p, i) => capturePhotoMetadata(i));
     
     try {
         const apiKey = localStorage.getItem('divertscan_openai');
         if (!apiKey) throw new Error('Add OpenAI key in Settings');
         
         const content = [
-            { type: 'text', text: 'Analyze ' + photos.length + ' C&D debris photo(s) from ' + selectedContainer + '-yard roll-off. Estimate visible VOLUME % accurately. Categories: wood (lumber/plywood/pallets), gypsum (drywall), plastic (film/pipe), occ (cardboard), metal (steel/aluminum), concrete (cement), block (CMU/brick), landfill (mixed/contaminated/trash). If uncertain, use landfill. Return ONLY JSON: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100} MUST total exactly 100.' }
+            { type: 'text', text: 'Analyze ' + photos.length + ' C&D debris photo(s) from ' + selectedContainer + '-yard roll-off container. Estimate visible VOLUME % for each material. Categories: wood (lumber/plywood/pallets), gypsum (drywall/sheetrock), plastic (film/pipe/packaging), occ (cardboard/paper), metal (steel/aluminum/copper), concrete (cement/sidewalk), block (CMU/brick/masonry), landfill (mixed/contaminated/unidentifiable). IMPORTANT: If materials are mixed or uncertain, classify as landfill. Be conservative. Return ONLY valid JSON with confidence: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100,"confidence":"high/medium/low","notes":"brief observation"} Percentages MUST total exactly 100. Confidence: high=clearly visible separated materials, medium=identifiable but mixed, low=heavily contaminated/uncertain.' }
         ];
         photos.forEach(img => content.push({ type: 'image_url', image_url: { url: img } }));
         
@@ -1210,11 +1290,23 @@ async function analyzeDebris() {
         const res = JSON.parse(match[0]);
         
         ticketSession.debrisImages = photos;
+        
+        // Store AI raw output for audit trail
+        ticketSession.aiRawOutput = res;
+        ticketSession.aiConfidence = res.confidence || 'medium';
+        ticketSession.aiNotes = res.notes || '';
+        
         // Convert AI volume % to weight % using densities
         const volPcts = {};
         MATERIAL_KEYS.forEach(k => { volPcts[k] = res[k] || 0; });
         ticketSession.materialBreakdown = volumeToWeight(volPcts);
+        ticketSession.humanVerified = false; // Reset - needs human verification
         recalcSession();
+        
+        // Show confidence warning if low
+        if (ticketSession.aiConfidence === 'low') {
+            toast('⚠️ Low confidence - review carefully!', 'error');
+        }
         
         toast(photos.length + ' photo(s) → ' + ticketSession.diversionRate + '% diversion', 'success');
         showStep(3);
@@ -1357,7 +1449,15 @@ async function finalizeTicket() {
             signed_at: new Date().toISOString(),
             is_closed: true,
             closed_at: new Date().toISOString(),
-            audit_id: 'DS-' + Date.now()
+            audit_id: 'DS-' + Date.now(),
+            // Audit trail fields
+            gps_coords: JSON.stringify(b.gpsCoords || {}),
+            device_info: b.deviceInfo || '',
+            ai_raw_output: JSON.stringify(b.aiRawOutput || {}),
+            ai_confidence: b.aiConfidence || 'medium',
+            human_verified: b.humanVerified || false,
+            operator_notes: b.operatorNotes || '',
+            photo_count: (b.debrisImages || []).length
         };
         
         await sb.from('tickets').insert([data]);
@@ -1565,7 +1665,7 @@ const DALMEX_INFO = {
     name: 'Dalmex Recycling LLC',
     address: '2828 Nagle St., Dallas, TX 75220',
     phone: '(214) 352-2000',
-    certification: 'Licensed C&D Recycling Facility'
+    permit: 'TCEQ Registered C&D Processing Facility'
 };
 const REPORT_FOOTER = 'All materials reported as diverted have been processed at Dalmex Recycling LLC, a licensed C&D recycling facility. No diverted materials include Alternative Daily Cover (ADC). Material percentages calculated via DivertScan™ AI Volumetric Mass-Balance Analysis.';
 
@@ -1602,7 +1702,7 @@ async function openReport(pid) {
     const { data: tks } = await sb.from('tickets').select('*').eq('project_id', pid).order('service_date', {ascending:true});
     rptTks = tks || [];
     const tot = calcTotals(rptTks);
-    document.getElementById('rptProjName').textContent = p.name + ' - LEED v' + leedVersion + ' Report';
+    document.getElementById('rptProjName').textContent = p.name + ' - Diversion Report';
     document.getElementById('rptMeta').innerHTML = (p.address ? '<strong>Address:</strong> ' + p.address + '<br>' : '') + (p.waste_hauler ? '<strong>Hauler:</strong> ' + p.waste_hauler + '<br>' : '') + '<strong>Generated:</strong> ' + new Date().toLocaleDateString();
     document.getElementById('rptStats').innerHTML = '<div class="project-stat"><div class="value">' + rptTks.length + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + tot.tons.toFixed(2) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value">' + tot.div.toFixed(2) + '</div><div class="label">Diverted</div></div><div class="project-stat"><div class="value">' + tot.co2.toFixed(1) + '</div><div class="label">CO₂e</div></div>';
     const rate = tot.rate;
@@ -1660,21 +1760,21 @@ function exportPDF() {
     doc.text('Project: ' + rptProj.name, 14, y); y += 7;
     if (rptProj.address) { doc.text('Project Address: ' + rptProj.address, 14, y); y += 7; }
     doc.text('Report Date: ' + new Date().toLocaleDateString(), 14, y); y += 7;
-    doc.text('LEED Version: v' + leedVersion, 14, y); y += 10;
+    doc.text('LEED Target: 50% (v4 1pt) / 75% (v4 2pt, v5 2pt)', 14, y); y += 10;
     doc.setFillColor(240,240,240); doc.rect(14, y, 182, 35, 'F');
     doc.setFontSize(10);
     doc.text('Generated: ' + tot.tons.toFixed(2) + ' tons', 20, y+10);
     doc.text('Diverted: ' + tot.div.toFixed(2) + ' tons', 20, y+18);
     doc.text('Landfill: ' + tot.lf.toFixed(2) + ' tons', 20, y+26);
     doc.text('Diversion: ' + tot.rate.toFixed(1) + '%', 110, y+10);
-    doc.text('LEED v' + leedVersion + ' Target: ' + getLeedTarget(), 110, y+18);
-    const pdfLeed = getLeedStatus(tot.rate); doc.text('Status: ' + pdfLeed.status, 110, y+26);
+    doc.text('LEED v4: 50%/75% | v5: 75%', 110, y+18);
+    const pdfLeed = getLeedStatus(tot.rate); doc.text(pdfLeed.status, 110, y+26);
     y += 45;
     doc.autoTable({startY:y, head:[['Material','Tons','%']], body:MATERIAL_KEYS.map(k=>[MATERIALS[k].name,(tot.mats[k]||0).toFixed(3),(tot.tons>0?(tot.mats[k]/tot.tons*100):0).toFixed(1)+'%']), theme:'striped', headStyles:{fillColor:[16,185,129]}});
     y = doc.lastAutoTable.finalY + 10;
     doc.autoTable({startY:y, head:[['Date','Ticket','Net(T)','Div%','Audit']], body:rptTks.map(t=>[formatDate(t.service_date),t.ticket_number||'-',(t.net_tons||0).toFixed(3),(t.diversion_pct||0)+'%',t.audit_id||'-']), theme:'striped', headStyles:{fillColor:[16,185,129]}, styles:{fontSize:8}});
     doc.setFontSize(8); doc.setTextColor(100);
-    doc.text(DALMEX_INFO.name + ' - ' + DALMEX_INFO.certification, 14, doc.internal.pageSize.height-20);
+    doc.text(DALMEX_INFO.name + ' - ' + DALMEX_INFO.permit, 14, doc.internal.pageSize.height-20);
     doc.text(DALMEX_INFO.address + ' | ' + DALMEX_INFO.phone, 14, doc.internal.pageSize.height-15);
     doc.text('Generated by DivertScan™ | ' + new Date().toLocaleString(), 14, doc.internal.pageSize.height-10);
     hideLoading();
@@ -1686,7 +1786,7 @@ function exportExcel() {
     if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
     const tot = calcTotals(rptTks);
     const wb = XLSX.utils.book_new();
-    const sum = [['LEED WASTE DIVERSION REPORT'],[],['Prepared by:',DALMEX_INFO.name],['Facility Address:',DALMEX_INFO.address],['Phone:',DALMEX_INFO.phone],[],['Project:',rptProj.name],['Project Address:',rptProj.address||''],['LEED Version:','v'+leedVersion],['Report Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED v'+leedVersion+':',getLeedStatus(tot.rate).status],[],['MATERIALS']];
+    const sum = [['LEED WASTE DIVERSION REPORT'],[],['Prepared by:',DALMEX_INFO.name],['Facility Address:',DALMEX_INFO.address],['Phone:',DALMEX_INFO.phone],[],['Project:',rptProj.name],['Project Address:',rptProj.address||''],['LEED Version:','v4/v5'],['Report Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED:',getLeedStatus(tot.rate).status],[],['MATERIALS']];
     MATERIAL_KEYS.forEach(k => sum.push([MATERIALS[k].name, (tot.mats[k]||0).toFixed(3)]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Summary');
     const th = ['Date','Ticket','Gross','Tare','Net(T)','Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill','Diverted','Div%','Audit'];
@@ -1741,26 +1841,16 @@ function exportAudit() {
 let leedVersion = 4;
 
 function setLeedVersion(v) {
-    leedVersion = v;
-    document.getElementById('leedV4Btn').classList.toggle('active', v === 4);
-    document.getElementById('leedV5Btn').classList.toggle('active', v === 5);
-    loadReportList();
+    // Simplified - both v4/v5 thresholds shown
+    leedVersion = v || 4;
 }
 
 function getLeedStatus(rate) {
-    if (leedVersion === 4) {
-        if (rate >= 75) return { status: '2 POINTS', color: 'var(--emerald-400)', met: true };
-        if (rate >= 50) return { status: '1 POINT', color: 'var(--amber-400)', met: true };
-        return { status: 'NOT MET', color: 'var(--red-400)', met: false };
-    } else {
-        if (rate >= 75) return { status: 'ACHIEVED', color: 'var(--emerald-400)', met: true };
-        return { status: 'NOT MET', color: 'var(--red-400)', met: false };
-    }
+    if (rate >= 75) return { status: 'v4: 2pts | v5: 2pts', color: 'var(--emerald-400)', met: true, points: 2 };
+    if (rate >= 50) return { status: 'v4: 1pt | v5: 0pts', color: 'var(--amber-400)', met: true, points: 1 };
+    return { status: 'Below threshold', color: 'var(--red-400)', met: false, points: 0 };
 }
 
-function getLeedTarget() {
-    return leedVersion === 4 ? '50%/75%' : '75%';
-}
 
 
 
@@ -1771,6 +1861,192 @@ function showLoading(msg = 'Processing...') {
 
 function hideLoading() {
     document.getElementById('loadingOverlay').classList.remove('active');
+}
+
+
+// GPS Capture for audit trail
+async function captureGPS() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve({ error: 'GPS not available' });
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                resolve({
+                    lat: pos.coords.latitude.toFixed(6),
+                    lng: pos.coords.longitude.toFixed(6),
+                    accuracy: pos.coords.accuracy.toFixed(0) + 'm',
+                    timestamp: new Date().toISOString()
+                });
+            },
+            (err) => resolve({ error: err.message }),
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    });
+}
+
+// Capture photo metadata
+function capturePhotoMetadata(index) {
+    return {
+        index: index,
+        timestamp: new Date().toISOString(),
+        deviceInfo: navigator.userAgent.substring(0, 100)
+    };
+}
+
+
+function toggleAiRaw() {
+    const el = document.getElementById('aiRawData');
+    el.classList.toggle('show');
+    if (el.classList.contains('show') && ticketSession.aiRawOutput) {
+        el.textContent = JSON.stringify(ticketSession.aiRawOutput, null, 2);
+    }
+}
+
+function updateVerification() {
+    const checked = document.getElementById('humanVerifyCheck').checked;
+    ticketSession.humanVerified = checked;
+    document.getElementById('verificationBox').classList.toggle('verified', checked);
+}
+
+function updateConfidenceDisplay() {
+    const badge = document.getElementById('aiConfidenceBadge');
+    const conf = ticketSession.aiConfidence || 'medium';
+    badge.textContent = 'AI Confidence: ' + conf.toUpperCase();
+    badge.className = 'confidence-badge confidence-' + conf;
+    
+    // Update GPS display
+    const gps = ticketSession.gpsCoords;
+    const gpsText = document.getElementById('gpsText');
+    if (gps && gps.lat) {
+        gpsText.textContent = gps.lat + ', ' + gps.lng + ' (±' + gps.accuracy + ')';
+        gpsText.style.color = 'var(--emerald-400)';
+    } else if (gps && gps.error) {
+        gpsText.textContent = 'Location: ' + gps.error;
+        gpsText.style.color = 'var(--amber-400)';
+    }
+}
+
+
+function exportAuditPackage() {
+    if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
+    showLoading('Generating Audit Package...');
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const tot = calcTotals(rptTks);
+    
+    // Cover Page
+    doc.setFontSize(24); doc.setTextColor(16,185,129);
+    doc.text('AUDIT DOCUMENTATION PACKAGE', 105, 40, {align:'center'});
+    
+    doc.setFontSize(14); doc.setTextColor(0);
+    doc.text('LEED MRc5 - Construction Waste Management', 105, 55, {align:'center'});
+    
+    doc.setFontSize(12);
+    let y = 80;
+    doc.text('Project: ' + rptProj.name, 20, y); y += 10;
+    doc.text('Address: ' + (rptProj.address || 'N/A'), 20, y); y += 10;
+    doc.text('Report Date: ' + new Date().toLocaleDateString(), 20, y); y += 10;
+    doc.text('Total Tickets: ' + rptTks.length, 20, y); y += 10;
+    doc.text('Total Tonnage: ' + tot.tons.toFixed(2) + ' tons', 20, y); y += 10;
+    doc.text('Diversion Rate: ' + tot.rate.toFixed(1) + '%', 20, y); y += 20;
+    
+    doc.setFontSize(10);
+    doc.text('Prepared by:', 20, y); y += 7;
+    doc.text(DALMEX_INFO.name, 20, y); y += 5;
+    doc.text(DALMEX_INFO.address, 20, y); y += 5;
+    doc.text(DALMEX_INFO.phone, 20, y); y += 15;
+    
+    doc.setFontSize(9); doc.setTextColor(100);
+    doc.text('This package contains verification documentation for all waste loads including:', 20, y); y += 7;
+    doc.text('• AI-assisted material analysis with human verification', 25, y); y += 5;
+    doc.text('• GPS coordinates for each load (where available)', 25, y); y += 5;
+    doc.text('• Photographic evidence (3+ photos per load)', 25, y); y += 5;
+    doc.text('• Operator signatures and timestamps', 25, y);
+    
+    // Ticket Details Pages
+    rptTks.forEach((t, idx) => {
+        doc.addPage();
+        doc.setFontSize(14); doc.setTextColor(16,185,129);
+        doc.text('LOAD #' + (idx+1) + ' - Ticket ' + (t.ticket_number || 'N/A'), 14, 20);
+        
+        doc.setFontSize(10); doc.setTextColor(0);
+        y = 35;
+        
+        // Basic Info
+        doc.text('Date: ' + (t.service_date || 'N/A'), 14, y);
+        doc.text('Audit ID: ' + (t.audit_id || 'N/A'), 110, y); y += 8;
+        doc.text('Net Weight: ' + (t.net_tons || 0).toFixed(3) + ' tons', 14, y);
+        doc.text('Diversion: ' + (t.diversion_pct || 0) + '%', 110, y); y += 12;
+        
+        // Verification Status
+        doc.setFillColor(240, 240, 240);
+        doc.rect(14, y, 180, 25, 'F');
+        doc.text('VERIFICATION STATUS', 20, y + 7);
+        doc.text('AI Confidence: ' + (t.ai_confidence || 'N/A').toUpperCase(), 20, y + 14);
+        doc.text('Human Verified: ' + (t.human_verified ? 'YES' : 'NO'), 20, y + 21);
+        doc.text('GPS: ' + (t.gps_coords ? 'Captured' : 'Not Available'), 110, y + 14);
+        doc.text('Photos: ' + (t.photo_count || (t.debris_images ? JSON.parse(t.debris_images).length : 0)), 110, y + 21);
+        y += 35;
+        
+        // Materials
+        doc.text('MATERIAL BREAKDOWN:', 14, y); y += 7;
+        MATERIAL_KEYS.forEach(k => {
+            const pct = t[k + '_pct'] || 0;
+            const tons = t[k + '_tons'] || 0;
+            if (pct > 0) {
+                doc.text(MATERIALS[k].name + ': ' + pct + '% (' + tons.toFixed(3) + ' tons)', 20, y);
+                y += 5;
+            }
+        });
+        
+        // Notes
+        if (t.operator_notes) {
+            y += 5;
+            doc.text('Operator Notes: ' + t.operator_notes, 14, y);
+        }
+        
+        // Footer
+        doc.setFontSize(8); doc.setTextColor(100);
+        doc.text('Created: ' + (t.created_at ? new Date(t.created_at).toLocaleString() : 'N/A'), 14, 280);
+    });
+    
+    // Final page - methodology
+    doc.addPage();
+    doc.setFontSize(14); doc.setTextColor(16,185,129);
+    doc.text('METHODOLOGY & CERTIFICATION', 105, 20, {align:'center'});
+    
+    doc.setFontSize(10); doc.setTextColor(0);
+    y = 40;
+    doc.text('Material Estimation Process:', 14, y); y += 10;
+    doc.setFontSize(9);
+    doc.text('1. Minimum 3 photographs taken from different angles', 20, y); y += 6;
+    doc.text('2. AI-assisted volumetric analysis using GPT-4 Vision', 20, y); y += 6;
+    doc.text('3. Volume percentages converted to weight using standard densities', 20, y); y += 6;
+    doc.text('4. Human operator review and verification required', 20, y); y += 6;
+    doc.text('5. Digital signature and timestamp captured', 20, y); y += 15;
+    
+    doc.text('Material Densities Used (lb/ft³):', 14, y); y += 7;
+    MATERIAL_KEYS.forEach(k => {
+        doc.text(MATERIALS[k].name + ': ' + MATERIALS[k].density + ' lb/ft³', 20, y);
+        y += 5;
+    });
+    
+    y += 10;
+    doc.setFontSize(10);
+    doc.text('Certification:', 14, y); y += 8;
+    doc.setFontSize(9);
+    const certText = 'All materials reported as diverted have been processed at ' + DALMEX_INFO.name + 
+        ', a TCEQ registered C&D processing facility. No diverted materials were used for Alternative Daily Cover (ADC). ' +
+        'This methodology follows USGBC LEED requirements for Construction Waste Management documentation.';
+    const certLines = doc.splitTextToSize(certText, 180);
+    doc.text(certLines, 14, y);
+    
+    doc.save('Audit-Package-' + rptProj.name.replace(/\s+/g, '-') + '-' + new Date().toISOString().split('T')[0] + '.pdf');
+    hideLoading();
+    toast('Audit package generated!', 'success');
 }
 
 document.addEventListener('DOMContentLoaded', initialize);
