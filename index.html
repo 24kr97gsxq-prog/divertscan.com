@@ -3,1524 +3,2170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DivertScan © 2026 | The Carbon Truth in Every Load</title>
-    <meta name="description" content="LEED-compliant waste diversion tracking with Point-of-Capture Verification">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/tesseract.js@4/dist/tesseract.min.js"></script>
+    <title>DivertScan™ v2.2</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         :root {
-            --primary: #059669; --primary-dark: #047857; --primary-light: #10b981;
-            --accent: #f59e0b; --danger: #dc2626; --success: #16a34a;
-            --bg-dark: #0f172a; --bg-card: #1e293b; --bg-input: #334155;
-            --text-primary: #f8fafc; --text-secondary: #94a3b8; --text-muted: #64748b;
-            --border: #475569; --radius: 12px;
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-500: #64748b;
+            --slate-400: #94a3b8;
+            --slate-300: #cbd5e1;
+            --emerald-500: #10b981;
+            --emerald-400: #34d399;
+            --amber-500: #f59e0b;
+            --amber-400: #fbbf24;
+            --red-500: #ef4444;
+            --blue-500: #3b82f6;
         }
+        
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-dark); color: var(--text-primary); min-height: 100vh; line-height: 1.5; }
         
-        /* Screens */
-        .screen { position: fixed; inset: 0; background: var(--bg-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s; }
-        .screen.hidden { opacity: 0; pointer-events: none; }
-        .loader-logo, .login-logo { font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 1.5rem; }
-        .loader-logo span, .login-logo span { color: var(--text-primary); }
-        .loader-spinner { width: 48px; height: 48px; border: 4px solid var(--bg-card); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loader-status { margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem; }
-        .loader-error { color: var(--danger); margin-top: 1rem; text-align: center; max-width: 300px; display: none; }
-        .loader-error.show { display: block; }
-        .loader-error button { margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 0.5rem; }
-
-        /* Login */
-        .login-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 90%; max-width: 400px; }
-        .login-title { text-align: center; margin-bottom: 1.5rem; }
-        .login-title h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
-        .login-title p { color: var(--text-muted); font-size: 0.875rem; }
-        .user-select-grid { display: flex; flex-direction: column; gap: 0.75rem; }
-        .user-btn { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-input); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; color: var(--text-primary); }
-        .user-btn:hover { border-color: var(--primary); background: rgba(5, 150, 105, 0.1); }
-        .user-btn.selected { border-color: var(--primary); background: rgba(5, 150, 105, 0.15); }
-        .user-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 600; flex-shrink: 0; }
-        .user-avatar.admin { background: linear-gradient(135deg, #059669, #10b981); color: white; }
-        .user-avatar.operator { background: linear-gradient(135deg, #3b82f6, #60a5fa); color: white; }
-        .user-avatar.driver { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: white; }
-        .user-info h3 { font-size: 1rem; font-weight: 600; }
-        .user-info p { font-size: 0.75rem; color: var(--text-muted); }
-        .pin-input-group { margin-top: 1.5rem; display: none; }
-        .pin-input-group.show { display: block; }
-        .pin-input-group label { display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
-        .pin-input { width: 100%; padding: 0.875rem; font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); }
-        .pin-input:focus { outline: none; border-color: var(--primary); }
-        .login-btn { width: 100%; margin-top: 1rem; padding: 0.875rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
-        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .login-error { color: var(--danger); font-size: 0.875rem; text-align: center; margin-top: 1rem; display: none; }
-        .login-error.show { display: block; }
-
-        /* App */
-        #app { display: none; }
-        #app.loaded { display: block; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--slate-900);
+            color: var(--slate-300);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
         
-        .header { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%); border-bottom: 1px solid var(--border); padding: 1rem; position: sticky; top: 0; z-index: 100; }
-        .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
-        .logo { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
-        .logo span { color: var(--text-primary); }
-        .tagline { font-size: 0.75rem; color: var(--text-muted); display: block; }
-        .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .current-user { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 8px; font-size: 0.875rem; }
-        .current-user .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: white; }
-        .current-user .logout-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; margin-left: 0.5rem; }
-
-        .btn { padding: 0.625rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); }
-        .btn-secondary { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); }
-        .btn-secondary:hover { background: var(--border); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .main { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1rem; }
+        /* Header */
+        .header {
+            background: var(--slate-800);
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--slate-700);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
         
-        .tabs { display: flex; gap: 0.25rem; background: var(--bg-card); padding: 0.25rem; border-radius: var(--radius); margin-bottom: 1.5rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .tab { padding: 0.75rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; background: transparent; color: var(--text-secondary); border: none; white-space: nowrap; transition: all 0.2s; }
-        .tab.active { background: var(--primary); color: white; }
-        .tab:hover:not(.active) { background: var(--bg-input); }
-        .tab.admin-only { display: none; }
-        body.is-admin .tab.admin-only { display: block; }
-
-        .tab-content { display: none; }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--emerald-400);
+        }
+        
+        .logo span { color: var(--slate-400); font-weight: 400; font-size: 12px; }
+        
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+        
+        /* Navigation */
+        .nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--slate-800);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+            border-top: 1px solid var(--slate-700);
+            z-index: 100;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 16px;
+            color: var(--slate-500);
+            text-decoration: none;
+            font-size: 11px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .nav-item.active { color: var(--emerald-400); }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 4px; }
+        
+        /* Tabs */
+        .tab-content { display: none; padding: 16px; }
         .tab-content.active { display: block; }
-
-        .card { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1rem; }
-        .card-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
-        .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--primary); }
-        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
-
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.375rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
-
-        .table-container { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { background: var(--bg-input); font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-        tr:last-child td { border-bottom: none; }
-
-        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
-        .badge-success { background: rgba(22, 163, 74, 0.2); color: #4ade80; }
-        .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .badge-info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
-        .modal-overlay.active { display: flex; }
-        .modal { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; }
-        .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-        .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem; }
-        .modal-body { padding: 1.5rem; }
-        .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; justify-content: flex-end; }
-
-        .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 1rem; }
-        .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: rgba(5,150,105,0.05); }
-        .upload-zone input { display: none; }
-        .upload-preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 1rem; }
-
-        .ocr-result { background: var(--bg-input); border-radius: 8px; padding: 1rem; margin-top: 1rem; font-family: monospace; font-size: 0.875rem; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
-        .ocr-loading { display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); }
-
-        .verification-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(5,150,105,0.1); border: 1px solid var(--primary); border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
-        .capture-info { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); background: var(--bg-input); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
-
-        .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
-        .toast { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; min-width: 280px; animation: slideIn 0.3s; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
-        .toast-success { border-left: 4px solid var(--success); }
-        .toast-error { border-left: 4px solid var(--danger); }
-        .toast-info { border-left: 4px solid var(--primary); }
-
-        .footer { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem; }
-
-        .connection-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted); }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
-        .status-dot.connected { background: var(--success); }
-
-        .news-item { padding: 1rem; border-left: 3px solid var(--primary); background: var(--bg-input); border-radius: 0 8px 8px 0; margin-bottom: 0.75rem; }
-        .news-item h4 { font-size: 0.9rem; margin-bottom: 0.25rem; }
-        .news-item p { font-size: 0.75rem; color: var(--text-muted); }
-        .news-item a { color: var(--primary); text-decoration: none; }
-
-        .resource-link { display: block; padding: 0.75rem 1rem; background: var(--bg-input); border-radius: 8px; margin-bottom: 0.5rem; color: var(--text-primary); text-decoration: none; transition: background 0.2s; }
-        .resource-link:hover { background: var(--border); }
-        .resource-link span { color: var(--text-muted); font-size: 0.75rem; display: block; }
-
-        .weight-source-btn { transition: all 0.2s; }
-        .weight-source-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .weight-source-panel { animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        @media (max-width: 640px) {
-            .header-content { flex-direction: column; align-items: stretch; }
-            .header-actions { flex-direction: column; }
-            .current-user { justify-content: center; }
-            .form-grid { grid-template-columns: 1fr; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        
+        /* Cards */
+        .card {
+            background: var(--slate-800);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--slate-700);
+        }
+        
+        .card-title {
+            font-size: 14px;
+            color: var(--slate-400);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .stat-card {
+            background: var(--slate-700);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--emerald-400);
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: var(--slate-400);
+            margin-top: 4px;
+        }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: var(--emerald-500);
+            color: white;
+        }
+        
+        .btn-primary:hover { background: var(--emerald-400); }
+        
+        .btn-secondary {
+            background: var(--slate-700);
+            color: var(--slate-300);
+        }
+        
+        .btn-secondary:hover { background: var(--slate-600); }
+        
+        .btn-lg { padding: 16px 24px; font-size: 16px; }
+        
+        /* Forms */
+        .form-group { margin-bottom: 16px; }
+        
+        .form-label {
+            display: block;
+            font-size: 12px;
+            color: var(--slate-400);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            background: var(--slate-700);
+            border: 1px solid var(--slate-600);
+            border-radius: 8px;
+            color: var(--slate-300);
+            font-size: 16px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--emerald-500);
+        }
+        
+        /* Material Grid */
+        .material-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .material-item {
+            background: var(--slate-700);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .material-name {
+            font-size: 13px;
+            color: var(--slate-300);
+        }
+        
+        .material-input {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .material-input input {
+            width: 50px;
+            padding: 6px;
+            background: var(--slate-800);
+            border: 1px solid var(--slate-600);
+            border-radius: 4px;
+            color: var(--slate-300);
+            font-size: 14px;
+            text-align: right;
+        }
+        
+        .material-input span {
+            color: var(--slate-500);
+            font-size: 12px;
+        }
+        
+        /* Progress Bar */
+        .progress-bar {
+            height: 8px;
+            background: var(--slate-700);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--emerald-500);
+            transition: width 0.3s;
+        }
+        
+        .progress-fill.warning { background: var(--amber-500); }
+        .progress-fill.danger { background: var(--red-500); }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        
+        .modal.active { display: flex; }
+        
+        .modal-content {
+            background: var(--slate-800);
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            border-radius: 16px 16px 0 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--slate-700);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--slate-200);
+        }
+        
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--slate-700);
+            border: none;
+            color: var(--slate-400);
+            cursor: pointer;
+            font-size: 20px;
+        }
+        
+        .modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .modal-footer {
+            padding: 16px;
+            border-top: 1px solid var(--slate-700);
+            display: flex;
+            gap: 12px;
+        }
+        
+        /* Steps */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .step {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--slate-700);
+            color: var(--slate-500);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .step.active {
+            background: var(--emerald-500);
+            color: white;
+        }
+        
+        .step.complete {
+            background: var(--emerald-500);
+            color: white;
+        }
+        
+        .step-line {
+            width: 40px;
+            height: 2px;
+            background: var(--slate-700);
+            align-self: center;
+        }
+        
+        .step-line.complete { background: var(--emerald-500); }
+        
+        /* Image Preview */
+        .image-preview {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: var(--slate-700);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--slate-500);
+            font-size: 14px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Photo Grid */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .photo-slot {
+            aspect-ratio: 1;
+            background: var(--slate-700);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--slate-500);
+            font-size: 24px;
+            cursor: pointer;
+            overflow: hidden;
+            border: 2px dashed var(--slate-600);
+        }
+        
+        .photo-slot.filled {
+            border: 2px solid var(--emerald-500);
+        }
+        
+        .photo-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Analysis Result */
+        .analysis-result {
+            background: var(--slate-700);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .diversion-badge {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        
+        .diversion-badge.good { color: var(--emerald-400); }
+        .diversion-badge.warning { color: var(--amber-400); }
+        .diversion-badge.bad { color: var(--red-500); }
+        
+        .material-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .material-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--slate-600);
+        }
+        
+        .material-row:last-child { border-bottom: none; }
+        
+        .material-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .material-icon { font-size: 18px; }
+        
+        .material-values {
+            text-align: right;
+            font-size: 14px;
+        }
+        
+        .material-pct { font-weight: 600; color: var(--slate-200); }
+        .material-tons { color: var(--slate-400); font-size: 12px; }
+        
+        /* Ticket List */
+        .ticket-list { display: flex; flex-direction: column; gap: 12px; }
+        
+        .ticket-item {
+            background: var(--slate-700);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ticket-info h4 {
+            color: var(--slate-200);
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .ticket-info p {
+            color: var(--slate-400);
+            font-size: 12px;
+        }
+        
+        .ticket-stats {
+            text-align: right;
+        }
+        
+        .ticket-tons {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--emerald-400);
+        }
+        
+        .ticket-diversion {
+            font-size: 12px;
+            color: var(--slate-400);
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--slate-700);
+            color: var(--slate-200);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 300;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.success { background: var(--emerald-500); color: white; }
+        .toast.error { background: var(--red-500); color: white; }
+        
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--slate-400);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--slate-700);
+            border-top-color: var(--emerald-500);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 12px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Container select */
+        .container-select {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .container-option {
+            flex: 1;
+            padding: 12px;
+            background: var(--slate-700);
+            border: 2px solid var(--slate-600);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .container-option.selected {
+            border-color: var(--emerald-500);
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .container-option span {
+            display: block;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--slate-200);
+        }
+        
+        .container-option small {
+            font-size: 11px;
+            color: var(--slate-400);
+        }
+        
+        /* Hidden */
+        .hidden { display: none !important; }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--slate-500);
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Project selector */
+        .project-selector {
+            background: var(--slate-700);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .project-name {
+            font-weight: 600;
+            color: var(--slate-200);
+        }
+        
+        .project-change {
+            color: var(--emerald-400);
+            font-size: 12px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="screen" id="loading-screen">
-        <div class="loader-logo">Divert<span>Scan</span></div>
-        <div class="loader-spinner" id="loader-spinner"></div>
-        <div class="loader-status" id="loader-status">Initializing...</div>
-        <div class="loader-error" id="loader-error">
-            <p id="error-message">Connection failed</p>
-            <button onclick="location.reload()">Retry</button>
-            <button onclick="continueOffline()" style="background:var(--bg-input);">Continue Offline</button>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">DivertScan™ <span>v2.2</span></div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="showSettings()" style="padding:8px 12px;width:auto;">⚙️</button>
+            <button class="btn btn-secondary" onclick="signOut()" style="padding:8px 12px;width:auto;">↪️</button>
         </div>
-    </div>
+    </header>
 
-    <!-- Login Screen -->
-    <div class="screen hidden" id="login-screen">
-        <div class="login-box">
-            <div class="login-title">
-                <div class="login-logo">Divert<span>Scan</span></div>
-                <h2>Select Your Account</h2>
-                <p>Choose who you are to continue</p>
+    <!-- Main Content -->
+    <main>
+        <!-- Auth Screen -->
+        <div id="authScreen" class="tab-content active">
+            <div style="max-width:400px;margin:60px auto;padding:20px;">
+                <div style="text-align:center;margin-bottom:32px;">
+                    <div style="font-size:48px;margin-bottom:16px;">♻️</div>
+                    <h1 style="font-size:24px;color:var(--emerald-400);margin-bottom:8px;">DivertScan™</h1>
+                    <p style="color:var(--slate-400);">LEED-Compliant Waste Tracking</p>
+                </div>
+                <div class="card">
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="authEmail" class="form-input" placeholder="you@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="authPassword" class="form-input" placeholder="••••••••">
+                    </div>
+                    <button class="btn btn-primary btn-lg" onclick="signIn()">Sign In</button>
+                    <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--slate-500);">
+                        Don't have an account? <a href="#" onclick="signUp()" style="color:var(--emerald-400);">Sign Up</a>
+                    </p>
+                </div>
             </div>
-            <div class="user-select-grid" id="user-select-grid"></div>
-            <div class="pin-input-group" id="pin-group">
-                <label>Enter PIN</label>
-                <input type="tel" class="pin-input" id="pin-input" maxlength="4" inputmode="numeric" placeholder="••••" autocomplete="off">
-            </div>
-            <button class="login-btn" id="login-btn" disabled>Sign In</button>
-            <p class="login-error" id="login-error">Incorrect PIN</p>
         </div>
-    </div>
 
-    <!-- Main App -->
-    <div id="app">
-        <header class="header">
-            <div class="header-content">
+        <!-- Dashboard Tab -->
+        <div id="dashboardTab" class="tab-content">
+            <div class="project-selector" id="projectSelector">
                 <div>
-                    <div class="logo">Divert<span>Scan</span></div>
-                    <span class="tagline">The Carbon Truth in Every Load</span>
+                    <div style="font-size:11px;color:var(--slate-500);">CURRENT PROJECT</div>
+                    <div class="project-name" id="currentProjectName">Select a Project</div>
                 </div>
-                <div class="connection-status">
-                    <span class="status-dot" id="status-dot"></span>
-                    <span id="connection-text">Connecting...</span>
-                </div>
-                <div class="header-actions">
-                    <div class="current-user">
-                        <div class="avatar admin" id="user-avatar">R</div>
-                        <span id="user-name">User</span>
-                        <button class="logout-btn" onclick="logout()">✕</button>
-                    </div>
-                    <button class="btn btn-primary" onclick="openNewLoadModal()">+ New Load</button>
-                </div>
+                <span class="project-change" onclick="showProjectModal()">Change →</span>
             </div>
-        </header>
 
-        <main class="main">
             <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="stat-loads">0</div><div class="stat-label">Loads</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-tonnage">0</div><div class="stat-label">Tons</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-diversion">0%</div><div class="stat-label">Diverted</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-carbon">0</div><div class="stat-label">CO₂e Saved</div></div>
-            </div>
-
-            <div class="tabs">
-                <button class="tab active" data-tab="loads">Loads</button>
-                <button class="tab" data-tab="projects">Projects</button>
-                <button class="tab" data-tab="materials">Materials</button>
-                <button class="tab admin-only" data-tab="reports">Reports</button>
-                <button class="tab admin-only" data-tab="watchtower">Watchtower</button>
-                <button class="tab admin-only" data-tab="settings">Settings</button>
-            </div>
-
-            <!-- Loads Tab -->
-            <div class="tab-content active" id="tab-loads">
-                <div class="card">
-                    <div class="card-title">📦 Recent Loads</div>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>Date</th><th>Project</th><th>Material</th><th>Tons</th><th>Destination</th><th>By</th><th>Verified</th></tr></thead>
-                            <tbody id="loads-table"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
-                        </table>
-                    </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statTickets">0</div>
+                    <div class="stat-label">Tickets</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statTons">0</div>
+                    <div class="stat-label">Total Tons</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statDiversion">0%</div>
+                    <div class="stat-label">Diversion Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statCO2">0</div>
+                    <div class="stat-label">MT CO₂e Avoided</div>
                 </div>
             </div>
 
-            <!-- Projects Tab -->
-            <div class="tab-content" id="tab-projects">
-                <div class="card">
-                    <div class="card-title">📁 Active Projects</div>
-                    <div id="projects-list"></div>
+            <div class="card" style="margin-top:16px;">
+                <div class="card-title">LEED v5 Progress</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <span style="font-size:12px;color:var(--slate-400);">75% Target</span>
+                    <span style="font-size:14px;font-weight:600;" id="leedProgress">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="leedProgressBar" style="width:0%"></div>
                 </div>
             </div>
 
-            <!-- Materials Tab -->
-            <div class="tab-content" id="tab-materials">
-                <div class="card">
-                    <div class="card-title">🧱 Materials & GWP Coefficients</div>
-                    <p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.875rem;">Global Warming Potential values from EPA WARM v15. Tier 1 materials receive enhanced LEED v5 credits.</p>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>Material</th><th>Category</th><th>GWP (MT CO₂e/ton)</th><th>LEED Tier</th></tr></thead>
-                            <tbody id="materials-table"></tbody>
-                        </table>
+            <button class="btn btn-primary btn-lg" style="margin-top:20px;" onclick="startNewTicket()">
+                ➕ New Ticket
+            </button>
+
+            <div class="card" style="margin-top:20px;">
+                <div class="card-title">Recent Tickets</div>
+                <div class="ticket-list" id="ticketList">
+                    <div class="empty-state">
+                        <p>No tickets yet</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Reports Tab -->
-            <div class="tab-content" id="tab-reports">
-                <div class="card">
-                    <div class="card-title">📊 Export Reports</div>
-                    <div class="form-grid" style="margin-bottom:1.5rem;">
-                        <div class="form-group">
-                            <label>Project Filter</label>
-                            <select id="report-project"><option value="">All Projects</option></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Date Range</label>
-                            <select id="report-range">
-                                <option value="all">All Time</option>
-                                <option value="month">This Month</option>
-                                <option value="quarter">This Quarter</option>
-                                <option value="year">This Year</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                        <button class="btn btn-primary" onclick="exportExcel()">📥 Dalmex Excel (24-col)</button>
-                        <button class="btn btn-secondary" onclick="exportLEEDReport()">📋 LEED Compliance</button>
-                        <button class="btn btn-secondary" onclick="exportAuditLog()">📝 Audit Trail</button>
-                    </div>
+        <!-- Tickets Tab -->
+        <div id="ticketsTab" class="tab-content">
+            <h2 style="font-size:20px;margin-bottom:16px;">All Tickets</h2>
+            <div class="ticket-list" id="allTicketsList">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading tickets...</p>
                 </div>
             </div>
+        </div>
 
-            <!-- Watchtower Tab -->
-            <div class="tab-content" id="tab-watchtower">
-                <div class="card">
-                    <div class="card-title">🌐 Industry Watchtower</div>
-                    <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.875rem;">LEED v5 updates, regulatory news, and industry resources</p>
-                    
-                    <h4 style="color:var(--primary);margin-bottom:1rem;">📰 LEED v5 Key Changes (2024-2026)</h4>
-                    <div class="news-item">
-                        <h4>Tier 1 Circularity Credits Enhanced</h4>
-                        <p>Reuse materials now receive 2x weighted multiplier for MR credits. Wood salvage, fixture reuse, and appliance donation qualify.</p>
-                    </div>
-                    <div class="news-item">
-                        <h4>GWP Coefficients Now Required</h4>
-                        <p>All diversion reports must include Global Warming Potential calculations. DivertScan uses EPA WARM v15 coefficients.</p>
-                    </div>
-                    <div class="news-item">
-                        <h4>Chain of Custody Documentation</h4>
-                        <p>Point-of-capture verification with GPS/IP timestamps becoming standard for LEED auditor acceptance.</p>
-                    </div>
-
-                    <h4 style="color:var(--primary);margin:1.5rem 0 1rem;">🔗 Official Resources</h4>
-                    <a href="https://www.usgbc.org/leed" target="_blank" class="resource-link">
-                        USGBC LEED Official
-                        <span>usgbc.org/leed</span>
-                    </a>
-                    <a href="https://www.epa.gov/warm" target="_blank" class="resource-link">
-                        EPA WARM Calculator v15
-                        <span>epa.gov/warm</span>
-                    </a>
-                    <a href="https://www.usgbc.org/credits" target="_blank" class="resource-link">
-                        LEED Credit Library
-                        <span>MR Credit: Construction Waste Management</span>
-                    </a>
-                    <a href="https://www.tceq.texas.gov" target="_blank" class="resource-link">
-                        Texas TCEQ
-                        <span>State environmental regulations</span>
-                    </a>
-                </div>
+        <!-- Reports Tab -->
+        <div id="reportsTab" class="tab-content">
+            <h2 style="font-size:20px;margin-bottom:16px;">LEED Reports</h2>
+            <div class="card">
+                <div class="card-title">Export Options</div>
+                <button class="btn btn-secondary" style="margin-bottom:12px;" onclick="exportLEEDReport()">
+                    📊 LEED v5 CSV Report
+                </button>
+                <button class="btn btn-secondary" onclick="exportAuditLog()">
+                    📋 Audit Log
+                </button>
             </div>
+        </div>
 
-            <!-- Settings Tab -->
-            <div class="tab-content" id="tab-settings">
-                <div class="card">
-                    <div class="card-title">⚙️ Settings</div>
-                    
-                    <div class="form-group">
-                        <label>OpenAI API Key (for AI Analysis & OCR)</label>
-                        <div style="display:flex;gap:0.5rem;">
-                            <input type="password" id="settings-api-key" placeholder="sk-..." style="flex:1;">
-                            <button class="btn btn-primary" onclick="saveApiKey()">Save</button>
-                        </div>
-                        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;">
-                            Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--primary);">platform.openai.com/api-keys</a>
-                        </p>
-                    </div>
-
-                    <div class="form-group" style="margin-top:1.5rem;">
-                        <label>API Key Status</label>
-                        <div id="api-key-status" style="padding:0.75rem;background:var(--bg-input);border-radius:8px;">
-                            Checking...
-                        </div>
-                    </div>
-
-                    <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
-
-                    <div class="card-title" style="font-size:1rem;">⚖️ Scale Connection</div>
-                    <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem;">Connect directly to your Avery Weigh-Tronix scale via USB/Serial</p>
-                    
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Scale Model</label>
-                            <select id="scale-model">
-                                <option value="avery-1310">Avery Weigh-Tronix 1310</option>
-                                <option value="avery-zm303">Avery Weigh-Tronix ZM303</option>
-                                <option value="rice-lake">Rice Lake</option>
-                                <option value="other">Other (9600 baud)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Baud Rate</label>
-                            <select id="scale-baud">
-                                <option value="9600" selected>9600</option>
-                                <option value="19200">19200</option>
-                                <option value="38400">38400</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style="background:var(--bg-input);padding:1rem;border-radius:8px;margin-bottom:1rem;">
-                        <div style="font-weight:600;margin-bottom:0.5rem;">Connection Requirements:</div>
-                        <ul style="font-size:0.875rem;color:var(--text-muted);margin-left:1.5rem;">
-                            <li>Chrome or Edge browser (Web Serial API)</li>
-                            <li>USB-to-Serial adapter connected to scale</li>
-                            <li>Scale configured for continuous output or polling</li>
-                        </ul>
-                    </div>
-
-                    <button class="btn btn-secondary" onclick="testScaleConnection()">🔌 Test Connection</button>
-
-                    <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
-
-                    <div class="form-group">
-                        <label>App Version</label>
-                        <p style="color:var(--text-muted);">DivertScan © 2026 v2.2.0</p>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Current User</label>
-                        <p id="settings-current-user" style="color:var(--text-muted);">-</p>
-                    </div>
+        <!-- Settings Tab -->
+        <div id="settingsTab" class="tab-content">
+            <h2 style="font-size:20px;margin-bottom:16px;">Settings</h2>
+            <div class="card">
+                <div class="card-title">OpenAI API Key</div>
+                <p style="font-size:12px;color:var(--slate-400);margin-bottom:12px;">
+                    Required for OCR and debris analysis
+                </p>
+                <div class="form-group">
+                    <input type="password" id="openaiKeyInput" class="form-input" placeholder="sk-...">
                 </div>
+                <button class="btn btn-primary" onclick="saveOpenAIKey()">Save API Key</button>
             </div>
-        </main>
+            <div class="card">
+                <div class="card-title">Account</div>
+                <p style="font-size:14px;color:var(--slate-300);margin-bottom:8px;" id="userEmail">-</p>
+                <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+            </div>
+        </div>
+    </main>
 
-        <footer class="footer">
-            <p><strong>DivertScan © 2026</strong> | Powered by Dalmex Recycling LLC</p>
-            <p style="margin-top:0.5rem;">Point-of-Capture Verification™ | LEED v5 Compliant</p>
-        </footer>
-    </div>
+    <!-- Bottom Navigation -->
+    <nav class="nav">
+        <div class="nav-item active" onclick="showTab('dashboard')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            Home
+        </div>
+        <div class="nav-item" onclick="showTab('tickets')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+            </svg>
+            Tickets
+        </div>
+        <div class="nav-item" onclick="showTab('reports')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 20V10M12 20V4M6 20v-6"/>
+            </svg>
+            Reports
+        </div>
+        <div class="nav-item" onclick="showTab('settings')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+            Settings
+        </div>
+    </nav>
 
-    <!-- New Load Modal -->
-    <div class="modal-overlay" id="new-load-modal">
-        <div class="modal" style="max-width:700px;">
-            <div class="modal-header"><h3>Add New Load</h3><button class="modal-close" onclick="closeModal('new-load-modal')">×</button></div>
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- New Ticket Modal -->
+    <div id="ticketModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">New Ticket</div>
+                <button class="modal-close" onclick="closeModal('ticketModal')">×</button>
+            </div>
             <div class="modal-body">
-                <div class="verification-badge">🛡️ Point-of-Capture Verification Active</div>
-                
-                <!-- Step 1: Weight Source Selection -->
-                <div style="margin-bottom:1.5rem;">
-                    <div style="font-weight:600;margin-bottom:0.75rem;">📊 Step 1: Get Weight</div>
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;">
-                        <button type="button" class="btn btn-secondary weight-source-btn active" data-source="ticket" onclick="selectWeightSource('ticket')">
-                            🎫 Scale Ticket
-                        </button>
-                        <button type="button" class="btn btn-secondary weight-source-btn" data-source="scale" onclick="selectWeightSource('scale')">
-                            ⚖️ Live Scale
-                        </button>
-                        <button type="button" class="btn btn-secondary weight-source-btn" data-source="manual" onclick="selectWeightSource('manual')">
-                            ✏️ Manual Entry
-                        </button>
-                    </div>
+                <!-- Steps Indicator -->
+                <div class="steps">
+                    <div class="step active" id="step1">1</div>
+                    <div class="step-line" id="stepLine1"></div>
+                    <div class="step" id="step2">2</div>
+                    <div class="step-line" id="stepLine2"></div>
+                    <div class="step" id="step3">3</div>
                 </div>
 
-                <!-- Ticket Upload (default) -->
-                <div id="weight-source-ticket" class="weight-source-panel">
-                    <div class="upload-zone" id="ticket-zone">
-                        <input type="file" id="ticket-input-camera" accept="image/*" capture="environment" onchange="handleTicketScan(this)" style="display:none;">
-                        <input type="file" id="ticket-input-upload" accept="image/*,.pdf" onchange="handleTicketScan(this)" style="display:none;">
-                        <div id="ticket-placeholder">
-                            <div style="font-size:2rem;margin-bottom:0.5rem;">🎫</div>
-                            <div style="margin-bottom:0.75rem;"><strong>Scan Scale Ticket</strong></div>
-                            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-                                <button type="button" class="btn btn-primary" onclick="document.getElementById('ticket-input-camera').click()">📷 Camera</button>
-                                <button type="button" class="btn btn-secondary" onclick="document.getElementById('ticket-input-upload').click()">📁 Upload</button>
-                            </div>
-                        </div>
-                        <img id="ticket-preview" class="upload-preview" style="display:none;">
+                <!-- Step 1: Scale Ticket -->
+                <div id="ticketStep1">
+                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">📄 Scale Ticket</h3>
+                    
+                    <div class="image-preview" id="ticketImagePreview">
+                        <span>No image</span>
                     </div>
-                    <div id="ocr-status" style="display:none;" class="ocr-loading">
-                        <div class="loader-spinner" style="width:20px;height:20px;border-width:2px;"></div>
-                        <span>Reading ticket...</span>
+                    
+                    <div style="display:flex;gap:8px;margin-bottom:16px;">
+                        <button class="btn btn-secondary" onclick="captureTicketPhoto()" style="flex:1;">📷 Camera</button>
+                        <button class="btn btn-secondary" onclick="uploadTicketPhoto()" style="flex:1;">📁 Upload</button>
                     </div>
-                    <div id="ocr-result" class="ocr-result" style="display:none;"></div>
-                </div>
+                    <input type="file" id="ticketFileInput" accept="image/*" style="display:none;" onchange="handleTicketFile(event)">
+                    <input type="file" id="ticketCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleTicketFile(event)">
 
-                <!-- Live Scale Connection -->
-                <div id="weight-source-scale" class="weight-source-panel" style="display:none;">
-                    <div class="card" style="margin-bottom:0;background:var(--bg-input);">
-                        <div style="text-align:center;padding:1rem;">
-                            <div style="font-size:2.5rem;margin-bottom:0.5rem;">⚖️</div>
-                            <div style="font-weight:600;margin-bottom:0.5rem;">Avery Weigh-Tronix Scale</div>
-                            <div id="scale-status" style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem;">Not connected</div>
-                            <div id="scale-reading" style="font-size:2rem;font-weight:700;color:var(--primary);display:none;">
-                                <span id="scale-weight-display">0</span> <span style="font-size:1rem;">lbs</span>
-                            </div>
-                            <div style="margin-top:1rem;">
-                                <button type="button" class="btn btn-primary" onclick="connectScale()">🔌 Connect Scale</button>
-                                <button type="button" class="btn btn-secondary" onclick="captureScaleWeight()" id="capture-scale-btn" disabled>📥 Capture Weight</button>
-                            </div>
-                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:1rem;">
-                                Requires Web Serial API (Chrome/Edge)<br>
-                                Configure in Settings → Scale Connection
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Manual Entry -->
-                <div id="weight-source-manual" class="weight-source-panel" style="display:none;">
-                    <div style="background:var(--bg-input);padding:1rem;border-radius:8px;text-align:center;">
-                        <div style="font-size:1.5rem;margin-bottom:0.5rem;">✏️</div>
-                        <div style="font-weight:600;margin-bottom:0.75rem;">Enter Weight Manually</div>
-                        <div style="display:flex;gap:0.5rem;justify-content:center;align-items:center;">
-                            <input type="number" id="manual-weight-lbs" step="1" min="0" placeholder="Weight" style="width:120px;text-align:center;font-size:1.25rem;">
-                            <select id="manual-weight-unit" style="width:80px;">
-                                <option value="lbs">lbs</option>
-                                <option value="tons">tons</option>
-                            </select>
-                            <button type="button" class="btn btn-primary" onclick="applyManualWeight()">Apply</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Divider -->
-                <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
-
-                <!-- Step 2: Debris Photo (Optional) -->
-                <div style="margin-bottom:1rem;">
-                    <div style="font-weight:600;margin-bottom:0.75rem;">📷 Step 2: Debris Analysis <span style="font-weight:400;color:var(--text-muted);">(Optional - improves LEED reporting)</span></div>
-                    <div class="upload-zone" id="photo-zone" style="padding:1rem;">
-                        <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhotoUpload(this)" style="display:none;">
-                        <input type="file" id="photo-input-multi" accept="image/*" multiple onchange="handleMultiPhotoUpload(this)" style="display:none;">
-                        <div id="photo-placeholder">
-                            <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;align-items:center;">
-                                <span style="font-size:1.25rem;">📷</span>
-                                <span>Add debris photos for AI material analysis</span>
-                                <button type="button" class="btn btn-secondary" style="padding:0.375rem 0.75rem;" onclick="document.getElementById('photo-input').click()">Take Photo</button>
-                                <button type="button" class="btn btn-secondary" style="padding:0.375rem 0.75rem;" onclick="document.getElementById('photo-input-multi').click()">Upload Multiple</button>
-                            </div>
-                        </div>
-                        <div id="photo-previews" style="display:none;"></div>
-                    </div>
-                </div>
-                <div id="ai-suggestion" style="display:none;padding:1rem;background:var(--bg-input);border-radius:8px;margin-bottom:1rem;">
-                    <div id="ai-material"></div>
-                </div>
-
-                <!-- Divider -->
-                <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0;">
-
-                <!-- Step 3: Load Details -->
-                <div style="font-weight:600;margin-bottom:0.75rem;">📋 Step 3: Load Details</div>
-                <form id="new-load-form">
-                    <div class="form-grid">
-                        <div class="form-group"><label>Project *</label><select id="load-project" required><option value="">Select Project</option></select></div>
-                        <div class="form-group"><label>Date *</label><input type="date" id="load-date" required></div>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label>Material *</label><select id="load-material" required><option value="">Select Material</option></select></div>
+                    <div id="ticketOCRResult" class="hidden">
                         <div class="form-group">
-                            <label>Weight (tons) *</label>
-                            <input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00">
-                            <div id="weight-source-label" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem;"></div>
+                            <label class="form-label">Ticket #</label>
+                            <input type="text" id="ticketNumber" class="form-input" placeholder="84600">
                         </div>
-                    </div>
-                    <div class="form-grid">
                         <div class="form-group">
-                            <label>Destination *</label>
-                            <select id="load-destination-type" required>
-                                <option value="">Select</option>
-                                <option value="recycling">Recycling Facility</option>
-                                <option value="reuse">Reuse/Donation</option>
-                                <option value="landfill">Landfill</option>
-                                <option value="composting">Composting</option>
-                                <option value="wte">Waste-to-Energy</option>
-                            </select>
+                            <label class="form-label">Date</label>
+                            <input type="date" id="ticketDate" class="form-input">
                         </div>
-                        <div class="form-group"><label>Facility Name</label><input type="text" id="load-facility" placeholder="Destination facility"></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div class="form-group">
+                                <label class="form-label">Gross (lbs)</label>
+                                <input type="number" id="grossLbs" class="form-input" placeholder="40620">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Tare (lbs)</label>
+                                <input type="number" id="tareLbs" class="form-input" placeholder="34840">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Net Weight</label>
+                            <div style="font-size:24px;font-weight:700;color:var(--emerald-400);" id="netWeightDisplay">0.00 tons</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Hauler</label>
+                            <input type="text" id="haulerName" class="form-input" placeholder="Dalmex Recycling">
+                        </div>
                     </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label>Hauler</label><input type="text" id="load-hauler" placeholder="Hauler company"></div>
-                        <div class="form-group"><label>Ticket/Manifest #</label><input type="text" id="load-ticket" placeholder="Scale ticket number"></div>
+
+                    <div id="ticketAnalyzing" class="loading hidden">
+                        <div class="spinner"></div>
+                        <p>Analyzing ticket...</p>
                     </div>
-                    <div class="form-group"><label>Notes</label><textarea id="load-notes" rows="2" placeholder="Additional notes..."></textarea></div>
-                    <div class="capture-info" id="capture-info">Capturing verification data...</div>
-                </form>
+                </div>
+
+                <!-- Step 2: Debris Photos -->
+                <div id="ticketStep2" class="hidden">
+                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">📸 Debris Photos</h3>
+                    
+                    <div class="container-select">
+                        <div class="container-option" onclick="selectContainer(20)">
+                            <span>20</span>
+                            <small>yard</small>
+                        </div>
+                        <div class="container-option selected" onclick="selectContainer(30)">
+                            <span>30</span>
+                            <small>yard</small>
+                        </div>
+                        <div class="container-option" onclick="selectContainer(40)">
+                            <span>40</span>
+                            <small>yard</small>
+                        </div>
+                    </div>
+
+                    <div class="photo-grid" id="debrisPhotoGrid">
+                        <div class="photo-slot" onclick="addDebrisPhoto(0)">➕</div>
+                        <div class="photo-slot" onclick="addDebrisPhoto(1)">➕</div>
+                        <div class="photo-slot" onclick="addDebrisPhoto(2)">➕</div>
+                    </div>
+                    <input type="file" id="debrisFileInput" accept="image/*" style="display:none;" onchange="handleDebrisFile(event)">
+                    <input type="file" id="debrisCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleDebrisFile(event)">
+                    
+                    <p style="font-size:12px;color:var(--slate-400);text-align:center;margin-bottom:16px;">
+                        Add 1-3 photos of the debris load
+                    </p>
+
+                    <button class="btn btn-primary" id="analyzeDebrisBtn" onclick="analyzeDebris()" disabled>
+                        🤖 Analyze Materials
+                    </button>
+
+                    <div id="debrisAnalyzing" class="loading hidden">
+                        <div class="spinner"></div>
+                        <p>Analyzing debris...</p>
+                    </div>
+                </div>
+
+                <!-- Step 3: Review & Save -->
+                <div id="ticketStep3" class="hidden">
+                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">✅ Review & Save</h3>
+                    
+                    <div class="analysis-result" id="analysisResult">
+                        <div class="analysis-header">
+                            <div>
+                                <div style="font-size:12px;color:var(--slate-400);">Diversion Rate</div>
+                                <div class="diversion-badge good" id="finalDiversionRate">0%</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:12px;color:var(--slate-400);">LEED v5 Target</div>
+                                <div style="font-size:14px;color:var(--slate-300);">75%</div>
+                            </div>
+                        </div>
+                        <div class="progress-bar" style="margin-bottom:16px;">
+                            <div class="progress-fill" id="finalProgressBar" style="width:0%"></div>
+                        </div>
+                        
+                        <div style="font-size:12px;color:var(--slate-400);margin-bottom:8px;">MATERIAL BREAKDOWN</div>
+                        <div class="material-breakdown" id="materialBreakdown">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-top:16px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div>
+                                <div style="font-size:11px;color:var(--slate-500);">TICKET #</div>
+                                <div style="font-size:14px;color:var(--slate-200);" id="reviewTicketNum">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--slate-500);">DATE</div>
+                                <div style="font-size:14px;color:var(--slate-200);" id="reviewDate">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--slate-500);">NET WEIGHT</div>
+                                <div style="font-size:14px;color:var(--emerald-400);font-weight:700;" id="reviewNetTons">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--slate-500);">CO₂e AVOIDED</div>
+                                <div style="font-size:14px;color:var(--slate-200);" id="reviewCO2">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual adjustment -->
+                    <details style="margin-top:16px;">
+                        <summary style="color:var(--slate-400);font-size:12px;cursor:pointer;">Adjust Percentages Manually</summary>
+                        <div class="material-grid" style="margin-top:12px;" id="manualMaterialGrid">
+                            <!-- Filled dynamically -->
+                        </div>
+                        <div style="margin-top:8px;font-size:12px;color:var(--slate-400);">
+                            Total: <span id="manualTotal">100</span>%
+                        </div>
+                        <button class="btn btn-secondary" style="margin-top:8px;" onclick="recalculateManual()">
+                            Recalculate
+                        </button>
+                    </details>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('new-load-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveLoad()">Save Load</button>
+                <button class="btn btn-secondary" id="prevStepBtn" onclick="prevStep()" style="flex:1;" disabled>Back</button>
+                <button class="btn btn-primary" id="nextStepBtn" onclick="nextStep()" style="flex:1;">Next</button>
             </div>
         </div>
     </div>
 
-    <div class="toast-container" id="toast-container"></div>
+    <!-- Project Modal -->
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Select Project</div>
+                <button class="modal-close" onclick="closeModal('projectModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="projectList" class="ticket-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading projects...</p>
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="margin-top:16px;" onclick="showNewProjectForm()">
+                    ➕ New Project
+                </button>
+                <div id="newProjectForm" class="hidden" style="margin-top:16px;">
+                    <div class="form-group">
+                        <label class="form-label">Project Name</label>
+                        <input type="text" id="newProjectName" class="form-input" placeholder="Children's Medical Center">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Address</label>
+                        <input type="text" id="newProjectAddress" class="form-input" placeholder="1234 Main St">
+                    </div>
+                    <button class="btn btn-primary" onclick="createProject()">Create Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- DIVERTSCAN CORE MODULE -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
     <script>
-    // ========== CONFIG ==========
+/**
+ * DivertScan™ Core Module v2.2 (Embedded)
+ * This is the master core - all shared functions live here
+ */
+const DivertScan = (function() {
+    'use strict';
+
     const CONFIG = {
-        SUPABASE_URL: 'https://rnaujdajnrlvndhmhvbk.supabase.co',
-        SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D7Ts3ZWSRM'
+        SUPABASE_URL: 'https://cyvvlngtojagfoaitoog.supabase.co',
+        SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g',
+        VERSION: '2.2.0',
+        LEED_V4_TARGET: 50,
+        LEED_V5_TARGET: 75,
+        CONTAINER_SIZES: [20, 30, 40],
+        DEFAULT_CONTAINER: 30
     };
 
-    const USERS = [
-        { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Robert', company: 'DivertScan', role: 'admin', pin: '1234', initials: 'RA' },
-        { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', name: 'Dalmex Floor', company: 'Dalmex Recycling', role: 'operator', pin: '5678', initials: 'DF' },
-        { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', name: 'Jaguar Driver', company: 'Jaguar Waste', role: 'driver', pin: '9012', initials: 'JD' }
-    ];
+    const MATERIALS = {
+        wood: { name: 'Wood/Lumber', icon: '🪵', recyclable: true, gwpFactor: 0.03 },
+        gypsum: { name: 'Gypsum/Drywall', icon: '🧱', recyclable: true, gwpFactor: 0.12 },
+        plastic: { name: 'Plastic', icon: '♻️', recyclable: true, gwpFactor: 2.5 },
+        occ: { name: 'Cardboard/OCC', icon: '📦', recyclable: true, gwpFactor: 0.94 },
+        metal: { name: 'Metal/Steel', icon: '🔩', recyclable: true, gwpFactor: 1.85 },
+        concrete: { name: 'Concrete', icon: '🪨', recyclable: true, gwpFactor: 0.159 },
+        block: { name: 'CMU/Block', icon: '🧱', recyclable: true, gwpFactor: 0.159 },
+        landfill: { name: 'Landfill/Trash', icon: '🗑️', recyclable: false, gwpFactor: 0.52 }
+    };
 
-    const MATERIALS = [
-        { name: 'Concrete', category: 'Aggregate', density: 4050, gwp: 0.107, tier: 'Standard' },
-        { name: 'Asphalt', category: 'Aggregate', density: 3960, gwp: 0.094, tier: 'Standard' },
-        { name: 'Wood - Clean', category: 'Wood', density: 600, gwp: 0.912, tier: 'Tier 1' },
-        { name: 'Wood - Treated', category: 'Wood', density: 650, gwp: 0.312, tier: 'Standard' },
-        { name: 'Metal - Ferrous', category: 'Metal', density: 1600, gwp: 1.831, tier: 'Standard' },
-        { name: 'Metal - Non-Ferrous', category: 'Metal', density: 1200, gwp: 4.876, tier: 'Standard' },
-        { name: 'Drywall/Gypsum', category: 'Drywall', density: 800, gwp: 0.184, tier: 'Standard' },
-        { name: 'Cardboard/OCC', category: 'Paper', density: 200, gwp: 3.112, tier: 'Standard' },
-        { name: 'Plastic - Mixed', category: 'Plastic', density: 400, gwp: 1.423, tier: 'Standard' },
-        { name: 'Roofing Materials', category: 'Mixed', density: 1100, gwp: 0.156, tier: 'Standard' },
-        { name: 'Brick/Masonry', category: 'Aggregate', density: 3200, gwp: 0.089, tier: 'Standard' },
-        { name: 'Glass', category: 'Glass', density: 2500, gwp: 0.423, tier: 'Standard' },
-        { name: 'Carpet', category: 'Mixed', density: 350, gwp: 2.156, tier: 'Standard' },
-        { name: 'Insulation', category: 'Mixed', density: 150, gwp: 0.534, tier: 'Standard' },
-        { name: 'Mixed C&D', category: 'Mixed', density: 1500, gwp: 0.267, tier: 'Standard' },
-        { name: 'Land Clearing Debris', category: 'Organic', density: 500, gwp: 0.756, tier: 'Tier 1' },
-        { name: 'Fixtures - Reuse', category: 'Reuse', density: 800, gwp: 2.5, tier: 'Tier 1' },
-        { name: 'Appliances - Reuse', category: 'Reuse', density: 700, gwp: 3.2, tier: 'Tier 1' }
-    ];
+    const MATERIAL_KEYS = ['wood', 'gypsum', 'plastic', 'occ', 'metal', 'concrete', 'block', 'landfill'];
 
-    const DEFAULT_PROJECTS = [
-        { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
-        { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
-        { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
-    ];
+    let state = {
+        supabase: null,
+        user: null,
+        currentProject: null,
+        ticketSession: {
+            ticketNumber: null,
+            ticketDate: null,
+            grossLbs: null,
+            tareLbs: null,
+            netLbs: null,
+            netTons: null,
+            hauler: null,
+            containerSize: 30,
+            scaleTicketImage: null,
+            debrisImages: [],
+            materialBreakdown: {},
+            diversionRate: 0,
+            co2eAvoided: 0,
+            calculatedBreakdown: {},
+            gpsLat: null,
+            gpsLng: null,
+            ipAddress: null,
+            capturedAt: null
+        },
+        openaiKey: localStorage.getItem('divertscan_openai') || '',
+        isOnline: navigator.onLine
+    };
 
-    // ========== STATE ==========
-    let supabaseClient = null;
-    let currentUser = null;
-    let selectedUserId = null;
-    let gpsData = null;
-    let ipData = null;
-    let isConnected = false;
-    let photoDataUrl = null;
-    let ticketDataUrl = null;
+    function toast(message, type = 'info') {
+        const toastEl = document.getElementById('toast');
+        if (!toastEl) { console.log(`[${type}] ${message}`); return; }
+        toastEl.textContent = message;
+        toastEl.className = `toast ${type} show`;
+        setTimeout(() => toastEl.classList.remove('show'), 3000);
+    }
 
-    // ========== INIT ==========
-    async function initialize() {
-        try {
-            updateStatus('Connecting...');
-            if (typeof supabase !== 'undefined') {
-                supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-                const { error } = await supabaseClient.from('loads').select('id').limit(1);
-                isConnected = !error;
+    function formatNumber(num) {
+        if (num === null || num === undefined) return '0';
+        return Number(num).toLocaleString('en-US');
+    }
+
+    function formatDate(date) {
+        if (!date) return '';
+        const d = new Date(date);
+        return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+    }
+
+    function generateAuditId() {
+        const year = new Date().getFullYear();
+        const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const seq = Date.now().toString().slice(-5);
+        return `DS-${year}-${seq}-${random}`;
+    }
+
+    function calculateNetWeight(grossLbs, tareLbs) {
+        const gross = parseFloat(grossLbs) || 0;
+        const tare = parseFloat(tareLbs) || 0;
+        const netLbs = gross - tare;
+        return { netLbs: Math.max(0, netLbs), netTons: Math.max(0, netLbs / 2000) };
+    }
+
+    function calculateMaterialTonnages(percentages, netTons) {
+        const breakdown = {};
+        let totalDivertedPct = 0;
+        let totalCO2e = 0;
+
+        for (const key of MATERIAL_KEYS) {
+            const pct = parseFloat(percentages[key]) || 0;
+            const tons = (pct / 100) * netTons;
+            const material = MATERIALS[key];
+            const co2e = tons * (material?.gwpFactor || 0);
+
+            breakdown[key] = { pct, tons, co2e, recyclable: material?.recyclable || false };
+
+            if (material?.recyclable && key !== 'landfill') {
+                totalDivertedPct += pct;
             }
-            updateStatus('Loading...');
-            getGPSData().then(d => gpsData = d);
-            getIPData().then(d => ipData = d);
-            
-            const saved = localStorage.getItem('divertscan_user');
-            if (saved) { currentUser = JSON.parse(saved); showApp(); }
-            else { showLogin(); }
-            updateConnectionStatus();
-        } catch (e) {
-            console.error(e);
-            showError('Connection failed: ' + e.message);
+            totalCO2e += co2e;
         }
+
+        return {
+            breakdown,
+            diversionRate: Math.round(totalDivertedPct),
+            totalCO2e,
+            meetsLEEDv4: totalDivertedPct >= CONFIG.LEED_V4_TARGET,
+            meetsLEEDv5: totalDivertedPct >= CONFIG.LEED_V5_TARGET
+        };
     }
 
-    function updateStatus(msg) { document.getElementById('loader-status').textContent = msg; }
-    function showError(msg) {
-        document.getElementById('loader-spinner').style.display = 'none';
-        document.getElementById('loader-status').style.display = 'none';
-        document.getElementById('error-message').textContent = msg;
-        document.getElementById('loader-error').classList.add('show');
-    }
-    function continueOffline() { isConnected = false; showLogin(); }
-    function showLogin() {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('login-screen').classList.remove('hidden');
-        renderUserSelect();
-    }
-    function showApp() {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('app').classList.add('loaded');
-        initApp();
-        applyUserRole();
-        updateApiKeyStatus();
-    }
-
-    // ========== LOGIN ==========
-    function renderUserSelect() {
-        document.getElementById('user-select-grid').innerHTML = USERS.map(u => `
-            <button type="button" class="user-btn" data-id="${u.id}">
-                <div class="user-avatar ${u.role}">${u.initials}</div>
-                <div class="user-info"><h3>${u.name}</h3><p>${u.company} • ${u.role}</p></div>
-            </button>
-        `).join('');
-        document.querySelectorAll('.user-btn').forEach(btn => btn.addEventListener('click', () => selectUser(btn.dataset.id)));
-    }
-
-    function selectUser(id) {
-        selectedUserId = id;
-        document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
-        document.querySelector(`.user-btn[data-id="${id}"]`).classList.add('selected');
-        document.getElementById('pin-group').classList.add('show');
-        document.getElementById('pin-input').value = '';
-        document.getElementById('pin-input').focus();
-        document.getElementById('login-btn').disabled = false;
-        document.getElementById('login-error').classList.remove('show');
-    }
-
-    document.getElementById('pin-input').addEventListener('input', function() { if (this.value.length === 4) doLogin(); });
-    document.getElementById('login-btn').addEventListener('click', doLogin);
-
-    function doLogin() {
-        const pin = document.getElementById('pin-input').value;
-        const user = USERS.find(u => u.id === selectedUserId);
-        if (user && user.pin === pin) {
-            currentUser = user;
-            localStorage.setItem('divertscan_user', JSON.stringify(user));
-            showApp();
-            showToast('Welcome, ' + user.name + '!', 'success');
-        } else {
-            document.getElementById('login-error').classList.add('show');
-            document.getElementById('pin-input').value = '';
+    function validateMaterialTotal(percentages) {
+        let total = 0;
+        for (const key of MATERIAL_KEYS) {
+            total += parseFloat(percentages[key]) || 0;
         }
+        return { total, valid: Math.abs(total - 100) < 0.1 };
     }
 
-    function logout() {
-        localStorage.removeItem('divertscan_user');
-        currentUser = null;
-        document.getElementById('app').classList.remove('loaded');
-        document.body.classList.remove('is-admin');
-        showLogin();
+    function initTicketSession() {
+        state.ticketSession = {
+            ticketNumber: null,
+            ticketDate: new Date().toISOString().split('T')[0],
+            grossLbs: null,
+            tareLbs: null,
+            netLbs: null,
+            netTons: null,
+            hauler: null,
+            containerSize: 30,
+            scaleTicketImage: null,
+            debrisImages: [],
+            materialBreakdown: {},
+            diversionRate: 0,
+            co2eAvoided: 0,
+            calculatedBreakdown: {},
+            gpsLat: null,
+            gpsLng: null,
+            ipAddress: null,
+            capturedAt: new Date().toISOString()
+        };
+        return state.ticketSession;
     }
 
-    function applyUserRole() {
-        if (!currentUser) return;
-        document.getElementById('user-name').textContent = currentUser.name;
-        document.getElementById('user-avatar').textContent = currentUser.initials;
-        document.getElementById('user-avatar').className = 'avatar ' + currentUser.role;
-        document.body.classList.toggle('is-admin', currentUser.role === 'admin');
+    function updateTicketSession(data) {
+        Object.assign(state.ticketSession, data);
+        
+        if (state.ticketSession.grossLbs && state.ticketSession.tareLbs) {
+            const net = calculateNetWeight(state.ticketSession.grossLbs, state.ticketSession.tareLbs);
+            state.ticketSession.netLbs = net.netLbs;
+            state.ticketSession.netTons = net.netTons;
+        }
+
+        if (Object.keys(state.ticketSession.materialBreakdown).length > 0 && state.ticketSession.netTons) {
+            const result = calculateMaterialTonnages(state.ticketSession.materialBreakdown, state.ticketSession.netTons);
+            state.ticketSession.diversionRate = result.diversionRate;
+            state.ticketSession.co2eAvoided = result.totalCO2e;
+            state.ticketSession.calculatedBreakdown = result.breakdown;
+        }
+
+        return state.ticketSession;
     }
 
-    // ========== APP ==========
-    function initApp() {
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-            });
+    function setMaterialPercentages(percentages) {
+        const normalized = {};
+        for (const key of MATERIAL_KEYS) {
+            normalized[key] = parseFloat(percentages[key]) || 0;
+        }
+        state.ticketSession.materialBreakdown = normalized;
+
+        if (state.ticketSession.netTons) {
+            const result = calculateMaterialTonnages(normalized, state.ticketSession.netTons);
+            state.ticketSession.diversionRate = result.diversionRate;
+            state.ticketSession.co2eAvoided = result.totalCO2e;
+            state.ticketSession.calculatedBreakdown = result.breakdown;
+            return result;
+        }
+
+        return { breakdown: normalized, diversionRate: 100 - (normalized.landfill || 0) };
+    }
+
+    function getTicketSession() {
+        return { ...state.ticketSession };
+    }
+
+    async function captureGPS() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve({ lat: null, lng: null });
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    state.ticketSession.gpsLat = pos.coords.latitude;
+                    state.ticketSession.gpsLng = pos.coords.longitude;
+                    resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                },
+                () => resolve({ lat: null, lng: null }),
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
         });
-        document.getElementById('load-date').valueAsDate = new Date();
-        loadMaterials();
-        loadProjects();
-        loadLoads();
     }
 
-    function loadMaterials() {
-        document.getElementById('load-material').innerHTML = '<option value="">Select Material</option>' + MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
-        document.getElementById('materials-table').innerHTML = MATERIALS.map(m => `
-            <tr>
-                <td>${m.name}</td>
-                <td>${m.category}</td>
-                <td>${m.gwp.toFixed(3)}</td>
-                <td><span class="badge ${m.tier === 'Tier 1' ? 'badge-success' : 'badge-info'}">${m.tier}</span></td>
-            </tr>
-        `).join('');
+    async function captureIP() {
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            state.ticketSession.ipAddress = data.ip;
+            return data.ip;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function analyzeScaleTicket(imageDataUrl) {
+        const apiKey = state.openaiKey || localStorage.getItem('divertscan_openai');
+        if (!apiKey) throw new Error('OpenAI API key not configured. Go to Settings.');
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: `Extract data from this scale ticket. Return ONLY valid JSON:
+{"ticket_number":"string or null","date":"MM/DD/YY or null","hauler":"string or null","gross_lbs":number or null,"tare_lbs":number or null,"net_lbs":number or null,"commodity":"string or null","confidence":0-100}` },
+                        { type: 'image_url', image_url: { url: imageDataUrl } }
+                    ]
+                }],
+                max_tokens: 500
+            })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+
+        const content = data.choices[0].message.content;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('Could not parse OCR response');
+
+        const result = JSON.parse(jsonMatch[0]);
+
+        updateTicketSession({
+            ticketNumber: result.ticket_number,
+            ticketDate: result.date,
+            grossLbs: result.gross_lbs,
+            tareLbs: result.tare_lbs,
+            hauler: result.hauler,
+            scaleTicketImage: imageDataUrl
+        });
+
+        return result;
+    }
+
+    async function analyzeDebrisPhoto(imageDataUrl, containerSize = 30) {
+        const apiKey = state.openaiKey || localStorage.getItem('divertscan_openai');
+        if (!apiKey) throw new Error('OpenAI API key not configured. Go to Settings.');
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: `Analyze this ${containerSize}-yard container of construction/demolition debris. Estimate percentage breakdown of visible materials. Return ONLY valid JSON:
+{"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100,"confidence":0-100,"notes":"brief description"}
+Percentages MUST total 100. Include landfill for non-recyclable waste.` },
+                        { type: 'image_url', image_url: { url: imageDataUrl } }
+                    ]
+                }],
+                max_tokens: 500
+            })
+        });
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
+
+        const content = data.choices[0].message.content;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('Could not parse debris analysis');
+
+        const result = JSON.parse(jsonMatch[0]);
+
+        const percentages = {
+            wood: result.wood || 0,
+            gypsum: result.gypsum || 0,
+            plastic: result.plastic || 0,
+            occ: result.occ || 0,
+            metal: result.metal || 0,
+            concrete: result.concrete || 0,
+            block: result.block || 0,
+            landfill: result.landfill || 0
+        };
+
+        if (!state.ticketSession.debrisImages) state.ticketSession.debrisImages = [];
+        state.ticketSession.debrisImages.push(imageDataUrl);
+
+        const breakdown = setMaterialPercentages(percentages);
+
+        return { raw: result, percentages, breakdown, confidence: result.confidence, notes: result.notes };
+    }
+
+    async function initSupabase() {
+        if (state.supabase) return state.supabase;
+
+        if (typeof supabase === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+                script.onload = resolve;
+                script.onerror = () => reject(new Error('Failed to load Supabase'));
+                document.head.appendChild(script);
+            });
+        }
+
+        state.supabase = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+        return state.supabase;
+    }
+
+    async function saveTicket(projectId) {
+        await initSupabase();
+
+        const session = state.ticketSession;
+        const breakdown = session.calculatedBreakdown || {};
+
+        const ticketData = {
+            project_id: projectId || state.currentProject?.id,
+            user_id: state.user?.id,
+            ticket_number: session.ticketNumber,
+            ticket_date: session.ticketDate,
+            hauler: session.hauler,
+            container_size: session.containerSize,
+            gross_lbs: session.grossLbs,
+            tare_lbs: session.tareLbs,
+            net_lbs: session.netLbs,
+            net_tons: session.netTons,
+            wood_pct: session.materialBreakdown.wood || 0,
+            gypsum_pct: session.materialBreakdown.gypsum || 0,
+            plastic_pct: session.materialBreakdown.plastic || 0,
+            occ_pct: session.materialBreakdown.occ || 0,
+            metal_pct: session.materialBreakdown.metal || 0,
+            concrete_pct: session.materialBreakdown.concrete || 0,
+            block_pct: session.materialBreakdown.block || 0,
+            landfill_pct: session.materialBreakdown.landfill || 0,
+            wood_tons: breakdown.wood?.tons || 0,
+            gypsum_tons: breakdown.gypsum?.tons || 0,
+            plastic_tons: breakdown.plastic?.tons || 0,
+            occ_tons: breakdown.occ?.tons || 0,
+            metal_tons: breakdown.metal?.tons || 0,
+            concrete_tons: breakdown.concrete?.tons || 0,
+            block_tons: breakdown.block?.tons || 0,
+            landfill_tons: breakdown.landfill?.tons || 0,
+            diversion_pct: session.diversionRate,
+            diverted_tons: session.netTons * (session.diversionRate / 100),
+            co2e_avoided: session.co2eAvoided,
+            gps_lat: session.gpsLat,
+            gps_lng: session.gpsLng,
+            ip_address: session.ipAddress,
+            captured_at: session.capturedAt,
+            scale_ticket_image: session.scaleTicketImage,
+            debris_images: JSON.stringify(session.debrisImages || []),
+            created_at: new Date().toISOString(),
+            audit_id: generateAuditId()
+        };
+
+        const { data, error } = await state.supabase.from('tickets').insert([ticketData]).select().single();
+        if (error) throw error;
+
+        toast('Ticket saved successfully!', 'success');
+        return data;
+    }
+
+    async function loadTickets(projectId) {
+        await initSupabase();
+        const { data, error } = await state.supabase.from('tickets').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+        if (error) throw error;
+        return data;
     }
 
     async function loadProjects() {
-        let projects = DEFAULT_PROJECTS;
-        if (isConnected && supabaseClient) {
-            try {
-                const { data } = await supabaseClient.from('projects').select('*');
-                if (data?.length) projects = data;
-            } catch (e) { console.warn('Projects fetch failed'); }
+        await initSupabase();
+        const { data, error } = await state.supabase.from('projects').select('*').eq('user_id', state.user?.id).order('created_at', { ascending: false });
+        if (error) throw error;
+        return data;
+    }
+
+    function generateLEEDReport(tickets) {
+        const headers = ['Date','Ticket #','Gross (lbs)','Gross (tons)','Tare (lbs)','Tare (tons)','Net (lbs)','Net (tons)','Wood %','Wood (T)','Gypsum %','Gypsum (T)','Plastic %','Plastic (T)','OCC %','OCC (T)','Metal %','Metal (T)','Concrete %','Concrete (T)','Block %','Block (T)','Landfill %','Landfill (T)','Total Diverted (T)','Diversion %'];
+        let csv = headers.join(',') + '\n';
+
+        for (const t of tickets) {
+            const row = [
+                formatDate(t.ticket_date), t.ticket_number, t.gross_lbs, (t.gross_lbs/2000).toFixed(2),
+                t.tare_lbs, (t.tare_lbs/2000).toFixed(2), t.net_lbs, t.net_tons?.toFixed(2),
+                t.wood_pct, t.wood_tons?.toFixed(3), t.gypsum_pct, t.gypsum_tons?.toFixed(3),
+                t.plastic_pct, t.plastic_tons?.toFixed(3), t.occ_pct, t.occ_tons?.toFixed(3),
+                t.metal_pct, t.metal_tons?.toFixed(3), t.concrete_pct, t.concrete_tons?.toFixed(3),
+                t.block_pct, t.block_tons?.toFixed(3), t.landfill_pct, t.landfill_tons?.toFixed(3),
+                t.diverted_tons?.toFixed(3), t.diversion_pct
+            ];
+            csv += row.join(',') + '\n';
         }
-        window.projectsData = projects;
-        const opts = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        document.getElementById('load-project').innerHTML = '<option value="">Select Project</option>' + opts;
-        document.getElementById('report-project').innerHTML = '<option value="">All Projects</option>' + opts;
-        document.getElementById('projects-list').innerHTML = projects.map(p => `
-            <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;">
-                <strong>${p.name}</strong><br><span style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''}</span>
+        return csv;
+    }
+
+    function downloadCSV(csv, filename) {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'divertscan-report.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    return {
+        CONFIG, MATERIALS, MATERIAL_KEYS,
+        getState: () => state,
+        setState: (key, value) => { state[key] = value; },
+        setOpenAIKey: (key) => { state.openaiKey = key; localStorage.setItem('divertscan_openai', key); },
+        toast, formatNumber, formatDate, generateAuditId,
+        calculateNetWeight, calculateMaterialTonnages, validateMaterialTotal,
+        initTicketSession, updateTicketSession, setMaterialPercentages, getTicketSession,
+        captureGPS, captureIP,
+        analyzeScaleTicket, analyzeDebrisPhoto,
+        initSupabase, saveTicket, loadTickets, loadProjects,
+        generateLEEDReport, downloadCSV,
+        version: CONFIG.VERSION
+    };
+})();
+
+window.DivertScan = DivertScan;
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- APPLICATION LOGIC -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <script>
+// ═══════════════════════════════════════════════════════════════════════
+// UI STATE
+// ═══════════════════════════════════════════════════════════════════════
+
+let currentStep = 1;
+let selectedContainerSize = 30;
+let debrisPhotoSlot = 0;
+let debrisPhotos = [null, null, null];
+
+// ═══════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════
+
+async function initialize() {
+    try {
+        await DivertScan.initSupabase();
+        const sb = DivertScan.getState().supabase;
+        
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) {
+            DivertScan.setState('user', session.user);
+            showApp();
+        }
+
+        sb.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                DivertScan.setState('user', session.user);
+                showApp();
+            } else {
+                DivertScan.setState('user', null);
+                showAuth();
+            }
+        });
+    } catch (e) {
+        console.error('Init error:', e);
+        DivertScan.toast('Failed to initialize', 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════════
+
+async function signIn() {
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+    
+    if (!email || !password) {
+        DivertScan.toast('Enter email and password', 'error');
+        return;
+    }
+
+    try {
+        const sb = DivertScan.getState().supabase;
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        DivertScan.toast('Signed in!', 'success');
+    } catch (e) {
+        DivertScan.toast(e.message, 'error');
+    }
+}
+
+async function signUp() {
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+    
+    if (!email || !password) {
+        DivertScan.toast('Enter email and password', 'error');
+        return;
+    }
+
+    try {
+        const sb = DivertScan.getState().supabase;
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        DivertScan.toast('Account created! Check email to confirm.', 'success');
+    } catch (e) {
+        DivertScan.toast(e.message, 'error');
+    }
+}
+
+async function signOut() {
+    const sb = DivertScan.getState().supabase;
+    await sb.auth.signOut();
+    showAuth();
+}
+
+function showAuth() {
+    document.getElementById('authScreen').classList.add('active');
+    document.getElementById('dashboardTab').classList.remove('active');
+    document.querySelector('.nav').style.display = 'none';
+}
+
+function showApp() {
+    document.getElementById('authScreen').classList.remove('active');
+    document.querySelector('.nav').style.display = 'flex';
+    document.getElementById('userEmail').textContent = DivertScan.getState().user?.email || '-';
+    document.getElementById('openaiKeyInput').value = DivertScan.getState().openaiKey || '';
+    loadProjectsAndData();
+    showTab('dashboard');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════
+
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    
+    document.getElementById(tab + 'Tab').classList.add('active');
+    document.querySelectorAll('.nav-item')[['dashboard','tickets','reports','settings'].indexOf(tab)].classList.add('active');
+    
+    if (tab === 'tickets') loadAllTickets();
+}
+
+function showSettings() {
+    showTab('settings');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROJECTS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function loadProjectsAndData() {
+    try {
+        const projects = await DivertScan.loadProjects();
+        
+        if (projects && projects.length > 0) {
+            DivertScan.setState('currentProject', projects[0]);
+            document.getElementById('currentProjectName').textContent = projects[0].name;
+            await loadDashboardData();
+        } else {
+            document.getElementById('currentProjectName').textContent = 'No Projects - Create One';
+        }
+    } catch (e) {
+        console.error('Load projects error:', e);
+    }
+}
+
+function showProjectModal() {
+    openModal('projectModal');
+    loadProjectList();
+}
+
+async function loadProjectList() {
+    const projects = await DivertScan.loadProjects();
+    const list = document.getElementById('projectList');
+    
+    if (!projects || projects.length === 0) {
+        list.innerHTML = '<div class="empty-state"><p>No projects yet</p></div>';
+        return;
+    }
+
+    list.innerHTML = projects.map(p => `
+        <div class="ticket-item" onclick="selectProject('${p.id}', '${p.name}')">
+            <div class="ticket-info">
+                <h4>${p.name}</h4>
+                <p>${p.address || 'No address'}</p>
             </div>
-        `).join('');
+            <span style="color:var(--emerald-400);">→</span>
+        </div>
+    `).join('');
+}
+
+function selectProject(id, name) {
+    const state = DivertScan.getState();
+    DivertScan.setState('currentProject', { id, name });
+    document.getElementById('currentProjectName').textContent = name;
+    closeModal('projectModal');
+    loadDashboardData();
+}
+
+function showNewProjectForm() {
+    document.getElementById('newProjectForm').classList.toggle('hidden');
+}
+
+async function createProject() {
+    const name = document.getElementById('newProjectName').value;
+    const address = document.getElementById('newProjectAddress').value;
+    
+    if (!name) {
+        DivertScan.toast('Enter project name', 'error');
+        return;
     }
 
-    async function loadLoads() {
-        let loads = [];
-        if (isConnected && supabaseClient) {
-            try {
-                const { data } = await supabaseClient.from('loads').select('*').order('created_at', { ascending: false }).limit(50);
-                if (data) loads = data;
-            } catch (e) { console.warn('Loads fetch failed'); }
-        }
-        window.loadsData = loads;
-        renderLoads(loads);
-        updateStats();
-    }
+    try {
+        const sb = DivertScan.getState().supabase;
+        const { data, error } = await sb.from('projects').insert([{
+            name,
+            address,
+            user_id: DivertScan.getState().user.id
+        }]).select().single();
 
-    function renderLoads(loads) {
-        const tbody = document.getElementById('loads-table');
-        if (!loads.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">No loads yet. Tap "+ New Load"</td></tr>'; return; }
-        tbody.innerHTML = loads.map(l => {
-            const proj = (window.projectsData || []).find(p => p.id === l.project_id);
-            const isDiverted = ['recycling','reuse','composting'].includes(l.destination_type);
-            const isVerified = l.gps_latitude && l.ip_address;
-            return `<tr>
-                <td>${new Date(l.load_date || l.created_at).toLocaleDateString()}</td>
-                <td>${proj?.name || '-'}</td>
-                <td>${l.material || '-'}</td>
-                <td>${parseFloat(l.weight_tons||0).toFixed(2)}</td>
-                <td><span class="badge ${isDiverted?'badge-success':'badge-warning'}">${l.destination_type || '-'}</span></td>
-                <td>${l.entered_by_name || '-'}</td>
-                <td>${isVerified ? '<span class="badge badge-success">✓</span>' : '<span class="badge badge-warning">—</span>'}</td>
-            </tr>`;
-        }).join('');
-    }
+        if (error) throw error;
 
-    function updateStats() {
-        const loads = window.loadsData || [];
-        const total = loads.reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-        const diverted = loads.filter(l => ['recycling','reuse','composting'].includes(l.destination_type)).reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-        let carbon = 0;
-        loads.forEach(l => {
-            if (['recycling','reuse','composting'].includes(l.destination_type)) {
-                const m = MATERIALS.find(x => x.name === l.material);
-                if (m) carbon += parseFloat(l.weight_tons||0) * m.gwp;
-            }
-        });
-        document.getElementById('stat-loads').textContent = loads.length;
-        document.getElementById('stat-tonnage').textContent = total.toFixed(1);
-        document.getElementById('stat-diversion').textContent = (total > 0 ? (diverted/total*100) : 0).toFixed(0) + '%';
-        document.getElementById('stat-carbon').textContent = carbon.toFixed(1);
+        DivertScan.toast('Project created!', 'success');
+        selectProject(data.id, data.name);
+        document.getElementById('newProjectForm').classList.add('hidden');
+        document.getElementById('newProjectName').value = '';
+        document.getElementById('newProjectAddress').value = '';
+    } catch (e) {
+        DivertScan.toast(e.message, 'error');
     }
+}
 
-    function updateConnectionStatus() {
-        document.getElementById('status-dot').classList.toggle('connected', isConnected);
-        document.getElementById('connection-text').textContent = isConnected ? 'Online' : 'Offline';
-    }
+// ═══════════════════════════════════════════════════════════════════════
+// DASHBOARD DATA
+// ═══════════════════════════════════════════════════════════════════════
 
-    // ========== GPS/IP ==========
-    async function getGPSData() {
-        return new Promise(resolve => {
-            if (!navigator.geolocation) { resolve(null); return; }
-            navigator.geolocation.getCurrentPosition(
-                p => resolve({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6), acc: p.coords.accuracy }),
-                () => resolve(null), { enableHighAccuracy: true, timeout: 10000 }
-            );
-        });
-    }
-    async function getIPData() {
-        try { const r = await fetch('https://api.ipify.org?format=json'); return await r.json(); }
-        catch { return { ip: 'unavailable' }; }
-    }
+async function loadDashboardData() {
+    const project = DivertScan.getState().currentProject;
+    if (!project) return;
 
-    // ========== WEIGHT SOURCE SELECTION ==========
-    let currentWeightSource = 'ticket';
-    let scalePort = null;
-    let scaleReader = null;
-
-    function selectWeightSource(source) {
-        currentWeightSource = source;
-        document.querySelectorAll('.weight-source-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.source === source);
-        });
-        document.querySelectorAll('.weight-source-panel').forEach(panel => {
-            panel.style.display = 'none';
-        });
-        document.getElementById('weight-source-' + source).style.display = 'block';
-    }
-
-    function applyManualWeight() {
-        const value = parseFloat(document.getElementById('manual-weight-lbs').value);
-        const unit = document.getElementById('manual-weight-unit').value;
-        if (!value || value <= 0) { showToast('Enter a valid weight', 'error'); return; }
+    try {
+        const tickets = await DivertScan.loadTickets(project.id);
         
-        const tons = unit === 'tons' ? value : value / 2000;
-        document.getElementById('load-weight').value = tons.toFixed(2);
-        document.getElementById('weight-source-label').textContent = '✓ Manual entry: ' + value + ' ' + unit;
-        showToast('Weight: ' + tons.toFixed(2) + ' tons', 'success');
-    }
+        const totalTickets = tickets.length;
+        const totalTons = tickets.reduce((sum, t) => sum + (parseFloat(t.net_tons) || 0), 0);
+        const totalDiverted = tickets.reduce((sum, t) => sum + (parseFloat(t.diverted_tons) || 0), 0);
+        const avgDiversion = totalTons > 0 ? (totalDiverted / totalTons * 100) : 0;
+        const totalCO2 = tickets.reduce((sum, t) => sum + (parseFloat(t.co2e_avoided) || 0), 0);
 
-    // ========== SCALE CONNECTION (Web Serial API) ==========
-    async function connectScale() {
-        if (!('serial' in navigator)) {
-            showToast('Web Serial not supported. Use Chrome or Edge.', 'error');
-            return;
-        }
-
-        try {
-            document.getElementById('scale-status').textContent = 'Requesting port...';
-            scalePort = await navigator.serial.requestPort();
-            
-            // Avery Weigh-Tronix typically uses 9600 baud, 8N1
-            await scalePort.open({ 
-                baudRate: 9600,
-                dataBits: 8,
-                stopBits: 1,
-                parity: 'none'
-            });
-
-            document.getElementById('scale-status').innerHTML = '<span style="color:var(--success);">✅ Connected</span>';
-            document.getElementById('scale-reading').style.display = 'block';
-            document.getElementById('capture-scale-btn').disabled = false;
-            showToast('Scale connected!', 'success');
-
-            // Start reading
-            readScaleData();
-        } catch (err) {
-            console.error('Scale connection error:', err);
-            document.getElementById('scale-status').textContent = '❌ ' + err.message;
-            showToast('Connection failed: ' + err.message, 'error');
-        }
-    }
-
-    async function readScaleData() {
-        if (!scalePort || !scalePort.readable) return;
-
-        const decoder = new TextDecoderStream();
-        const inputDone = scalePort.readable.pipeTo(decoder.writable);
-        scaleReader = decoder.readable.getReader();
-
-        let buffer = '';
-        try {
-            while (true) {
-                const { value, done } = await scaleReader.read();
-                if (done) break;
-                
-                buffer += value;
-                // Parse weight from common formats: "7580 LB" or "7580" or "GS,7580,LB"
-                const match = buffer.match(/(\d+\.?\d*)\s*(LB|KG|lb|kg)?/);
-                if (match) {
-                    const weight = parseFloat(match[1]);
-                    document.getElementById('scale-weight-display').textContent = weight.toLocaleString();
-                    window.lastScaleWeight = weight;
-                    buffer = '';
-                }
-                
-                // Prevent buffer overflow
-                if (buffer.length > 100) buffer = buffer.slice(-50);
-            }
-        } catch (err) {
-            console.error('Scale read error:', err);
-        }
-    }
-
-    function captureScaleWeight() {
-        const weight = window.lastScaleWeight;
-        if (!weight) {
-            showToast('No weight reading available', 'error');
-            return;
-        }
+        document.getElementById('statTickets').textContent = totalTickets;
+        document.getElementById('statTons').textContent = totalTons.toFixed(2);
+        document.getElementById('statDiversion').textContent = avgDiversion.toFixed(0) + '%';
+        document.getElementById('statCO2').textContent = totalCO2.toFixed(2);
+        document.getElementById('leedProgress').textContent = avgDiversion.toFixed(0) + '%';
         
-        const tons = weight / 2000;
-        document.getElementById('load-weight').value = tons.toFixed(2);
-        document.getElementById('weight-source-label').textContent = '✓ Live scale: ' + weight.toLocaleString() + ' lbs';
-        showToast('Captured: ' + tons.toFixed(2) + ' tons', 'success');
-    }
+        const progressBar = document.getElementById('leedProgressBar');
+        progressBar.style.width = Math.min(avgDiversion, 100) + '%';
+        progressBar.className = 'progress-fill' + (avgDiversion >= 75 ? '' : avgDiversion >= 50 ? ' warning' : ' danger');
 
-    // ========== PHOTO & OCR ==========
-    let debrisPhotos = []; // Store multiple photos for analysis
-
-    function handlePhotoUpload(input) {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = e => {
-            debrisPhotos = [e.target.result];
-            showPhotoPreview([e.target.result]);
-            analyzePhotos(debrisPhotos);
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function handleMultiPhotoUpload(input) {
-        const files = Array.from(input.files);
-        if (!files.length) return;
-        
-        debrisPhotos = [];
-        let loaded = 0;
-        
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onload = e => {
-                debrisPhotos.push(e.target.result);
-                loaded++;
-                if (loaded === files.length) {
-                    showPhotoPreview(debrisPhotos);
-                    analyzePhotos(debrisPhotos);
-                }
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    function showPhotoPreview(photos) {
-        document.getElementById('photo-placeholder').style.display = 'none';
-        const previewDiv = document.getElementById('photo-previews');
-        previewDiv.style.display = 'flex';
-        previewDiv.style.flexWrap = 'wrap';
-        previewDiv.style.gap = '0.5rem';
-        previewDiv.style.justifyContent = 'center';
-        previewDiv.innerHTML = photos.map(p => 
-            `<img src="${p}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--primary);">`
-        ).join('') + `<div style="width:100%;text-align:center;margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted);">${photos.length} photo(s) selected</div>`;
-    }
-
-    async function analyzePhotos(photos) {
-        if (!OPENAI_KEY) {
-            document.getElementById('ai-material').innerHTML = '⚠️ OpenAI API key required. Go to <strong>Settings</strong> tab to add key.';
-            document.getElementById('ai-suggestion').style.display = 'block';
-            return;
-        }
-
-        document.getElementById('ai-material').innerHTML = `🔄 Analyzing ${photos.length} photo(s)...`;
-        document.getElementById('ai-suggestion').style.display = 'block';
-
-        try {
-            // Build message with all images
-            const content = [{
-                type: 'text',
-                text: `Analyze these ${photos.length} construction/demolition debris photo(s). Estimate the COMBINED percentage breakdown of ALL visible materials.
-
-Return TOP 5-7 materials. Return ONLY valid JSON:
-{"materials":[{"name":"material name","percentage":number,"recyclable":true}],"diversion_potential":number,"confidence":number,"notes":"observation"}
-
-Common C&D materials:
-- Wood/Lumber (recyclable)
-- Cardboard/OCC (recyclable)  
-- Metal/Steel (recyclable)
-- Concrete/Block/CMU (recyclable)
-- Drywall/Gypsum (recyclable)
-- Plastic/PVC (limited)
-- Roofing/Shingles (limited)
-- Mixed debris/Trash (not recyclable)
-
-Percentages must total 100. diversion_potential = sum of recyclable %.`
-            }];
-
-            // Add each photo
-            photos.forEach(photo => {
-                content.push({ type: 'image_url', image_url: { url: photo, detail: 'high' } });
-            });
-
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENAI_KEY },
-                body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [{ role: 'user', content: content }],
-                    max_tokens: 800
-                })
-            });
-
-            if (!response.ok) throw new Error('API error: ' + response.status);
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-
-            const match = data.choices[0].message.content.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error('Could not parse response');
-
-            displayDebrisAnalysis(JSON.parse(match[0]));
-        } catch (err) {
-            console.error('AI error:', err);
-            document.getElementById('ai-material').innerHTML = '❌ ' + err.message;
-        }
-    }
-
-    // OpenAI API Key - User should set this in Settings
-    let OPENAI_KEY = localStorage.getItem('divertscan_openai_key') || '';
-
-    function displayDebrisAnalysis(analysis) {
-        let html = '<div style="margin-bottom:0.75rem;"><strong>📊 Material Breakdown:</strong></div>';
-        html += '<div style="display:flex;flex-direction:column;gap:0.5rem;">';
-        
-        analysis.materials.forEach(m => {
-            const icon = m.recyclable ? '♻️' : '🗑️';
-            const barColor = m.recyclable ? 'var(--primary)' : 'var(--accent)';
-            html += `<div style="display:flex;align-items:center;gap:0.5rem;">
-                <span style="width:24px;">${icon}</span>
-                <span style="flex:1;font-size:0.85rem;">${m.name}</span>
-                <div style="width:80px;height:12px;background:var(--bg-dark);border-radius:6px;overflow:hidden;">
-                    <div style="width:${m.percentage}%;height:100%;background:${barColor};"></div>
+        // Recent tickets
+        const list = document.getElementById('ticketList');
+        if (tickets.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>No tickets yet</p></div>';
+        } else {
+            list.innerHTML = tickets.slice(0, 5).map(t => `
+                <div class="ticket-item">
+                    <div class="ticket-info">
+                        <h4>#${t.ticket_number || 'N/A'}</h4>
+                        <p>${DivertScan.formatDate(t.ticket_date)}</p>
+                    </div>
+                    <div class="ticket-stats">
+                        <div class="ticket-tons">${(t.net_tons || 0).toFixed(2)}T</div>
+                        <div class="ticket-diversion">${t.diversion_pct || 0}% diverted</div>
+                    </div>
                 </div>
-                <span style="width:40px;text-align:right;font-weight:600;font-size:0.9rem;">${m.percentage}%</span>
-            </div>`;
-        });
-        html += '</div>';
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Dashboard error:', e);
+    }
+}
+
+async function loadAllTickets() {
+    const project = DivertScan.getState().currentProject;
+    if (!project) return;
+
+    try {
+        const tickets = await DivertScan.loadTickets(project.id);
+        const list = document.getElementById('allTicketsList');
         
-        const meetsLEED = analysis.diversion_potential >= 75;
-        html += `<div style="margin-top:1rem;padding:0.75rem;background:${meetsLEED ? 'rgba(22,163,74,0.15)' : 'rgba(245,158,11,0.15)'};border-radius:8px;border-left:4px solid ${meetsLEED ? 'var(--success)' : 'var(--accent)'};">
-            <div style="font-size:1.1rem;font-weight:600;">Diversion Potential: ${analysis.diversion_potential}%</div>
-            <div style="font-size:0.85rem;">${meetsLEED ? '✅ Meets LEED 75% target' : '⚠️ Below LEED 75% target'}</div>
-        </div>`;
-
-        if (analysis.confidence) {
-            html += `<div style="margin-top:0.5rem;font-size:0.75rem;color:var(--text-muted);">AI Confidence: ${analysis.confidence}%</div>`;
+        if (tickets.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>No tickets yet</p></div>';
+        } else {
+            list.innerHTML = tickets.map(t => `
+                <div class="ticket-item">
+                    <div class="ticket-info">
+                        <h4>#${t.ticket_number || 'N/A'}</h4>
+                        <p>${DivertScan.formatDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'}</p>
+                    </div>
+                    <div class="ticket-stats">
+                        <div class="ticket-tons">${(t.net_tons || 0).toFixed(2)}T</div>
+                        <div class="ticket-diversion">${t.diversion_pct || 0}% diverted</div>
+                    </div>
+                </div>
+            `).join('');
         }
-        
-        if (analysis.notes) {
-            html += `<div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-secondary);">📝 ${analysis.notes}</div>`;
-        }
+    } catch (e) {
+        console.error('Load tickets error:', e);
+    }
+}
 
-        // Add "Apply top material" button
-        if (analysis.materials.length > 0) {
-            const topMaterial = analysis.materials[0].name;
-            const matchedMaterial = MATERIALS.find(m => 
-                m.name.toLowerCase().includes(topMaterial.toLowerCase().split('/')[0]) ||
-                topMaterial.toLowerCase().includes(m.name.toLowerCase().split(' ')[0])
-            );
-            if (matchedMaterial) {
-                html += `<button type="button" class="btn btn-primary" style="margin-top:1rem;width:100%;" onclick="document.getElementById('load-material').value='${matchedMaterial.name}';showToast('Material set to ${matchedMaterial.name}','success');">
-                    ✓ Apply: ${matchedMaterial.name}
-                </button>`;
-            }
-        }
+// ═══════════════════════════════════════════════════════════════════════
+// NEW TICKET FLOW
+// ═══════════════════════════════════════════════════════════════════════
 
-        document.getElementById('ai-material').innerHTML = html;
-        document.getElementById('ai-suggestion').style.display = 'block';
-        document.getElementById('ai-suggestion').style.background = 'var(--bg-input)';
-        document.getElementById('ai-suggestion').style.padding = '1rem';
-        document.getElementById('ai-suggestion').style.borderRadius = '8px';
+function startNewTicket() {
+    const project = DivertScan.getState().currentProject;
+    if (!project) {
+        DivertScan.toast('Select a project first', 'error');
+        return;
     }
 
-    function promptApiKey() {
-        const key = prompt('Enter your OpenAI API key (starts with sk-):');
-        if (key && key.startsWith('sk-')) {
-            OPENAI_KEY = key;
-            localStorage.setItem('divertscan_openai_key', key);
-            showToast('API key saved!', 'success');
-        } else if (key) {
-            showToast('Invalid key format', 'error');
+    // Initialize fresh ticket session
+    DivertScan.initTicketSession();
+    
+    // Reset UI
+    currentStep = 1;
+    debrisPhotos = [null, null, null];
+    
+    document.getElementById('ticketImagePreview').innerHTML = '<span>No image</span>';
+    document.getElementById('ticketOCRResult').classList.add('hidden');
+    document.getElementById('ticketStep1').classList.remove('hidden');
+    document.getElementById('ticketStep2').classList.add('hidden');
+    document.getElementById('ticketStep3').classList.add('hidden');
+    
+    updateStepIndicators();
+    resetDebrisPhotoGrid();
+    
+    openModal('ticketModal');
+    
+    // Capture verification data
+    DivertScan.captureGPS();
+    DivertScan.captureIP();
+}
+
+function updateStepIndicators() {
+    for (let i = 1; i <= 3; i++) {
+        const step = document.getElementById('step' + i);
+        step.className = 'step' + (i < currentStep ? ' complete' : i === currentStep ? ' active' : '');
+    }
+    document.getElementById('stepLine1').className = 'step-line' + (currentStep > 1 ? ' complete' : '');
+    document.getElementById('stepLine2').className = 'step-line' + (currentStep > 2 ? ' complete' : '');
+    
+    document.getElementById('prevStepBtn').disabled = currentStep === 1;
+    document.getElementById('nextStepBtn').textContent = currentStep === 3 ? 'Save Ticket' : 'Next';
+}
+
+function nextStep() {
+    if (currentStep === 3) {
+        saveCurrentTicket();
+        return;
+    }
+    
+    if (currentStep === 1) {
+        // Validate step 1
+        const session = DivertScan.getTicketSession();
+        if (!session.grossLbs || !session.tareLbs) {
+            DivertScan.toast('Enter gross and tare weights', 'error');
+            return;
         }
     }
+    
+    if (currentStep === 2) {
+        // Validate step 2
+        const session = DivertScan.getTicketSession();
+        if (Object.keys(session.materialBreakdown).length === 0 || session.diversionRate === 0) {
+            DivertScan.toast('Analyze debris photos first', 'error');
+            return;
+        }
+    }
+    
+    currentStep++;
+    showCurrentStep();
+}
 
-    function handleTicketScan(input) {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async e => {
-            const dataUrl = e.target.result;
-            document.getElementById('ticket-preview').src = dataUrl;
-            document.getElementById('ticket-preview').style.display = 'block';
-            document.getElementById('ticket-placeholder').style.display = 'none';
-            document.getElementById('ocr-status').style.display = 'flex';
-            document.getElementById('ocr-result').style.display = 'none';
+function prevStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        showCurrentStep();
+    }
+}
+
+function showCurrentStep() {
+    document.getElementById('ticketStep1').classList.toggle('hidden', currentStep !== 1);
+    document.getElementById('ticketStep2').classList.toggle('hidden', currentStep !== 2);
+    document.getElementById('ticketStep3').classList.toggle('hidden', currentStep !== 3);
+    updateStepIndicators();
+    
+    if (currentStep === 3) {
+        populateReviewStep();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 1: SCALE TICKET
+// ═══════════════════════════════════════════════════════════════════════
+
+function captureTicketPhoto() {
+    document.getElementById('ticketCameraInput').click();
+}
+
+function uploadTicketPhoto() {
+    document.getElementById('ticketFileInput').click();
+}
+
+async function handleTicketFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const imageData = e.target.result;
+        document.getElementById('ticketImagePreview').innerHTML = `<img src="${imageData}" alt="Ticket">`;
+        
+        // Analyze with OCR
+        document.getElementById('ticketAnalyzing').classList.remove('hidden');
+        
+        try {
+            const result = await DivertScan.analyzeScaleTicket(imageData);
             
-            // Use OpenAI if key available (much better accuracy)
-            if (OPENAI_KEY) {
-                await ocrWithOpenAI(dataUrl);
-            } else {
-                await ocrWithTesseract(dataUrl);
-            }
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async function ocrWithOpenAI(dataUrl) {
-        try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + OPENAI_KEY },
-                body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: `Extract data from this scale ticket/weight ticket image. Return ONLY valid JSON:
-{"ticket_number":"string or null","date":"YYYY-MM-DD or null","time":"HH:MM or null","hauler":"company name or null","customer":"customer name or null","gross_lbs":number or null,"tare_lbs":number or null,"net_lbs":number or null,"net_tons":number or null,"material":"material type or null","facility":"facility name or null","vehicle":"truck/vehicle info or null"}
-
-Look for: Ticket #, Date, Time, Gross weight, Tare weight, Net weight. If weight is in lbs, also calculate net_tons (lbs / 2000). Extract hauler/customer names, material type if visible.` },
-                            { type: 'image_url', image_url: { url: dataUrl } }
-                        ]
-                    }],
-                    max_tokens: 600
-                })
-            });
-
-            if (!response.ok) throw new Error('API error: ' + response.status);
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-
-            const match = data.choices[0].message.content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const ticket = JSON.parse(match[0]);
-                applyTicketData(ticket);
-                document.getElementById('ocr-result').innerHTML = '<div style="color:var(--success);margin-bottom:0.5rem;">✅ AI extracted data:</div>' + formatTicketData(ticket);
-            } else {
-                throw new Error('Could not parse');
-            }
+            // Populate form fields
+            document.getElementById('ticketNumber').value = result.ticket_number || '';
+            document.getElementById('ticketDate').value = result.date ? formatDateForInput(result.date) : new Date().toISOString().split('T')[0];
+            document.getElementById('grossLbs').value = result.gross_lbs || '';
+            document.getElementById('tareLbs').value = result.tare_lbs || '';
+            document.getElementById('haulerName').value = result.hauler || '';
+            
+            updateNetWeightDisplay();
+            document.getElementById('ticketOCRResult').classList.remove('hidden');
+            
+            DivertScan.toast('Ticket analyzed!', 'success');
         } catch (err) {
-            console.warn('OpenAI OCR failed:', err);
-            await ocrWithTesseract(dataUrl);
-            return;
+            DivertScan.toast(err.message, 'error');
+        } finally {
+            document.getElementById('ticketAnalyzing').classList.add('hidden');
         }
-        document.getElementById('ocr-status').style.display = 'none';
-        document.getElementById('ocr-result').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function formatDateForInput(dateStr) {
+    // Convert MM/DD/YY to YYYY-MM-DD
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+        return `${year}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
     }
+    return dateStr;
+}
 
-    async function ocrWithTesseract(dataUrl) {
-        try {
-            if (typeof Tesseract !== 'undefined') {
-                const result = await Tesseract.recognize(dataUrl, 'eng');
-                const text = result.data.text;
-                
-                // Basic parsing
-                const ticket = {};
-                const weightMatch = text.match(/(\d+[,.]?\d*)\s*(ton|lb|pound)/i);
-                if (weightMatch) {
-                    let weight = parseFloat(weightMatch[1].replace(',', ''));
-                    if (weightMatch[2].toLowerCase().includes('lb')) weight = weight / 2000;
-                    ticket.net_tons = weight;
-                }
-                const ticketMatch = text.match(/(ticket|manifest|#)\s*:?\s*(\w+)/i);
-                if (ticketMatch) ticket.ticket_number = ticketMatch[2];
+function updateNetWeightDisplay() {
+    const gross = parseFloat(document.getElementById('grossLbs').value) || 0;
+    const tare = parseFloat(document.getElementById('tareLbs').value) || 0;
+    const net = DivertScan.calculateNetWeight(gross, tare);
+    
+    document.getElementById('netWeightDisplay').textContent = net.netTons.toFixed(2) + ' tons';
+    
+    // Update session
+    DivertScan.updateTicketSession({
+        ticketNumber: document.getElementById('ticketNumber').value,
+        ticketDate: document.getElementById('ticketDate').value,
+        grossLbs: gross,
+        tareLbs: tare,
+        hauler: document.getElementById('haulerName').value
+    });
+}
 
-                applyTicketData(ticket);
-                document.getElementById('ocr-result').innerHTML = '<div style="color:var(--accent);margin-bottom:0.5rem;">⚠️ Basic OCR (add API key for better results)</div><pre style="font-size:0.7rem;max-height:80px;overflow:auto;white-space:pre-wrap;">' + text.substring(0, 300) + '</pre>';
-            } else {
-                document.getElementById('ocr-result').innerHTML = '⚠️ OCR not available. Add OpenAI API key in Settings for best results, or enter data manually.';
-            }
-        } catch (err) {
-            document.getElementById('ocr-result').innerHTML = '❌ OCR failed: ' + err.message;
+// Add event listeners for weight inputs
+document.getElementById('grossLbs')?.addEventListener('input', updateNetWeightDisplay);
+document.getElementById('tareLbs')?.addEventListener('input', updateNetWeightDisplay);
+document.getElementById('ticketNumber')?.addEventListener('input', () => {
+    DivertScan.updateTicketSession({ ticketNumber: document.getElementById('ticketNumber').value });
+});
+document.getElementById('haulerName')?.addEventListener('input', () => {
+    DivertScan.updateTicketSession({ hauler: document.getElementById('haulerName').value });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 2: DEBRIS PHOTOS
+// ═══════════════════════════════════════════════════════════════════════
+
+function selectContainer(size) {
+    selectedContainerSize = size;
+    DivertScan.updateTicketSession({ containerSize: size });
+    
+    document.querySelectorAll('.container-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.querySelector('span').textContent == size);
+    });
+}
+
+function resetDebrisPhotoGrid() {
+    const grid = document.getElementById('debrisPhotoGrid');
+    grid.innerHTML = `
+        <div class="photo-slot" onclick="addDebrisPhoto(0)">➕</div>
+        <div class="photo-slot" onclick="addDebrisPhoto(1)">➕</div>
+        <div class="photo-slot" onclick="addDebrisPhoto(2)">➕</div>
+    `;
+    document.getElementById('analyzeDebrisBtn').disabled = true;
+}
+
+function addDebrisPhoto(slot) {
+    debrisPhotoSlot = slot;
+    document.getElementById('debrisFileInput').click();
+}
+
+function handleDebrisFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        debrisPhotos[debrisPhotoSlot] = e.target.result;
+        updateDebrisPhotoGrid();
+    };
+    reader.readAsDataURL(file);
+}
+
+function updateDebrisPhotoGrid() {
+    const grid = document.getElementById('debrisPhotoGrid');
+    grid.innerHTML = debrisPhotos.map((photo, i) => {
+        if (photo) {
+            return `<div class="photo-slot filled" onclick="addDebrisPhoto(${i})"><img src="${photo}" alt="Debris ${i+1}"></div>`;
         }
-        document.getElementById('ocr-status').style.display = 'none';
-        document.getElementById('ocr-result').style.display = 'block';
+        return `<div class="photo-slot" onclick="addDebrisPhoto(${i})">➕</div>`;
+    }).join('');
+    
+    const hasPhotos = debrisPhotos.some(p => p !== null);
+    document.getElementById('analyzeDebrisBtn').disabled = !hasPhotos;
+}
+
+async function analyzeDebris() {
+    const photos = debrisPhotos.filter(p => p !== null);
+    if (photos.length === 0) {
+        DivertScan.toast('Add at least one photo', 'error');
+        return;
     }
 
-    function applyTicketData(ticket) {
-        if (ticket.net_tons) {
-            document.getElementById('load-weight').value = ticket.net_tons.toFixed(2);
-            document.getElementById('weight-source-label').textContent = '✓ From ticket: ' + ticket.net_tons.toFixed(2) + ' tons';
-            showToast('Weight: ' + ticket.net_tons.toFixed(2) + ' tons', 'success');
-        } else if (ticket.net_lbs) {
-            const tons = ticket.net_lbs / 2000;
-            document.getElementById('load-weight').value = tons.toFixed(2);
-            document.getElementById('weight-source-label').textContent = '✓ From ticket: ' + ticket.net_lbs.toLocaleString() + ' lbs';
-            showToast('Weight: ' + tons.toFixed(2) + ' tons', 'success');
-        }
-        if (ticket.ticket_number) document.getElementById('load-ticket').value = ticket.ticket_number;
-        if (ticket.date) document.getElementById('load-date').value = ticket.date;
-        if (ticket.hauler) document.getElementById('load-hauler').value = ticket.hauler;
-        if (ticket.facility) document.getElementById('load-facility').value = ticket.facility;
-    }
+    document.getElementById('debrisAnalyzing').classList.remove('hidden');
+    document.getElementById('analyzeDebrisBtn').disabled = true;
 
-    function formatTicketData(t) {
-        let html = '<table style="font-size:0.8rem;width:100%;">';
-        if (t.ticket_number) html += `<tr><td style="color:var(--text-muted);">Ticket #</td><td style="text-align:right;"><strong>${t.ticket_number}</strong></td></tr>`;
-        if (t.date) html += `<tr><td style="color:var(--text-muted);">Date</td><td style="text-align:right;">${t.date}${t.time ? ' ' + t.time : ''}</td></tr>`;
-        if (t.gross_lbs) html += `<tr><td style="color:var(--text-muted);">Gross</td><td style="text-align:right;">${t.gross_lbs.toLocaleString()} lbs</td></tr>`;
-        if (t.tare_lbs) html += `<tr><td style="color:var(--text-muted);">Tare</td><td style="text-align:right;">${t.tare_lbs.toLocaleString()} lbs</td></tr>`;
-        if (t.net_lbs || t.net_tons) {
-            const tons = t.net_tons || (t.net_lbs / 2000);
-            const lbs = t.net_lbs || (t.net_tons * 2000);
-            html += `<tr><td style="color:var(--text-muted);">Net</td><td style="text-align:right;"><strong>${tons.toFixed(2)} tons</strong> (${Math.round(lbs).toLocaleString()} lbs)</td></tr>`;
-        }
-        if (t.hauler) html += `<tr><td style="color:var(--text-muted);">Hauler</td><td style="text-align:right;">${t.hauler}</td></tr>`;
-        if (t.material) html += `<tr><td style="color:var(--text-muted);">Material</td><td style="text-align:right;">${t.material}</td></tr>`;
-        if (t.facility) html += `<tr><td style="color:var(--text-muted);">Facility</td><td style="text-align:right;">${t.facility}</td></tr>`;
-        html += '</table>';
-        return html;
-    }
-
-    // ========== MODAL ==========
-    function openNewLoadModal() {
-        document.getElementById('new-load-modal').classList.add('active');
-        document.getElementById('load-date').valueAsDate = new Date();
-        resetUploadZones();
-        updateCaptureInfo();
-    }
-
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-    function resetUploadZones() {
-        debrisPhotos = [];
-        document.getElementById('photo-previews').style.display = 'none';
-        document.getElementById('photo-previews').innerHTML = '';
-        document.getElementById('photo-placeholder').style.display = 'block';
-        document.getElementById('ticket-preview').style.display = 'none';
-        document.getElementById('ticket-placeholder').style.display = 'block';
-        document.getElementById('ai-suggestion').style.display = 'none';
-        document.getElementById('ocr-result').style.display = 'none';
-        document.getElementById('ocr-status').style.display = 'none';
-    }
-
-    function updateCaptureInfo() {
-        const parts = [];
-        parts.push(gpsData ? 'GPS: ' + gpsData.lat + ', ' + gpsData.lng : 'GPS: N/A');
-        parts.push(ipData ? 'IP: ' + ipData.ip : 'IP: N/A');
-        parts.push('User: ' + (currentUser?.name || 'Unknown'));
-        parts.push('Time: ' + new Date().toLocaleString());
-        document.getElementById('capture-info').textContent = parts.join(' | ');
-    }
-
-    // ========== SAVE ==========
-    async function saveLoad() {
-        const data = {
-            project_id: document.getElementById('load-project').value,
-            load_date: document.getElementById('load-date').value,
-            material: document.getElementById('load-material').value,
-            weight_tons: parseFloat(document.getElementById('load-weight').value),
-            destination_type: document.getElementById('load-destination-type').value,
-            facility_name: document.getElementById('load-facility').value || null,
-            hauler: document.getElementById('load-hauler').value || null,
-            ticket_number: document.getElementById('load-ticket').value || null,
-            notes: document.getElementById('load-notes').value || null,
-            gps_latitude: gpsData?.lat || null,
-            gps_longitude: gpsData?.lng || null,
-            ip_address: ipData?.ip || null,
-            capture_timestamp: new Date().toISOString(),
-            entered_by: currentUser?.id || null,
-            entered_by_name: currentUser?.name || 'Unknown'
-        };
-
-        if (!data.project_id || !data.material || !data.weight_tons || !data.destination_type) {
-            showToast('Fill all required fields', 'error'); return;
-        }
-
-        try {
-            if (isConnected && supabaseClient) {
-                const { error } = await supabaseClient.from('loads').insert([data]);
-                if (error) throw error;
-            } else {
-                data.id = 'local-' + Date.now();
-                data.created_at = new Date().toISOString();
-                window.loadsData = window.loadsData || [];
-                window.loadsData.unshift(data);
-            }
-            showToast('Load saved!', 'success');
-            closeModal('new-load-modal');
-            document.getElementById('new-load-form').reset();
-            if (isConnected) loadLoads(); else { renderLoads(window.loadsData); updateStats(); }
-        } catch (e) {
-            console.error(e);
-            showToast('Error: ' + e.message, 'error');
-        }
-    }
-
-    // ========== TOAST ==========
-    function showToast(msg, type) {
-        const t = document.createElement('div');
-        t.className = 'toast toast-' + type;
-        t.textContent = msg;
-        document.getElementById('toast-container').appendChild(t);
-        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
-    }
-
-    // ========== EXPORTS ==========
-    async function loadSheetJS() {
-        if (window.XLSX) return;
-        return new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-            s.onload = resolve; s.onerror = reject;
-            document.head.appendChild(s);
-        });
-    }
-
-    async function exportExcel() {
-        showToast('Generating Excel...', 'info');
-        try {
-            await loadSheetJS();
-            const loads = window.loadsData || [];
-            const projects = window.projectsData || [];
-            const wb = XLSX.utils.book_new();
-
-            // Summary Sheet
-            const totalTons = loads.reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-            const divertedTons = loads.filter(l => ['recycling','reuse','composting'].includes(l.destination_type)).reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-            const summary = [
-                ['DivertScan © 2026'],
-                ['The Carbon Truth in Every Load'],
-                ['Powered by Dalmex Recycling LLC'],
-                [''],
-                ['Report Generated:', new Date().toLocaleString()],
-                ['Generated By:', currentUser?.name || 'Unknown'],
-                [''],
-                ['SUMMARY'],
-                ['Total Loads:', loads.length],
-                ['Total Tonnage:', totalTons.toFixed(2)],
-                ['Diverted Tonnage:', divertedTons.toFixed(2)],
-                ['Landfill Tonnage:', (totalTons - divertedTons).toFixed(2)],
-                ['Diversion Rate:', (totalTons > 0 ? (divertedTons/totalTons*100) : 0).toFixed(1) + '%']
-            ];
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
-
-            // Loads Detail (24 columns)
-            const headers = ['ID','Date','Project ID','Project Name','Client','Material','Category','Weight (tons)','Weight (lbs)','Destination Type','Facility','Hauler','Ticket #','Diverted','GWP Factor','CO2e Avoided','GPS Lat','GPS Long','IP Address','Capture Time','Entered By','LEED Tier','Verified','Notes'];
-            const rows = loads.map(l => {
-                const proj = projects.find(p => p.id === l.project_id) || {};
-                const mat = MATERIALS.find(m => m.name === l.material) || {};
-                const isDiverted = ['recycling','reuse','composting'].includes(l.destination_type);
-                const co2e = isDiverted ? (parseFloat(l.weight_tons||0) * (mat.gwp||0)) : 0;
-                return [
-                    l.id, l.load_date, l.project_id, proj.name||'', proj.client||'',
-                    l.material, mat.category||'', parseFloat(l.weight_tons||0).toFixed(2), (parseFloat(l.weight_tons||0)*2000).toFixed(0),
-                    l.destination_type, l.facility_name||'', l.hauler||'', l.ticket_number||'',
-                    isDiverted?'Yes':'No', mat.gwp||0, co2e.toFixed(3),
-                    l.gps_latitude||'', l.gps_longitude||'', l.ip_address||'', l.capture_timestamp||'',
-                    l.entered_by_name||'', mat.tier||'', (l.gps_latitude && l.ip_address)?'Yes':'No', l.notes||''
-                ];
-            });
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), 'Loads Detail');
-
-            // Materials Sheet
-            const matHeaders = ['Material','Category','Density (lb/yd³)','GWP (MT CO2e/ton)','LEED Tier'];
-            const matRows = MATERIALS.map(m => [m.name, m.category, m.density, m.gwp, m.tier]);
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([matHeaders, ...matRows]), 'Materials');
-
-            // Watchtower Sheet
-            const watch = [
-                ['DivertScan © 2026 - Industry Watchtower'],
-                [''],
-                ['LEED v5 KEY UPDATES'],
-                ['• Tier 1 Circularity credits provide 2x weighted multiplier for reuse materials'],
-                ['• GWP coefficients required for all carbon tracking'],
-                ['• Chain-of-custody documentation with point-of-capture verification'],
-                [''],
-                ['RESOURCES'],
-                ['USGBC LEED', 'https://www.usgbc.org/leed'],
-                ['EPA WARM Calculator', 'https://www.epa.gov/warm'],
-                ['LEED Credit Library', 'https://www.usgbc.org/credits'],
-                ['Texas TCEQ', 'https://www.tceq.texas.gov']
-            ];
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(watch), 'Industry Watchtower');
-
-            XLSX.writeFile(wb, 'DivertScan_Report_' + new Date().toISOString().split('T')[0] + '.xlsx');
-            showToast('Excel downloaded!', 'success');
-        } catch (e) { console.error(e); showToast('Export failed', 'error'); }
-    }
-
-    async function exportLEEDReport() {
-        showToast('Generating LEED report...', 'info');
-        try {
-            await loadSheetJS();
-            const loads = window.loadsData || [];
-            const wb = XLSX.utils.book_new();
-
-            const totalTons = loads.reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-            const divertedTons = loads.filter(l => ['recycling','reuse','composting'].includes(l.destination_type)).reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
-
-            const leed = [
-                ['LEED v5 Construction Waste Management Report'],
-                ['DivertScan © 2026 - Point-of-Capture Verified'],
-                [''],
-                ['Report Date:', new Date().toLocaleString()],
-                [''],
-                ['DIVERSION SUMMARY'],
-                ['Total Waste Generated (tons):', totalTons.toFixed(2)],
-                ['Total Waste Diverted (tons):', divertedTons.toFixed(2)],
-                ['Total to Landfill (tons):', (totalTons - divertedTons).toFixed(2)],
-                ['Diversion Rate:', (totalTons > 0 ? (divertedTons/totalTons*100) : 0).toFixed(1) + '%'],
-                [''],
-                ['COMPLIANCE NOTES'],
-                ['• Diversion rate calculated per MR Credit requirements'],
-                ['• Point-of-capture verification provides chain-of-custody'],
-                ['• Tier 1 materials tracked for enhanced credits'],
-                ['• Certification level determined by LEED reviewer'],
-                [''],
-                ['VERIFICATION METHOD'],
-                ['All entries captured with GPS + IP verification'],
-                ['Timestamps recorded at moment of data entry']
-            ];
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leed), 'LEED Summary');
-
-            // Material breakdown
-            const matBreakdown = {};
-            loads.forEach(l => {
-                const m = l.material || 'Unknown';
-                if (!matBreakdown[m]) matBreakdown[m] = { total: 0, diverted: 0 };
-                matBreakdown[m].total += parseFloat(l.weight_tons||0);
-                if (['recycling','reuse','composting'].includes(l.destination_type)) matBreakdown[m].diverted += parseFloat(l.weight_tons||0);
-            });
-            const mbHeaders = ['Material','Total (tons)','Diverted (tons)','Rate'];
-            const mbRows = Object.entries(matBreakdown).map(([m, d]) => [m, d.total.toFixed(2), d.diverted.toFixed(2), (d.total > 0 ? (d.diverted/d.total*100) : 0).toFixed(1) + '%']);
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([mbHeaders, ...mbRows]), 'Material Breakdown');
-
-            XLSX.writeFile(wb, 'LEED_Report_' + new Date().toISOString().split('T')[0] + '.xlsx');
-            showToast('LEED report downloaded!', 'success');
-        } catch (e) { console.error(e); showToast('Export failed', 'error'); }
-    }
-
-    function exportAuditLog() {
-        showToast('Audit export coming soon', 'info');
-    }
-
-    // ========== SETTINGS ==========
-    function saveApiKey() {
-        const key = document.getElementById('settings-api-key').value.trim();
-        if (key && key.startsWith('sk-')) {
-            OPENAI_KEY = key;
-            localStorage.setItem('divertscan_openai_key', key);
-            showToast('API key saved!', 'success');
-            updateApiKeyStatus();
-        } else if (key) {
-            showToast('Invalid key - must start with sk-', 'error');
-        }
-    }
-
-    function updateApiKeyStatus() {
-        const statusEl = document.getElementById('api-key-status');
-        const inputEl = document.getElementById('settings-api-key');
-        const userEl = document.getElementById('settings-current-user');
+    try {
+        // Analyze the first photo (or could average multiple)
+        const result = await DivertScan.analyzeDebrisPhoto(photos[0], selectedContainerSize);
         
-        if (statusEl) {
-            if (OPENAI_KEY) {
-                statusEl.innerHTML = '<span style="color:var(--success);">✅ API key configured</span><br><small style="color:var(--text-muted);">Key: ' + OPENAI_KEY.substring(0,7) + '...' + OPENAI_KEY.slice(-4) + '</small>';
-                if (inputEl) inputEl.value = OPENAI_KEY;
-            } else {
-                statusEl.innerHTML = '<span style="color:var(--accent);">⚠️ No API key set</span><br><small style="color:var(--text-muted);">AI debris analysis and OCR will not work without a key</small>';
-            }
+        // If multiple photos, we could average them - for now use first
+        for (let i = 1; i < photos.length; i++) {
+            DivertScan.getState().ticketSession.debrisImages.push(photos[i]);
         }
-        if (userEl && currentUser) {
-            userEl.textContent = currentUser.name + ' (' + currentUser.role + ') - ' + currentUser.company;
-        }
+        
+        DivertScan.toast(`Analysis complete: ${result.breakdown.diversionRate}% diversion`, 'success');
+        
+        // Auto-advance to step 3
+        currentStep = 3;
+        showCurrentStep();
+        
+    } catch (err) {
+        DivertScan.toast(err.message, 'error');
+        document.getElementById('analyzeDebrisBtn').disabled = false;
+    } finally {
+        document.getElementById('debrisAnalyzing').classList.add('hidden');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 3: REVIEW & SAVE
+// ═══════════════════════════════════════════════════════════════════════
+
+function populateReviewStep() {
+    const session = DivertScan.getTicketSession();
+    const breakdown = session.calculatedBreakdown || {};
+    
+    // Diversion rate badge
+    const divRate = session.diversionRate || 0;
+    const badge = document.getElementById('finalDiversionRate');
+    badge.textContent = divRate + '%';
+    badge.className = 'diversion-badge ' + (divRate >= 75 ? 'good' : divRate >= 50 ? 'warning' : 'bad');
+    
+    document.getElementById('finalProgressBar').style.width = Math.min(divRate, 100) + '%';
+    
+    // Material breakdown
+    const breakdownEl = document.getElementById('materialBreakdown');
+    breakdownEl.innerHTML = DivertScan.MATERIAL_KEYS.map(key => {
+        const mat = DivertScan.MATERIALS[key];
+        const data = breakdown[key] || { pct: 0, tons: 0 };
+        if (data.pct === 0) return '';
+        return `
+            <div class="material-row">
+                <div class="material-info">
+                    <span class="material-icon">${mat.icon}</span>
+                    <span>${mat.name}</span>
+                </div>
+                <div class="material-values">
+                    <div class="material-pct">${data.pct}%</div>
+                    <div class="material-tons">${data.tons.toFixed(3)}T ${data.recyclable ? '♻️' : '🗑️'}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Summary info
+    document.getElementById('reviewTicketNum').textContent = session.ticketNumber || '-';
+    document.getElementById('reviewDate').textContent = session.ticketDate || '-';
+    document.getElementById('reviewNetTons').textContent = (session.netTons || 0).toFixed(2) + ' tons';
+    document.getElementById('reviewCO2').textContent = (session.co2eAvoided || 0).toFixed(2) + ' MT';
+    
+    // Manual adjustment grid
+    const manualGrid = document.getElementById('manualMaterialGrid');
+    manualGrid.innerHTML = DivertScan.MATERIAL_KEYS.map(key => {
+        const mat = DivertScan.MATERIALS[key];
+        const pct = session.materialBreakdown[key] || 0;
+        return `
+            <div class="material-item">
+                <div class="material-name">${mat.icon} ${key}</div>
+                <div class="material-input">
+                    <input type="number" id="manual_${key}" value="${pct}" min="0" max="100" onchange="updateManualTotal()">
+                    <span>%</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    updateManualTotal();
+}
+
+function updateManualTotal() {
+    let total = 0;
+    DivertScan.MATERIAL_KEYS.forEach(key => {
+        total += parseFloat(document.getElementById('manual_' + key)?.value) || 0;
+    });
+    document.getElementById('manualTotal').textContent = total.toFixed(0);
+}
+
+function recalculateManual() {
+    const percentages = {};
+    DivertScan.MATERIAL_KEYS.forEach(key => {
+        percentages[key] = parseFloat(document.getElementById('manual_' + key)?.value) || 0;
+    });
+    
+    const validation = DivertScan.validateMaterialTotal(percentages);
+    if (!validation.valid) {
+        DivertScan.toast(`Total is ${validation.total}%, must equal 100%`, 'error');
+        return;
+    }
+    
+    DivertScan.setMaterialPercentages(percentages);
+    populateReviewStep();
+    DivertScan.toast('Recalculated!', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SAVE TICKET
+// ═══════════════════════════════════════════════════════════════════════
+
+async function saveCurrentTicket() {
+    const project = DivertScan.getState().currentProject;
+    if (!project) {
+        DivertScan.toast('No project selected', 'error');
+        return;
     }
 
-    async function testScaleConnection() {
-        if (!('serial' in navigator)) {
-            showToast('Web Serial not supported. Use Chrome or Edge.', 'error');
+    try {
+        await DivertScan.saveTicket(project.id);
+        closeModal('ticketModal');
+        loadDashboardData();
+    } catch (err) {
+        DivertScan.toast('Save failed: ' + err.message, 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// REPORTS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function exportLEEDReport() {
+    const project = DivertScan.getState().currentProject;
+    if (!project) {
+        DivertScan.toast('Select a project first', 'error');
+        return;
+    }
+
+    try {
+        const tickets = await DivertScan.loadTickets(project.id);
+        if (tickets.length === 0) {
+            DivertScan.toast('No tickets to export', 'error');
             return;
         }
-        showToast('Select your scale port in the popup...', 'info');
-        await connectScale();
+        
+        const csv = DivertScan.generateLEEDReport(tickets);
+        DivertScan.downloadCSV(csv, `DivertScan-LEED-${project.name}-${new Date().toISOString().split('T')[0]}.csv`);
+        DivertScan.toast('Report downloaded!', 'success');
+    } catch (e) {
+        DivertScan.toast(e.message, 'error');
     }
+}
 
-    // ========== START ==========
-    window.addEventListener('online', () => { isConnected = true; updateConnectionStatus(); showToast('Back online', 'success'); });
-    window.addEventListener('offline', () => { isConnected = false; updateConnectionStatus(); showToast('Offline mode', 'info'); });
-    document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', initialize) : initialize();
+function exportAuditLog() {
+    DivertScan.toast('Audit log export coming soon', 'info');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════════
+
+function saveOpenAIKey() {
+    const key = document.getElementById('openaiKeyInput').value;
+    if (!key) {
+        DivertScan.toast('Enter API key', 'error');
+        return;
+    }
+    DivertScan.setOpenAIKey(key);
+    DivertScan.toast('API key saved!', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════════════════════
+
+function openModal(id) {
+    document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
 </html>
