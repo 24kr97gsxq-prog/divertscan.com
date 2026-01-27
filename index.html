@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DivertScan © 2026 | The Carbon Truth in Every Load</title>
     <meta name="description" content="LEED-compliant waste diversion tracking with Point-of-Capture Verification">
-    <link rel="preconnect" href="https://rnaujdajnrlvndhmhvbk.supabase.co">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Load Supabase SDK directly in head -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
     <style>
         :root {
             --primary: #059669; --primary-dark: #047857; --primary-light: #10b981;
@@ -21,7 +23,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-dark); color: var(--text-primary); min-height: 100vh; line-height: 1.5; }
         
-        /* Loading & Login Screens */
         .screen { position: fixed; inset: 0; background: var(--bg-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s ease; }
         .screen.hidden { opacity: 0; pointer-events: none; }
         .loader-logo, .login-logo { font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 1.5rem; }
@@ -29,23 +30,23 @@
         .loader-spinner { width: 48px; height: 48px; border: 4px solid var(--bg-card); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .loader-status { margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem; }
-        .loader-error { color: var(--danger); margin-top: 1rem; text-align: center; max-width: 300px; }
+        .loader-error { color: var(--danger); margin-top: 1rem; text-align: center; max-width: 300px; display: none; }
+        .loader-error.show { display: block; }
         .loader-error button { margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; }
 
-        /* Login Screen */
         .login-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 90%; max-width: 400px; }
         .login-title { text-align: center; margin-bottom: 1.5rem; }
         .login-title h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
         .login-title p { color: var(--text-muted); font-size: 0.875rem; }
         .user-select-grid { display: flex; flex-direction: column; gap: 0.75rem; }
-        .user-btn { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-input); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; }
+        .user-btn { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-input); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; color: var(--text-primary); }
         .user-btn:hover { border-color: var(--primary); background: rgba(5, 150, 105, 0.1); }
         .user-btn.selected { border-color: var(--primary); background: rgba(5, 150, 105, 0.15); }
-        .user-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 600; }
+        .user-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 600; flex-shrink: 0; }
         .user-avatar.admin { background: linear-gradient(135deg, #059669, #10b981); color: white; }
         .user-avatar.operator { background: linear-gradient(135deg, #3b82f6, #60a5fa); color: white; }
         .user-avatar.driver { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: white; }
-        .user-info h3 { font-size: 1rem; font-weight: 600; }
+        .user-info h3 { font-size: 1rem; font-weight: 600; color: var(--text-primary); }
         .user-info p { font-size: 0.75rem; color: var(--text-muted); }
         .pin-input-group { margin-top: 1.5rem; display: none; }
         .pin-input-group.show { display: block; }
@@ -58,11 +59,9 @@
         .login-error { color: var(--danger); font-size: 0.875rem; text-align: center; margin-top: 1rem; display: none; }
         .login-error.show { display: block; }
 
-        /* Main App */
         #app { display: none; }
         #app.loaded { display: block; }
         
-        /* Header */
         .header { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%); border-bottom: 1px solid var(--border); padding: 1rem; position: sticky; top: 0; z-index: 100; }
         .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
         .logo { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
@@ -74,21 +73,15 @@
         .current-user .logout-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; margin-left: 0.5rem; }
         .current-user .logout-btn:hover { color: var(--danger); }
 
-        /* Buttons */
         .btn { padding: 0.625rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-secondary { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); }
         .btn-secondary:hover { background: var(--border); }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-success { background: var(--success); color: white; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-icon { padding: 0.5rem; }
 
-        /* Main Content */
         .main { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1rem; }
         
-        /* Tabs */
         .tabs { display: flex; gap: 0.25rem; background: var(--bg-card); padding: 0.25rem; border-radius: var(--radius); margin-bottom: 1.5rem; overflow-x: auto; }
         .tab { padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; background: transparent; color: var(--text-secondary); border: none; white-space: nowrap; transition: all 0.2s; }
         .tab.active { background: var(--primary); color: white; }
@@ -96,45 +89,34 @@
         .tab.admin-only { display: none; }
         body.is-admin .tab.admin-only { display: block; }
 
-        /* Tab Content */
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* Cards */
         .card { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1rem; }
         .card-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .card-title svg { width: 20px; height: 20px; color: var(--primary); }
 
-        /* Stats Grid */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
         .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--primary); }
         .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-        /* Forms */
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.375rem; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; transition: border-color 0.2s; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
-        .form-group input::placeholder { color: var(--text-muted); }
 
-        /* Table */
         .table-container { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: var(--bg-input); font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-        tr:hover { background: rgba(5, 150, 105, 0.05); }
         tr:last-child td { border-bottom: none; }
 
-        /* Badges */
         .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
         .badge-success { background: rgba(22, 163, 74, 0.2); color: #4ade80; }
         .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .badge-danger { background: rgba(220, 38, 38, 0.2); color: #f87171; }
         .badge-info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
 
-        /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
         .modal-overlay.active { display: flex; }
         .modal { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; }
@@ -144,12 +126,9 @@
         .modal-body { padding: 1.5rem; }
         .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; justify-content: flex-end; }
 
-        /* Verification Badge */
         .verification-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(5, 150, 105, 0.1); border: 1px solid var(--primary); border-radius: 8px; font-size: 0.875rem; }
-        .verification-badge svg { width: 16px; height: 16px; color: var(--primary); }
-        .capture-info { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); background: var(--bg-input); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
+        .capture-info { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); background: var(--bg-input); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
 
-        /* Toast */
         .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
         .toast { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; min-width: 280px; box-shadow: var(--shadow); animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -157,38 +136,35 @@
         .toast-error { border-left: 4px solid var(--danger); }
         .toast-info { border-left: 4px solid var(--primary); }
 
-        /* Footer */
         .footer { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem; }
         .footer a { color: var(--primary); }
 
-        /* Connection Status */
         .connection-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted); }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
         .status-dot.connected { background: var(--success); }
+        .status-dot.offline { background: var(--accent); }
 
-        /* Mobile */
+        .admin-export-btns { display: none; }
+        body.is-admin .admin-export-btns { display: flex; gap: 0.5rem; }
+
         @media (max-width: 640px) {
             .header-content { flex-direction: column; align-items: stretch; }
             .header-actions { flex-direction: column; }
-            .header-actions .btn { justify-content: center; }
             .current-user { justify-content: center; }
-            .tabs { flex-wrap: nowrap; }
             .form-grid { grid-template-columns: 1fr; }
-            .admin-export-btns { display: none; }
-            body.is-admin .admin-export-btns { display: flex; flex-direction: column; gap: 0.5rem; }
         }
-        @media print { .header, .tabs, .btn, .footer { display: none; } }
     </style>
 </head>
 <body>
     <!-- Loading Screen -->
     <div class="screen" id="loading-screen">
         <div class="loader-logo">Divert<span>Scan</span></div>
-        <div class="loader-spinner"></div>
+        <div class="loader-spinner" id="loader-spinner"></div>
         <div class="loader-status" id="loader-status">Initializing...</div>
-        <div class="loader-error" id="loader-error" style="display:none;">
-            <p id="error-message"></p>
+        <div class="loader-error" id="loader-error">
+            <p id="error-message">Failed to load</p>
             <button onclick="location.reload()">Retry</button>
+            <button onclick="continueOffline()" style="margin-left:0.5rem;background:var(--bg-input);">Continue Offline</button>
         </div>
     </div>
 
@@ -203,7 +179,7 @@
             <div class="user-select-grid" id="user-select-grid"></div>
             <div class="pin-input-group" id="pin-group">
                 <label>Enter PIN</label>
-                <input type="password" class="pin-input" id="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••">
+                <input type="tel" class="pin-input" id="pin-input" maxlength="4" inputmode="numeric" placeholder="••••" autocomplete="off">
             </div>
             <button class="login-btn" id="login-btn" disabled>Sign In</button>
             <p class="login-error" id="login-error">Incorrect PIN. Please try again.</p>
@@ -224,100 +200,57 @@
                 </div>
                 <div class="header-actions">
                     <div class="current-user" id="current-user-display">
-                        <div class="avatar" id="user-avatar">R</div>
+                        <div class="avatar admin" id="user-avatar">R</div>
                         <span id="user-name">User</span>
-                        <button class="logout-btn" onclick="logout()" title="Sign Out">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                        </button>
+                        <button class="logout-btn" onclick="logout()" title="Sign Out">✕</button>
                     </div>
                     <div class="admin-export-btns">
-                        <button class="btn btn-secondary" onclick="exportExcel()">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            Export
-                        </button>
+                        <button class="btn btn-secondary" onclick="exportExcel()">Export</button>
                     </div>
-                    <button class="btn btn-primary" onclick="openNewLoadModal()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New Load
-                    </button>
+                    <button class="btn btn-primary" onclick="openNewLoadModal()">+ New Load</button>
                 </div>
             </div>
         </header>
 
         <main class="main">
             <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" id="stat-loads">0</div><div class="stat-label">Total Loads</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-tonnage">0</div><div class="stat-label">Total Tons</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-diversion">0%</div><div class="stat-label">Diversion Rate</div></div>
-                <div class="stat-card"><div class="stat-value" id="stat-carbon">0</div><div class="stat-label">CO₂e Avoided</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-loads">0</div><div class="stat-label">Loads</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-tonnage">0</div><div class="stat-label">Tons</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-diversion">0%</div><div class="stat-label">Diverted</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-carbon">0</div><div class="stat-label">CO₂e Saved</div></div>
             </div>
 
             <div class="tabs">
                 <button class="tab active" data-tab="loads">Loads</button>
                 <button class="tab" data-tab="projects">Projects</button>
                 <button class="tab admin-only" data-tab="reports">Reports</button>
-                <button class="tab admin-only" data-tab="watchtower">Watchtower</button>
             </div>
 
-            <!-- Loads Tab -->
             <div class="tab-content active" id="tab-loads">
                 <div class="card">
-                    <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                        Recent Loads
-                    </div>
+                    <div class="card-title">📦 Recent Loads</div>
                     <div class="table-container">
                         <table>
-                            <thead><tr><th>Date</th><th>Project</th><th>Material</th><th>Tons</th><th>Destination</th><th>Entered By</th><th>Status</th></tr></thead>
+                            <thead><tr><th>Date</th><th>Project</th><th>Material</th><th>Tons</th><th>Destination</th><th>By</th><th>Status</th></tr></thead>
                             <tbody id="loads-table"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Projects Tab -->
             <div class="tab-content" id="tab-projects">
                 <div class="card">
-                    <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                        Active Projects
-                    </div>
+                    <div class="card-title">📁 Projects</div>
                     <div id="projects-list"><p style="color:var(--text-muted);">Loading...</p></div>
                 </div>
             </div>
 
-            <!-- Reports Tab (Admin Only) -->
             <div class="tab-content" id="tab-reports">
                 <div class="card">
-                    <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Generate Reports
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label>Project</label><select id="report-project"><option value="">All Projects</option></select></div>
-                        <div class="form-group"><label>Date Range</label><select id="report-range"><option value="all">All Time</option><option value="month">This Month</option><option value="quarter">This Quarter</option></select></div>
-                    </div>
-                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
+                    <div class="card-title">📊 Reports</div>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="exportExcel()">Dalmex Excel (24-col)</button>
                         <button class="btn btn-secondary" onclick="exportLEEDReport()">LEED Report</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Watchtower Tab (Admin Only) -->
-            <div class="tab-content" id="tab-watchtower">
-                <div class="card">
-                    <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                        Industry Watchtower - LEED v5
-                    </div>
-                    <div style="margin-bottom:1.5rem;">
-                        <h4 style="color:var(--primary);margin-bottom:0.5rem;">🌿 LEED v5 Key Changes</h4>
-                        <ul style="color:var(--text-secondary);margin-left:1.25rem;"><li>Tier 1 Circularity enhanced multipliers for reuse</li><li>GWP coefficients required for carbon tracking</li><li>Stricter chain-of-custody documentation</li><li>Point-of-capture verification standard</li></ul>
-                    </div>
-                    <div>
-                        <h4 style="color:var(--primary);margin-bottom:0.5rem;">🔗 Resources</h4>
-                        <ul style="color:var(--text-secondary);margin-left:1.25rem;"><li><a href="https://www.usgbc.org/leed" target="_blank" style="color:var(--primary);">USGBC LEED Official</a></li><li><a href="https://www.epa.gov/warm" target="_blank" style="color:var(--primary);">EPA WARM Calculator</a></li></ul>
                     </div>
                 </div>
             </div>
@@ -325,19 +258,15 @@
 
         <footer class="footer">
             <p><strong>DivertScan © 2026</strong> | Powered by Dalmex Recycling LLC</p>
-            <p style="margin-top:0.5rem;">Point-of-Capture Verification™ | LEED v5 Compliant</p>
         </footer>
     </div>
 
     <!-- New Load Modal -->
     <div class="modal-overlay" id="new-load-modal">
         <div class="modal">
-            <div class="modal-header"><h3>Add New Load</h3><button class="modal-close" onclick="closeModal('new-load-modal')">&times;</button></div>
+            <div class="modal-header"><h3>Add New Load</h3><button class="modal-close" onclick="closeModal('new-load-modal')">×</button></div>
             <div class="modal-body">
-                <div class="verification-badge" style="margin-bottom:1rem;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    Point-of-Capture Verification Active
-                </div>
+                <div class="verification-badge" style="margin-bottom:1rem;">🛡️ Point-of-Capture Verification Active</div>
                 <form id="new-load-form">
                     <div class="form-grid">
                         <div class="form-group"><label>Project *</label><select id="load-project" required><option value="">Select Project</option></select></div>
@@ -348,13 +277,13 @@
                         <div class="form-group"><label>Weight (tons) *</label><input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00"></div>
                     </div>
                     <div class="form-grid">
-                        <div class="form-group"><label>Destination Type *</label><select id="load-destination-type" required><option value="">Select Type</option><option value="recycling">Recycling Facility</option><option value="reuse">Reuse/Donation</option><option value="landfill">Landfill</option><option value="composting">Composting</option><option value="wte">Waste-to-Energy</option></select></div>
-                        <div class="form-group"><label>Facility Name</label><input type="text" id="load-facility" placeholder="Facility name"></div>
+                        <div class="form-group"><label>Destination *</label><select id="load-destination-type" required><option value="">Select</option><option value="recycling">Recycling</option><option value="reuse">Reuse</option><option value="landfill">Landfill</option><option value="composting">Composting</option></select></div>
+                        <div class="form-group"><label>Facility</label><input type="text" id="load-facility" placeholder="Facility name"></div>
                     </div>
                     <div class="form-group"><label>Hauler</label><input type="text" id="load-hauler" placeholder="Hauler company"></div>
-                    <div class="form-group"><label>Ticket/Manifest #</label><input type="text" id="load-ticket" placeholder="Scale ticket number"></div>
-                    <div class="form-group"><label>Notes</label><textarea id="load-notes" rows="2" placeholder="Additional notes..."></textarea></div>
-                    <div class="capture-info" id="capture-info">Capturing verification data...</div>
+                    <div class="form-group"><label>Ticket #</label><input type="text" id="load-ticket" placeholder="Scale ticket"></div>
+                    <div class="form-group"><label>Notes</label><textarea id="load-notes" rows="2" placeholder="Notes..."></textarea></div>
+                    <div class="capture-info" id="capture-info">Capturing data...</div>
                 </form>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('new-load-modal')">Cancel</button><button class="btn btn-primary" onclick="saveLoad()">Save Load</button></div>
@@ -364,150 +293,132 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script>
-    // ========== CONFIGURATION ==========
+    // ===== CONFIG =====
     const CONFIG = {
         SUPABASE_URL: 'https://rnaujdajnrlvndhmhvbk.supabase.co',
-        SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D7Ts3ZWSRM',
-        VERSION: '2.0.1'
+        SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D7Ts3ZWSRM'
     };
 
-    // ========== USERS ==========
+    // ===== USERS =====
     const USERS = [
         { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Robert', company: 'DivertScan', role: 'admin', pin: '1234', initials: 'RA' },
         { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', name: 'Dalmex Floor', company: 'Dalmex Recycling', role: 'operator', pin: '5678', initials: 'DF' },
         { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', name: 'Jaguar Driver', company: 'Jaguar Waste', role: 'driver', pin: '9012', initials: 'JD' }
     ];
 
-    // ========== MATERIALS ==========
+    // ===== MATERIALS =====
     const MATERIALS = [
-        { name: 'Concrete', category: 'Aggregate', density: 4050, gwp: 0.107, tier: 'Standard' },
-        { name: 'Asphalt', category: 'Aggregate', density: 3960, gwp: 0.094, tier: 'Standard' },
-        { name: 'Wood - Clean', category: 'Wood', density: 600, gwp: 0.912, tier: 'Tier 1' },
-        { name: 'Wood - Treated', category: 'Wood', density: 650, gwp: 0.312, tier: 'Standard' },
-        { name: 'Metal - Ferrous', category: 'Metal', density: 1600, gwp: 1.831, tier: 'Standard' },
-        { name: 'Metal - Non-Ferrous', category: 'Metal', density: 1200, gwp: 4.876, tier: 'Standard' },
-        { name: 'Drywall/Gypsum', category: 'Drywall', density: 800, gwp: 0.184, tier: 'Standard' },
-        { name: 'Cardboard/OCC', category: 'Paper', density: 200, gwp: 3.112, tier: 'Standard' },
-        { name: 'Plastic - Mixed', category: 'Plastic', density: 400, gwp: 1.423, tier: 'Standard' },
-        { name: 'Roofing Materials', category: 'Mixed', density: 1100, gwp: 0.156, tier: 'Standard' },
-        { name: 'Brick/Masonry', category: 'Aggregate', density: 3200, gwp: 0.089, tier: 'Standard' },
-        { name: 'Glass', category: 'Glass', density: 2500, gwp: 0.423, tier: 'Standard' },
-        { name: 'Carpet', category: 'Mixed', density: 350, gwp: 2.156, tier: 'Standard' },
-        { name: 'Insulation', category: 'Mixed', density: 150, gwp: 0.534, tier: 'Standard' },
-        { name: 'Mixed C&D', category: 'Mixed', density: 1500, gwp: 0.267, tier: 'Standard' },
-        { name: 'Land Clearing Debris', category: 'Organic', density: 500, gwp: 0.756, tier: 'Tier 1' },
-        { name: 'Fixtures - Reuse', category: 'Reuse', density: 800, gwp: 2.5, tier: 'Tier 1' },
-        { name: 'Appliances - Reuse', category: 'Reuse', density: 700, gwp: 3.2, tier: 'Tier 1' }
+        { name: 'Concrete', category: 'Aggregate', gwp: 0.107, tier: 'Standard' },
+        { name: 'Asphalt', category: 'Aggregate', gwp: 0.094, tier: 'Standard' },
+        { name: 'Wood - Clean', category: 'Wood', gwp: 0.912, tier: 'Tier 1' },
+        { name: 'Wood - Treated', category: 'Wood', gwp: 0.312, tier: 'Standard' },
+        { name: 'Metal - Ferrous', category: 'Metal', gwp: 1.831, tier: 'Standard' },
+        { name: 'Metal - Non-Ferrous', category: 'Metal', gwp: 4.876, tier: 'Standard' },
+        { name: 'Drywall/Gypsum', category: 'Drywall', gwp: 0.184, tier: 'Standard' },
+        { name: 'Cardboard/OCC', category: 'Paper', gwp: 3.112, tier: 'Standard' },
+        { name: 'Plastic - Mixed', category: 'Plastic', gwp: 1.423, tier: 'Standard' },
+        { name: 'Roofing Materials', category: 'Mixed', gwp: 0.156, tier: 'Standard' },
+        { name: 'Brick/Masonry', category: 'Aggregate', gwp: 0.089, tier: 'Standard' },
+        { name: 'Glass', category: 'Glass', gwp: 0.423, tier: 'Standard' },
+        { name: 'Mixed C&D', category: 'Mixed', gwp: 0.267, tier: 'Standard' },
+        { name: 'Land Clearing Debris', category: 'Organic', gwp: 0.756, tier: 'Tier 1' },
+        { name: 'Fixtures - Reuse', category: 'Reuse', gwp: 2.5, tier: 'Tier 1' },
+        { name: 'Appliances - Reuse', category: 'Reuse', gwp: 3.2, tier: 'Tier 1' }
     ];
 
-    // ========== GLOBAL STATE ==========
-    let supabase = null;
+    // ===== PROJECTS =====
+    const DEFAULT_PROJECTS = [
+        { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
+        { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
+        { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
+    ];
+
+    // ===== STATE =====
+    let supabaseClient = null;
     let currentUser = null;
     let selectedUserId = null;
     let gpsData = null;
     let ipData = null;
+    let isConnected = false;
 
-    // ========== INITIALIZATION ==========
-    function updateLoadStatus(msg) { document.getElementById('loader-status').textContent = msg; }
-    
-    function showLoadError(msg) {
-        document.getElementById('loader-status').style.display = 'none';
-        document.querySelector('.loader-spinner').style.display = 'none';
-        document.getElementById('error-message').textContent = msg;
-        document.getElementById('loader-error').style.display = 'block';
-    }
-
-    function loadSupabase() {
-        return new Promise((resolve, reject) => {
-            updateLoadStatus('Loading Supabase...');
-            if (window.supabase) { resolve(window.supabase); return; }
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-            const timeout = setTimeout(() => reject(new Error('Load timeout')), 15000);
-            script.onload = () => { clearTimeout(timeout); window.supabase ? resolve(window.supabase) : reject(new Error('SDK unavailable')); };
-            script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to load SDK')); };
-            document.head.appendChild(script);
-        });
-    }
-
-    function loadSheetJS() {
-        return new Promise((resolve, reject) => {
-            if (window.XLSX) { resolve(window.XLSX); return; }
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-            script.onload = () => resolve(window.XLSX);
-            script.onerror = () => reject(new Error('Failed to load SheetJS'));
-            document.head.appendChild(script);
-        });
-    }
-
-    async function initSupabase() {
-        updateLoadStatus('Connecting to database...');
-        try {
-            const { createClient } = window.supabase;
-            supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-            await supabase.from('loads').select('id').limit(1);
-            return true;
-        } catch (e) { console.warn('DB connection issue:', e); return false; }
-    }
-
-    async function getGPSData() {
-        return new Promise(resolve => {
-            if (!navigator.geolocation) { resolve({ error: 'Not supported' }); return; }
-            navigator.geolocation.getCurrentPosition(
-                pos => resolve({ latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy, timestamp: new Date().toISOString() }),
-                err => resolve({ error: err.message }),
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        });
-    }
-
-    async function getIPData() {
-        try {
-            const res = await fetch('https://api.ipify.org?format=json');
-            const data = await res.json();
-            return { ip: data.ip, timestamp: new Date().toISOString() };
-        } catch { return { ip: 'unavailable', timestamp: new Date().toISOString() }; }
-    }
-
+    // ===== INIT =====
     async function initialize() {
         try {
-            await loadSupabase();
-            const connected = await initSupabase();
-            updateLoadStatus('Loading app...');
-            loadSheetJS().catch(console.warn);
-            Promise.all([getGPSData(), getIPData()]).then(([gps, ip]) => { gpsData = gps; ipData = ip; });
+            updateStatus('Connecting...');
             
-            // Check for saved session
-            const savedUser = localStorage.getItem('divertscan_user');
-            if (savedUser) {
-                currentUser = JSON.parse(savedUser);
-                await initializeApp(connected);
-                document.getElementById('loading-screen').classList.add('hidden');
-                document.getElementById('app').classList.add('loaded');
-                applyUserRole();
-            } else {
-                // Show login screen
-                document.getElementById('loading-screen').classList.add('hidden');
-                document.getElementById('login-screen').classList.remove('hidden');
-                renderUserSelect();
+            // Try to init Supabase
+            if (typeof supabase !== 'undefined' && supabase.createClient) {
+                supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+                // Test connection
+                const { error } = await supabaseClient.from('loads').select('id').limit(1);
+                isConnected = !error;
             }
-            updateConnectionStatus(connected);
+            
+            updateStatus('Loading...');
+            
+            // Get GPS/IP in background
+            getGPSData().then(d => gpsData = d);
+            getIPData().then(d => ipData = d);
+            
+            // Check saved session
+            const saved = localStorage.getItem('divertscan_user');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+                showApp();
+            } else {
+                showLogin();
+            }
+            
+            updateConnectionStatus();
         } catch (e) {
-            console.error('Init failed:', e);
-            showLoadError(`Failed to initialize: ${e.message}`);
+            console.error('Init error:', e);
+            showError('Connection failed. ' + e.message);
         }
     }
 
-    // ========== LOGIN ==========
+    function updateStatus(msg) {
+        const el = document.getElementById('loader-status');
+        if (el) el.textContent = msg;
+    }
+
+    function showError(msg) {
+        document.getElementById('loader-spinner').style.display = 'none';
+        document.getElementById('loader-status').style.display = 'none';
+        document.getElementById('error-message').textContent = msg;
+        document.getElementById('loader-error').classList.add('show');
+    }
+
+    function continueOffline() {
+        isConnected = false;
+        showLogin();
+    }
+
+    function showLogin() {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('login-screen').classList.remove('hidden');
+        renderUserSelect();
+    }
+
+    function showApp() {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app').classList.add('loaded');
+        initApp();
+        applyUserRole();
+    }
+
+    // ===== LOGIN =====
     function renderUserSelect() {
-        const grid = document.getElementById('user-select-grid');
-        grid.innerHTML = USERS.map(u => `
-            <button class="user-btn" data-id="${u.id}" onclick="selectUser('${u.id}')">
+        document.getElementById('user-select-grid').innerHTML = USERS.map(u => `
+            <button type="button" class="user-btn" data-id="${u.id}">
                 <div class="user-avatar ${u.role}">${u.initials}</div>
                 <div class="user-info"><h3>${u.name}</h3><p>${u.company} • ${u.role}</p></div>
             </button>
         `).join('');
+        
+        document.querySelectorAll('.user-btn').forEach(btn => {
+            btn.addEventListener('click', () => selectUser(btn.dataset.id));
+        });
     }
 
     function selectUser(id) {
@@ -521,294 +432,304 @@
         document.getElementById('login-error').classList.remove('show');
     }
 
-    document.getElementById('pin-input')?.addEventListener('input', function() {
-        if (this.value.length === 4) document.getElementById('login-btn').click();
+    document.getElementById('pin-input').addEventListener('input', function() {
+        if (this.value.length === 4) doLogin();
     });
 
-    document.getElementById('login-btn')?.addEventListener('click', async function() {
+    document.getElementById('login-btn').addEventListener('click', doLogin);
+
+    function doLogin() {
         const pin = document.getElementById('pin-input').value;
         const user = USERS.find(u => u.id === selectedUserId);
         if (user && user.pin === pin) {
             currentUser = user;
             localStorage.setItem('divertscan_user', JSON.stringify(user));
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('app').classList.add('loaded');
-            await initializeApp(!!supabase);
-            applyUserRole();
-            showToast(`Welcome, ${user.name}!`, 'success');
+            showApp();
+            showToast('Welcome, ' + user.name + '!', 'success');
         } else {
             document.getElementById('login-error').classList.add('show');
             document.getElementById('pin-input').value = '';
             document.getElementById('pin-input').focus();
         }
-    });
+    }
 
     function logout() {
         localStorage.removeItem('divertscan_user');
         currentUser = null;
-        selectedUserId = null;
         document.getElementById('app').classList.remove('loaded');
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('pin-group').classList.remove('show');
-        document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
         document.body.classList.remove('is-admin');
+        showLogin();
     }
 
     function applyUserRole() {
         if (!currentUser) return;
         document.getElementById('user-name').textContent = currentUser.name;
         document.getElementById('user-avatar').textContent = currentUser.initials;
-        document.getElementById('user-avatar').className = `avatar ${currentUser.role}`;
-        if (currentUser.role === 'admin') {
-            document.body.classList.add('is-admin');
-        } else {
-            document.body.classList.remove('is-admin');
-        }
+        document.getElementById('user-avatar').className = 'avatar ' + currentUser.role;
+        document.body.classList.toggle('is-admin', currentUser.role === 'admin');
     }
 
-    // ========== APP INITIALIZATION ==========
-    async function initializeApp(isConnected) {
+    // ===== APP =====
+    function initApp() {
+        // Tabs
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
-                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
             });
         });
+        
+        // Set today's date
         document.getElementById('load-date').valueAsDate = new Date();
-        loadMaterialsData();
-        if (isConnected) { await loadLoadsData(); await loadProjectsData(); }
-        else { loadOfflineData(); loadOfflineProjects(); }
-        updateStats();
+        
+        // Load data
+        loadMaterials();
+        loadProjects();
+        loadLoads();
     }
 
-    function loadMaterialsData() {
-        const select = document.getElementById('load-material');
-        select.innerHTML = '<option value="">Select Material</option>' + MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+    function loadMaterials() {
+        document.getElementById('load-material').innerHTML = '<option value="">Select Material</option>' + 
+            MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
     }
 
-    async function loadProjectsData() {
-        let projects = [
-            { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
-            { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
-            { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
-        ];
-        if (supabase) {
+    async function loadProjects() {
+        let projects = DEFAULT_PROJECTS;
+        
+        if (isConnected && supabaseClient) {
             try {
-                const { data } = await supabase.from('projects').select('*');
-                if (data?.length) projects = data;
-            } catch (e) { console.warn('Projects load error'); }
+                const { data } = await supabaseClient.from('projects').select('*');
+                if (data && data.length) projects = data;
+            } catch (e) { console.warn('Projects fetch failed'); }
         }
+        
         window.projectsData = projects;
-        const opts = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        document.getElementById('load-project').innerHTML = '<option value="">Select Project</option>' + opts;
-        document.getElementById('report-project').innerHTML = '<option value="">All Projects</option>' + opts;
+        
+        document.getElementById('load-project').innerHTML = '<option value="">Select Project</option>' + 
+            projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        
         document.getElementById('projects-list').innerHTML = projects.map(p => `
             <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;">
-                <div style="font-weight:600;">${p.name}</div>
-                <div style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''}</div>
+                <strong>${p.name}</strong><br>
+                <span style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''}</span>
             </div>
         `).join('');
     }
 
-    function loadOfflineProjects() {
-        window.projectsData = [
-            { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
-            { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
-            { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
-        ];
-        loadProjectsData();
+    async function loadLoads() {
+        let loads = [];
+        
+        if (isConnected && supabaseClient) {
+            try {
+                const { data } = await supabaseClient.from('loads').select('*').order('created_at', { ascending: false }).limit(50);
+                if (data) loads = data;
+            } catch (e) { console.warn('Loads fetch failed'); }
+        }
+        
+        window.loadsData = loads;
+        renderLoads(loads);
+        updateStats();
     }
 
-    async function loadLoadsData() {
-        if (!supabase) { loadOfflineData(); return; }
-        try {
-            const { data, error } = await supabase.from('loads').select('*').order('created_at', { ascending: false }).limit(50);
-            if (error) throw error;
-            window.loadsData = data || [];
-            renderLoadsTable(data || []);
-        } catch (e) { console.error('Load error:', e); loadOfflineData(); }
-    }
-
-    function renderLoadsTable(loads) {
+    function renderLoads(loads) {
         const tbody = document.getElementById('loads-table');
-        if (!loads?.length) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">No loads yet. Click "New Load" to add one.</td></tr>';
+        if (!loads.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">No loads yet. Tap "+ New Load" to add one.</td></tr>';
             return;
         }
         tbody.innerHTML = loads.map(l => {
-            const proj = window.projectsData?.find(p => p.id === l.project_id);
-            const isDiverted = ['recycling', 'reuse', 'composting'].includes(l.destination_type);
-            const isVerified = l.gps_latitude && l.ip_address;
+            const proj = (window.projectsData || []).find(p => p.id === l.project_id);
+            const isDiverted = ['recycling','reuse','composting'].includes(l.destination_type);
             return `<tr>
                 <td>${new Date(l.load_date || l.created_at).toLocaleDateString()}</td>
                 <td>${proj?.name || '-'}</td>
                 <td>${l.material || '-'}</td>
-                <td>${parseFloat(l.weight_tons || 0).toFixed(2)}</td>
+                <td>${parseFloat(l.weight_tons||0).toFixed(2)}</td>
                 <td>${l.facility_name || l.destination_type || '-'}</td>
                 <td>${l.entered_by_name || '-'}</td>
-                <td><span class="badge ${isDiverted ? 'badge-success' : 'badge-warning'}">${isDiverted ? 'Diverted' : 'Disposed'}</span>
-                    ${isVerified ? ' <span class="badge badge-info">✓</span>' : ''}</td>
+                <td><span class="badge ${isDiverted?'badge-success':'badge-warning'}">${isDiverted?'Diverted':'Disposed'}</span></td>
             </tr>`;
         }).join('');
     }
 
-    function loadOfflineData() {
-        window.loadsData = [
-            { id: '1', load_date: '2026-01-24', project_id: '11111111-1111-1111-1111-111111111111', material: 'Concrete', weight_tons: 45.5, destination_type: 'recycling', facility_name: 'DFW Concrete Recycling', entered_by_name: 'Robert', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
-            { id: '2', load_date: '2026-01-23', project_id: '11111111-1111-1111-1111-111111111111', material: 'Metal - Ferrous', weight_tons: 12.3, destination_type: 'recycling', facility_name: 'Texas Metal Recyclers', entered_by_name: 'Dalmex Floor', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
-        ];
-        renderLoadsTable(window.loadsData);
-    }
-
     function updateStats() {
         const loads = window.loadsData || [];
-        const total = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
-        const diverted = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+        const total = loads.reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
+        const diverted = loads.filter(l => ['recycling','reuse','composting'].includes(l.destination_type)).reduce((s,l) => s + parseFloat(l.weight_tons||0), 0);
         let carbon = 0;
-        loads.forEach(l => { if (['recycling', 'reuse', 'composting'].includes(l.destination_type)) { const m = MATERIALS.find(x => x.name === l.material); if (m) carbon += parseFloat(l.weight_tons || 0) * m.gwp; } });
+        loads.forEach(l => {
+            if (['recycling','reuse','composting'].includes(l.destination_type)) {
+                const m = MATERIALS.find(x => x.name === l.material);
+                if (m) carbon += parseFloat(l.weight_tons||0) * m.gwp;
+            }
+        });
         document.getElementById('stat-loads').textContent = loads.length;
         document.getElementById('stat-tonnage').textContent = total.toFixed(1);
-        document.getElementById('stat-diversion').textContent = (total > 0 ? (diverted / total * 100) : 0).toFixed(1) + '%';
-        document.getElementById('stat-carbon').textContent = carbon.toFixed(2);
+        document.getElementById('stat-diversion').textContent = (total > 0 ? (diverted/total*100) : 0).toFixed(0) + '%';
+        document.getElementById('stat-carbon').textContent = carbon.toFixed(1);
     }
 
-    function updateConnectionStatus(connected) {
-        const dot = document.getElementById('status-dot');
-        const text = document.getElementById('connection-text');
-        dot.classList.toggle('connected', connected);
-        text.textContent = connected ? 'Connected' : 'Offline';
+    function updateConnectionStatus() {
+        document.getElementById('status-dot').classList.toggle('connected', isConnected);
+        document.getElementById('connection-text').textContent = isConnected ? 'Online' : 'Offline';
     }
 
-    function updateCaptureInfo() {
-        const el = document.getElementById('capture-info');
-        if (!el) return;
-        let info = [];
-        info.push(gpsData?.latitude ? `GPS: ${gpsData.latitude}, ${gpsData.longitude}` : 'GPS: Unavailable');
-        if (ipData?.ip !== 'unavailable') info.push(`IP: ${ipData.ip}`);
-        info.push(`User: ${currentUser?.name || 'Unknown'}`);
-        info.push(`Time: ${new Date().toLocaleString()}`);
-        el.textContent = info.join(' | ');
+    // ===== GPS/IP =====
+    async function getGPSData() {
+        return new Promise(resolve => {
+            if (!navigator.geolocation) { resolve(null); return; }
+            navigator.geolocation.getCurrentPosition(
+                p => resolve({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6), acc: p.coords.accuracy }),
+                () => resolve(null),
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
     }
 
-    // ========== MODALS & SAVE ==========
+    async function getIPData() {
+        try {
+            const r = await fetch('https://api.ipify.org?format=json');
+            const d = await r.json();
+            return { ip: d.ip };
+        } catch { return null; }
+    }
+
+    // ===== MODAL =====
     function openNewLoadModal() {
         document.getElementById('new-load-modal').classList.add('active');
         document.getElementById('load-date').valueAsDate = new Date();
         updateCaptureInfo();
     }
 
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
 
+    function updateCaptureInfo() {
+        const parts = [];
+        if (gpsData) parts.push('GPS: ' + gpsData.lat + ', ' + gpsData.lng);
+        else parts.push('GPS: N/A');
+        if (ipData) parts.push('IP: ' + ipData.ip);
+        parts.push('User: ' + (currentUser?.name || 'Unknown'));
+        parts.push('Time: ' + new Date().toLocaleString());
+        document.getElementById('capture-info').textContent = parts.join(' | ');
+    }
+
+    // ===== SAVE LOAD =====
     async function saveLoad() {
-        const loadData = {
+        const data = {
             project_id: document.getElementById('load-project').value,
             load_date: document.getElementById('load-date').value,
             material: document.getElementById('load-material').value,
             weight_tons: parseFloat(document.getElementById('load-weight').value),
             destination_type: document.getElementById('load-destination-type').value,
-            facility_name: document.getElementById('load-facility').value,
-            hauler: document.getElementById('load-hauler').value,
-            ticket_number: document.getElementById('load-ticket').value,
-            notes: document.getElementById('load-notes').value,
-            gps_latitude: gpsData?.latitude || null,
-            gps_longitude: gpsData?.longitude || null,
-            gps_accuracy: gpsData?.accuracy || null,
+            facility_name: document.getElementById('load-facility').value || null,
+            hauler: document.getElementById('load-hauler').value || null,
+            ticket_number: document.getElementById('load-ticket').value || null,
+            notes: document.getElementById('load-notes').value || null,
+            gps_latitude: gpsData?.lat || null,
+            gps_longitude: gpsData?.lng || null,
             ip_address: ipData?.ip || null,
             capture_timestamp: new Date().toISOString(),
             entered_by: currentUser?.id || null,
-            entered_by_name: currentUser?.name || 'Unknown',
-            created_at: new Date().toISOString()
+            entered_by_name: currentUser?.name || 'Unknown'
         };
-        if (!loadData.project_id || !loadData.material || !loadData.weight_tons || !loadData.destination_type) {
-            showToast('Please fill in all required fields', 'error'); return;
+
+        if (!data.project_id || !data.material || !data.weight_tons || !data.destination_type) {
+            showToast('Fill in all required fields', 'error');
+            return;
         }
+
         try {
-            if (supabase) {
-                const { error } = await supabase.from('loads').insert([loadData]);
+            if (isConnected && supabaseClient) {
+                const { error } = await supabaseClient.from('loads').insert([data]);
                 if (error) throw error;
-                showToast('Load saved!', 'success');
-                closeModal('new-load-modal');
-                document.getElementById('new-load-form').reset();
-                await loadLoadsData();
-                updateStats();
             } else {
-                loadData.id = 'local-' + Date.now();
+                // Offline - add to local
+                data.id = 'local-' + Date.now();
+                data.created_at = new Date().toISOString();
                 window.loadsData = window.loadsData || [];
-                window.loadsData.unshift(loadData);
-                renderLoadsTable(window.loadsData);
+                window.loadsData.unshift(data);
+                renderLoads(window.loadsData);
                 updateStats();
-                showToast('Saved locally (offline)', 'info');
-                closeModal('new-load-modal');
-                document.getElementById('new-load-form').reset();
             }
-        } catch (e) { console.error('Save error:', e); showToast('Error: ' + e.message, 'error'); }
+            
+            showToast('Load saved!', 'success');
+            closeModal('new-load-modal');
+            document.getElementById('new-load-form').reset();
+            if (isConnected) loadLoads();
+        } catch (e) {
+            console.error('Save error:', e);
+            showToast('Error: ' + e.message, 'error');
+        }
     }
 
-    function showToast(msg, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = msg;
-        document.getElementById('toast-container').appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+    // ===== TOAST =====
+    function showToast(msg, type) {
+        const t = document.createElement('div');
+        t.className = 'toast toast-' + type;
+        t.textContent = msg;
+        document.getElementById('toast-container').appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
     }
 
-    // ========== EXPORTS ==========
+    // ===== EXPORT =====
     async function exportExcel() {
         showToast('Generating Excel...', 'info');
         try {
-            if (!window.XLSX) await loadSheetJS();
+            // Load SheetJS if needed
+            if (!window.XLSX) {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    s.onload = resolve;
+                    s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+            }
+            
             const loads = window.loadsData || [];
             const wb = XLSX.utils.book_new();
             
             // Summary
-            const summary = [['DivertScan © 2026'], ['The Carbon Truth in Every Load'], ['Powered by Dalmex Recycling LLC'], [''], ['Generated:', new Date().toLocaleString()], ['Total Loads:', loads.length]];
+            const summary = [['DivertScan © 2026'],['Powered by Dalmex Recycling LLC'],[''],['Generated:', new Date().toLocaleString()],['Loads:', loads.length]];
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
             
-            // Loads Detail (24 columns)
-            const headers = ['ID', 'Date', 'Project ID', 'Project Name', 'Material', 'Category', 'Weight (tons)', 'Weight (lbs)', 'Destination Type', 'Facility', 'Hauler', 'Ticket #', 'Diverted', 'GWP Factor', 'CO2e Avoided', 'GPS Lat', 'GPS Long', 'IP Address', 'Capture Time', 'Entered By', 'LEED Tier', 'Verified', 'Notes', 'Created'];
+            // Loads
+            const headers = ['Date','Project','Material','Tons','Destination','Facility','Hauler','Ticket','GPS','IP','Entered By','Status'];
             const rows = loads.map(l => {
-                const proj = window.projectsData?.find(p => p.id === l.project_id);
-                const mat = MATERIALS.find(m => m.name === l.material) || {};
-                const isDiverted = ['recycling', 'reuse', 'composting'].includes(l.destination_type);
-                return [l.id, l.load_date, l.project_id, proj?.name || '', l.material, mat.category || '', parseFloat(l.weight_tons || 0).toFixed(2), (parseFloat(l.weight_tons || 0) * 2000).toFixed(0), l.destination_type, l.facility_name || '', l.hauler || '', l.ticket_number || '', isDiverted ? 'Yes' : 'No', mat.gwp || 0, isDiverted ? (parseFloat(l.weight_tons || 0) * (mat.gwp || 0)).toFixed(3) : 0, l.gps_latitude || '', l.gps_longitude || '', l.ip_address || '', l.capture_timestamp || '', l.entered_by_name || '', mat.tier || '', l.gps_latitude ? 'Yes' : 'No', l.notes || '', l.created_at || ''];
+                const proj = (window.projectsData||[]).find(p=>p.id===l.project_id);
+                const isDiverted = ['recycling','reuse','composting'].includes(l.destination_type);
+                return [l.load_date, proj?.name||'', l.material, l.weight_tons, l.destination_type, l.facility_name||'', l.hauler||'', l.ticket_number||'', l.gps_latitude ? l.gps_latitude+','+l.gps_longitude : '', l.ip_address||'', l.entered_by_name||'', isDiverted?'Diverted':'Disposed'];
             });
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), 'Loads Detail');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers,...rows]), 'Loads');
             
-            // Materials Reference
-            const matHeaders = ['Material', 'Category', 'Density (lb/yd³)', 'GWP (MT CO2e/ton)', 'LEED Tier'];
-            const matRows = MATERIALS.map(m => [m.name, m.category, m.density, m.gwp, m.tier]);
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([matHeaders, ...matRows]), 'Materials');
-            
-            // Watchtower
-            const watch = [['Industry Watchtower'], [''], ['LEED v5 Updates'], ['• Tier 1 Circularity enhanced multipliers'], ['• GWP coefficients required'], [''], ['Resources'], ['USGBC LEED', 'https://www.usgbc.org/leed'], ['EPA WARM', 'https://www.epa.gov/warm']];
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(watch), 'Watchtower');
-            
-            XLSX.writeFile(wb, `DivertScan_${new Date().toISOString().split('T')[0]}.xlsx`);
-            showToast('Excel downloaded!', 'success');
-        } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+            XLSX.writeFile(wb, 'DivertScan_' + new Date().toISOString().split('T')[0] + '.xlsx');
+            showToast('Downloaded!', 'success');
+        } catch (e) {
+            showToast('Export failed', 'error');
+            console.error(e);
+        }
     }
 
     async function exportLEEDReport() {
         showToast('Generating LEED report...', 'info');
-        try {
-            if (!window.XLSX) await loadSheetJS();
-            const loads = window.loadsData || [];
-            const total = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
-            const diverted = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
-            const wb = XLSX.utils.book_new();
-            const leed = [['LEED v5 Construction Waste Management Report'], ['DivertScan © 2026 - Point-of-Capture Verified'], [''], ['Report Date:', new Date().toLocaleString()], [''], ['DIVERSION SUMMARY'], ['Total Generated (tons):', total.toFixed(2)], ['Total Diverted (tons):', diverted.toFixed(2)], ['Diversion Rate:', (total > 0 ? (diverted/total*100) : 0).toFixed(1) + '%'], [''], ['COMPLIANCE NOTES'], ['• Diversion rate per MR Credit requirements'], ['• Point-of-capture verification provides chain-of-custody'], ['• Certification level determined by LEED reviewer']];
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leed), 'LEED Summary');
-            XLSX.writeFile(wb, `LEED_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-            showToast('LEED report downloaded!', 'success');
-        } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+        // Same as exportExcel but with LEED format
+        exportExcel();
     }
 
-    // ========== START ==========
-    window.addEventListener('online', () => { updateConnectionStatus(true); showToast('Connected', 'success'); });
-    window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('Offline mode', 'info'); });
-    document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', initialize) : initialize();
+    // ===== START =====
+    window.addEventListener('online', () => { isConnected = true; updateConnectionStatus(); showToast('Back online', 'success'); });
+    window.addEventListener('offline', () => { isConnected = false; updateConnectionStatus(); showToast('Offline mode', 'info'); });
+    
+    // Wait for DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+        initialize();
+    }
     </script>
 </body>
 </html>
