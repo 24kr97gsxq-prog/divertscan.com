@@ -1,1026 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DivertScan™ v2.2</title>
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f172a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <style>
-        :root {
-            --slate-900: #0f172a;
-            --slate-800: #1e293b;
-            --slate-700: #334155;
-            --slate-600: #475569;
-            --slate-500: #64748b;
-            --slate-400: #94a3b8;
-            --slate-300: #cbd5e1;
-            --emerald-500: #10b981;
-            --emerald-400: #34d399;
-            --amber-500: #f59e0b;
-            --amber-400: #fbbf24;
-            --red-500: #ef4444;
-            --blue-500: #3b82f6;
-        }
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--slate-900);
-            color: var(--slate-300);
-            min-height: 100vh;
-            padding-bottom: 80px;
-        }
-        
-        /* Header */
-        .header {
-            background: var(--slate-800);
-            padding: 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--slate-700);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .logo {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--emerald-400);
-        }
-        
-        .logo span { color: var(--slate-400); font-weight: 400; font-size: 12px; }
-        
-        .header-actions { display: flex; gap: 12px; align-items: center; }
-        
-        /* Navigation */
-        .nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--slate-800);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0 max(8px, env(safe-area-inset-bottom));
-            border-top: 1px solid var(--slate-700);
-            z-index: 100;
-        }
-        
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 8px 16px;
-            color: var(--slate-500);
-            text-decoration: none;
-            font-size: 11px;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-        
-        .nav-item.active { color: var(--emerald-400); }
-        .nav-item svg { width: 24px; height: 24px; margin-bottom: 4px; }
-        
-        /* Tabs */
-        .tab-content { display: none; padding: 16px; }
-        .tab-content.active { display: block; }
-        
-        /* Cards */
-        .card {
-            background: var(--slate-800);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border: 1px solid var(--slate-700);
-        }
-        
-        .card-title {
-            font-size: 14px;
-            color: var(--slate-400);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-        
-        .stat-card {
-            background: var(--slate-700);
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--emerald-400);
-        }
-        
-        .stat-label {
-            font-size: 11px;
-            color: var(--slate-400);
-            margin-top: 4px;
-        }
-        
-        /* Buttons */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-            width: 100%;
-        }
-        
-        .btn-primary {
-            background: var(--emerald-500);
-            color: white;
-        }
-        
-        .btn-primary:hover { background: var(--emerald-400); }
-        
-        .btn-secondary {
-            background: var(--slate-700);
-            color: var(--slate-300);
-        }
-        
-        .btn-secondary:hover { background: var(--slate-600); }
-        
-        .btn-lg { padding: 16px 24px; font-size: 16px; }
-        
-        /* Forms */
-        .form-group { margin-bottom: 16px; }
-        
-        .form-label {
-            display: block;
-            font-size: 12px;
-            color: var(--slate-400);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 12px;
-            background: var(--slate-700);
-            border: 1px solid var(--slate-600);
-            border-radius: 8px;
-            color: var(--slate-300);
-            font-size: 16px;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: var(--emerald-500);
-        }
-        
-        /* Material Grid */
-        .material-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        
-        .material-item {
-            background: var(--slate-700);
-            border-radius: 8px;
-            padding: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .material-name {
-            font-size: 13px;
-            color: var(--slate-300);
-        }
-        
-        .material-input {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .material-input input {
-            width: 50px;
-            padding: 6px;
-            background: var(--slate-800);
-            border: 1px solid var(--slate-600);
-            border-radius: 4px;
-            color: var(--slate-300);
-            font-size: 14px;
-            text-align: right;
-        }
-        
-        .material-input span {
-            color: var(--slate-500);
-            font-size: 12px;
-        }
-        
-        /* Progress Bar */
-        .progress-bar {
-            height: 8px;
-            background: var(--slate-700);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: var(--emerald-500);
-            transition: width 0.3s;
-        }
-        
-        .progress-fill.warning { background: var(--amber-500); }
-        .progress-fill.danger { background: var(--red-500); }
-        
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 200;
-            align-items: flex-end;
-            justify-content: center;
-        }
-        
-        .modal.active { display: flex; }
-        
-        .modal-content {
-            background: var(--slate-800);
-            width: 100%;
-            max-width: 500px;
-            max-height: 90vh;
-            border-radius: 16px 16px 0 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .modal-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--slate-700);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .modal-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--slate-200);
-        }
-        
-        .modal-close {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--slate-700);
-            border: none;
-            color: var(--slate-400);
-            cursor: pointer;
-            font-size: 20px;
-        }
-        
-        .modal-body {
-            padding: 16px;
-            overflow-y: auto;
-            flex: 1;
-        }
-        
-        .modal-footer {
-            padding: 16px;
-            border-top: 1px solid var(--slate-700);
-            display: flex;
-            gap: 12px;
-        }
-        
-        /* Steps */
-        .steps {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-        
-        .step {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--slate-700);
-            color: var(--slate-500);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .step.active {
-            background: var(--emerald-500);
-            color: white;
-        }
-        
-        .step.complete {
-            background: var(--emerald-500);
-            color: white;
-        }
-        
-        .step-line {
-            width: 40px;
-            height: 2px;
-            background: var(--slate-700);
-            align-self: center;
-        }
-        
-        .step-line.complete { background: var(--emerald-500); }
-        
-        /* Image Preview */
-        .image-preview {
-            width: 100%;
-            aspect-ratio: 4/3;
-            background: var(--slate-700);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--slate-500);
-            font-size: 14px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-        
-        .image-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        /* Photo Grid */
-        .photo-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-        
-        .photo-slot {
-            aspect-ratio: 1;
-            background: var(--slate-700);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--slate-500);
-            font-size: 24px;
-            cursor: pointer;
-            overflow: hidden;
-            border: 2px dashed var(--slate-600);
-        }
-        
-        .photo-slot.filled {
-            border: 2px solid var(--emerald-500);
-        }
-        
-        .photo-slot img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        /* Analysis Result */
-        .analysis-result {
-            background: var(--slate-700);
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 16px;
-        }
-        
-        .analysis-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .diversion-badge {
-            font-size: 28px;
-            font-weight: 700;
-        }
-        
-        .diversion-badge.good { color: var(--emerald-400); }
-        .diversion-badge.warning { color: var(--amber-400); }
-        .diversion-badge.bad { color: var(--red-500); }
-        
-        .material-breakdown {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .material-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--slate-600);
-        }
-        
-        .material-row:last-child { border-bottom: none; }
-        
-        .material-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .material-icon { font-size: 18px; }
-        
-        .material-values {
-            text-align: right;
-            font-size: 14px;
-        }
-        
-        .material-pct { font-weight: 600; color: var(--slate-200); }
-        .material-tons { color: var(--slate-400); font-size: 12px; }
-        
-        /* Ticket List */
-        .ticket-list { display: flex; flex-direction: column; gap: 12px; }
-        
-        .ticket-item {
-            background: var(--slate-700);
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .ticket-info h4 {
-            color: var(--slate-200);
-            font-size: 14px;
-            margin-bottom: 4px;
-        }
-        
-        .ticket-info p {
-            color: var(--slate-400);
-            font-size: 12px;
-        }
-        
-        .ticket-stats {
-            text-align: right;
-        }
-        
-        .ticket-tons {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--emerald-400);
-        }
-        
-        .ticket-diversion {
-            font-size: 12px;
-            color: var(--slate-400);
-        }
-        
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--slate-700);
-            color: var(--slate-200);
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 300;
-            opacity: 0;
-            transition: all 0.3s;
-        }
-        
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-        
-        .toast.success { background: var(--emerald-500); color: white; }
-        .toast.error { background: var(--red-500); color: white; }
-        
-        /* Loading */
-        .loading {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            color: var(--slate-400);
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--slate-700);
-            border-top-color: var(--emerald-500);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 12px;
-        }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        /* Container select */
-        .container-select {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        
-        .container-option {
-            flex: 1;
-            padding: 12px;
-            background: var(--slate-700);
-            border: 2px solid var(--slate-600);
-            border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .container-option.selected {
-            border-color: var(--emerald-500);
-            background: rgba(16, 185, 129, 0.1);
-        }
-        
-        .container-option span {
-            display: block;
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--slate-200);
-        }
-        
-        .container-option small {
-            font-size: 11px;
-            color: var(--slate-400);
-        }
-        
-        /* Hidden */
-        .hidden { display: none !important; }
-        
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--slate-500);
-        }
-        
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-        
-        /* Project selector */
-        .project-selector {
-            background: var(--slate-700);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .project-name {
-            font-weight: 600;
-            color: var(--slate-200);
-        }
-        
-        .project-change {
-            color: var(--emerald-400);
-            font-size: 12px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <!-- Header -->
-    <header class="header">
-        <div class="logo">DivertScan™ <span>v2.2</span></div>
-        <div class="header-actions">
-            <button class="btn btn-secondary" onclick="showSettings()" style="padding:8px 12px;width:auto;">⚙️</button>
-            <button class="btn btn-secondary" onclick="signOut()" style="padding:8px 12px;width:auto;">↪️</button>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main>
-        <!-- Auth Screen -->
-        <div id="authScreen" class="tab-content active">
-            <div style="max-width:400px;margin:60px auto;padding:20px;">
-                <div style="text-align:center;margin-bottom:32px;">
-                    <div style="font-size:48px;margin-bottom:16px;">♻️</div>
-                    <h1 style="font-size:24px;color:var(--emerald-400);margin-bottom:8px;">DivertScan™</h1>
-                    <p style="color:var(--slate-400);">LEED-Compliant Waste Tracking</p>
-                </div>
-                <div class="card">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="authEmail" class="form-input" placeholder="you@company.com">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" id="authPassword" class="form-input" placeholder="••••••••">
-                    </div>
-                    <button class="btn btn-primary btn-lg" onclick="signIn()">Sign In</button>
-                    <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--slate-500);">
-                        Don't have an account? <a href="#" onclick="signUp()" style="color:var(--emerald-400);">Sign Up</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dashboard Tab -->
-        <div id="dashboardTab" class="tab-content">
-            <div class="project-selector" id="projectSelector">
-                <div>
-                    <div style="font-size:11px;color:var(--slate-500);">CURRENT PROJECT</div>
-                    <div class="project-name" id="currentProjectName">Select a Project</div>
-                </div>
-                <span class="project-change" onclick="showProjectModal()">Change →</span>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="statTickets">0</div>
-                    <div class="stat-label">Tickets</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statTons">0</div>
-                    <div class="stat-label">Total Tons</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statDiversion">0%</div>
-                    <div class="stat-label">Diversion Rate</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statCO2">0</div>
-                    <div class="stat-label">MT CO₂e Avoided</div>
-                </div>
-            </div>
-
-            <div class="card" style="margin-top:16px;">
-                <div class="card-title">LEED v5 Progress</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span style="font-size:12px;color:var(--slate-400);">75% Target</span>
-                    <span style="font-size:14px;font-weight:600;" id="leedProgress">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="leedProgressBar" style="width:0%"></div>
-                </div>
-            </div>
-
-            <button class="btn btn-primary btn-lg" style="margin-top:20px;" onclick="startNewTicket()">
-                ➕ New Ticket
-            </button>
-
-            <div class="card" style="margin-top:20px;">
-                <div class="card-title">Recent Tickets</div>
-                <div class="ticket-list" id="ticketList">
-                    <div class="empty-state">
-                        <p>No tickets yet</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tickets Tab -->
-        <div id="ticketsTab" class="tab-content">
-            <h2 style="font-size:20px;margin-bottom:16px;">All Tickets</h2>
-            <div class="ticket-list" id="allTicketsList">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading tickets...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Reports Tab -->
-        <div id="reportsTab" class="tab-content">
-            <h2 style="font-size:20px;margin-bottom:16px;">LEED Reports</h2>
-            <div class="card">
-                <div class="card-title">Export Options</div>
-                <button class="btn btn-secondary" style="margin-bottom:12px;" onclick="exportLEEDReport()">
-                    📊 LEED v5 CSV Report
-                </button>
-                <button class="btn btn-secondary" onclick="exportAuditLog()">
-                    📋 Audit Log
-                </button>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="settingsTab" class="tab-content">
-            <h2 style="font-size:20px;margin-bottom:16px;">Settings</h2>
-            <div class="card">
-                <div class="card-title">OpenAI API Key</div>
-                <p style="font-size:12px;color:var(--slate-400);margin-bottom:12px;">
-                    Required for OCR and debris analysis
-                </p>
-                <div class="form-group">
-                    <input type="password" id="openaiKeyInput" class="form-input" placeholder="sk-...">
-                </div>
-                <button class="btn btn-primary" onclick="saveOpenAIKey()">Save API Key</button>
-            </div>
-            <div class="card">
-                <div class="card-title">Account</div>
-                <p style="font-size:14px;color:var(--slate-300);margin-bottom:8px;" id="userEmail">-</p>
-                <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
-            </div>
-        </div>
-    </main>
-
-    <!-- Bottom Navigation -->
-    <nav class="nav">
-        <div class="nav-item active" onclick="showTab('dashboard')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-            </svg>
-            Home
-        </div>
-        <div class="nav-item" onclick="showTab('tickets')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-            </svg>
-            Tickets
-        </div>
-        <div class="nav-item" onclick="showTab('reports')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 20V10M12 20V4M6 20v-6"/>
-            </svg>
-            Reports
-        </div>
-        <div class="nav-item" onclick="showTab('settings')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-            </svg>
-            Settings
-        </div>
-    </nav>
-
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
-
-    <!-- New Ticket Modal -->
-    <div id="ticketModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">New Ticket</div>
-                <button class="modal-close" onclick="closeModal('ticketModal')">×</button>
-            </div>
-            <div class="modal-body">
-                <!-- Steps Indicator -->
-                <div class="steps">
-                    <div class="step active" id="step1">1</div>
-                    <div class="step-line" id="stepLine1"></div>
-                    <div class="step" id="step2">2</div>
-                    <div class="step-line" id="stepLine2"></div>
-                    <div class="step" id="step3">3</div>
-                </div>
-
-                <!-- Step 1: Scale Ticket -->
-                <div id="ticketStep1">
-                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">📄 Scale Ticket</h3>
-                    
-                    <div class="image-preview" id="ticketImagePreview">
-                        <span>No image</span>
-                    </div>
-                    
-                    <div style="display:flex;gap:8px;margin-bottom:16px;">
-                        <button class="btn btn-secondary" onclick="captureTicketPhoto()" style="flex:1;">📷 Camera</button>
-                        <button class="btn btn-secondary" onclick="uploadTicketPhoto()" style="flex:1;">📁 Upload</button>
-                    </div>
-                    <input type="file" id="ticketFileInput" accept="image/*" style="display:none;" onchange="handleTicketFile(event)">
-                    <input type="file" id="ticketCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleTicketFile(event)">
-
-                    <div id="ticketOCRResult" class="hidden">
-                        <div class="form-group">
-                            <label class="form-label">Ticket #</label>
-                            <input type="text" id="ticketNumber" class="form-input" placeholder="84600">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Date</label>
-                            <input type="date" id="ticketDate" class="form-input">
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                            <div class="form-group">
-                                <label class="form-label">Gross (lbs)</label>
-                                <input type="number" id="grossLbs" class="form-input" placeholder="40620">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Tare (lbs)</label>
-                                <input type="number" id="tareLbs" class="form-input" placeholder="34840">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Net Weight</label>
-                            <div style="font-size:24px;font-weight:700;color:var(--emerald-400);" id="netWeightDisplay">0.00 tons</div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Hauler</label>
-                            <input type="text" id="haulerName" class="form-input" placeholder="Dalmex Recycling">
-                        </div>
-                    </div>
-
-                    <div id="ticketAnalyzing" class="loading hidden">
-                        <div class="spinner"></div>
-                        <p>Analyzing ticket...</p>
-                    </div>
-                </div>
-
-                <!-- Step 2: Debris Photos -->
-                <div id="ticketStep2" class="hidden">
-                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">📸 Debris Photos</h3>
-                    
-                    <div class="container-select">
-                        <div class="container-option" onclick="selectContainer(20)">
-                            <span>20</span>
-                            <small>yard</small>
-                        </div>
-                        <div class="container-option selected" onclick="selectContainer(30)">
-                            <span>30</span>
-                            <small>yard</small>
-                        </div>
-                        <div class="container-option" onclick="selectContainer(40)">
-                            <span>40</span>
-                            <small>yard</small>
-                        </div>
-                    </div>
-
-                    <div class="photo-grid" id="debrisPhotoGrid">
-                        <div class="photo-slot" onclick="addDebrisPhoto(0)">➕</div>
-                        <div class="photo-slot" onclick="addDebrisPhoto(1)">➕</div>
-                        <div class="photo-slot" onclick="addDebrisPhoto(2)">➕</div>
-                    </div>
-                    <input type="file" id="debrisFileInput" accept="image/*" style="display:none;" onchange="handleDebrisFile(event)">
-                    <input type="file" id="debrisCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleDebrisFile(event)">
-                    
-                    <p style="font-size:12px;color:var(--slate-400);text-align:center;margin-bottom:16px;">
-                        Add 1-3 photos of the debris load
-                    </p>
-
-                    <button class="btn btn-primary" id="analyzeDebrisBtn" onclick="analyzeDebris()" disabled>
-                        🤖 Analyze Materials
-                    </button>
-
-                    <div id="debrisAnalyzing" class="loading hidden">
-                        <div class="spinner"></div>
-                        <p>Analyzing debris...</p>
-                    </div>
-                </div>
-
-                <!-- Step 3: Review & Save -->
-                <div id="ticketStep3" class="hidden">
-                    <h3 style="font-size:16px;margin-bottom:16px;text-align:center;">✅ Review & Save</h3>
-                    
-                    <div class="analysis-result" id="analysisResult">
-                        <div class="analysis-header">
-                            <div>
-                                <div style="font-size:12px;color:var(--slate-400);">Diversion Rate</div>
-                                <div class="diversion-badge good" id="finalDiversionRate">0%</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:12px;color:var(--slate-400);">LEED v5 Target</div>
-                                <div style="font-size:14px;color:var(--slate-300);">75%</div>
-                            </div>
-                        </div>
-                        <div class="progress-bar" style="margin-bottom:16px;">
-                            <div class="progress-fill" id="finalProgressBar" style="width:0%"></div>
-                        </div>
-                        
-                        <div style="font-size:12px;color:var(--slate-400);margin-bottom:8px;">MATERIAL BREAKDOWN</div>
-                        <div class="material-breakdown" id="materialBreakdown">
-                            <!-- Filled dynamically -->
-                        </div>
-                    </div>
-
-                    <div class="card" style="margin-top:16px;">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                            <div>
-                                <div style="font-size:11px;color:var(--slate-500);">TICKET #</div>
-                                <div style="font-size:14px;color:var(--slate-200);" id="reviewTicketNum">-</div>
-                            </div>
-                            <div>
-                                <div style="font-size:11px;color:var(--slate-500);">DATE</div>
-                                <div style="font-size:14px;color:var(--slate-200);" id="reviewDate">-</div>
-                            </div>
-                            <div>
-                                <div style="font-size:11px;color:var(--slate-500);">NET WEIGHT</div>
-                                <div style="font-size:14px;color:var(--emerald-400);font-weight:700;" id="reviewNetTons">-</div>
-                            </div>
-                            <div>
-                                <div style="font-size:11px;color:var(--slate-500);">CO₂e AVOIDED</div>
-                                <div style="font-size:14px;color:var(--slate-200);" id="reviewCO2">-</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Manual adjustment -->
-                    <details style="margin-top:16px;">
-                        <summary style="color:var(--slate-400);font-size:12px;cursor:pointer;">Adjust Percentages Manually</summary>
-                        <div class="material-grid" style="margin-top:12px;" id="manualMaterialGrid">
-                            <!-- Filled dynamically -->
-                        </div>
-                        <div style="margin-top:8px;font-size:12px;color:var(--slate-400);">
-                            Total: <span id="manualTotal">100</span>%
-                        </div>
-                        <button class="btn btn-secondary" style="margin-top:8px;" onclick="recalculateManual()">
-                            Recalculate
-                        </button>
-                    </details>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="prevStepBtn" onclick="prevStep()" style="flex:1;" disabled>Back</button>
-                <button class="btn btn-primary" id="nextStepBtn" onclick="nextStep()" style="flex:1;">Next</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Project Modal -->
-    <div id="projectModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">Select Project</div>
-                <button class="modal-close" onclick="closeModal('projectModal')">×</button>
-            </div>
-            <div class="modal-body">
-                <div id="projectList" class="ticket-list">
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <p>Loading projects...</p>
-                    </div>
-                </div>
-                <button class="btn btn-primary" style="margin-top:16px;" onclick="showNewProjectForm()">
-                    ➕ New Project
-                </button>
-                <div id="newProjectForm" class="hidden" style="margin-top:16px;">
-                    <div class="form-group">
-                        <label class="form-label">Project Name</label>
-                        <input type="text" id="newProjectName" class="form-input" placeholder="Children's Medical Center">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Address</label>
-                        <input type="text" id="newProjectAddress" class="form-input" placeholder="1234 Main St">
-                    </div>
-                    <button class="btn btn-primary" onclick="createProject()">Create Project</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════════════════════════ -->
-    <!-- DIVERTSCAN CORE MODULE -->
-    <!-- ═══════════════════════════════════════════════════════════════════════ -->
-    <script>
 /**
- * DivertScan™ Core Module v2.2 (Embedded)
- * This is the master core - all shared functions live here
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DivertScan™ Core Module v2.3
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Master core for all DivertScan functionality
+ * © 2026 Robert - All Rights Reserved
+ * 
+ * CHANGELOG v2.3:
+ * - Fixed date logic: defaults to current system date, user-editable service_date
+ * - Full CRUD for tickets (Create, Read, Update, Delete)
+ * - Scale API integration via Web Serial API
+ * - Auto-recalculate on any weight/percentage edit
+ * - Export format aligned with LEED Waste Diversion Reports
+ * ═══════════════════════════════════════════════════════════════════════════
  */
+
 const DivertScan = (function() {
     'use strict';
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONFIGURATION
+    // ═══════════════════════════════════════════════════════════════════════
+    
     const CONFIG = {
         SUPABASE_URL: 'https://cyvvlngtojagfoaitoog.supabase.co',
         SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g',
-        VERSION: '2.2.0',
+        VERSION: '2.3.0',
         LEED_V4_TARGET: 50,
         LEED_V5_TARGET: 75,
         CONTAINER_SIZES: [20, 30, 40],
-        DEFAULT_CONTAINER: 30
+        DEFAULT_CONTAINER: 30,
+        
+        // Scale Configuration (Avery Weigh-Tronix 1310)
+        SCALE: {
+            BAUD_RATE: 9600,
+            DATA_BITS: 8,
+            STOP_BITS: 1,
+            PARITY: 'none',
+            FLOW_CONTROL: 'none',
+            // Weight parsing regex for common scale formats
+            WEIGHT_REGEX: /(\d+\.?\d*)\s*(lb|lbs|kg|LB|LBS|KG)?/
+        }
     };
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // MATERIAL DEFINITIONS - LEED v5 Compliant
+    // ═══════════════════════════════════════════════════════════════════════
+    
     const MATERIALS = {
         wood: { name: 'Wood/Lumber', icon: '🪵', recyclable: true, gwpFactor: 0.03 },
         gypsum: { name: 'Gypsum/Drywall', icon: '🧱', recyclable: true, gwpFactor: 0.12 },
@@ -1034,13 +59,30 @@ const DivertScan = (function() {
 
     const MATERIAL_KEYS = ['wood', 'gypsum', 'plastic', 'occ', 'metal', 'concrete', 'block', 'landfill'];
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATE MANAGEMENT
+    // ═══════════════════════════════════════════════════════════════════════
+    
     let state = {
         supabase: null,
         user: null,
         currentProject: null,
+        
+        // Scale connection
+        scalePort: null,
+        scaleReader: null,
+        scaleConnected: false,
+        lastScaleReading: null,
+        
+        // Current ticket being edited (for CRUD)
+        editingTicketId: null,
+        
+        // Active ticket session
         ticketSession: {
+            id: null,                    // UUID if editing existing ticket
             ticketNumber: null,
-            ticketDate: null,
+            serviceDate: null,           // NEW: User-editable service date
+            createdAt: null,             // System timestamp when ticket was created
             grossLbs: null,
             tareLbs: null,
             netLbs: null,
@@ -1056,12 +98,19 @@ const DivertScan = (function() {
             gpsLat: null,
             gpsLng: null,
             ipAddress: null,
-            capturedAt: null
+            capturedAt: null,
+            lastModified: null,          // Track edits
+            modifiedBy: null
         },
+        
         openaiKey: localStorage.getItem('divertscan_openai') || '',
         isOnline: navigator.onLine
     };
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // UTILITY FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    
     function toast(message, type = 'info') {
         const toastEl = document.getElementById('toast');
         if (!toastEl) { console.log(`[${type}] ${message}`); return; }
@@ -1075,10 +124,43 @@ const DivertScan = (function() {
         return Number(num).toLocaleString('en-US');
     }
 
+    /**
+     * Get current system date in YYYY-MM-DD format
+     * FIX: Always use actual current date, not hardcoded
+     */
+    function getCurrentDate() {
+        const now = new Date();
+        return now.toISOString().split('T')[0];
+    }
+
+    /**
+     * Format date for display (MM/DD/YY)
+     */
     function formatDate(date) {
         if (!date) return '';
-        const d = new Date(date);
+        const d = new Date(date + 'T00:00:00'); // Prevent timezone shift
         return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+    }
+
+    /**
+     * Format date for database (YYYY-MM-DD)
+     */
+    function formatDateDB(date) {
+        if (!date) return getCurrentDate();
+        if (date instanceof Date) {
+            return date.toISOString().split('T')[0];
+        }
+        // Already in correct format
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return date;
+        }
+        // Convert MM/DD/YY to YYYY-MM-DD
+        const parts = date.split('/');
+        if (parts.length === 3) {
+            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+            return `${year}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+        }
+        return getCurrentDate();
     }
 
     function generateAuditId() {
@@ -1088,13 +170,27 @@ const DivertScan = (function() {
         return `DS-${year}-${seq}-${random}`;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // WEIGHT & MATERIAL CALCULATIONS (Auto-recalculate on edit)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Calculate net weight from gross and tare
+     */
     function calculateNetWeight(grossLbs, tareLbs) {
         const gross = parseFloat(grossLbs) || 0;
         const tare = parseFloat(tareLbs) || 0;
         const netLbs = gross - tare;
-        return { netLbs: Math.max(0, netLbs), netTons: Math.max(0, netLbs / 2000) };
+        return {
+            netLbs: Math.max(0, netLbs),
+            netTons: Math.max(0, netLbs / 2000)
+        };
     }
 
+    /**
+     * Calculate material tonnages from percentages
+     * AUTO-RECALCULATES when weights or percentages change
+     */
     function calculateMaterialTonnages(percentages, netTons) {
         const breakdown = {};
         let totalDivertedPct = 0;
@@ -1106,7 +202,12 @@ const DivertScan = (function() {
             const material = MATERIALS[key];
             const co2e = tons * (material?.gwpFactor || 0);
 
-            breakdown[key] = { pct, tons, co2e, recyclable: material?.recyclable || false };
+            breakdown[key] = {
+                pct: pct,
+                tons: tons,
+                co2e: co2e,
+                recyclable: material?.recyclable || false
+            };
 
             if (material?.recyclable && key !== 'landfill') {
                 totalDivertedPct += pct;
@@ -1123,18 +224,64 @@ const DivertScan = (function() {
         };
     }
 
+    /**
+     * Validate material percentages total 100%
+     */
     function validateMaterialTotal(percentages) {
         let total = 0;
         for (const key of MATERIAL_KEYS) {
             total += parseFloat(percentages[key]) || 0;
         }
-        return { total, valid: Math.abs(total - 100) < 0.1 };
+        return {
+            total: Math.round(total * 10) / 10,
+            valid: Math.abs(total - 100) < 0.5,
+            message: Math.abs(total - 100) < 0.5 ? 'Valid' : `Total is ${total.toFixed(1)}%, must equal 100%`
+        };
     }
 
+    /**
+     * MASTER RECALCULATION - Call this whenever weights or percentages change
+     */
+    function recalculateTicket() {
+        const session = state.ticketSession;
+        
+        // Recalculate net weight
+        if (session.grossLbs !== null && session.tareLbs !== null) {
+            const net = calculateNetWeight(session.grossLbs, session.tareLbs);
+            session.netLbs = net.netLbs;
+            session.netTons = net.netTons;
+        }
+
+        // Recalculate material tonnages if we have percentages and net tons
+        if (Object.keys(session.materialBreakdown).length > 0 && session.netTons) {
+            const result = calculateMaterialTonnages(session.materialBreakdown, session.netTons);
+            session.diversionRate = result.diversionRate;
+            session.co2eAvoided = result.totalCO2e;
+            session.calculatedBreakdown = result.breakdown;
+        }
+
+        // Mark as modified
+        session.lastModified = new Date().toISOString();
+        session.modifiedBy = state.user?.email || 'unknown';
+
+        return session;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TICKET SESSION MANAGEMENT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Initialize a new ticket session with CORRECT current date
+     */
     function initTicketSession() {
+        const currentDate = getCurrentDate();
+        
         state.ticketSession = {
+            id: null,
             ticketNumber: null,
-            ticketDate: new Date().toISOString().split('T')[0],
+            serviceDate: currentDate,        // DEFAULT TO TODAY
+            createdAt: new Date().toISOString(),
             grossLbs: null,
             tareLbs: null,
             netLbs: null,
@@ -1150,51 +297,325 @@ const DivertScan = (function() {
             gpsLat: null,
             gpsLng: null,
             ipAddress: null,
-            capturedAt: new Date().toISOString()
+            capturedAt: new Date().toISOString(),
+            lastModified: null,
+            modifiedBy: null
         };
+        
+        state.editingTicketId = null;
         return state.ticketSession;
     }
 
+    /**
+     * Load existing ticket into session for editing
+     */
+    function loadTicketForEdit(ticket) {
+        state.editingTicketId = ticket.id;
+        
+        state.ticketSession = {
+            id: ticket.id,
+            ticketNumber: ticket.ticket_number,
+            serviceDate: ticket.service_date || ticket.ticket_date,
+            createdAt: ticket.created_at,
+            grossLbs: ticket.gross_lbs,
+            tareLbs: ticket.tare_lbs,
+            netLbs: ticket.net_lbs,
+            netTons: ticket.net_tons,
+            hauler: ticket.hauler,
+            containerSize: ticket.container_size || 30,
+            scaleTicketImage: ticket.scale_ticket_image,
+            debrisImages: ticket.debris_images ? JSON.parse(ticket.debris_images) : [],
+            materialBreakdown: {
+                wood: ticket.wood_pct || 0,
+                gypsum: ticket.gypsum_pct || 0,
+                plastic: ticket.plastic_pct || 0,
+                occ: ticket.occ_pct || 0,
+                metal: ticket.metal_pct || 0,
+                concrete: ticket.concrete_pct || 0,
+                block: ticket.block_pct || 0,
+                landfill: ticket.landfill_pct || 0
+            },
+            diversionRate: ticket.diversion_pct || 0,
+            co2eAvoided: ticket.co2e_avoided || 0,
+            calculatedBreakdown: {
+                wood: { pct: ticket.wood_pct, tons: ticket.wood_tons },
+                gypsum: { pct: ticket.gypsum_pct, tons: ticket.gypsum_tons },
+                plastic: { pct: ticket.plastic_pct, tons: ticket.plastic_tons },
+                occ: { pct: ticket.occ_pct, tons: ticket.occ_tons },
+                metal: { pct: ticket.metal_pct, tons: ticket.metal_tons },
+                concrete: { pct: ticket.concrete_pct, tons: ticket.concrete_tons },
+                block: { pct: ticket.block_pct, tons: ticket.block_tons },
+                landfill: { pct: ticket.landfill_pct, tons: ticket.landfill_tons }
+            },
+            gpsLat: ticket.gps_lat,
+            gpsLng: ticket.gps_lng,
+            ipAddress: ticket.ip_address,
+            capturedAt: ticket.captured_at,
+            lastModified: ticket.last_modified,
+            modifiedBy: ticket.modified_by
+        };
+
+        return state.ticketSession;
+    }
+
+    /**
+     * Update ticket session with new data and auto-recalculate
+     */
     function updateTicketSession(data) {
         Object.assign(state.ticketSession, data);
-        
-        if (state.ticketSession.grossLbs && state.ticketSession.tareLbs) {
-            const net = calculateNetWeight(state.ticketSession.grossLbs, state.ticketSession.tareLbs);
-            state.ticketSession.netLbs = net.netLbs;
-            state.ticketSession.netTons = net.netTons;
-        }
-
-        if (Object.keys(state.ticketSession.materialBreakdown).length > 0 && state.ticketSession.netTons) {
-            const result = calculateMaterialTonnages(state.ticketSession.materialBreakdown, state.ticketSession.netTons);
-            state.ticketSession.diversionRate = result.diversionRate;
-            state.ticketSession.co2eAvoided = result.totalCO2e;
-            state.ticketSession.calculatedBreakdown = result.breakdown;
-        }
-
-        return state.ticketSession;
+        return recalculateTicket();
     }
 
+    /**
+     * Set material percentages and recalculate
+     */
     function setMaterialPercentages(percentages) {
         const normalized = {};
         for (const key of MATERIAL_KEYS) {
             normalized[key] = parseFloat(percentages[key]) || 0;
         }
         state.ticketSession.materialBreakdown = normalized;
-
-        if (state.ticketSession.netTons) {
-            const result = calculateMaterialTonnages(normalized, state.ticketSession.netTons);
-            state.ticketSession.diversionRate = result.diversionRate;
-            state.ticketSession.co2eAvoided = result.totalCO2e;
-            state.ticketSession.calculatedBreakdown = result.breakdown;
-            return result;
-        }
-
-        return { breakdown: normalized, diversionRate: 100 - (normalized.landfill || 0) };
+        return recalculateTicket();
     }
 
+    /**
+     * Update a single material percentage and recalculate
+     */
+    function updateMaterialPercentage(material, percentage) {
+        if (!MATERIAL_KEYS.includes(material)) {
+            console.warn('Invalid material:', material);
+            return;
+        }
+        state.ticketSession.materialBreakdown[material] = parseFloat(percentage) || 0;
+        return recalculateTicket();
+    }
+
+    /**
+     * Get current ticket session
+     */
     function getTicketSession() {
         return { ...state.ticketSession };
     }
+
+    /**
+     * Check if currently editing an existing ticket
+     */
+    function isEditingTicket() {
+        return state.editingTicketId !== null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SCALE API INTEGRATION (Web Serial API)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if Web Serial API is supported
+     */
+    function isScaleSupported() {
+        return 'serial' in navigator;
+    }
+
+    /**
+     * Connect to scale via Web Serial API
+     * For Avery Weigh-Tronix 1310 with RS-232
+     */
+    async function connectScale() {
+        if (!isScaleSupported()) {
+            toast('Web Serial API not supported. Use Chrome or Edge.', 'error');
+            return false;
+        }
+
+        try {
+            // Request port access
+            state.scalePort = await navigator.serial.requestPort();
+            
+            // Open with Avery 1310 settings
+            await state.scalePort.open({
+                baudRate: CONFIG.SCALE.BAUD_RATE,
+                dataBits: CONFIG.SCALE.DATA_BITS,
+                stopBits: CONFIG.SCALE.STOP_BITS,
+                parity: CONFIG.SCALE.PARITY,
+                flowControl: CONFIG.SCALE.FLOW_CONTROL
+            });
+
+            state.scaleConnected = true;
+            toast('Scale connected!', 'success');
+            
+            // Start reading
+            startScaleReader();
+            
+            return true;
+        } catch (e) {
+            console.error('Scale connection error:', e);
+            toast('Failed to connect to scale: ' + e.message, 'error');
+            return false;
+        }
+    }
+
+    /**
+     * Disconnect from scale
+     */
+    async function disconnectScale() {
+        try {
+            if (state.scaleReader) {
+                await state.scaleReader.cancel();
+                state.scaleReader = null;
+            }
+            if (state.scalePort) {
+                await state.scalePort.close();
+                state.scalePort = null;
+            }
+            state.scaleConnected = false;
+            toast('Scale disconnected', 'info');
+        } catch (e) {
+            console.error('Scale disconnect error:', e);
+        }
+    }
+
+    /**
+     * Start continuous reading from scale
+     */
+    async function startScaleReader() {
+        if (!state.scalePort || !state.scalePort.readable) return;
+
+        const decoder = new TextDecoderStream();
+        const readableStreamClosed = state.scalePort.readable.pipeTo(decoder.writable);
+        state.scaleReader = decoder.readable.getReader();
+
+        let buffer = '';
+
+        try {
+            while (true) {
+                const { value, done } = await state.scaleReader.read();
+                if (done) break;
+                
+                buffer += value;
+                
+                // Look for weight data (varies by scale model)
+                // Avery typically sends: "    1234 lb" or similar
+                const lines = buffer.split(/[\r\n]+/);
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    const weight = parseScaleWeight(line);
+                    if (weight !== null) {
+                        state.lastScaleReading = {
+                            weight: weight,
+                            unit: 'lbs',
+                            timestamp: new Date().toISOString(),
+                            raw: line.trim()
+                        };
+                        
+                        // Dispatch event for UI to listen to
+                        window.dispatchEvent(new CustomEvent('scaleReading', {
+                            detail: state.lastScaleReading
+                        }));
+                    }
+                }
+            }
+        } catch (e) {
+            if (e.name !== 'CancelError') {
+                console.error('Scale read error:', e);
+            }
+        }
+    }
+
+    /**
+     * Parse weight from scale output string
+     */
+    function parseScaleWeight(rawData) {
+        if (!rawData) return null;
+        
+        // Try to match common scale output formats
+        const match = rawData.match(CONFIG.SCALE.WEIGHT_REGEX);
+        if (match) {
+            let weight = parseFloat(match[1]);
+            const unit = (match[2] || 'lb').toLowerCase();
+            
+            // Convert kg to lbs if needed
+            if (unit === 'kg') {
+                weight = weight * 2.20462;
+            }
+            
+            return Math.round(weight);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Fetch current scale reading (one-shot)
+     * Called when user clicks "Capture Weight" button
+     */
+    async function fetchScaleData(type = 'gross') {
+        if (!state.scaleConnected) {
+            toast('Scale not connected. Click "Connect Scale" first.', 'error');
+            return null;
+        }
+
+        // Use the last reading if available and recent (within 5 seconds)
+        if (state.lastScaleReading) {
+            const readingAge = Date.now() - new Date(state.lastScaleReading.timestamp).getTime();
+            if (readingAge < 5000) {
+                const weight = state.lastScaleReading.weight;
+                
+                // Update the appropriate field
+                if (type === 'gross') {
+                    updateTicketSession({ grossLbs: weight });
+                    toast(`Gross weight captured: ${formatNumber(weight)} lbs`, 'success');
+                } else if (type === 'tare') {
+                    updateTicketSession({ tareLbs: weight });
+                    toast(`Tare weight captured: ${formatNumber(weight)} lbs`, 'success');
+                }
+                
+                return weight;
+            }
+        }
+
+        toast('Waiting for scale reading...', 'info');
+        
+        // Wait for next reading (up to 3 seconds)
+        return new Promise((resolve) => {
+            const handler = (event) => {
+                const weight = event.detail.weight;
+                window.removeEventListener('scaleReading', handler);
+                
+                if (type === 'gross') {
+                    updateTicketSession({ grossLbs: weight });
+                    toast(`Gross weight captured: ${formatNumber(weight)} lbs`, 'success');
+                } else if (type === 'tare') {
+                    updateTicketSession({ tareLbs: weight });
+                    toast(`Tare weight captured: ${formatNumber(weight)} lbs`, 'success');
+                }
+                
+                resolve(weight);
+            };
+            
+            window.addEventListener('scaleReading', handler);
+            
+            // Timeout after 3 seconds
+            setTimeout(() => {
+                window.removeEventListener('scaleReading', handler);
+                toast('No scale reading received. Check connection.', 'error');
+                resolve(null);
+            }, 3000);
+        });
+    }
+
+    /**
+     * Get scale connection status
+     */
+    function getScaleStatus() {
+        return {
+            supported: isScaleSupported(),
+            connected: state.scaleConnected,
+            lastReading: state.lastScaleReading
+        };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // POINT-OF-CAPTURE VERIFICATION
+    // ═══════════════════════════════════════════════════════════════════════
 
     async function captureGPS() {
         return new Promise((resolve) => {
@@ -1224,6 +645,10 @@ const DivertScan = (function() {
             return null;
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // OPENAI GPT-4o INTEGRATION
+    // ═══════════════════════════════════════════════════════════════════════
 
     async function analyzeScaleTicket(imageDataUrl) {
         const apiKey = state.openaiKey || localStorage.getItem('divertscan_openai');
@@ -1255,9 +680,10 @@ const DivertScan = (function() {
 
         const result = JSON.parse(jsonMatch[0]);
 
+        // Update session - use extracted date or default to today
         updateTicketSession({
             ticketNumber: result.ticket_number,
-            ticketDate: result.date,
+            serviceDate: result.date ? formatDateDB(result.date) : getCurrentDate(),
             grossLbs: result.gross_lbs,
             tareLbs: result.tare_lbs,
             hauler: result.hauler,
@@ -1312,10 +738,14 @@ Percentages MUST total 100. Include landfill for non-recyclable waste.` },
         if (!state.ticketSession.debrisImages) state.ticketSession.debrisImages = [];
         state.ticketSession.debrisImages.push(imageDataUrl);
 
-        const breakdown = setMaterialPercentages(percentages);
+        setMaterialPercentages(percentages);
 
-        return { raw: result, percentages, breakdown, confidence: result.confidence, notes: result.notes };
+        return { raw: result, percentages, confidence: result.confidence, notes: result.notes };
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DATABASE OPERATIONS - FULL CRUD
+    // ═══════════════════════════════════════════════════════════════════════
 
     async function initSupabase() {
         if (state.supabase) return state.supabase;
@@ -1334,7 +764,10 @@ Percentages MUST total 100. Include landfill for non-recyclable waste.` },
         return state.supabase;
     }
 
-    async function saveTicket(projectId) {
+    /**
+     * CREATE - Save new ticket
+     */
+    async function createTicket(projectId) {
         await initSupabase();
 
         const session = state.ticketSession;
@@ -1344,7 +777,8 @@ Percentages MUST total 100. Include landfill for non-recyclable waste.` },
             project_id: projectId || state.currentProject?.id,
             user_id: state.user?.id,
             ticket_number: session.ticketNumber,
-            ticket_date: session.ticketDate,
+            service_date: session.serviceDate || getCurrentDate(),
+            ticket_date: session.serviceDate || getCurrentDate(), // Legacy field
             hauler: session.hauler,
             container_size: session.containerSize,
             gross_lbs: session.grossLbs,
@@ -1368,7 +802,7 @@ Percentages MUST total 100. Include landfill for non-recyclable waste.` },
             block_tons: breakdown.block?.tons || 0,
             landfill_tons: breakdown.landfill?.tons || 0,
             diversion_pct: session.diversionRate,
-            diverted_tons: session.netTons * (session.diversionRate / 100),
+            diverted_tons: session.netTons ? session.netTons * (session.diversionRate / 100) : 0,
             co2e_avoided: session.co2eAvoided,
             gps_lat: session.gpsLat,
             gps_lng: session.gpsLng,
@@ -1383,790 +817,364 @@ Percentages MUST total 100. Include landfill for non-recyclable waste.` },
         const { data, error } = await state.supabase.from('tickets').insert([ticketData]).select().single();
         if (error) throw error;
 
-        toast('Ticket saved successfully!', 'success');
+        toast('Ticket created successfully!', 'success');
         return data;
     }
 
-    async function loadTickets(projectId) {
+    /**
+     * READ - Load tickets for a project
+     */
+    async function loadTickets(projectId, options = {}) {
         await initSupabase();
-        const { data, error } = await state.supabase.from('tickets').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+
+        let query = state.supabase
+            .from('tickets')
+            .select('*')
+            .eq('project_id', projectId);
+
+        // Apply date range filter if provided
+        if (options.startDate) {
+            query = query.gte('service_date', options.startDate);
+        }
+        if (options.endDate) {
+            query = query.lte('service_date', options.endDate);
+        }
+
+        // Order by service date, newest first
+        query = query.order('service_date', { ascending: false });
+
+        // Limit if specified
+        if (options.limit) {
+            query = query.limit(options.limit);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    }
+
+    /**
+     * READ - Load single ticket by ID
+     */
+    async function loadTicket(ticketId) {
+        await initSupabase();
+
+        const { data, error } = await state.supabase
+            .from('tickets')
+            .select('*')
+            .eq('id', ticketId)
+            .single();
+
         if (error) throw error;
         return data;
     }
 
+    /**
+     * UPDATE - Update existing ticket
+     */
+    async function updateTicket(ticketId) {
+        await initSupabase();
+
+        const session = state.ticketSession;
+        const breakdown = session.calculatedBreakdown || {};
+
+        const ticketData = {
+            ticket_number: session.ticketNumber,
+            service_date: session.serviceDate,
+            ticket_date: session.serviceDate, // Keep in sync
+            hauler: session.hauler,
+            container_size: session.containerSize,
+            gross_lbs: session.grossLbs,
+            tare_lbs: session.tareLbs,
+            net_lbs: session.netLbs,
+            net_tons: session.netTons,
+            wood_pct: session.materialBreakdown.wood || 0,
+            gypsum_pct: session.materialBreakdown.gypsum || 0,
+            plastic_pct: session.materialBreakdown.plastic || 0,
+            occ_pct: session.materialBreakdown.occ || 0,
+            metal_pct: session.materialBreakdown.metal || 0,
+            concrete_pct: session.materialBreakdown.concrete || 0,
+            block_pct: session.materialBreakdown.block || 0,
+            landfill_pct: session.materialBreakdown.landfill || 0,
+            wood_tons: breakdown.wood?.tons || 0,
+            gypsum_tons: breakdown.gypsum?.tons || 0,
+            plastic_tons: breakdown.plastic?.tons || 0,
+            occ_tons: breakdown.occ?.tons || 0,
+            metal_tons: breakdown.metal?.tons || 0,
+            concrete_tons: breakdown.concrete?.tons || 0,
+            block_tons: breakdown.block?.tons || 0,
+            landfill_tons: breakdown.landfill?.tons || 0,
+            diversion_pct: session.diversionRate,
+            diverted_tons: session.netTons ? session.netTons * (session.diversionRate / 100) : 0,
+            co2e_avoided: session.co2eAvoided,
+            last_modified: new Date().toISOString(),
+            modified_by: state.user?.email || 'unknown'
+        };
+
+        const { data, error } = await state.supabase
+            .from('tickets')
+            .update(ticketData)
+            .eq('id', ticketId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        toast('Ticket updated successfully!', 'success');
+        return data;
+    }
+
+    /**
+     * DELETE - Remove ticket
+     */
+    async function deleteTicket(ticketId) {
+        await initSupabase();
+
+        const { error } = await state.supabase
+            .from('tickets')
+            .delete()
+            .eq('id', ticketId);
+
+        if (error) throw error;
+
+        toast('Ticket deleted', 'success');
+        return true;
+    }
+
+    /**
+     * SAVE - Creates or updates based on edit state
+     */
+    async function saveTicket(projectId) {
+        if (state.editingTicketId) {
+            return updateTicket(state.editingTicketId);
+        } else {
+            return createTicket(projectId);
+        }
+    }
+
+    /**
+     * Load projects for current user
+     */
     async function loadProjects() {
         await initSupabase();
-        const { data, error } = await state.supabase.from('projects').select('*').eq('user_id', state.user?.id).order('created_at', { ascending: false });
+
+        const { data, error } = await state.supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', state.user?.id)
+            .order('created_at', { ascending: false });
+
         if (error) throw error;
-        return data;
+        return data || [];
     }
 
-    function generateLEEDReport(tickets) {
-        const headers = ['Date','Ticket #','Gross (lbs)','Gross (tons)','Tare (lbs)','Tare (tons)','Net (lbs)','Net (tons)','Wood %','Wood (T)','Gypsum %','Gypsum (T)','Plastic %','Plastic (T)','OCC %','OCC (T)','Metal %','Metal (T)','Concrete %','Concrete (T)','Block %','Block (T)','Landfill %','Landfill (T)','Total Diverted (T)','Diversion %'];
-        let csv = headers.join(',') + '\n';
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPORT GENERATION - LEED Waste Diversion Format
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Generate LEED-compliant CSV report
+     * Format: Date, Ticket No, GWT, Tare, Net, Wood, Gypsum, Plastic, OCC, Metal, Concrete, Block
+     */
+    function generateLEEDReport(tickets, projectName = '') {
+        // Headers matching LEED Waste Diversion Report format
+        const headers = [
+            'Date',
+            'Ticket No',
+            'Gross (lbs)',
+            'Tare (lbs)',
+            'Net (lbs)',
+            'Net (tons)',
+            'Wood (tons)',
+            'Gypsum (tons)',
+            'Plastic (tons)',
+            'OCC (tons)',
+            'Metal (tons)',
+            'Concrete (tons)',
+            'Block (tons)',
+            'Landfill (tons)',
+            'Diverted (tons)',
+            'Diversion %'
+        ];
+
+        let csv = '';
+        
+        // Add report header
+        if (projectName) {
+            csv += `LEED Waste Diversion Report - ${projectName}\n`;
+            csv += `Generated: ${new Date().toLocaleDateString()}\n\n`;
+        }
+        
+        csv += headers.join(',') + '\n';
+
+        // Calculate totals
+        let totals = {
+            gross: 0, tare: 0, net: 0, netTons: 0,
+            wood: 0, gypsum: 0, plastic: 0, occ: 0,
+            metal: 0, concrete: 0, block: 0, landfill: 0,
+            diverted: 0
+        };
 
         for (const t of tickets) {
             const row = [
-                formatDate(t.ticket_date), t.ticket_number, t.gross_lbs, (t.gross_lbs/2000).toFixed(2),
-                t.tare_lbs, (t.tare_lbs/2000).toFixed(2), t.net_lbs, t.net_tons?.toFixed(2),
-                t.wood_pct, t.wood_tons?.toFixed(3), t.gypsum_pct, t.gypsum_tons?.toFixed(3),
-                t.plastic_pct, t.plastic_tons?.toFixed(3), t.occ_pct, t.occ_tons?.toFixed(3),
-                t.metal_pct, t.metal_tons?.toFixed(3), t.concrete_pct, t.concrete_tons?.toFixed(3),
-                t.block_pct, t.block_tons?.toFixed(3), t.landfill_pct, t.landfill_tons?.toFixed(3),
-                t.diverted_tons?.toFixed(3), t.diversion_pct
+                formatDate(t.service_date || t.ticket_date),
+                t.ticket_number || '',
+                t.gross_lbs || 0,
+                t.tare_lbs || 0,
+                t.net_lbs || 0,
+                (t.net_tons || 0).toFixed(3),
+                (t.wood_tons || 0).toFixed(3),
+                (t.gypsum_tons || 0).toFixed(3),
+                (t.plastic_tons || 0).toFixed(3),
+                (t.occ_tons || 0).toFixed(3),
+                (t.metal_tons || 0).toFixed(3),
+                (t.concrete_tons || 0).toFixed(3),
+                (t.block_tons || 0).toFixed(3),
+                (t.landfill_tons || 0).toFixed(3),
+                (t.diverted_tons || 0).toFixed(3),
+                (t.diversion_pct || 0) + '%'
             ];
             csv += row.join(',') + '\n';
+
+            // Accumulate totals
+            totals.gross += parseFloat(t.gross_lbs) || 0;
+            totals.tare += parseFloat(t.tare_lbs) || 0;
+            totals.net += parseFloat(t.net_lbs) || 0;
+            totals.netTons += parseFloat(t.net_tons) || 0;
+            totals.wood += parseFloat(t.wood_tons) || 0;
+            totals.gypsum += parseFloat(t.gypsum_tons) || 0;
+            totals.plastic += parseFloat(t.plastic_tons) || 0;
+            totals.occ += parseFloat(t.occ_tons) || 0;
+            totals.metal += parseFloat(t.metal_tons) || 0;
+            totals.concrete += parseFloat(t.concrete_tons) || 0;
+            totals.block += parseFloat(t.block_tons) || 0;
+            totals.landfill += parseFloat(t.landfill_tons) || 0;
+            totals.diverted += parseFloat(t.diverted_tons) || 0;
         }
+
+        // Add totals row
+        const overallDiversion = totals.netTons > 0 
+            ? ((totals.diverted / totals.netTons) * 100).toFixed(1) 
+            : 0;
+
+        csv += '\n';
+        csv += [
+            'TOTALS',
+            tickets.length + ' tickets',
+            totals.gross.toFixed(0),
+            totals.tare.toFixed(0),
+            totals.net.toFixed(0),
+            totals.netTons.toFixed(3),
+            totals.wood.toFixed(3),
+            totals.gypsum.toFixed(3),
+            totals.plastic.toFixed(3),
+            totals.occ.toFixed(3),
+            totals.metal.toFixed(3),
+            totals.concrete.toFixed(3),
+            totals.block.toFixed(3),
+            totals.landfill.toFixed(3),
+            totals.diverted.toFixed(3),
+            overallDiversion + '%'
+        ].join(',') + '\n';
+
+        // Add LEED compliance status
+        csv += '\n';
+        csv += `LEED v5 Target: 75%\n`;
+        csv += `Project Diversion Rate: ${overallDiversion}%\n`;
+        csv += `Status: ${parseFloat(overallDiversion) >= 75 ? 'COMPLIANT ✓' : 'BELOW TARGET'}\n`;
+
         return csv;
     }
 
+    /**
+     * Download CSV file
+     */
     function downloadCSV(csv, filename) {
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename || 'divertscan-report.csv';
+        a.download = filename || `DivertScan-Report-${getCurrentDate()}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // PUBLIC API
+    // ═══════════════════════════════════════════════════════════════════════
+
     return {
-        CONFIG, MATERIALS, MATERIAL_KEYS,
+        // Configuration
+        CONFIG,
+        MATERIALS,
+        MATERIAL_KEYS,
+        
+        // State access
         getState: () => state,
         setState: (key, value) => { state[key] = value; },
         setOpenAIKey: (key) => { state.openaiKey = key; localStorage.setItem('divertscan_openai', key); },
-        toast, formatNumber, formatDate, generateAuditId,
-        calculateNetWeight, calculateMaterialTonnages, validateMaterialTotal,
-        initTicketSession, updateTicketSession, setMaterialPercentages, getTicketSession,
-        captureGPS, captureIP,
-        analyzeScaleTicket, analyzeDebrisPhoto,
-        initSupabase, saveTicket, loadTickets, loadProjects,
-        generateLEEDReport, downloadCSV,
+        
+        // Utilities
+        toast,
+        formatNumber,
+        formatDate,
+        formatDateDB,
+        getCurrentDate,
+        generateAuditId,
+        
+        // Calculations
+        calculateNetWeight,
+        calculateMaterialTonnages,
+        validateMaterialTotal,
+        recalculateTicket,
+        
+        // Ticket session (CRUD-ready)
+        initTicketSession,
+        loadTicketForEdit,
+        updateTicketSession,
+        setMaterialPercentages,
+        updateMaterialPercentage,
+        getTicketSession,
+        isEditingTicket,
+        
+        // Scale Integration
+        isScaleSupported,
+        connectScale,
+        disconnectScale,
+        fetchScaleData,
+        getScaleStatus,
+        
+        // Verification
+        captureGPS,
+        captureIP,
+        
+        // AI Analysis
+        analyzeScaleTicket,
+        analyzeDebrisPhoto,
+        
+        // Database CRUD
+        initSupabase,
+        createTicket,
+        loadTickets,
+        loadTicket,
+        updateTicket,
+        deleteTicket,
+        saveTicket,  // Smart save (create or update)
+        loadProjects,
+        
+        // Reports
+        generateLEEDReport,
+        downloadCSV,
+        
+        // Version
         version: CONFIG.VERSION
     };
 })();
 
+// Export for module systems
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = DivertScan;
+}
+
+// Make globally available
 window.DivertScan = DivertScan;
-    </script>
-
-    <!-- ═══════════════════════════════════════════════════════════════════════ -->
-    <!-- APPLICATION LOGIC -->
-    <!-- ═══════════════════════════════════════════════════════════════════════ -->
-    <script>
-// ═══════════════════════════════════════════════════════════════════════
-// UI STATE
-// ═══════════════════════════════════════════════════════════════════════
-
-let currentStep = 1;
-let selectedContainerSize = 30;
-let debrisPhotoSlot = 0;
-let debrisPhotos = [null, null, null];
-
-// ═══════════════════════════════════════════════════════════════════════
-// INITIALIZATION
-// ═══════════════════════════════════════════════════════════════════════
-
-async function initialize() {
-    try {
-        await DivertScan.initSupabase();
-        const sb = DivertScan.getState().supabase;
-        
-        const { data: { session } } = await sb.auth.getSession();
-        if (session) {
-            DivertScan.setState('user', session.user);
-            showApp();
-        }
-
-        sb.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                DivertScan.setState('user', session.user);
-                showApp();
-            } else {
-                DivertScan.setState('user', null);
-                showAuth();
-            }
-        });
-    } catch (e) {
-        console.error('Init error:', e);
-        DivertScan.toast('Failed to initialize', 'error');
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════════════════
-
-async function signIn() {
-    const email = document.getElementById('authEmail').value;
-    const password = document.getElementById('authPassword').value;
-    
-    if (!email || !password) {
-        DivertScan.toast('Enter email and password', 'error');
-        return;
-    }
-
-    try {
-        const sb = DivertScan.getState().supabase;
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        DivertScan.toast('Signed in!', 'success');
-    } catch (e) {
-        DivertScan.toast(e.message, 'error');
-    }
-}
-
-async function signUp() {
-    const email = document.getElementById('authEmail').value;
-    const password = document.getElementById('authPassword').value;
-    
-    if (!email || !password) {
-        DivertScan.toast('Enter email and password', 'error');
-        return;
-    }
-
-    try {
-        const sb = DivertScan.getState().supabase;
-        const { data, error } = await sb.auth.signUp({ email, password });
-        if (error) throw error;
-        DivertScan.toast('Account created! Check email to confirm.', 'success');
-    } catch (e) {
-        DivertScan.toast(e.message, 'error');
-    }
-}
-
-async function signOut() {
-    const sb = DivertScan.getState().supabase;
-    await sb.auth.signOut();
-    showAuth();
-}
-
-function showAuth() {
-    document.getElementById('authScreen').classList.add('active');
-    document.getElementById('dashboardTab').classList.remove('active');
-    document.querySelector('.nav').style.display = 'none';
-}
-
-function showApp() {
-    document.getElementById('authScreen').classList.remove('active');
-    document.querySelector('.nav').style.display = 'flex';
-    document.getElementById('userEmail').textContent = DivertScan.getState().user?.email || '-';
-    document.getElementById('openaiKeyInput').value = DivertScan.getState().openaiKey || '';
-    loadProjectsAndData();
-    showTab('dashboard');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// NAVIGATION
-// ═══════════════════════════════════════════════════════════════════════
-
-function showTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    
-    document.getElementById(tab + 'Tab').classList.add('active');
-    document.querySelectorAll('.nav-item')[['dashboard','tickets','reports','settings'].indexOf(tab)].classList.add('active');
-    
-    if (tab === 'tickets') loadAllTickets();
-}
-
-function showSettings() {
-    showTab('settings');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// PROJECTS
-// ═══════════════════════════════════════════════════════════════════════
-
-async function loadProjectsAndData() {
-    try {
-        const projects = await DivertScan.loadProjects();
-        
-        if (projects && projects.length > 0) {
-            DivertScan.setState('currentProject', projects[0]);
-            document.getElementById('currentProjectName').textContent = projects[0].name;
-            await loadDashboardData();
-        } else {
-            document.getElementById('currentProjectName').textContent = 'No Projects - Create One';
-        }
-    } catch (e) {
-        console.error('Load projects error:', e);
-    }
-}
-
-function showProjectModal() {
-    openModal('projectModal');
-    loadProjectList();
-}
-
-async function loadProjectList() {
-    const projects = await DivertScan.loadProjects();
-    const list = document.getElementById('projectList');
-    
-    if (!projects || projects.length === 0) {
-        list.innerHTML = '<div class="empty-state"><p>No projects yet</p></div>';
-        return;
-    }
-
-    list.innerHTML = projects.map(p => `
-        <div class="ticket-item" onclick="selectProject('${p.id}', '${p.name}')">
-            <div class="ticket-info">
-                <h4>${p.name}</h4>
-                <p>${p.address || 'No address'}</p>
-            </div>
-            <span style="color:var(--emerald-400);">→</span>
-        </div>
-    `).join('');
-}
-
-function selectProject(id, name) {
-    const state = DivertScan.getState();
-    DivertScan.setState('currentProject', { id, name });
-    document.getElementById('currentProjectName').textContent = name;
-    closeModal('projectModal');
-    loadDashboardData();
-}
-
-function showNewProjectForm() {
-    document.getElementById('newProjectForm').classList.toggle('hidden');
-}
-
-async function createProject() {
-    const name = document.getElementById('newProjectName').value;
-    const address = document.getElementById('newProjectAddress').value;
-    
-    if (!name) {
-        DivertScan.toast('Enter project name', 'error');
-        return;
-    }
-
-    try {
-        const sb = DivertScan.getState().supabase;
-        const { data, error } = await sb.from('projects').insert([{
-            name,
-            address,
-            user_id: DivertScan.getState().user.id
-        }]).select().single();
-
-        if (error) throw error;
-
-        DivertScan.toast('Project created!', 'success');
-        selectProject(data.id, data.name);
-        document.getElementById('newProjectForm').classList.add('hidden');
-        document.getElementById('newProjectName').value = '';
-        document.getElementById('newProjectAddress').value = '';
-    } catch (e) {
-        DivertScan.toast(e.message, 'error');
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// DASHBOARD DATA
-// ═══════════════════════════════════════════════════════════════════════
-
-async function loadDashboardData() {
-    const project = DivertScan.getState().currentProject;
-    if (!project) return;
-
-    try {
-        const tickets = await DivertScan.loadTickets(project.id);
-        
-        const totalTickets = tickets.length;
-        const totalTons = tickets.reduce((sum, t) => sum + (parseFloat(t.net_tons) || 0), 0);
-        const totalDiverted = tickets.reduce((sum, t) => sum + (parseFloat(t.diverted_tons) || 0), 0);
-        const avgDiversion = totalTons > 0 ? (totalDiverted / totalTons * 100) : 0;
-        const totalCO2 = tickets.reduce((sum, t) => sum + (parseFloat(t.co2e_avoided) || 0), 0);
-
-        document.getElementById('statTickets').textContent = totalTickets;
-        document.getElementById('statTons').textContent = totalTons.toFixed(2);
-        document.getElementById('statDiversion').textContent = avgDiversion.toFixed(0) + '%';
-        document.getElementById('statCO2').textContent = totalCO2.toFixed(2);
-        document.getElementById('leedProgress').textContent = avgDiversion.toFixed(0) + '%';
-        
-        const progressBar = document.getElementById('leedProgressBar');
-        progressBar.style.width = Math.min(avgDiversion, 100) + '%';
-        progressBar.className = 'progress-fill' + (avgDiversion >= 75 ? '' : avgDiversion >= 50 ? ' warning' : ' danger');
-
-        // Recent tickets
-        const list = document.getElementById('ticketList');
-        if (tickets.length === 0) {
-            list.innerHTML = '<div class="empty-state"><p>No tickets yet</p></div>';
-        } else {
-            list.innerHTML = tickets.slice(0, 5).map(t => `
-                <div class="ticket-item">
-                    <div class="ticket-info">
-                        <h4>#${t.ticket_number || 'N/A'}</h4>
-                        <p>${DivertScan.formatDate(t.ticket_date)}</p>
-                    </div>
-                    <div class="ticket-stats">
-                        <div class="ticket-tons">${(t.net_tons || 0).toFixed(2)}T</div>
-                        <div class="ticket-diversion">${t.diversion_pct || 0}% diverted</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-    } catch (e) {
-        console.error('Dashboard error:', e);
-    }
-}
-
-async function loadAllTickets() {
-    const project = DivertScan.getState().currentProject;
-    if (!project) return;
-
-    try {
-        const tickets = await DivertScan.loadTickets(project.id);
-        const list = document.getElementById('allTicketsList');
-        
-        if (tickets.length === 0) {
-            list.innerHTML = '<div class="empty-state"><p>No tickets yet</p></div>';
-        } else {
-            list.innerHTML = tickets.map(t => `
-                <div class="ticket-item">
-                    <div class="ticket-info">
-                        <h4>#${t.ticket_number || 'N/A'}</h4>
-                        <p>${DivertScan.formatDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'}</p>
-                    </div>
-                    <div class="ticket-stats">
-                        <div class="ticket-tons">${(t.net_tons || 0).toFixed(2)}T</div>
-                        <div class="ticket-diversion">${t.diversion_pct || 0}% diverted</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-    } catch (e) {
-        console.error('Load tickets error:', e);
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// NEW TICKET FLOW
-// ═══════════════════════════════════════════════════════════════════════
-
-function startNewTicket() {
-    const project = DivertScan.getState().currentProject;
-    if (!project) {
-        DivertScan.toast('Select a project first', 'error');
-        return;
-    }
-
-    // Initialize fresh ticket session
-    DivertScan.initTicketSession();
-    
-    // Reset UI
-    currentStep = 1;
-    debrisPhotos = [null, null, null];
-    
-    document.getElementById('ticketImagePreview').innerHTML = '<span>No image</span>';
-    document.getElementById('ticketOCRResult').classList.add('hidden');
-    document.getElementById('ticketStep1').classList.remove('hidden');
-    document.getElementById('ticketStep2').classList.add('hidden');
-    document.getElementById('ticketStep3').classList.add('hidden');
-    
-    updateStepIndicators();
-    resetDebrisPhotoGrid();
-    
-    openModal('ticketModal');
-    
-    // Capture verification data
-    DivertScan.captureGPS();
-    DivertScan.captureIP();
-}
-
-function updateStepIndicators() {
-    for (let i = 1; i <= 3; i++) {
-        const step = document.getElementById('step' + i);
-        step.className = 'step' + (i < currentStep ? ' complete' : i === currentStep ? ' active' : '');
-    }
-    document.getElementById('stepLine1').className = 'step-line' + (currentStep > 1 ? ' complete' : '');
-    document.getElementById('stepLine2').className = 'step-line' + (currentStep > 2 ? ' complete' : '');
-    
-    document.getElementById('prevStepBtn').disabled = currentStep === 1;
-    document.getElementById('nextStepBtn').textContent = currentStep === 3 ? 'Save Ticket' : 'Next';
-}
-
-function nextStep() {
-    if (currentStep === 3) {
-        saveCurrentTicket();
-        return;
-    }
-    
-    if (currentStep === 1) {
-        // Validate step 1
-        const session = DivertScan.getTicketSession();
-        if (!session.grossLbs || !session.tareLbs) {
-            DivertScan.toast('Enter gross and tare weights', 'error');
-            return;
-        }
-    }
-    
-    if (currentStep === 2) {
-        // Validate step 2
-        const session = DivertScan.getTicketSession();
-        if (Object.keys(session.materialBreakdown).length === 0 || session.diversionRate === 0) {
-            DivertScan.toast('Analyze debris photos first', 'error');
-            return;
-        }
-    }
-    
-    currentStep++;
-    showCurrentStep();
-}
-
-function prevStep() {
-    if (currentStep > 1) {
-        currentStep--;
-        showCurrentStep();
-    }
-}
-
-function showCurrentStep() {
-    document.getElementById('ticketStep1').classList.toggle('hidden', currentStep !== 1);
-    document.getElementById('ticketStep2').classList.toggle('hidden', currentStep !== 2);
-    document.getElementById('ticketStep3').classList.toggle('hidden', currentStep !== 3);
-    updateStepIndicators();
-    
-    if (currentStep === 3) {
-        populateReviewStep();
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// STEP 1: SCALE TICKET
-// ═══════════════════════════════════════════════════════════════════════
-
-function captureTicketPhoto() {
-    document.getElementById('ticketCameraInput').click();
-}
-
-function uploadTicketPhoto() {
-    document.getElementById('ticketFileInput').click();
-}
-
-async function handleTicketFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const imageData = e.target.result;
-        document.getElementById('ticketImagePreview').innerHTML = `<img src="${imageData}" alt="Ticket">`;
-        
-        // Analyze with OCR
-        document.getElementById('ticketAnalyzing').classList.remove('hidden');
-        
-        try {
-            const result = await DivertScan.analyzeScaleTicket(imageData);
-            
-            // Populate form fields
-            document.getElementById('ticketNumber').value = result.ticket_number || '';
-            document.getElementById('ticketDate').value = result.date ? formatDateForInput(result.date) : new Date().toISOString().split('T')[0];
-            document.getElementById('grossLbs').value = result.gross_lbs || '';
-            document.getElementById('tareLbs').value = result.tare_lbs || '';
-            document.getElementById('haulerName').value = result.hauler || '';
-            
-            updateNetWeightDisplay();
-            document.getElementById('ticketOCRResult').classList.remove('hidden');
-            
-            DivertScan.toast('Ticket analyzed!', 'success');
-        } catch (err) {
-            DivertScan.toast(err.message, 'error');
-        } finally {
-            document.getElementById('ticketAnalyzing').classList.add('hidden');
-        }
-    };
-    reader.readAsDataURL(file);
-}
-
-function formatDateForInput(dateStr) {
-    // Convert MM/DD/YY to YYYY-MM-DD
-    if (!dateStr) return '';
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-        const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
-        return `${year}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
-    }
-    return dateStr;
-}
-
-function updateNetWeightDisplay() {
-    const gross = parseFloat(document.getElementById('grossLbs').value) || 0;
-    const tare = parseFloat(document.getElementById('tareLbs').value) || 0;
-    const net = DivertScan.calculateNetWeight(gross, tare);
-    
-    document.getElementById('netWeightDisplay').textContent = net.netTons.toFixed(2) + ' tons';
-    
-    // Update session
-    DivertScan.updateTicketSession({
-        ticketNumber: document.getElementById('ticketNumber').value,
-        ticketDate: document.getElementById('ticketDate').value,
-        grossLbs: gross,
-        tareLbs: tare,
-        hauler: document.getElementById('haulerName').value
-    });
-}
-
-// Add event listeners for weight inputs
-document.getElementById('grossLbs')?.addEventListener('input', updateNetWeightDisplay);
-document.getElementById('tareLbs')?.addEventListener('input', updateNetWeightDisplay);
-document.getElementById('ticketNumber')?.addEventListener('input', () => {
-    DivertScan.updateTicketSession({ ticketNumber: document.getElementById('ticketNumber').value });
-});
-document.getElementById('haulerName')?.addEventListener('input', () => {
-    DivertScan.updateTicketSession({ hauler: document.getElementById('haulerName').value });
-});
-
-// ═══════════════════════════════════════════════════════════════════════
-// STEP 2: DEBRIS PHOTOS
-// ═══════════════════════════════════════════════════════════════════════
-
-function selectContainer(size) {
-    selectedContainerSize = size;
-    DivertScan.updateTicketSession({ containerSize: size });
-    
-    document.querySelectorAll('.container-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.querySelector('span').textContent == size);
-    });
-}
-
-function resetDebrisPhotoGrid() {
-    const grid = document.getElementById('debrisPhotoGrid');
-    grid.innerHTML = `
-        <div class="photo-slot" onclick="addDebrisPhoto(0)">➕</div>
-        <div class="photo-slot" onclick="addDebrisPhoto(1)">➕</div>
-        <div class="photo-slot" onclick="addDebrisPhoto(2)">➕</div>
-    `;
-    document.getElementById('analyzeDebrisBtn').disabled = true;
-}
-
-function addDebrisPhoto(slot) {
-    debrisPhotoSlot = slot;
-    document.getElementById('debrisFileInput').click();
-}
-
-function handleDebrisFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        debrisPhotos[debrisPhotoSlot] = e.target.result;
-        updateDebrisPhotoGrid();
-    };
-    reader.readAsDataURL(file);
-}
-
-function updateDebrisPhotoGrid() {
-    const grid = document.getElementById('debrisPhotoGrid');
-    grid.innerHTML = debrisPhotos.map((photo, i) => {
-        if (photo) {
-            return `<div class="photo-slot filled" onclick="addDebrisPhoto(${i})"><img src="${photo}" alt="Debris ${i+1}"></div>`;
-        }
-        return `<div class="photo-slot" onclick="addDebrisPhoto(${i})">➕</div>`;
-    }).join('');
-    
-    const hasPhotos = debrisPhotos.some(p => p !== null);
-    document.getElementById('analyzeDebrisBtn').disabled = !hasPhotos;
-}
-
-async function analyzeDebris() {
-    const photos = debrisPhotos.filter(p => p !== null);
-    if (photos.length === 0) {
-        DivertScan.toast('Add at least one photo', 'error');
-        return;
-    }
-
-    document.getElementById('debrisAnalyzing').classList.remove('hidden');
-    document.getElementById('analyzeDebrisBtn').disabled = true;
-
-    try {
-        // Analyze the first photo (or could average multiple)
-        const result = await DivertScan.analyzeDebrisPhoto(photos[0], selectedContainerSize);
-        
-        // If multiple photos, we could average them - for now use first
-        for (let i = 1; i < photos.length; i++) {
-            DivertScan.getState().ticketSession.debrisImages.push(photos[i]);
-        }
-        
-        DivertScan.toast(`Analysis complete: ${result.breakdown.diversionRate}% diversion`, 'success');
-        
-        // Auto-advance to step 3
-        currentStep = 3;
-        showCurrentStep();
-        
-    } catch (err) {
-        DivertScan.toast(err.message, 'error');
-        document.getElementById('analyzeDebrisBtn').disabled = false;
-    } finally {
-        document.getElementById('debrisAnalyzing').classList.add('hidden');
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// STEP 3: REVIEW & SAVE
-// ═══════════════════════════════════════════════════════════════════════
-
-function populateReviewStep() {
-    const session = DivertScan.getTicketSession();
-    const breakdown = session.calculatedBreakdown || {};
-    
-    // Diversion rate badge
-    const divRate = session.diversionRate || 0;
-    const badge = document.getElementById('finalDiversionRate');
-    badge.textContent = divRate + '%';
-    badge.className = 'diversion-badge ' + (divRate >= 75 ? 'good' : divRate >= 50 ? 'warning' : 'bad');
-    
-    document.getElementById('finalProgressBar').style.width = Math.min(divRate, 100) + '%';
-    
-    // Material breakdown
-    const breakdownEl = document.getElementById('materialBreakdown');
-    breakdownEl.innerHTML = DivertScan.MATERIAL_KEYS.map(key => {
-        const mat = DivertScan.MATERIALS[key];
-        const data = breakdown[key] || { pct: 0, tons: 0 };
-        if (data.pct === 0) return '';
-        return `
-            <div class="material-row">
-                <div class="material-info">
-                    <span class="material-icon">${mat.icon}</span>
-                    <span>${mat.name}</span>
-                </div>
-                <div class="material-values">
-                    <div class="material-pct">${data.pct}%</div>
-                    <div class="material-tons">${data.tons.toFixed(3)}T ${data.recyclable ? '♻️' : '🗑️'}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    // Summary info
-    document.getElementById('reviewTicketNum').textContent = session.ticketNumber || '-';
-    document.getElementById('reviewDate').textContent = session.ticketDate || '-';
-    document.getElementById('reviewNetTons').textContent = (session.netTons || 0).toFixed(2) + ' tons';
-    document.getElementById('reviewCO2').textContent = (session.co2eAvoided || 0).toFixed(2) + ' MT';
-    
-    // Manual adjustment grid
-    const manualGrid = document.getElementById('manualMaterialGrid');
-    manualGrid.innerHTML = DivertScan.MATERIAL_KEYS.map(key => {
-        const mat = DivertScan.MATERIALS[key];
-        const pct = session.materialBreakdown[key] || 0;
-        return `
-            <div class="material-item">
-                <div class="material-name">${mat.icon} ${key}</div>
-                <div class="material-input">
-                    <input type="number" id="manual_${key}" value="${pct}" min="0" max="100" onchange="updateManualTotal()">
-                    <span>%</span>
-                </div>
-            </div>
-        `;
-    }).join('');
-    updateManualTotal();
-}
-
-function updateManualTotal() {
-    let total = 0;
-    DivertScan.MATERIAL_KEYS.forEach(key => {
-        total += parseFloat(document.getElementById('manual_' + key)?.value) || 0;
-    });
-    document.getElementById('manualTotal').textContent = total.toFixed(0);
-}
-
-function recalculateManual() {
-    const percentages = {};
-    DivertScan.MATERIAL_KEYS.forEach(key => {
-        percentages[key] = parseFloat(document.getElementById('manual_' + key)?.value) || 0;
-    });
-    
-    const validation = DivertScan.validateMaterialTotal(percentages);
-    if (!validation.valid) {
-        DivertScan.toast(`Total is ${validation.total}%, must equal 100%`, 'error');
-        return;
-    }
-    
-    DivertScan.setMaterialPercentages(percentages);
-    populateReviewStep();
-    DivertScan.toast('Recalculated!', 'success');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SAVE TICKET
-// ═══════════════════════════════════════════════════════════════════════
-
-async function saveCurrentTicket() {
-    const project = DivertScan.getState().currentProject;
-    if (!project) {
-        DivertScan.toast('No project selected', 'error');
-        return;
-    }
-
-    try {
-        await DivertScan.saveTicket(project.id);
-        closeModal('ticketModal');
-        loadDashboardData();
-    } catch (err) {
-        DivertScan.toast('Save failed: ' + err.message, 'error');
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// REPORTS
-// ═══════════════════════════════════════════════════════════════════════
-
-async function exportLEEDReport() {
-    const project = DivertScan.getState().currentProject;
-    if (!project) {
-        DivertScan.toast('Select a project first', 'error');
-        return;
-    }
-
-    try {
-        const tickets = await DivertScan.loadTickets(project.id);
-        if (tickets.length === 0) {
-            DivertScan.toast('No tickets to export', 'error');
-            return;
-        }
-        
-        const csv = DivertScan.generateLEEDReport(tickets);
-        DivertScan.downloadCSV(csv, `DivertScan-LEED-${project.name}-${new Date().toISOString().split('T')[0]}.csv`);
-        DivertScan.toast('Report downloaded!', 'success');
-    } catch (e) {
-        DivertScan.toast(e.message, 'error');
-    }
-}
-
-function exportAuditLog() {
-    DivertScan.toast('Audit log export coming soon', 'info');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SETTINGS
-// ═══════════════════════════════════════════════════════════════════════
-
-function saveOpenAIKey() {
-    const key = document.getElementById('openaiKeyInput').value;
-    if (!key) {
-        DivertScan.toast('Enter API key', 'error');
-        return;
-    }
-    DivertScan.setOpenAIKey(key);
-    DivertScan.toast('API key saved!', 'success');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// MODALS
-// ═══════════════════════════════════════════════════════════════════════
-
-function openModal(id) {
-    document.getElementById(id).classList.add('active');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// START
-// ═══════════════════════════════════════════════════════════════════════
-
-document.addEventListener('DOMContentLoaded', initialize);
-    </script>
-</body>
-</html>
