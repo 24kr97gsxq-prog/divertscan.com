@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v3.4</title>
+<title>DivertScan™ v3.5</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -147,11 +147,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 .material-bar{display:flex;height:24px;border-radius:4px;overflow:hidden;margin:8px 0}
 .material-segment{display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:600}
 
+
+.loading-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.9);z-index:250;display:none;flex-direction:column;align-items:center;justify-content:center}
+.loading-overlay.active{display:flex}
+.loading-overlay .spinner{width:50px;height:50px;border:4px solid var(--slate-700);border-top-color:var(--emerald-500);border-radius:50%;animation:spin 1s linear infinite}
+.loading-overlay p{margin-top:16px;color:var(--slate-300);font-size:14px}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
 </style>
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v3.4</span></div>
+<div class="logo">DivertScan™ <span>v3.5</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -175,13 +181,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 
 <!-- Dashboard -->
 <div id="dashboardTab" class="tab-content">
-<div class="project-selector" onclick="showProjectModal()">
+<div class="card" style="background:linear-gradient(135deg,var(--slate-800),var(--slate-700));border:none;margin-bottom:12px">
+<div style="display:flex;justify-content:space-between;align-items:center">
 <div>
-<div style="font-size:10px;color:var(--slate-500)">CURRENT PROJECT</div>
-<div style="font-weight:600;color:var(--slate-200)" id="currentProjectName">Select Project</div>
-<div style="font-size:11px;color:var(--emerald-400)" id="currentProjectHauler"></div>
+<div style="font-size:10px;color:var(--slate-400)">CURRENT PROJECT</div>
+<div style="font-size:18px;font-weight:700;color:var(--slate-200)" id="currentProjectName">Select Project</div>
+<div style="font-size:12px;color:var(--emerald-400)" id="currentProjectHauler"></div>
 </div>
-<span style="color:var(--emerald-400);font-size:12px">Change →</span>
+<button class="btn btn-secondary btn-sm" onclick="showProjectModal()" style="width:auto">Change</button>
+</div>
 </div>
 <div class="stats-grid">
 <div class="stat-card"><div class="stat-value" id="statTickets">0</div><div class="stat-label">Tickets</div></div>
@@ -197,7 +205,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </div>
 <div class="progress-bar"><div class="progress-fill" id="leedProgressBar" style="width:0%"></div></div>
 </div>
-<button class="btn btn-primary btn-lg" style="margin-top:20px" onclick="startNewTicket()">➕ New Ticket</button>
+<div class="btn-row" style="margin-top:16px">
+<button class="btn btn-primary btn-lg" onclick="startNewTicket()">➕ New Ticket</button>
+</div>
+<div class="btn-row" style="margin-top:8px">
+<button class="btn btn-secondary" onclick="showTab('reports')">📊 Reports</button>
+<button class="btn btn-secondary" onclick="showTab('projects')">📁 Projects</button>
+</div>
 <div class="card" style="margin-top:20px">
 <div class="card-title">Recent Tickets <span style="font-size:10px;color:var(--slate-500);font-weight:normal">(tap to edit)</span></div>
 <div class="ticket-list" id="ticketList"><div class="empty-state">No tickets yet</div></div>
@@ -211,6 +225,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <button class="btn btn-primary btn-sm" onclick="showNewProjectModal()" style="width:auto">➕ New</button>
 </div>
 <div id="projectListFull"><div class="loading"><div class="spinner"></div></div></div>
+<div id="projectTicketsView" class="hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<button class="btn btn-secondary btn-sm" onclick="backToProjects()" style="width:auto">← Back</button>
+<h3 id="projectTicketsTitle" style="font-size:16px">Project Tickets</h3>
+<span></span>
+</div>
+<div id="projectTicketsList"></div>
+</div>
 </div>
 
 <!-- Tickets Tab -->
@@ -253,6 +275,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div class="nav-item" onclick="showTab('reports')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Reports</div>
 <div class="nav-item" onclick="showTab('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2"/></svg>Settings</div>
 </nav>
+
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+<div class="spinner"></div>
+<p id="loadingText">Processing...</p>
+</div>
 
 <div id="toast" class="toast"></div>
 
@@ -429,6 +458,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <div id="reportModal" class="modal"><div class="modal-content" style="max-height:95vh">
 <div class="modal-header"><div class="modal-title" id="rptProjName">Report</div><button class="modal-close" onclick="closeModal('reportModal')">×</button></div>
 <div class="modal-body">
+<div style="background:var(--emerald-500);color:white;padding:12px;border-radius:8px;margin-bottom:16px;text-align:center">
+<div style="font-weight:700">Dalmex Recycling LLC</div>
+<div style="font-size:11px">2828 Nagle St., Dallas, TX 75220 | (214) 352-2000</div>
+</div>
 <div id="rptMeta" style="color:var(--slate-400);font-size:12px;margin-bottom:16px"></div>
 <div class="project-stats" id="rptStats"></div>
 <div class="card"><div style="display:flex;justify-content:space-between"><div><div style="font-size:11px;color:var(--slate-400)">Diversion</div><div class="diversion-badge" id="rptDiv">0%</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--slate-400)">LEED v5</div><div style="font-size:20px;font-weight:700">75%</div></div></div><div class="progress-bar" style="margin-top:12px"><div class="progress-fill" id="rptBar" style="width:0%"></div></div><div style="margin-top:8px;text-align:center;font-size:12px" id="rptLeed"></div></div>
@@ -808,17 +841,57 @@ async function loadProjectListFull() {
         list.innerHTML = '<div class="empty-state">No projects yet</div>';
         return;
     }
-    list.innerHTML = projects.map(p => `
-        <div class="project-item">
-            <h4>${p.name}</h4>
-            <p>${p.address || 'No address'}</p>
-            <p style="color:var(--emerald-400);font-size:11px">${p.waste_hauler || 'No hauler'}</p>
-            <div class="btn-row" style="margin-top:8px">
-                <button class="btn btn-secondary btn-sm" onclick="editProject('${p.id}');event.stopPropagation()">✏️ Edit</button>
+    // Get ticket counts for each project
+    const { data: allTks } = await sb.from('tickets').select('project_id, net_tons, diversion_pct').order('service_date', {ascending: false});
+    const tksByProj = {};
+    (allTks || []).forEach(t => {
+        if (!tksByProj[t.project_id]) tksByProj[t.project_id] = { count: 0, tons: 0 };
+        tksByProj[t.project_id].count++;
+        tksByProj[t.project_id].tons += +t.net_tons || 0;
+    });
+    
+    list.innerHTML = projects.map(p => {
+        const stats = tksByProj[p.id] || { count: 0, tons: 0 };
+        return `
+        <div class="project-card" onclick="viewProjectTickets('${p.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+                <div>
+                    <h3>${p.name}</h3>
+                    <div class="meta">${p.address || 'No address'}</div>
+                    <div style="color:var(--emerald-400);font-size:11px">${p.waste_hauler || ''}</div>
+                </div>
+                <div style="text-align:right">
+                    <div style="font-size:20px;font-weight:700;color:var(--emerald-400)">${stats.count}</div>
+                    <div style="font-size:10px;color:var(--slate-400)">tickets</div>
+                    <div style="font-size:12px;color:var(--slate-300)">${stats.tons.toFixed(1)}T</div>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top:12px">
+                <button class="btn btn-secondary btn-sm" onclick="viewProjectTickets('${p.id}');event.stopPropagation()">📋 View Tickets</button>
+                <button class="btn btn-secondary btn-sm" onclick="editProject('${p.id}');event.stopPropagation()">✏️</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteProject('${p.id}');event.stopPropagation()">🗑️</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+}
+
+async function viewProjectTickets(pid) {
+    showLoading('Loading Tickets...');
+    const p = projects.find(x => x.id === pid);
+    if (!p) { hideLoading(); return; }
+    
+    document.getElementById('projectListFull').classList.add('hidden');
+    document.getElementById('projectTicketsView').classList.remove('hidden');
+    document.getElementById('projectTicketsTitle').textContent = p.name + ' - Tickets';
+    
+    const { data: tks } = await sb.from('tickets').select('*').eq('project_id', pid).order('service_date', {ascending: false});
+    renderTicketList(tks || [], 'projectTicketsList');
+    hideLoading();
+}
+
+function backToProjects() {
+    document.getElementById('projectTicketsView').classList.add('hidden');
+    document.getElementById('projectListFull').classList.remove('hidden');
 }
 
 function selectProject(id) {
@@ -976,6 +1049,7 @@ async function handleTicketFile(e) {
         document.getElementById('ticketImagePreview').innerHTML = '<img src="' + img + '">';
         document.getElementById('ticketImagePreview').classList.add('filled');
         document.getElementById('ticketAnalyzing').classList.remove('hidden');
+        showLoading('📄 Reading Scale Ticket...');
         
         try {
             const apiKey = localStorage.getItem('divertscan_openai');
@@ -1106,6 +1180,7 @@ async function analyzeDebris() {
     const photos = debrisPhotos.filter(p => p);
     if (!photos.length) { toast('Add at least 1 photo', 'error'); return; }
     
+    showLoading('🤖 AI Analyzing Debris...');
     document.getElementById('debrisAnalyzing').classList.remove('hidden');
     document.getElementById('analyzeDebrisBtn').disabled = true;
     
@@ -1286,6 +1361,7 @@ async function finalizeTicket() {
         };
         
         await sb.from('tickets').insert([data]);
+        hideLoading();
         closeModal('ticketModal');
         toast('Ticket finalized!', 'success');
         loadDashboard();
@@ -1485,12 +1561,19 @@ function closeModal(id) { document.getElementById(id).classList.remove('active')
 // Report variables
 let rptProj = null;
 let rptTks = [];
-const REPORT_FOOTER = 'This report represents a project-specific sort of commingled construction and demolition waste. All materials reported as diverted have been recycled or salvaged; no diverted tons include Alternative Daily Cover (ADC). Data processed via DivertScan AI Volumetric Analysis.';
+const DALMEX_INFO = {
+    name: 'Dalmex Recycling LLC',
+    address: '2828 Nagle St., Dallas, TX 75220',
+    phone: '(214) 352-2000',
+    certification: 'Licensed C&D Recycling Facility'
+};
+const REPORT_FOOTER = 'All materials reported as diverted have been processed at Dalmex Recycling LLC, a licensed C&D recycling facility. No diverted materials include Alternative Daily Cover (ADC). Material percentages calculated via DivertScan™ AI Volumetric Mass-Balance Analysis.';
 
 // Report functions
 async function loadReportList() {
+    showLoading('Loading Projects...');
     const el = document.getElementById('projectReportList');
-    if (!projects.length) { el.innerHTML = '<div class="empty-state">No projects</div>'; return; }
+    if (!projects.length) { el.innerHTML = '<div class="empty-state">No projects</div>'; hideLoading(); return; }
     let html = '';
     // Batch fetch summaries for all projects at once
     const { data: allTks } = await sb.from('tickets').select('project_id, net_tons, diverted_tons');
@@ -1508,16 +1591,18 @@ async function loadReportList() {
         html += '<div class="project-card" onclick="openReport(\'' + p.id + '\')"><h3>' + p.name + '</h3><div class="meta">' + (p.address||'') + ' • ' + (p.waste_hauler||'') + '</div><div class="project-stats"><div class="project-stat"><div class="value">' + s.count + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + s.tons.toFixed(1) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value" style="color:' + ls.color + '">' + rate.toFixed(0) + '%</div><div class="label">Div</div></div><div class="project-stat"><div class="value" style="color:' + ls.color + '">' + (ls.met?'✓':'—') + '</div><div class="label">LEED v'+leedVersion+'</div></div></div><div style="text-align:center;font-size:12px;color:var(--emerald-400)">Tap for reports →</div></div>';
     }
     el.innerHTML = html;
+    hideLoading();
 }
 
 async function openReport(pid) {
+    showLoading('Loading Report...');
     const p = projects.find(x => x.id === pid);
-    if (!p) return;
+    if (!p) { hideLoading(); return; }
     rptProj = p;
     const { data: tks } = await sb.from('tickets').select('*').eq('project_id', pid).order('service_date', {ascending:true});
     rptTks = tks || [];
     const tot = calcTotals(rptTks);
-    document.getElementById('rptProjName').textContent = p.name;
+    document.getElementById('rptProjName').textContent = p.name + ' - LEED v' + leedVersion + ' Report';
     document.getElementById('rptMeta').innerHTML = (p.address ? '<strong>Address:</strong> ' + p.address + '<br>' : '') + (p.waste_hauler ? '<strong>Hauler:</strong> ' + p.waste_hauler + '<br>' : '') + '<strong>Generated:</strong> ' + new Date().toLocaleDateString();
     document.getElementById('rptStats').innerHTML = '<div class="project-stat"><div class="value">' + rptTks.length + '</div><div class="label">Tickets</div></div><div class="project-stat"><div class="value">' + tot.tons.toFixed(2) + '</div><div class="label">Tons</div></div><div class="project-stat"><div class="value">' + tot.div.toFixed(2) + '</div><div class="label">Diverted</div></div><div class="project-stat"><div class="value">' + tot.co2.toFixed(1) + '</div><div class="label">CO₂e</div></div>';
     const rate = tot.rate;
@@ -1537,7 +1622,7 @@ async function openReport(pid) {
         const pct = tot.tons > 0 ? (tons/tot.tons*100) : 0;
         return '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--slate-800);border-radius:4px"><span>' + MATERIALS[k].icon + ' ' + MATERIALS[k].name + '</span><span style="color:' + (k==='landfill'?'var(--red-400)':'var(--emerald-400)') + '">' + tons.toFixed(3) + ' T</span></div>';
     }).join('') + '</div>';
-    openModal('reportModal');
+    hideLoading(); openModal('reportModal');
 }
 
 function calcTotals(tks) {
@@ -1556,20 +1641,26 @@ function calcTotals(tks) {
 
 
 function exportPDF() {
-    if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
+    if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
+    showLoading('Generating PDF...');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const tot = calcTotals(rptTks);
-    doc.setFontSize(20); doc.setTextColor(16,185,129);
-    doc.text('LEED WASTE DIVERSION REPORT', 105, 20, {align:'center'});
-    doc.setFontSize(10); doc.setTextColor(100);
-    doc.text('DivertScan™', 105, 27, {align:'center'});
+    
+    // Header with Dalmex branding
+    doc.setFontSize(18); doc.setTextColor(16,185,129);
+    doc.text('LEED WASTE DIVERSION REPORT', 105, 15, {align:'center'});
+    doc.setFontSize(10); doc.setTextColor(60,60,60);
+    doc.text('Prepared by: ' + DALMEX_INFO.name, 105, 22, {align:'center'});
+    doc.text(DALMEX_INFO.address + ' | ' + DALMEX_INFO.phone, 105, 27, {align:'center'});
+    
+    // Project Info
     doc.setFontSize(12); doc.setTextColor(0);
-    doc.text('Project: ' + rptProj.name, 14, 40);
-    let y = 47;
-    if (rptProj.address) { doc.text('Address: ' + rptProj.address, 14, y); y += 7; }
-    if (rptProj.waste_hauler) { doc.text('Hauler: ' + rptProj.waste_hauler, 14, y); y += 7; }
-    doc.text('Date: ' + new Date().toLocaleDateString(), 14, y); y += 15;
+    let y = 40;
+    doc.text('Project: ' + rptProj.name, 14, y); y += 7;
+    if (rptProj.address) { doc.text('Project Address: ' + rptProj.address, 14, y); y += 7; }
+    doc.text('Report Date: ' + new Date().toLocaleDateString(), 14, y); y += 7;
+    doc.text('LEED Version: v' + leedVersion, 14, y); y += 10;
     doc.setFillColor(240,240,240); doc.rect(14, y, 182, 35, 'F');
     doc.setFontSize(10);
     doc.text('Generated: ' + tot.tons.toFixed(2) + ' tons', 20, y+10);
@@ -1583,17 +1674,19 @@ function exportPDF() {
     y = doc.lastAutoTable.finalY + 10;
     doc.autoTable({startY:y, head:[['Date','Ticket','Net(T)','Div%','Audit']], body:rptTks.map(t=>[formatDate(t.service_date),t.ticket_number||'-',(t.net_tons||0).toFixed(3),(t.diversion_pct||0)+'%',t.audit_id||'-']), theme:'striped', headStyles:{fillColor:[16,185,129]}, styles:{fontSize:8}});
     doc.setFontSize(8); doc.setTextColor(100);
-    doc.text(REPORT_FOOTER.substring(0,90) + '...', 14, doc.internal.pageSize.height-15);
-    doc.text('© 2024-2025 DivertScan™', 14, doc.internal.pageSize.height-10);
+    doc.text(DALMEX_INFO.name + ' - ' + DALMEX_INFO.certification, 14, doc.internal.pageSize.height-20);
+    doc.text(DALMEX_INFO.address + ' | ' + DALMEX_INFO.phone, 14, doc.internal.pageSize.height-15);
+    doc.text('Generated by DivertScan™ | ' + new Date().toLocaleString(), 14, doc.internal.pageSize.height-10);
+    hideLoading();
     doc.save('LEED-' + rptProj.name.replace(/\s+/g,'-') + '.pdf');
-    DivertScan.toast('PDF saved!', 'success');
+    toast('PDF saved!', 'success');
 }
 
 function exportExcel() {
-    if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
+    if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
     const tot = calcTotals(rptTks);
     const wb = XLSX.utils.book_new();
-    const sum = [['LEED WASTE DIVERSION REPORT'],['Project:',rptProj.name],['Address:',rptProj.address||''],['Hauler:',rptProj.waste_hauler||''],['Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED v'+leedVersion+':',getLeedStatus(tot.rate).status],[],['MATERIALS']];
+    const sum = [['LEED WASTE DIVERSION REPORT'],[],['Prepared by:',DALMEX_INFO.name],['Facility Address:',DALMEX_INFO.address],['Phone:',DALMEX_INFO.phone],[],['Project:',rptProj.name],['Project Address:',rptProj.address||''],['LEED Version:','v'+leedVersion],['Report Date:',new Date().toLocaleDateString()],[],['Generated:',tot.tons.toFixed(3)],['Diverted:',tot.div.toFixed(3)],['Landfill:',tot.lf.toFixed(3)],['Diversion:',tot.rate.toFixed(1)+'%'],['LEED v'+leedVersion+':',getLeedStatus(tot.rate).status],[],['MATERIALS']];
     MATERIAL_KEYS.forEach(k => sum.push([MATERIALS[k].name, (tot.mats[k]||0).toFixed(3)]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Summary');
     const th = ['Date','Ticket','Gross','Tare','Net(T)','Wood','Gypsum','Plastic','OCC','Metal','Concrete','Block','Landfill','Diverted','Div%','Audit'];
@@ -1601,11 +1694,11 @@ function exportExcel() {
     rptTks.forEach(t => td.push([formatDate(t.service_date),t.ticket_number||'',t.gross_lbs||0,t.tare_lbs||0,(t.net_tons||0).toFixed(3),(t.wood_tons||0).toFixed(3),(t.gypsum_tons||0).toFixed(3),(t.plastic_tons||0).toFixed(3),(t.occ_tons||0).toFixed(3),(t.metal_tons||0).toFixed(3),(t.concrete_tons||0).toFixed(3),(t.block_tons||0).toFixed(3),(t.landfill_tons||0).toFixed(3),(t.diverted_tons||0).toFixed(3),(t.diversion_pct||0)+'%',t.audit_id||'']));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(td), 'Tickets');
     XLSX.writeFile(wb, 'LEED-' + rptProj.name.replace(/\s+/g,'-') + '.xlsx');
-    DivertScan.toast('Excel saved!', 'success');
+    toast('Excel saved!', 'success');
 }
 
 function exportCSV() {
-    if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
+    if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
     const tot = calcTotals(rptTks);
     let csv = 'LEED REPORT\nProject:,' + rptProj.name + '\n';
     csv += 'Diversion:,' + tot.rate.toFixed(1) + '%\nLEED:,' + getLeedStatus(tot.rate).status + '\n\n';
@@ -1614,11 +1707,11 @@ function exportCSV() {
     const blob = new Blob([csv], {type:'text/csv'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'LEED-' + rptProj.name.replace(/\s+/g,'-') + '.csv'; a.click();
-    DivertScan.toast('CSV saved!', 'success');
+    toast('CSV saved!', 'success');
 }
 
 function exportAudit() {
-    if (!rptProj || !rptTks.length) { DivertScan.toast('No data', 'error'); return; }
+    if (!rptProj || !rptTks.length) { toast('No data', 'error'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const tot = calcTotals(rptTks);
@@ -1640,7 +1733,7 @@ function exportAudit() {
     doc.text('Point-of-Capture verification. Photos stored in database.', 14, doc.internal.pageSize.height-15);
     doc.text('© 2024-2025 DivertScan™', 14, doc.internal.pageSize.height-10);
     doc.save('Audit-' + rptProj.name.replace(/\s+/g,'-') + '.pdf');
-    DivertScan.toast('Audit PDF saved!', 'success');
+    toast('Audit PDF saved!', 'success');
 }
 
 
@@ -1669,6 +1762,16 @@ function getLeedTarget() {
     return leedVersion === 4 ? '50%/75%' : '75%';
 }
 
+
+
+function showLoading(msg = 'Processing...') {
+    document.getElementById('loadingText').textContent = msg;
+    document.getElementById('loadingOverlay').classList.add('active');
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('active');
+}
 
 document.addEventListener('DOMContentLoaded', initialize);
 </script>
