@@ -5,508 +5,184 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DivertScan © 2026 | The Carbon Truth in Every Load</title>
     <meta name="description" content="LEED-compliant waste diversion tracking with Point-of-Capture Verification">
-    
-    <!-- Preconnect for faster loading -->
     <link rel="preconnect" href="https://rnaujdajnrlvndhmhvbk.supabase.co">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
     <style>
         :root {
-            --primary: #059669;
-            --primary-dark: #047857;
-            --primary-light: #10b981;
-            --accent: #f59e0b;
-            --danger: #dc2626;
-            --success: #16a34a;
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #334155;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --border: #475569;
-            --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
-            --radius: 12px;
+            --primary: #059669; --primary-dark: #047857; --primary-light: #10b981;
+            --accent: #f59e0b; --danger: #dc2626; --success: #16a34a;
+            --bg-dark: #0f172a; --bg-card: #1e293b; --bg-input: #334155;
+            --text-primary: #f8fafc; --text-secondary: #94a3b8; --text-muted: #64748b;
+            --border: #475569; --shadow: 0 4px 6px -1px rgba(0,0,0,0.3); --radius: 12px;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-dark); color: var(--text-primary); min-height: 100vh; line-height: 1.5; }
         
-        html, body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        /* Loading Screen */
-        #loading-screen {
-            position: fixed;
-            inset: 0;
-            background: var(--bg-dark);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            transition: opacity 0.3s ease;
-        }
-        #loading-screen.hidden { opacity: 0; pointer-events: none; }
-        
-        .loader-logo {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 1.5rem;
-        }
-        .loader-logo span { color: var(--text-primary); }
-        
-        .loader-spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--bg-card);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
+        /* Loading & Login Screens */
+        .screen { position: fixed; inset: 0; background: var(--bg-dark); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s ease; }
+        .screen.hidden { opacity: 0; pointer-events: none; }
+        .loader-logo, .login-logo { font-size: 2.5rem; font-weight: 700; color: var(--primary); margin-bottom: 1.5rem; }
+        .loader-logo span, .login-logo span { color: var(--text-primary); }
+        .loader-spinner { width: 48px; height: 48px; border: 4px solid var(--bg-card); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .loader-status {
-            margin-top: 1rem;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-        
-        .loader-error {
-            color: var(--danger);
-            margin-top: 1rem;
-            text-align: center;
-            max-width: 300px;
-        }
-        .loader-error button {
-            margin-top: 1rem;
-            padding: 0.5rem 1rem;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
+        .loader-status { margin-top: 1rem; color: var(--text-secondary); font-size: 0.875rem; }
+        .loader-error { color: var(--danger); margin-top: 1rem; text-align: center; max-width: 300px; }
+        .loader-error button { margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; }
+
+        /* Login Screen */
+        .login-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 90%; max-width: 400px; }
+        .login-title { text-align: center; margin-bottom: 1.5rem; }
+        .login-title h2 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+        .login-title p { color: var(--text-muted); font-size: 0.875rem; }
+        .user-select-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+        .user-btn { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-input); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; }
+        .user-btn:hover { border-color: var(--primary); background: rgba(5, 150, 105, 0.1); }
+        .user-btn.selected { border-color: var(--primary); background: rgba(5, 150, 105, 0.15); }
+        .user-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 600; }
+        .user-avatar.admin { background: linear-gradient(135deg, #059669, #10b981); color: white; }
+        .user-avatar.operator { background: linear-gradient(135deg, #3b82f6, #60a5fa); color: white; }
+        .user-avatar.driver { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: white; }
+        .user-info h3 { font-size: 1rem; font-weight: 600; }
+        .user-info p { font-size: 0.75rem; color: var(--text-muted); }
+        .pin-input-group { margin-top: 1.5rem; display: none; }
+        .pin-input-group.show { display: block; }
+        .pin-input-group label { display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+        .pin-input { width: 100%; padding: 0.875rem; font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); }
+        .pin-input:focus { outline: none; border-color: var(--primary); }
+        .login-btn { width: 100%; margin-top: 1rem; padding: 0.875rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+        .login-btn:hover { background: var(--primary-dark); }
+        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .login-error { color: var(--danger); font-size: 0.875rem; text-align: center; margin-top: 1rem; display: none; }
+        .login-error.show { display: block; }
 
         /* Main App */
         #app { display: none; }
         #app.loaded { display: block; }
-
-        /* Header */
-        .header {
-            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-        .logo span { color: var(--text-primary); }
-        .tagline {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            display: block;
-        }
         
-        .header-actions {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
+        /* Header */
+        .header { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%); border-bottom: 1px solid var(--border); padding: 1rem; position: sticky; top: 0; z-index: 100; }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+        .logo { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .logo span { color: var(--text-primary); }
+        .tagline { font-size: 0.75rem; color: var(--text-muted); display: block; }
+        .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .current-user { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 8px; font-size: 0.875rem; }
+        .current-user .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: white; }
+        .current-user .logout-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; margin-left: 0.5rem; }
+        .current-user .logout-btn:hover { color: var(--danger); }
 
         /* Buttons */
-        .btn {
-            padding: 0.625rem 1rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
+        .btn { padding: 0.625rem 1rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
-        .btn-secondary {
-            background: var(--bg-input);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-        }
+        .btn-secondary { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); }
         .btn-secondary:hover { background: var(--border); }
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-icon { padding: 0.5rem; }
 
         /* Main Content */
-        .main {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 1.5rem 1rem;
-        }
-
+        .main { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1rem; }
+        
         /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 0.25rem;
-            background: var(--bg-card);
-            padding: 0.25rem;
-            border-radius: var(--radius);
-            margin-bottom: 1.5rem;
-            overflow-x: auto;
-        }
-        .tab {
-            padding: 0.75rem 1.25rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            cursor: pointer;
-            background: transparent;
-            color: var(--text-secondary);
-            border: none;
-            white-space: nowrap;
-            transition: all 0.2s;
-        }
-        .tab.active {
-            background: var(--primary);
-            color: white;
-        }
-        .tab:hover:not(.active) {
-            background: var(--bg-input);
-            color: var(--text-primary);
-        }
+        .tabs { display: flex; gap: 0.25rem; background: var(--bg-card); padding: 0.25rem; border-radius: var(--radius); margin-bottom: 1.5rem; overflow-x: auto; }
+        .tab { padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 500; font-size: 0.875rem; cursor: pointer; background: transparent; color: var(--text-secondary); border: none; white-space: nowrap; transition: all 0.2s; }
+        .tab.active { background: var(--primary); color: white; }
+        .tab:hover:not(.active) { background: var(--bg-input); color: var(--text-primary); }
+        .tab.admin-only { display: none; }
+        body.is-admin .tab.admin-only { display: block; }
 
         /* Tab Content */
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
         /* Cards */
-        .card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        .card-title {
-            font-size: 1.125rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .card-title svg {
-            width: 20px;
-            height: 20px;
-            color: var(--primary);
-        }
-
-        /* Forms */
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 0.375rem;
-        }
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.625rem 0.875rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            transition: border-color 0.2s;
-        }
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        .form-group input::placeholder { color: var(--text-muted); }
+        .card { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1rem; }
+        .card-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .card-title svg { width: 20px; height: 20px; color: var(--primary); }
 
         /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1rem;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
+        .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--primary); }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Forms */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.375rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 0.875rem; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
+        .form-group input::placeholder { color: var(--text-muted); }
 
         /* Table */
-        .table-container {
-            overflow-x: auto;
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.875rem;
-        }
-        th, td {
-            padding: 0.75rem 1rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-        th {
-            background: var(--bg-input);
-            font-weight: 600;
-            color: var(--text-secondary);
-            white-space: nowrap;
-        }
+        .table-container { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg-input); font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
         tr:hover { background: rgba(5, 150, 105, 0.05); }
         tr:last-child td { border-bottom: none; }
 
-        /* Status badges */
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
+        /* Badges */
+        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
         .badge-success { background: rgba(22, 163, 74, 0.2); color: #4ade80; }
         .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
         .badge-danger { background: rgba(220, 38, 38, 0.2); color: #f87171; }
         .badge-info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
 
         /* Modal */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            padding: 1rem;
-        }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
         .modal-overlay.active { display: flex; }
-        .modal {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            max-width: 600px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        .modal-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+        .modal { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
         .modal-header h3 { font-size: 1.125rem; }
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 1.5rem;
-            line-height: 1;
-        }
+        .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem; line-height: 1; }
         .modal-body { padding: 1.5rem; }
-        .modal-footer {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
-        }
+        .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; justify-content: flex-end; }
 
-        /* File Upload */
-        .upload-zone {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .upload-zone:hover,
-        .upload-zone.dragover {
-            border-color: var(--primary);
-            background: rgba(5, 150, 105, 0.05);
-        }
-        .upload-zone input { display: none; }
-        .upload-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 1rem;
-            color: var(--text-muted);
-        }
-
-        /* Connection Status */
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--danger);
-        }
-        .status-dot.connected { background: var(--success); }
-        .status-dot.offline { background: var(--accent); }
+        /* Verification Badge */
+        .verification-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(5, 150, 105, 0.1); border: 1px solid var(--primary); border-radius: 8px; font-size: 0.875rem; }
+        .verification-badge svg { width: 16px; height: 16px; color: var(--primary); }
+        .capture-info { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); background: var(--bg-input); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
 
         /* Toast */
-        .toast-container {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .toast {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            min-width: 300px;
-            box-shadow: var(--shadow);
-            animation: slideIn 0.3s ease;
-        }
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
+        .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; min-width: 280px; box-shadow: var(--shadow); animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .toast-success { border-left: 4px solid var(--success); }
         .toast-error { border-left: 4px solid var(--danger); }
         .toast-info { border-left: 4px solid var(--primary); }
 
-        /* Verification Badge */
-        .verification-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(5, 150, 105, 0.1);
-            border: 1px solid var(--primary);
-            border-radius: 8px;
-            font-size: 0.875rem;
-        }
-        .verification-badge svg {
-            width: 16px;
-            height: 16px;
-            color: var(--primary);
-        }
-
-        /* GPS/IP Capture Display */
-        .capture-info {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            background: var(--bg-input);
-            padding: 0.5rem;
-            border-radius: 4px;
-            margin-top: 0.5rem;
-        }
-
         /* Footer */
-        .footer {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            border-top: 1px solid var(--border);
-            margin-top: 2rem;
-        }
+        .footer { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid var(--border); margin-top: 2rem; }
         .footer a { color: var(--primary); }
 
-        /* Print styles */
-        @media print {
-            .header, .tabs, .btn, .footer { display: none; }
-            .card { break-inside: avoid; }
-        }
+        /* Connection Status */
+        .connection-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+        .status-dot.connected { background: var(--success); }
 
-        /* Mobile adjustments */
+        /* Mobile */
         @media (max-width: 640px) {
-            .header-content { flex-direction: column; align-items: flex-start; }
-            .header-actions { width: 100%; }
-            .header-actions .btn { flex: 1; justify-content: center; }
+            .header-content { flex-direction: column; align-items: stretch; }
+            .header-actions { flex-direction: column; }
+            .header-actions .btn { justify-content: center; }
+            .current-user { justify-content: center; }
             .tabs { flex-wrap: nowrap; }
             .form-grid { grid-template-columns: 1fr; }
+            .admin-export-btns { display: none; }
+            body.is-admin .admin-export-btns { display: flex; flex-direction: column; gap: 0.5rem; }
         }
+        @media print { .header, .tabs, .btn, .footer { display: none; } }
     </style>
 </head>
 <body>
     <!-- Loading Screen -->
-    <div id="loading-screen">
+    <div class="screen" id="loading-screen">
         <div class="loader-logo">Divert<span>Scan</span></div>
         <div class="loader-spinner"></div>
         <div class="loader-status" id="loader-status">Initializing...</div>
@@ -516,9 +192,26 @@
         </div>
     </div>
 
+    <!-- Login Screen -->
+    <div class="screen hidden" id="login-screen">
+        <div class="login-box">
+            <div class="login-title">
+                <div class="login-logo">Divert<span>Scan</span></div>
+                <h2>Select Your Account</h2>
+                <p>Choose who you are to continue</p>
+            </div>
+            <div class="user-select-grid" id="user-select-grid"></div>
+            <div class="pin-input-group" id="pin-group">
+                <label>Enter PIN</label>
+                <input type="password" class="pin-input" id="pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••">
+            </div>
+            <button class="login-btn" id="login-btn" disabled>Sign In</button>
+            <p class="login-error" id="login-error">Incorrect PIN. Please try again.</p>
+        </div>
+    </div>
+
     <!-- Main App -->
     <div id="app">
-        <!-- Header -->
         <header class="header">
             <div class="header-content">
                 <div>
@@ -530,96 +223,53 @@
                     <span id="connection-text">Connecting...</span>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-secondary" onclick="exportExcel()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        Export Excel
-                    </button>
-                    <button class="btn btn-secondary" onclick="exportLEEDReport()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                        LEED Report
-                    </button>
+                    <div class="current-user" id="current-user-display">
+                        <div class="avatar" id="user-avatar">R</div>
+                        <span id="user-name">User</span>
+                        <button class="logout-btn" onclick="logout()" title="Sign Out">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        </button>
+                    </div>
+                    <div class="admin-export-btns">
+                        <button class="btn btn-secondary" onclick="exportExcel()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export
+                        </button>
+                    </div>
                     <button class="btn btn-primary" onclick="openNewLoadModal()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         New Load
                     </button>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content -->
         <main class="main">
-            <!-- Stats -->
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="stat-loads">0</div>
-                    <div class="stat-label">Total Loads</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="stat-tonnage">0</div>
-                    <div class="stat-label">Total Tons</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="stat-diversion">0%</div>
-                    <div class="stat-label">Diversion Rate</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="stat-carbon">0</div>
-                    <div class="stat-label">CO₂e Avoided (MT)</div>
-                </div>
+                <div class="stat-card"><div class="stat-value" id="stat-loads">0</div><div class="stat-label">Total Loads</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-tonnage">0</div><div class="stat-label">Total Tons</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-diversion">0%</div><div class="stat-label">Diversion Rate</div></div>
+                <div class="stat-card"><div class="stat-value" id="stat-carbon">0</div><div class="stat-label">CO₂e Avoided</div></div>
             </div>
 
-            <!-- Tabs -->
             <div class="tabs">
                 <button class="tab active" data-tab="loads">Loads</button>
                 <button class="tab" data-tab="projects">Projects</button>
-                <button class="tab" data-tab="materials">Materials</button>
-                <button class="tab" data-tab="reports">Reports</button>
-                <button class="tab" data-tab="watchtower">Industry Watchtower</button>
+                <button class="tab admin-only" data-tab="reports">Reports</button>
+                <button class="tab admin-only" data-tab="watchtower">Watchtower</button>
             </div>
 
             <!-- Loads Tab -->
             <div class="tab-content active" id="tab-loads">
                 <div class="card">
                     <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="1" y="3" width="15" height="13"/>
-                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
-                            <circle cx="5.5" cy="18.5" r="2.5"/>
-                            <circle cx="18.5" cy="18.5" r="2.5"/>
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                         Recent Loads
                     </div>
                     <div class="table-container">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Project</th>
-                                    <th>Material</th>
-                                    <th>Weight (tons)</th>
-                                    <th>Destination</th>
-                                    <th>Status</th>
-                                    <th>Verified</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="loads-table">
-                                <tr>
-                                    <td colspan="8" style="text-align:center;color:var(--text-muted);">
-                                        Loading loads data...
-                                    </td>
-                                </tr>
-                            </tbody>
+                            <thead><tr><th>Date</th><th>Project</th><th>Material</th><th>Tons</th><th>Destination</th><th>Entered By</th><th>Status</th></tr></thead>
+                            <tbody id="loads-table"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -629,1033 +279,536 @@
             <div class="tab-content" id="tab-projects">
                 <div class="card">
                     <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                         Active Projects
                     </div>
-                    <div id="projects-list">
-                        <p style="color:var(--text-muted);">Loading projects...</p>
-                    </div>
+                    <div id="projects-list"><p style="color:var(--text-muted);">Loading...</p></div>
                 </div>
             </div>
 
-            <!-- Materials Tab -->
-            <div class="tab-content" id="tab-materials">
-                <div class="card">
-                    <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        </svg>
-                        Material Categories &amp; GWP Coefficients
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Material</th>
-                                    <th>Category</th>
-                                    <th>Default Density (lb/yd³)</th>
-                                    <th>GWP (MT CO₂e/ton)</th>
-                                    <th>LEED v5 Tier</th>
-                                </tr>
-                            </thead>
-                            <tbody id="materials-table"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Reports Tab -->
+            <!-- Reports Tab (Admin Only) -->
             <div class="tab-content" id="tab-reports">
                 <div class="card">
                     <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                        </svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         Generate Reports
                     </div>
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Project</label>
-                            <select id="report-project">
-                                <option value="">All Projects</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Date Range</label>
-                            <select id="report-range">
-                                <option value="all">All Time</option>
-                                <option value="month">This Month</option>
-                                <option value="quarter">This Quarter</option>
-                                <option value="year">This Year</option>
-                            </select>
-                        </div>
+                        <div class="form-group"><label>Project</label><select id="report-project"><option value="">All Projects</option></select></div>
+                        <div class="form-group"><label>Date Range</label><select id="report-range"><option value="all">All Time</option><option value="month">This Month</option><option value="quarter">This Quarter</option></select></div>
                     </div>
                     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
-                        <button class="btn btn-primary" onclick="exportExcel()">Export Dalmex Excel (24-col)</button>
-                        <button class="btn btn-secondary" onclick="exportLEEDReport()">LEED Compliance Report</button>
-                        <button class="btn btn-secondary" onclick="exportAuditLog()">Audit Trail PDF</button>
+                        <button class="btn btn-primary" onclick="exportExcel()">Dalmex Excel (24-col)</button>
+                        <button class="btn btn-secondary" onclick="exportLEEDReport()">LEED Report</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Industry Watchtower Tab -->
+            <!-- Watchtower Tab (Admin Only) -->
             <div class="tab-content" id="tab-watchtower">
                 <div class="card">
                     <div class="card-title">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="2" y1="12" x2="22" y2="12"/>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                        </svg>
-                        Industry Watchtower - LEED v5 Updates
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        Industry Watchtower - LEED v5
                     </div>
-                    <div id="watchtower-content">
-                        <div style="margin-bottom:1.5rem;">
-                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">🌿 LEED v5 Key Changes (2024-2025)</h4>
-                            <ul style="color:var(--text-secondary);margin-left:1.25rem;">
-                                <li>Tier 1 Circularity credits now provide enhanced weighted multipliers for reuse materials</li>
-                                <li>Global Warming Potential (GWP) coefficients required for carbon tracking</li>
-                                <li>Stricter chain-of-custody documentation requirements</li>
-                                <li>Point-of-capture verification becoming industry standard</li>
-                            </ul>
-                        </div>
-                        <div style="margin-bottom:1.5rem;">
-                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">📰 Recent Industry News</h4>
-                            <div id="news-links"></div>
-                        </div>
-                        <div>
-                            <h4 style="color:var(--primary);margin-bottom:0.5rem;">🔗 Official Resources</h4>
-                            <ul style="color:var(--text-secondary);margin-left:1.25rem;">
-                                <li><a href="https://www.usgbc.org/leed" target="_blank" style="color:var(--primary);">USGBC LEED Official</a></li>
-                                <li><a href="https://www.epa.gov/warm" target="_blank" style="color:var(--primary);">EPA WARM Calculator</a></li>
-                                <li><a href="https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-data-702" target="_blank" style="color:var(--primary);">MR Credit: Construction Waste Management</a></li>
-                            </ul>
-                        </div>
+                    <div style="margin-bottom:1.5rem;">
+                        <h4 style="color:var(--primary);margin-bottom:0.5rem;">🌿 LEED v5 Key Changes</h4>
+                        <ul style="color:var(--text-secondary);margin-left:1.25rem;"><li>Tier 1 Circularity enhanced multipliers for reuse</li><li>GWP coefficients required for carbon tracking</li><li>Stricter chain-of-custody documentation</li><li>Point-of-capture verification standard</li></ul>
+                    </div>
+                    <div>
+                        <h4 style="color:var(--primary);margin-bottom:0.5rem;">🔗 Resources</h4>
+                        <ul style="color:var(--text-secondary);margin-left:1.25rem;"><li><a href="https://www.usgbc.org/leed" target="_blank" style="color:var(--primary);">USGBC LEED Official</a></li><li><a href="https://www.epa.gov/warm" target="_blank" style="color:var(--primary);">EPA WARM Calculator</a></li></ul>
                     </div>
                 </div>
             </div>
         </main>
 
-        <!-- Footer -->
         <footer class="footer">
-            <p><strong>DivertScan © 2026</strong> | Powered by <a href="#">Dalmex Recycling LLC</a></p>
-            <p style="margin-top:0.5rem;">Point-of-Capture Verification™ Technology | LEED v5 Compliant</p>
+            <p><strong>DivertScan © 2026</strong> | Powered by Dalmex Recycling LLC</p>
+            <p style="margin-top:0.5rem;">Point-of-Capture Verification™ | LEED v5 Compliant</p>
         </footer>
     </div>
 
     <!-- New Load Modal -->
     <div class="modal-overlay" id="new-load-modal">
         <div class="modal">
-            <div class="modal-header">
-                <h3>Add New Load</h3>
-                <button class="modal-close" onclick="closeModal('new-load-modal')">&times;</button>
-            </div>
+            <div class="modal-header"><h3>Add New Load</h3><button class="modal-close" onclick="closeModal('new-load-modal')">&times;</button></div>
             <div class="modal-body">
                 <div class="verification-badge" style="margin-bottom:1rem;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     Point-of-Capture Verification Active
                 </div>
-                
                 <form id="new-load-form">
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Project *</label>
-                            <select id="load-project" required>
-                                <option value="">Select Project</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Date *</label>
-                            <input type="date" id="load-date" required>
-                        </div>
+                        <div class="form-group"><label>Project *</label><select id="load-project" required><option value="">Select Project</option></select></div>
+                        <div class="form-group"><label>Date *</label><input type="date" id="load-date" required></div>
                     </div>
-                    
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Material *</label>
-                            <select id="load-material" required>
-                                <option value="">Select Material</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Weight (tons) *</label>
-                            <input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00">
-                        </div>
+                        <div class="form-group"><label>Material *</label><select id="load-material" required><option value="">Select Material</option></select></div>
+                        <div class="form-group"><label>Weight (tons) *</label><input type="number" id="load-weight" step="0.01" min="0" required placeholder="0.00"></div>
                     </div>
-                    
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Destination Type *</label>
-                            <select id="load-destination-type" required>
-                                <option value="">Select Type</option>
-                                <option value="recycling">Recycling Facility</option>
-                                <option value="reuse">Reuse/Donation</option>
-                                <option value="landfill">Landfill</option>
-                                <option value="composting">Composting</option>
-                                <option value="wte">Waste-to-Energy</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Destination Facility</label>
-                            <input type="text" id="load-facility" placeholder="Facility name">
-                        </div>
+                        <div class="form-group"><label>Destination Type *</label><select id="load-destination-type" required><option value="">Select Type</option><option value="recycling">Recycling Facility</option><option value="reuse">Reuse/Donation</option><option value="landfill">Landfill</option><option value="composting">Composting</option><option value="wte">Waste-to-Energy</option></select></div>
+                        <div class="form-group"><label>Facility Name</label><input type="text" id="load-facility" placeholder="Facility name"></div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Hauler</label>
-                        <input type="text" id="load-hauler" placeholder="Hauler company">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Ticket/Manifest #</label>
-                        <input type="text" id="load-ticket" placeholder="Scale ticket or manifest number">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Notes</label>
-                        <textarea id="load-notes" rows="2" placeholder="Additional notes..."></textarea>
-                    </div>
-                    
-                    <div class="capture-info" id="capture-info">
-                        Capturing verification data...
-                    </div>
+                    <div class="form-group"><label>Hauler</label><input type="text" id="load-hauler" placeholder="Hauler company"></div>
+                    <div class="form-group"><label>Ticket/Manifest #</label><input type="text" id="load-ticket" placeholder="Scale ticket number"></div>
+                    <div class="form-group"><label>Notes</label><textarea id="load-notes" rows="2" placeholder="Additional notes..."></textarea></div>
+                    <div class="capture-info" id="capture-info">Capturing verification data...</div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('new-load-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveLoad()">Save Load</button>
-            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('new-load-modal')">Cancel</button><button class="btn btn-primary" onclick="saveLoad()">Save Load</button></div>
         </div>
     </div>
 
-    <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- External Dependencies - Load in specific order -->
     <script>
-        // Configuration
-        const CONFIG = {
-            SUPABASE_URL: 'https://rnaujdajnrlvndhmhvbk.supabase.co',
-            SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D3Ts3ZWSRM',
-            VERSION: '2.0.0'
-        };
+    // ========== CONFIGURATION ==========
+    const CONFIG = {
+        SUPABASE_URL: 'https://rnaujdajnrlvndhmhvbk.supabase.co',
+        SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYXVqZGFqbnJsdm5kaG1odmJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NTY2NDUsImV4cCI6MjA1MzMzMjY0NX0.T-DPJVQkfhngFDgcPOVNgnbBJbRpWxgi3D7Ts3ZWSRM',
+        VERSION: '2.0.1'
+    };
 
-        // Global state
-        let supabase = null;
-        let isOnline = navigator.onLine;
-        let gpsData = null;
-        let ipData = null;
+    // ========== USERS ==========
+    const USERS = [
+        { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Robert', company: 'DivertScan', role: 'admin', pin: '1234', initials: 'RA' },
+        { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', name: 'Dalmex Floor', company: 'Dalmex Recycling', role: 'operator', pin: '5678', initials: 'DF' },
+        { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', name: 'Jaguar Driver', company: 'Jaguar Waste', role: 'driver', pin: '9012', initials: 'JD' }
+    ];
 
-        // Loading status updates
-        function updateLoadStatus(message) {
-            const statusEl = document.getElementById('loader-status');
-            if (statusEl) statusEl.textContent = message;
-        }
+    // ========== MATERIALS ==========
+    const MATERIALS = [
+        { name: 'Concrete', category: 'Aggregate', density: 4050, gwp: 0.107, tier: 'Standard' },
+        { name: 'Asphalt', category: 'Aggregate', density: 3960, gwp: 0.094, tier: 'Standard' },
+        { name: 'Wood - Clean', category: 'Wood', density: 600, gwp: 0.912, tier: 'Tier 1' },
+        { name: 'Wood - Treated', category: 'Wood', density: 650, gwp: 0.312, tier: 'Standard' },
+        { name: 'Metal - Ferrous', category: 'Metal', density: 1600, gwp: 1.831, tier: 'Standard' },
+        { name: 'Metal - Non-Ferrous', category: 'Metal', density: 1200, gwp: 4.876, tier: 'Standard' },
+        { name: 'Drywall/Gypsum', category: 'Drywall', density: 800, gwp: 0.184, tier: 'Standard' },
+        { name: 'Cardboard/OCC', category: 'Paper', density: 200, gwp: 3.112, tier: 'Standard' },
+        { name: 'Plastic - Mixed', category: 'Plastic', density: 400, gwp: 1.423, tier: 'Standard' },
+        { name: 'Roofing Materials', category: 'Mixed', density: 1100, gwp: 0.156, tier: 'Standard' },
+        { name: 'Brick/Masonry', category: 'Aggregate', density: 3200, gwp: 0.089, tier: 'Standard' },
+        { name: 'Glass', category: 'Glass', density: 2500, gwp: 0.423, tier: 'Standard' },
+        { name: 'Carpet', category: 'Mixed', density: 350, gwp: 2.156, tier: 'Standard' },
+        { name: 'Insulation', category: 'Mixed', density: 150, gwp: 0.534, tier: 'Standard' },
+        { name: 'Mixed C&D', category: 'Mixed', density: 1500, gwp: 0.267, tier: 'Standard' },
+        { name: 'Land Clearing Debris', category: 'Organic', density: 500, gwp: 0.756, tier: 'Tier 1' },
+        { name: 'Fixtures - Reuse', category: 'Reuse', density: 800, gwp: 2.5, tier: 'Tier 1' },
+        { name: 'Appliances - Reuse', category: 'Reuse', density: 700, gwp: 3.2, tier: 'Tier 1' }
+    ];
 
-        function showLoadError(message) {
-            document.getElementById('loader-status').style.display = 'none';
-            document.querySelector('.loader-spinner').style.display = 'none';
-            const errorEl = document.getElementById('loader-error');
-            document.getElementById('error-message').textContent = message;
-            errorEl.style.display = 'block';
-        }
+    // ========== GLOBAL STATE ==========
+    let supabase = null;
+    let currentUser = null;
+    let selectedUserId = null;
+    let gpsData = null;
+    let ipData = null;
 
-        // Load Supabase dynamically with proper error handling
-        function loadSupabase() {
-            return new Promise((resolve, reject) => {
-                updateLoadStatus('Loading Supabase SDK...');
-                
-                // Check if already loaded
-                if (window.supabase) {
-                    resolve(window.supabase);
-                    return;
-                }
+    // ========== INITIALIZATION ==========
+    function updateLoadStatus(msg) { document.getElementById('loader-status').textContent = msg; }
+    
+    function showLoadError(msg) {
+        document.getElementById('loader-status').style.display = 'none';
+        document.querySelector('.loader-spinner').style.display = 'none';
+        document.getElementById('error-message').textContent = msg;
+        document.getElementById('loader-error').style.display = 'block';
+    }
 
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-                script.async = true;
-                
-                const timeout = setTimeout(() => {
-                    reject(new Error('Supabase SDK load timeout'));
-                }, 15000);
+    function loadSupabase() {
+        return new Promise((resolve, reject) => {
+            updateLoadStatus('Loading Supabase...');
+            if (window.supabase) { resolve(window.supabase); return; }
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+            const timeout = setTimeout(() => reject(new Error('Load timeout')), 15000);
+            script.onload = () => { clearTimeout(timeout); window.supabase ? resolve(window.supabase) : reject(new Error('SDK unavailable')); };
+            script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to load SDK')); };
+            document.head.appendChild(script);
+        });
+    }
 
-                script.onload = () => {
-                    clearTimeout(timeout);
-                    if (window.supabase) {
-                        resolve(window.supabase);
-                    } else {
-                        reject(new Error('Supabase SDK loaded but not available'));
-                    }
-                };
+    function loadSheetJS() {
+        return new Promise((resolve, reject) => {
+            if (window.XLSX) { resolve(window.XLSX); return; }
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+            script.onload = () => resolve(window.XLSX);
+            script.onerror = () => reject(new Error('Failed to load SheetJS'));
+            document.head.appendChild(script);
+        });
+    }
 
-                script.onerror = () => {
-                    clearTimeout(timeout);
-                    reject(new Error('Failed to load Supabase SDK'));
-                };
+    async function initSupabase() {
+        updateLoadStatus('Connecting to database...');
+        try {
+            const { createClient } = window.supabase;
+            supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+            await supabase.from('loads').select('id').limit(1);
+            return true;
+        } catch (e) { console.warn('DB connection issue:', e); return false; }
+    }
 
-                document.head.appendChild(script);
-            });
-        }
+    async function getGPSData() {
+        return new Promise(resolve => {
+            if (!navigator.geolocation) { resolve({ error: 'Not supported' }); return; }
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve({ latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy, timestamp: new Date().toISOString() }),
+                err => resolve({ error: err.message }),
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
+    }
 
-        // Load SheetJS for Excel export
-        function loadSheetJS() {
-            return new Promise((resolve, reject) => {
-                if (window.XLSX) {
-                    resolve(window.XLSX);
-                    return;
-                }
+    async function getIPData() {
+        try {
+            const res = await fetch('https://api.ipify.org?format=json');
+            const data = await res.json();
+            return { ip: data.ip, timestamp: new Date().toISOString() };
+        } catch { return { ip: 'unavailable', timestamp: new Date().toISOString() }; }
+    }
 
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-                script.async = true;
-
-                const timeout = setTimeout(() => {
-                    reject(new Error('SheetJS load timeout'));
-                }, 10000);
-
-                script.onload = () => {
-                    clearTimeout(timeout);
-                    resolve(window.XLSX);
-                };
-
-                script.onerror = () => {
-                    clearTimeout(timeout);
-                    reject(new Error('Failed to load SheetJS'));
-                };
-
-                document.head.appendChild(script);
-            });
-        }
-
-        // Initialize Supabase client
-        async function initSupabase() {
-            updateLoadStatus('Connecting to database...');
+    async function initialize() {
+        try {
+            await loadSupabase();
+            const connected = await initSupabase();
+            updateLoadStatus('Loading app...');
+            loadSheetJS().catch(console.warn);
+            Promise.all([getGPSData(), getIPData()]).then(([gps, ip]) => { gpsData = gps; ipData = ip; });
             
-            try {
-                const { createClient } = window.supabase;
-                supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-                
-                // Test connection
-                const { error } = await supabase.from('loads').select('id').limit(1);
-                
-                if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist (ok for first run)
-                    console.warn('Database connection warning:', error.message);
-                }
-                
-                return true;
-            } catch (err) {
-                console.error('Supabase init error:', err);
-                return false;
-            }
-        }
-
-        // Get GPS coordinates
-        async function getGPSData() {
-            return new Promise((resolve) => {
-                if (!navigator.geolocation) {
-                    resolve({ error: 'Geolocation not supported' });
-                    return;
-                }
-
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        resolve({
-                            latitude: position.coords.latitude.toFixed(6),
-                            longitude: position.coords.longitude.toFixed(6),
-                            accuracy: position.coords.accuracy,
-                            timestamp: new Date().toISOString()
-                        });
-                    },
-                    (error) => {
-                        resolve({ error: error.message });
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                );
-            });
-        }
-
-        // Get IP data (simplified - would use actual API in production)
-        async function getIPData() {
-            try {
-                const response = await fetch('https://api.ipify.org?format=json');
-                const data = await response.json();
-                return { ip: data.ip, timestamp: new Date().toISOString() };
-            } catch {
-                return { ip: 'unavailable', timestamp: new Date().toISOString() };
-            }
-        }
-
-        // Main initialization
-        async function initialize() {
-            try {
-                // Load Supabase
-                await loadSupabase();
-                
-                // Initialize client
-                const connected = await initSupabase();
-                
-                updateLoadStatus('Loading application...');
-                
-                // Start loading other dependencies in parallel
-                loadSheetJS().catch(console.warn);
-                
-                // Get verification data in background
-                Promise.all([getGPSData(), getIPData()]).then(([gps, ip]) => {
-                    gpsData = gps;
-                    ipData = ip;
-                    updateCaptureInfo();
-                });
-
-                // Initialize app
+            // Check for saved session
+            const savedUser = localStorage.getItem('divertscan_user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
                 await initializeApp(connected);
-                
-                // Show app
                 document.getElementById('loading-screen').classList.add('hidden');
                 document.getElementById('app').classList.add('loaded');
-                
-                // Update connection status
-                updateConnectionStatus(connected);
-                
-            } catch (error) {
-                console.error('Initialization failed:', error);
-                showLoadError(`Failed to initialize: ${error.message}. Please check your internet connection and try again.`);
-            }
-        }
-
-        // Initialize app UI and data
-        async function initializeApp(isConnected) {
-            // Set up tabs
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    tab.classList.add('active');
-                    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-                });
-            });
-
-            // Set default date
-            document.getElementById('load-date').valueAsDate = new Date();
-
-            // Load data
-            await loadMaterialsData();
-            
-            if (isConnected) {
-                await loadLoadsData();
-                await loadProjectsData();
+                applyUserRole();
             } else {
-                loadOfflineData();
+                // Show login screen
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('login-screen').classList.remove('hidden');
+                renderUserSelect();
             }
-
-            updateStats();
-            populateNewsLinks();
+            updateConnectionStatus(connected);
+        } catch (e) {
+            console.error('Init failed:', e);
+            showLoadError(`Failed to initialize: ${e.message}`);
         }
+    }
 
-        // Materials data with GWP coefficients
-        const MATERIALS = [
-            { name: 'Concrete', category: 'Aggregate', density: 4050, gwp: 0.107, tier: 'Standard' },
-            { name: 'Asphalt', category: 'Aggregate', density: 3960, gwp: 0.094, tier: 'Standard' },
-            { name: 'Wood - Clean', category: 'Wood', density: 600, gwp: 0.912, tier: 'Tier 1' },
-            { name: 'Wood - Treated', category: 'Wood', density: 650, gwp: 0.312, tier: 'Standard' },
-            { name: 'Metal - Ferrous', category: 'Metal', density: 1600, gwp: 1.831, tier: 'Standard' },
-            { name: 'Metal - Non-Ferrous', category: 'Metal', density: 1200, gwp: 4.876, tier: 'Standard' },
-            { name: 'Drywall/Gypsum', category: 'Drywall', density: 800, gwp: 0.184, tier: 'Standard' },
-            { name: 'Cardboard/OCC', category: 'Paper', density: 200, gwp: 3.112, tier: 'Standard' },
-            { name: 'Plastic - Mixed', category: 'Plastic', density: 400, gwp: 1.423, tier: 'Standard' },
-            { name: 'Roofing Materials', category: 'Mixed', density: 1100, gwp: 0.156, tier: 'Standard' },
-            { name: 'Brick/Masonry', category: 'Aggregate', density: 3200, gwp: 0.089, tier: 'Standard' },
-            { name: 'Glass', category: 'Glass', density: 2500, gwp: 0.423, tier: 'Standard' },
-            { name: 'Carpet', category: 'Mixed', density: 350, gwp: 2.156, tier: 'Standard' },
-            { name: 'Insulation', category: 'Mixed', density: 150, gwp: 0.534, tier: 'Standard' },
-            { name: 'Mixed C&D', category: 'Mixed', density: 1500, gwp: 0.267, tier: 'Standard' },
-            { name: 'Land Clearing Debris', category: 'Organic', density: 500, gwp: 0.756, tier: 'Tier 1' },
-            { name: 'Fixtures - Reuse', category: 'Reuse', density: 800, gwp: 2.5, tier: 'Tier 1' },
-            { name: 'Appliances - Reuse', category: 'Reuse', density: 700, gwp: 3.2, tier: 'Tier 1' }
-        ];
+    // ========== LOGIN ==========
+    function renderUserSelect() {
+        const grid = document.getElementById('user-select-grid');
+        grid.innerHTML = USERS.map(u => `
+            <button class="user-btn" data-id="${u.id}" onclick="selectUser('${u.id}')">
+                <div class="user-avatar ${u.role}">${u.initials}</div>
+                <div class="user-info"><h3>${u.name}</h3><p>${u.company} • ${u.role}</p></div>
+            </button>
+        `).join('');
+    }
 
-        // Sample projects
-        const SAMPLE_PROJECTS = [
-            { id: 'proj-001', name: "Children's Hospital Phase 2", client: 'Children\'s Medical Center', address: 'Dallas, TX' },
-            { id: 'proj-002', name: 'DFW Airport Terminal C', client: 'DFW Airport', address: 'Irving, TX' },
-            { id: 'proj-003', name: 'Frisco Town Center', client: 'City of Frisco', address: 'Frisco, TX' }
-        ];
+    function selectUser(id) {
+        selectedUserId = id;
+        document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelector(`.user-btn[data-id="${id}"]`).classList.add('selected');
+        document.getElementById('pin-group').classList.add('show');
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-input').focus();
+        document.getElementById('login-btn').disabled = false;
+        document.getElementById('login-error').classList.remove('show');
+    }
 
-        // Load materials table
-        function loadMaterialsData() {
-            const tbody = document.getElementById('materials-table');
-            tbody.innerHTML = MATERIALS.map(m => `
-                <tr>
-                    <td>${m.name}</td>
-                    <td>${m.category}</td>
-                    <td>${m.density.toLocaleString()}</td>
-                    <td>${m.gwp.toFixed(3)}</td>
-                    <td><span class="badge ${m.tier === 'Tier 1' ? 'badge-success' : 'badge-info'}">${m.tier}</span></td>
-                </tr>
-            `).join('');
+    document.getElementById('pin-input')?.addEventListener('input', function() {
+        if (this.value.length === 4) document.getElementById('login-btn').click();
+    });
 
-            // Populate material select
-            const select = document.getElementById('load-material');
-            select.innerHTML = '<option value="">Select Material</option>' + 
-                MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
-        }
-
-        // Load projects
-        async function loadProjectsData() {
-            // Try to load from Supabase first
-            let projects = SAMPLE_PROJECTS;
-            
-            if (supabase) {
-                try {
-                    const { data, error } = await supabase.from('projects').select('*');
-                    if (!error && data && data.length > 0) {
-                        projects = data;
-                    }
-                } catch (e) {
-                    console.warn('Could not load projects from database');
-                }
-            }
-
-            // Update project select
-            const select = document.getElementById('load-project');
-            const reportSelect = document.getElementById('report-project');
-            
-            const options = '<option value="">Select Project</option>' + 
-                projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            
-            select.innerHTML = options;
-            reportSelect.innerHTML = '<option value="">All Projects</option>' + 
-                projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-
-            // Update projects list
-            const listEl = document.getElementById('projects-list');
-            listEl.innerHTML = projects.map(p => `
-                <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;">
-                    <div style="font-weight:600;">${p.name}</div>
-                    <div style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''} • ${p.address || ''}</div>
-                </div>
-            `).join('');
-
-            window.projectsData = projects;
-        }
-
-        // Load loads data
-        async function loadLoadsData() {
-            const tbody = document.getElementById('loads-table');
-            
-            if (!supabase) {
-                loadOfflineData();
-                return;
-            }
-
-            try {
-                const { data, error } = await supabase
-                    .from('loads')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-                    .limit(50);
-
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    window.loadsData = data;
-                    renderLoadsTable(data);
-                } else {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
-                                No loads recorded yet. Click "New Load" to add your first entry.
-                            </td>
-                        </tr>
-                    `;
-                    window.loadsData = [];
-                }
-            } catch (err) {
-                console.error('Error loading loads:', err);
-                loadOfflineData();
-            }
-        }
-
-        // Render loads table
-        function renderLoadsTable(loads) {
-            const tbody = document.getElementById('loads-table');
-            
-            if (!loads || loads.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" style="text-align:center;color:var(--text-muted);">
-                            No loads recorded yet.
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            tbody.innerHTML = loads.map(load => {
-                const project = window.projectsData?.find(p => p.id === load.project_id);
-                const isVerified = load.gps_latitude && load.ip_address;
-                const isDiverted = ['recycling', 'reuse', 'composting'].includes(load.destination_type);
-                
-                return `
-                    <tr>
-                        <td>${new Date(load.load_date || load.created_at).toLocaleDateString()}</td>
-                        <td>${project?.name || load.project_id || '-'}</td>
-                        <td>${load.material || '-'}</td>
-                        <td>${parseFloat(load.weight_tons || 0).toFixed(2)}</td>
-                        <td>${load.facility_name || load.destination_type || '-'}</td>
-                        <td>
-                            <span class="badge ${isDiverted ? 'badge-success' : 'badge-warning'}">
-                                ${isDiverted ? 'Diverted' : 'Disposed'}
-                            </span>
-                        </td>
-                        <td>
-                            ${isVerified ? 
-                                '<span class="badge badge-success">✓ Verified</span>' : 
-                                '<span class="badge badge-warning">Pending</span>'
-                            }
-                        </td>
-                        <td>
-                            <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" 
-                                onclick="viewLoad('${load.id}')">View</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        // Load offline/demo data
-        function loadOfflineData() {
-            const demoLoads = [
-                { id: '1', load_date: '2026-01-24', project_id: 'proj-001', material: 'Concrete', weight_tons: 45.5, destination_type: 'recycling', facility_name: 'DFW Concrete Recycling', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
-                { id: '2', load_date: '2026-01-23', project_id: 'proj-001', material: 'Metal - Ferrous', weight_tons: 12.3, destination_type: 'recycling', facility_name: 'Texas Metal Recyclers', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
-                { id: '3', load_date: '2026-01-22', project_id: 'proj-002', material: 'Mixed C&D', weight_tons: 28.7, destination_type: 'landfill', facility_name: 'DFW Landfill', gps_latitude: null, ip_address: null }
-            ];
-            
-            window.loadsData = demoLoads;
-            renderLoadsTable(demoLoads);
-        }
-
-        // Update stats
-        function updateStats() {
-            const loads = window.loadsData || [];
-            
-            const totalLoads = loads.length;
-            const totalTonnage = loads.reduce((sum, l) => sum + parseFloat(l.weight_tons || 0), 0);
-            const divertedTonnage = loads
-                .filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type))
-                .reduce((sum, l) => sum + parseFloat(l.weight_tons || 0), 0);
-            const diversionRate = totalTonnage > 0 ? (divertedTonnage / totalTonnage * 100) : 0;
-            
-            // Calculate carbon avoided
-            let carbonAvoided = 0;
-            loads.forEach(load => {
-                if (['recycling', 'reuse', 'composting'].includes(load.destination_type)) {
-                    const material = MATERIALS.find(m => m.name === load.material);
-                    if (material) {
-                        carbonAvoided += parseFloat(load.weight_tons || 0) * material.gwp;
-                    }
-                }
-            });
-
-            document.getElementById('stat-loads').textContent = totalLoads;
-            document.getElementById('stat-tonnage').textContent = totalTonnage.toFixed(1);
-            document.getElementById('stat-diversion').textContent = diversionRate.toFixed(1) + '%';
-            document.getElementById('stat-carbon').textContent = carbonAvoided.toFixed(2);
-        }
-
-        // Update connection status
-        function updateConnectionStatus(connected) {
-            const dot = document.getElementById('status-dot');
-            const text = document.getElementById('connection-text');
-            
-            if (connected) {
-                dot.classList.add('connected');
-                text.textContent = 'Connected';
-            } else if (navigator.onLine) {
-                dot.classList.remove('connected');
-                dot.classList.add('offline');
-                text.textContent = 'Limited Connection';
-            } else {
-                dot.classList.remove('connected');
-                text.textContent = 'Offline Mode';
-            }
-        }
-
-        // Update capture info display
-        function updateCaptureInfo() {
-            const el = document.getElementById('capture-info');
-            if (!el) return;
-
-            let info = [];
-            if (gpsData && !gpsData.error) {
-                info.push(`GPS: ${gpsData.latitude}, ${gpsData.longitude}`);
-            } else {
-                info.push('GPS: Unavailable');
-            }
-            if (ipData && ipData.ip !== 'unavailable') {
-                info.push(`IP: ${ipData.ip}`);
-            }
-            info.push(`Time: ${new Date().toLocaleString()}`);
-            
-            el.textContent = info.join(' | ');
-        }
-
-        // Modal functions
-        function openNewLoadModal() {
-            document.getElementById('new-load-modal').classList.add('active');
-            document.getElementById('load-date').valueAsDate = new Date();
-            updateCaptureInfo();
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        // Save load
-        async function saveLoad() {
-            const form = document.getElementById('new-load-form');
-            
-            const loadData = {
-                project_id: document.getElementById('load-project').value,
-                load_date: document.getElementById('load-date').value,
-                material: document.getElementById('load-material').value,
-                weight_tons: parseFloat(document.getElementById('load-weight').value),
-                destination_type: document.getElementById('load-destination-type').value,
-                facility_name: document.getElementById('load-facility').value,
-                hauler: document.getElementById('load-hauler').value,
-                ticket_number: document.getElementById('load-ticket').value,
-                notes: document.getElementById('load-notes').value,
-                gps_latitude: gpsData?.latitude || null,
-                gps_longitude: gpsData?.longitude || null,
-                gps_accuracy: gpsData?.accuracy || null,
-                ip_address: ipData?.ip || null,
-                capture_timestamp: new Date().toISOString(),
-                created_at: new Date().toISOString()
-            };
-
-            // Validate
-            if (!loadData.project_id || !loadData.material || !loadData.weight_tons || !loadData.destination_type) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-
-            try {
-                if (supabase) {
-                    const { data, error } = await supabase.from('loads').insert([loadData]).select();
-                    if (error) throw error;
-                    
-                    showToast('Load saved successfully!', 'success');
-                    closeModal('new-load-modal');
-                    form.reset();
-                    await loadLoadsData();
-                    updateStats();
-                } else {
-                    // Offline mode - save to local array
-                    loadData.id = 'local-' + Date.now();
-                    window.loadsData = window.loadsData || [];
-                    window.loadsData.unshift(loadData);
-                    renderLoadsTable(window.loadsData);
-                    updateStats();
-                    showToast('Load saved locally (offline mode)', 'info');
-                    closeModal('new-load-modal');
-                    form.reset();
-                }
-            } catch (err) {
-                console.error('Save error:', err);
-                showToast('Error saving load: ' + err.message, 'error');
-            }
-        }
-
-        // View load details
-        function viewLoad(id) {
-            const load = window.loadsData?.find(l => l.id === id);
-            if (load) {
-                alert(JSON.stringify(load, null, 2));
-            }
-        }
-
-        // Toast notifications
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
-
-        // Export to Excel (Dalmex 24-column format)
-        async function exportExcel() {
-            showToast('Generating Excel report...', 'info');
-            
-            try {
-                // Ensure SheetJS is loaded
-                if (!window.XLSX) {
-                    await loadSheetJS();
-                }
-                
-                const loads = window.loadsData || [];
-                const projects = window.projectsData || SAMPLE_PROJECTS;
-                
-                // Create workbook
-                const wb = XLSX.utils.book_new();
-                
-                // ===== SUMMARY SHEET =====
-                const summaryData = [
-                    ['DivertScan © 2026 - Waste Diversion Report'],
-                    ['The Carbon Truth in Every Load'],
-                    ['Powered by Dalmex Recycling LLC'],
-                    [''],
-                    ['Report Generated:', new Date().toLocaleString()],
-                    ['Total Loads:', loads.length],
-                    [''],
-                    ['SUMMARY STATISTICS'],
-                    ['Total Tonnage:', loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0).toFixed(2)],
-                    ['Diverted Tonnage:', loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0).toFixed(2)],
-                    ['Diversion Rate:', ((loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0) / Math.max(loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0), 1)) * 100).toFixed(1) + '%']
-                ];
-                const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
-                XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
-                
-                // ===== LOADS DETAIL SHEET (24 columns) =====
-                const loadsHeaders = [
-                    'Record ID', 'Load Date', 'Project ID', 'Project Name', 'Client',
-                    'Material Category', 'Material Type', 'Weight (tons)', 'Weight (lbs)',
-                    'Destination Type', 'Facility Name', 'Facility Address', 'Hauler',
-                    'Ticket Number', 'Diverted', 'GWP Factor', 'CO2e Avoided (MT)',
-                    'GPS Latitude', 'GPS Longitude', 'IP Address', 'Capture Timestamp',
-                    'LEED Tier', 'Verification Status', 'Notes'
-                ];
-                
-                const loadsRows = loads.map(load => {
-                    const project = projects.find(p => p.id === load.project_id) || {};
-                    const material = MATERIALS.find(m => m.name === load.material) || {};
-                    const isDiverted = ['recycling', 'reuse', 'composting'].includes(load.destination_type);
-                    const co2Avoided = isDiverted ? (parseFloat(load.weight_tons || 0) * (material.gwp || 0)) : 0;
-                    const isVerified = load.gps_latitude && load.ip_address;
-                    
-                    return [
-                        load.id,
-                        load.load_date,
-                        load.project_id,
-                        project.name || '',
-                        project.client || '',
-                        material.category || '',
-                        load.material,
-                        parseFloat(load.weight_tons || 0).toFixed(2),
-                        (parseFloat(load.weight_tons || 0) * 2000).toFixed(0),
-                        load.destination_type,
-                        load.facility_name || '',
-                        '',
-                        load.hauler || '',
-                        load.ticket_number || '',
-                        isDiverted ? 'Yes' : 'No',
-                        material.gwp || 0,
-                        co2Avoided.toFixed(3),
-                        load.gps_latitude || '',
-                        load.gps_longitude || '',
-                        load.ip_address || '',
-                        load.capture_timestamp || '',
-                        material.tier || 'Standard',
-                        isVerified ? 'Verified' : 'Pending',
-                        load.notes || ''
-                    ];
-                });
-                
-                const loadsWS = XLSX.utils.aoa_to_sheet([loadsHeaders, ...loadsRows]);
-                XLSX.utils.book_append_sheet(wb, loadsWS, 'Loads Detail');
-                
-                // ===== MATERIALS REFERENCE SHEET =====
-                const materialsHeaders = ['Material', 'Category', 'Default Density (lb/yd³)', 'GWP (MT CO2e/ton)', 'LEED v5 Tier'];
-                const materialsRows = MATERIALS.map(m => [m.name, m.category, m.density, m.gwp, m.tier]);
-                const materialsWS = XLSX.utils.aoa_to_sheet([materialsHeaders, ...materialsRows]);
-                XLSX.utils.book_append_sheet(wb, materialsWS, 'Materials Reference');
-                
-                // ===== INDUSTRY WATCHTOWER SHEET =====
-                const watchtowerData = [
-                    ['DivertScan © 2026 - Industry Watchtower'],
-                    [''],
-                    ['LEED v5 KEY UPDATES'],
-                    ['• Tier 1 Circularity credits provide enhanced weighted multipliers for reuse materials'],
-                    ['• Global Warming Potential (GWP) coefficients required for carbon tracking'],
-                    ['• Stricter chain-of-custody documentation requirements'],
-                    ['• Point-of-capture verification becoming industry standard'],
-                    [''],
-                    ['OFFICIAL RESOURCES'],
-                    ['USGBC LEED Official', 'https://www.usgbc.org/leed'],
-                    ['EPA WARM Calculator', 'https://www.epa.gov/warm'],
-                    ['MR Credit: Construction Waste Management', 'https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-data-702'],
-                    [''],
-                    ['REGULATORY CONTACTS'],
-                    ['Texas Commission on Environmental Quality (TCEQ)', 'https://www.tceq.texas.gov'],
-                    ['EPA Region 6 (Dallas)', 'https://www.epa.gov/aboutepa/epa-region-6-south-central']
-                ];
-                const watchtowerWS = XLSX.utils.aoa_to_sheet(watchtowerData);
-                XLSX.utils.book_append_sheet(wb, watchtowerWS, 'Industry Watchtower');
-                
-                // Generate and download
-                const filename = `DivertScan_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
-                XLSX.writeFile(wb, filename);
-                
-                showToast('Excel report downloaded!', 'success');
-            } catch (err) {
-                console.error('Export error:', err);
-                showToast('Export failed: ' + err.message, 'error');
-            }
-        }
-
-        // Export LEED Report (without hardcoded certification levels)
-        async function exportLEEDReport() {
-            showToast('Generating LEED report...', 'info');
-            
-            try {
-                if (!window.XLSX) {
-                    await loadSheetJS();
-                }
-                
-                const loads = window.loadsData || [];
-                const projects = window.projectsData || SAMPLE_PROJECTS;
-                
-                // Calculate metrics
-                const totalTonnage = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
-                const divertedLoads = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type));
-                const divertedTonnage = divertedLoads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
-                const diversionRate = totalTonnage > 0 ? (divertedTonnage / totalTonnage * 100) : 0;
-                
-                // Calculate by material
-                const materialSummary = {};
-                loads.forEach(load => {
-                    const mat = load.material || 'Unknown';
-                    if (!materialSummary[mat]) {
-                        materialSummary[mat] = { total: 0, diverted: 0, tier1: 0 };
-                    }
-                    const weight = parseFloat(load.weight_tons || 0);
-                    materialSummary[mat].total += weight;
-                    if (['recycling', 'reuse', 'composting'].includes(load.destination_type)) {
-                        materialSummary[mat].diverted += weight;
-                        const matDef = MATERIALS.find(m => m.name === mat);
-                        if (matDef?.tier === 'Tier 1') {
-                            materialSummary[mat].tier1 += weight;
-                        }
-                    }
-                });
-                
-                const wb = XLSX.utils.book_new();
-                
-                // LEED Summary Sheet
-                const leedData = [
-                    ['LEED v5 Construction Waste Management Report'],
-                    ['DivertScan © 2026 - Point-of-Capture Verified'],
-                    [''],
-                    ['Report Date:', new Date().toLocaleString()],
-                    ['Reporting Period:', 'All Available Data'],
-                    [''],
-                    ['DIVERSION SUMMARY'],
-                    ['Total Waste Generated (tons):', totalTonnage.toFixed(2)],
-                    ['Total Waste Diverted (tons):', divertedTonnage.toFixed(2)],
-                    ['Total Waste to Landfill (tons):', (totalTonnage - divertedTonnage).toFixed(2)],
-                    ['Overall Diversion Rate:', diversionRate.toFixed(1) + '%'],
-                    [''],
-                    ['LEED v5 COMPLIANCE NOTES'],
-                    ['• Diversion rate calculated per MR Credit requirements'],
-                    ['• Point-of-capture verification provides chain-of-custody documentation'],
-                    ['• Tier 1 Circularity materials tracked separately for enhanced credits'],
-                    ['• Actual certification level to be determined by LEED reviewer based on project scope'],
-                    [''],
-                    ['VERIFICATION METHOD'],
-                    ['All entries captured with GPS coordinates and IP address verification'],
-                    ['Timestamps recorded at moment of data entry']
-                ];
-                const leedWS = XLSX.utils.aoa_to_sheet(leedData);
-                XLSX.utils.book_append_sheet(wb, leedWS, 'LEED Summary');
-                
-                // Material Breakdown Sheet
-                const matHeaders = ['Material', 'Total (tons)', 'Diverted (tons)', 'Tier 1 (tons)', 'Diversion %'];
-                const matRows = Object.entries(materialSummary).map(([mat, data]) => [
-                    mat,
-                    data.total.toFixed(2),
-                    data.diverted.toFixed(2),
-                    data.tier1.toFixed(2),
-                    data.total > 0 ? ((data.diverted / data.total) * 100).toFixed(1) + '%' : '0%'
-                ]);
-                const matWS = XLSX.utils.aoa_to_sheet([matHeaders, ...matRows]);
-                XLSX.utils.book_append_sheet(wb, matWS, 'Material Breakdown');
-                
-                // Verification Audit Sheet
-                const auditHeaders = ['Date', 'Material', 'Weight', 'Destination', 'GPS', 'IP', 'Timestamp'];
-                const auditRows = loads.map(l => [
-                    l.load_date,
-                    l.material,
-                    parseFloat(l.weight_tons || 0).toFixed(2),
-                    l.destination_type,
-                    l.gps_latitude ? `${l.gps_latitude}, ${l.gps_longitude}` : 'N/A',
-                    l.ip_address || 'N/A',
-                    l.capture_timestamp || ''
-                ]);
-                const auditWS = XLSX.utils.aoa_to_sheet([auditHeaders, ...auditRows]);
-                XLSX.utils.book_append_sheet(wb, auditWS, 'Verification Audit');
-                
-                const filename = `LEED_Compliance_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
-                XLSX.writeFile(wb, filename);
-                
-                showToast('LEED report downloaded!', 'success');
-            } catch (err) {
-                console.error('LEED export error:', err);
-                showToast('LEED export failed: ' + err.message, 'error');
-            }
-        }
-
-        // Export Audit Log
-        function exportAuditLog() {
-            showToast('Audit log export coming soon', 'info');
-        }
-
-        // Populate news links
-        function populateNewsLinks() {
-            const container = document.getElementById('news-links');
-            const links = [
-                { title: 'USGBC Announces LEED v5 Updates for 2025', url: '#', date: '2025-12' },
-                { title: 'EPA Updates WARM Model to Version 16', url: '#', date: '2025-11' },
-                { title: 'Texas TCEQ Construction Waste Guidelines Revised', url: '#', date: '2025-10' }
-            ];
-            
-            container.innerHTML = links.map(l => `
-                <div style="padding:0.75rem;border-left:3px solid var(--primary);margin-bottom:0.5rem;background:var(--bg-input);border-radius:0 4px 4px 0;">
-                    <a href="${l.url}" target="_blank" style="color:var(--text-primary);text-decoration:none;font-weight:500;">${l.title}</a>
-                    <div style="color:var(--text-muted);font-size:0.75rem;margin-top:0.25rem;">${l.date}</div>
-                </div>
-            `).join('');
-        }
-
-        // Network status listeners
-        window.addEventListener('online', () => {
-            isOnline = true;
-            updateConnectionStatus(true);
-            showToast('Connection restored', 'success');
-        });
-
-        window.addEventListener('offline', () => {
-            isOnline = false;
-            updateConnectionStatus(false);
-            showToast('You are offline - data will be saved locally', 'info');
-        });
-
-        // Start initialization when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
+    document.getElementById('login-btn')?.addEventListener('click', async function() {
+        const pin = document.getElementById('pin-input').value;
+        const user = USERS.find(u => u.id === selectedUserId);
+        if (user && user.pin === pin) {
+            currentUser = user;
+            localStorage.setItem('divertscan_user', JSON.stringify(user));
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app').classList.add('loaded');
+            await initializeApp(!!supabase);
+            applyUserRole();
+            showToast(`Welcome, ${user.name}!`, 'success');
         } else {
-            initialize();
+            document.getElementById('login-error').classList.add('show');
+            document.getElementById('pin-input').value = '';
+            document.getElementById('pin-input').focus();
         }
+    });
+
+    function logout() {
+        localStorage.removeItem('divertscan_user');
+        currentUser = null;
+        selectedUserId = null;
+        document.getElementById('app').classList.remove('loaded');
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('pin-group').classList.remove('show');
+        document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
+        document.body.classList.remove('is-admin');
+    }
+
+    function applyUserRole() {
+        if (!currentUser) return;
+        document.getElementById('user-name').textContent = currentUser.name;
+        document.getElementById('user-avatar').textContent = currentUser.initials;
+        document.getElementById('user-avatar').className = `avatar ${currentUser.role}`;
+        if (currentUser.role === 'admin') {
+            document.body.classList.add('is-admin');
+        } else {
+            document.body.classList.remove('is-admin');
+        }
+    }
+
+    // ========== APP INITIALIZATION ==========
+    async function initializeApp(isConnected) {
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+            });
+        });
+        document.getElementById('load-date').valueAsDate = new Date();
+        loadMaterialsData();
+        if (isConnected) { await loadLoadsData(); await loadProjectsData(); }
+        else { loadOfflineData(); loadOfflineProjects(); }
+        updateStats();
+    }
+
+    function loadMaterialsData() {
+        const select = document.getElementById('load-material');
+        select.innerHTML = '<option value="">Select Material</option>' + MATERIALS.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+    }
+
+    async function loadProjectsData() {
+        let projects = [
+            { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
+            { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
+            { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
+        ];
+        if (supabase) {
+            try {
+                const { data } = await supabase.from('projects').select('*');
+                if (data?.length) projects = data;
+            } catch (e) { console.warn('Projects load error'); }
+        }
+        window.projectsData = projects;
+        const opts = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        document.getElementById('load-project').innerHTML = '<option value="">Select Project</option>' + opts;
+        document.getElementById('report-project').innerHTML = '<option value="">All Projects</option>' + opts;
+        document.getElementById('projects-list').innerHTML = projects.map(p => `
+            <div style="padding:1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;">
+                <div style="font-weight:600;">${p.name}</div>
+                <div style="color:var(--text-muted);font-size:0.875rem;">${p.client || ''}</div>
+            </div>
+        `).join('');
+    }
+
+    function loadOfflineProjects() {
+        window.projectsData = [
+            { id: '11111111-1111-1111-1111-111111111111', name: "Children's Hospital Phase 2", client: "Children's Medical Center" },
+            { id: '22222222-2222-2222-2222-222222222222', name: 'DFW Airport Terminal C', client: 'DFW Airport' },
+            { id: '33333333-3333-3333-3333-333333333333', name: 'Frisco Town Center', client: 'City of Frisco' }
+        ];
+        loadProjectsData();
+    }
+
+    async function loadLoadsData() {
+        if (!supabase) { loadOfflineData(); return; }
+        try {
+            const { data, error } = await supabase.from('loads').select('*').order('created_at', { ascending: false }).limit(50);
+            if (error) throw error;
+            window.loadsData = data || [];
+            renderLoadsTable(data || []);
+        } catch (e) { console.error('Load error:', e); loadOfflineData(); }
+    }
+
+    function renderLoadsTable(loads) {
+        const tbody = document.getElementById('loads-table');
+        if (!loads?.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem;">No loads yet. Click "New Load" to add one.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = loads.map(l => {
+            const proj = window.projectsData?.find(p => p.id === l.project_id);
+            const isDiverted = ['recycling', 'reuse', 'composting'].includes(l.destination_type);
+            const isVerified = l.gps_latitude && l.ip_address;
+            return `<tr>
+                <td>${new Date(l.load_date || l.created_at).toLocaleDateString()}</td>
+                <td>${proj?.name || '-'}</td>
+                <td>${l.material || '-'}</td>
+                <td>${parseFloat(l.weight_tons || 0).toFixed(2)}</td>
+                <td>${l.facility_name || l.destination_type || '-'}</td>
+                <td>${l.entered_by_name || '-'}</td>
+                <td><span class="badge ${isDiverted ? 'badge-success' : 'badge-warning'}">${isDiverted ? 'Diverted' : 'Disposed'}</span>
+                    ${isVerified ? ' <span class="badge badge-info">✓</span>' : ''}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function loadOfflineData() {
+        window.loadsData = [
+            { id: '1', load_date: '2026-01-24', project_id: '11111111-1111-1111-1111-111111111111', material: 'Concrete', weight_tons: 45.5, destination_type: 'recycling', facility_name: 'DFW Concrete Recycling', entered_by_name: 'Robert', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
+            { id: '2', load_date: '2026-01-23', project_id: '11111111-1111-1111-1111-111111111111', material: 'Metal - Ferrous', weight_tons: 12.3, destination_type: 'recycling', facility_name: 'Texas Metal Recyclers', entered_by_name: 'Dalmex Floor', gps_latitude: '32.8998', ip_address: '192.168.1.1' },
+        ];
+        renderLoadsTable(window.loadsData);
+    }
+
+    function updateStats() {
+        const loads = window.loadsData || [];
+        const total = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+        const diverted = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+        let carbon = 0;
+        loads.forEach(l => { if (['recycling', 'reuse', 'composting'].includes(l.destination_type)) { const m = MATERIALS.find(x => x.name === l.material); if (m) carbon += parseFloat(l.weight_tons || 0) * m.gwp; } });
+        document.getElementById('stat-loads').textContent = loads.length;
+        document.getElementById('stat-tonnage').textContent = total.toFixed(1);
+        document.getElementById('stat-diversion').textContent = (total > 0 ? (diverted / total * 100) : 0).toFixed(1) + '%';
+        document.getElementById('stat-carbon').textContent = carbon.toFixed(2);
+    }
+
+    function updateConnectionStatus(connected) {
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('connection-text');
+        dot.classList.toggle('connected', connected);
+        text.textContent = connected ? 'Connected' : 'Offline';
+    }
+
+    function updateCaptureInfo() {
+        const el = document.getElementById('capture-info');
+        if (!el) return;
+        let info = [];
+        info.push(gpsData?.latitude ? `GPS: ${gpsData.latitude}, ${gpsData.longitude}` : 'GPS: Unavailable');
+        if (ipData?.ip !== 'unavailable') info.push(`IP: ${ipData.ip}`);
+        info.push(`User: ${currentUser?.name || 'Unknown'}`);
+        info.push(`Time: ${new Date().toLocaleString()}`);
+        el.textContent = info.join(' | ');
+    }
+
+    // ========== MODALS & SAVE ==========
+    function openNewLoadModal() {
+        document.getElementById('new-load-modal').classList.add('active');
+        document.getElementById('load-date').valueAsDate = new Date();
+        updateCaptureInfo();
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    async function saveLoad() {
+        const loadData = {
+            project_id: document.getElementById('load-project').value,
+            load_date: document.getElementById('load-date').value,
+            material: document.getElementById('load-material').value,
+            weight_tons: parseFloat(document.getElementById('load-weight').value),
+            destination_type: document.getElementById('load-destination-type').value,
+            facility_name: document.getElementById('load-facility').value,
+            hauler: document.getElementById('load-hauler').value,
+            ticket_number: document.getElementById('load-ticket').value,
+            notes: document.getElementById('load-notes').value,
+            gps_latitude: gpsData?.latitude || null,
+            gps_longitude: gpsData?.longitude || null,
+            gps_accuracy: gpsData?.accuracy || null,
+            ip_address: ipData?.ip || null,
+            capture_timestamp: new Date().toISOString(),
+            entered_by: currentUser?.id || null,
+            entered_by_name: currentUser?.name || 'Unknown',
+            created_at: new Date().toISOString()
+        };
+        if (!loadData.project_id || !loadData.material || !loadData.weight_tons || !loadData.destination_type) {
+            showToast('Please fill in all required fields', 'error'); return;
+        }
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('loads').insert([loadData]);
+                if (error) throw error;
+                showToast('Load saved!', 'success');
+                closeModal('new-load-modal');
+                document.getElementById('new-load-form').reset();
+                await loadLoadsData();
+                updateStats();
+            } else {
+                loadData.id = 'local-' + Date.now();
+                window.loadsData = window.loadsData || [];
+                window.loadsData.unshift(loadData);
+                renderLoadsTable(window.loadsData);
+                updateStats();
+                showToast('Saved locally (offline)', 'info');
+                closeModal('new-load-modal');
+                document.getElementById('new-load-form').reset();
+            }
+        } catch (e) { console.error('Save error:', e); showToast('Error: ' + e.message, 'error'); }
+    }
+
+    function showToast(msg, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = msg;
+        document.getElementById('toast-container').appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+    }
+
+    // ========== EXPORTS ==========
+    async function exportExcel() {
+        showToast('Generating Excel...', 'info');
+        try {
+            if (!window.XLSX) await loadSheetJS();
+            const loads = window.loadsData || [];
+            const wb = XLSX.utils.book_new();
+            
+            // Summary
+            const summary = [['DivertScan © 2026'], ['The Carbon Truth in Every Load'], ['Powered by Dalmex Recycling LLC'], [''], ['Generated:', new Date().toLocaleString()], ['Total Loads:', loads.length]];
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
+            
+            // Loads Detail (24 columns)
+            const headers = ['ID', 'Date', 'Project ID', 'Project Name', 'Material', 'Category', 'Weight (tons)', 'Weight (lbs)', 'Destination Type', 'Facility', 'Hauler', 'Ticket #', 'Diverted', 'GWP Factor', 'CO2e Avoided', 'GPS Lat', 'GPS Long', 'IP Address', 'Capture Time', 'Entered By', 'LEED Tier', 'Verified', 'Notes', 'Created'];
+            const rows = loads.map(l => {
+                const proj = window.projectsData?.find(p => p.id === l.project_id);
+                const mat = MATERIALS.find(m => m.name === l.material) || {};
+                const isDiverted = ['recycling', 'reuse', 'composting'].includes(l.destination_type);
+                return [l.id, l.load_date, l.project_id, proj?.name || '', l.material, mat.category || '', parseFloat(l.weight_tons || 0).toFixed(2), (parseFloat(l.weight_tons || 0) * 2000).toFixed(0), l.destination_type, l.facility_name || '', l.hauler || '', l.ticket_number || '', isDiverted ? 'Yes' : 'No', mat.gwp || 0, isDiverted ? (parseFloat(l.weight_tons || 0) * (mat.gwp || 0)).toFixed(3) : 0, l.gps_latitude || '', l.gps_longitude || '', l.ip_address || '', l.capture_timestamp || '', l.entered_by_name || '', mat.tier || '', l.gps_latitude ? 'Yes' : 'No', l.notes || '', l.created_at || ''];
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), 'Loads Detail');
+            
+            // Materials Reference
+            const matHeaders = ['Material', 'Category', 'Density (lb/yd³)', 'GWP (MT CO2e/ton)', 'LEED Tier'];
+            const matRows = MATERIALS.map(m => [m.name, m.category, m.density, m.gwp, m.tier]);
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([matHeaders, ...matRows]), 'Materials');
+            
+            // Watchtower
+            const watch = [['Industry Watchtower'], [''], ['LEED v5 Updates'], ['• Tier 1 Circularity enhanced multipliers'], ['• GWP coefficients required'], [''], ['Resources'], ['USGBC LEED', 'https://www.usgbc.org/leed'], ['EPA WARM', 'https://www.epa.gov/warm']];
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(watch), 'Watchtower');
+            
+            XLSX.writeFile(wb, `DivertScan_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('Excel downloaded!', 'success');
+        } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+    }
+
+    async function exportLEEDReport() {
+        showToast('Generating LEED report...', 'info');
+        try {
+            if (!window.XLSX) await loadSheetJS();
+            const loads = window.loadsData || [];
+            const total = loads.reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+            const diverted = loads.filter(l => ['recycling', 'reuse', 'composting'].includes(l.destination_type)).reduce((s, l) => s + parseFloat(l.weight_tons || 0), 0);
+            const wb = XLSX.utils.book_new();
+            const leed = [['LEED v5 Construction Waste Management Report'], ['DivertScan © 2026 - Point-of-Capture Verified'], [''], ['Report Date:', new Date().toLocaleString()], [''], ['DIVERSION SUMMARY'], ['Total Generated (tons):', total.toFixed(2)], ['Total Diverted (tons):', diverted.toFixed(2)], ['Diversion Rate:', (total > 0 ? (diverted/total*100) : 0).toFixed(1) + '%'], [''], ['COMPLIANCE NOTES'], ['• Diversion rate per MR Credit requirements'], ['• Point-of-capture verification provides chain-of-custody'], ['• Certification level determined by LEED reviewer']];
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leed), 'LEED Summary');
+            XLSX.writeFile(wb, `LEED_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('LEED report downloaded!', 'success');
+        } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+    }
+
+    // ========== START ==========
+    window.addEventListener('online', () => { updateConnectionStatus(true); showToast('Connected', 'success'); });
+    window.addEventListener('offline', () => { updateConnectionStatus(false); showToast('Offline mode', 'info'); });
+    document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', initialize) : initialize();
     </script>
 </body>
 </html>
