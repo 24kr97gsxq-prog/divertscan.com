@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v4.5.1</title>
+<title>DivertScan™ v4.5.2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -178,7 +178,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v4.5.1</span></div>
+<div class="logo">DivertScan™ <span>v4.5.2</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -244,7 +244,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <a href="https://www.tceq.texas.gov/permitting/waste_permits/msw_permits" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:11px;text-align:center">📋 TCEQ</a>
 </div>
 <div style="margin-top:8px;padding:8px;background:var(--slate-700);border-radius:6px;font-size:10px;color:var(--slate-400)">
-<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.5.1/v5: 75%→2pts
+<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.5.2/v5: 75%→2pts
 </div>
 </div>
 <div class="card" style="margin-top:20px">
@@ -1340,7 +1340,7 @@ async function analyzeDebris() {
         if (!apiKey) throw new Error('Add OpenAI key in Settings');
         
         const content = [
-            { type: 'text', text: 'Analyze ' + photos.length + ' C&D debris photo(s) from ' + selectedContainer + '-yard roll-off container. Estimate visible VOLUME % for each material. Categories: wood (lumber/plywood/pallets), gypsum (drywall/sheetrock), plastic (film/pipe/packaging), occ (cardboard/paper), metal (steel/aluminum/copper), concrete (cement/sidewalk), block (CMU/brick/masonry), landfill (mixed/contaminated/unidentifiable). IMPORTANT: If materials are mixed or uncertain, classify as landfill. Be conservative. Return ONLY valid JSON with confidence: {"wood":0-100,"gypsum":0-100,"plastic":0-100,"occ":0-100,"metal":0-100,"concrete":0-100,"block":0-100,"landfill":0-100,"confidence":"high/medium/low","notes":"brief observation"} Percentages MUST total exactly 100. Confidence: high=clearly visible separated materials, medium=identifiable but mixed, low=heavily contaminated/uncertain.' }
+            { type: 'text', text: 'Look at these C&D debris photos. Estimate the VOLUME percentage of each material type. Return ONLY a JSON object like this example: {"wood":25,"gypsum":10,"plastic":5,"occ":20,"metal":5,"concrete":10,"block":5,"landfill":20,"confidence":"medium"} - wood=lumber/pallets, gypsum=drywall, plastic=any plastic, occ=cardboard, metal=steel/aluminum, concrete=cement, block=brick/CMU, landfill=trash/mixed. Numbers must total 100. No other text, just JSON.' }
         ];
         photos.forEach(img => content.push({ type: 'image_url', image_url: { url: img } }));
         
@@ -1356,40 +1356,68 @@ async function analyzeDebris() {
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
         
-        let aiText = data.choices[0].message.content;
-        console.log('AI Response:', aiText);
+        let aiText = data.choices[0].message.content || '';
+        console.log('AI Raw Response:', aiText);
         
-        // Clean up common AI response issues
-        aiText = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        // Clean up AI response
+        aiText = aiText.replace(/```json/gi, '').replace(/```/g, '').replace(/\n/g, ' ').trim();
         
-        // Find JSON object in response
-        const match = aiText.match(/\{[\s\S]*\}/);
-        if (!match) {
-            console.error('No JSON found in:', aiText);
-            throw new Error('AI did not return valid JSON. Please retry.');
-        }
+        // Try multiple parsing strategies
+        let res = null;
         
-        let res;
-        try {
-            res = JSON.parse(match[0]);
-        } catch (parseErr) {
-            console.error('JSON parse error:', parseErr, 'Raw:', match[0]);
-            // Try to fix common issues
-            let fixed = match[0]
-                .replace(/,\s*}/g, '}')  // trailing commas
-                .replace(/'/g, '"')       // single quotes
-                .replace(/([a-z_]+):/gi, '"$1":'); // unquoted keys
+        // Strategy 1: Find JSON object with regex
+        const jsonMatch = aiText.match(/\{[^{}]*\}/);
+        if (jsonMatch) {
             try {
-                res = JSON.parse(fixed);
+                res = JSON.parse(jsonMatch[0]);
             } catch (e) {
-                throw new Error('JSON Parse error: Unable to parse JSON string');
+                console.log('Strategy 1 failed:', e.message);
             }
         }
         
-        // Validate required fields
-        if (typeof res.wood === 'undefined' && typeof res.landfill === 'undefined') {
-            throw new Error('AI response missing material percentages. Please retry.');
+        // Strategy 2: Try parsing the whole response
+        if (!res) {
+            try {
+                res = JSON.parse(aiText);
+            } catch (e) {
+                console.log('Strategy 2 failed:', e.message);
+            }
         }
+        
+        // Strategy 3: Extract numbers manually using regex
+        if (!res) {
+            console.log('Trying manual extraction...');
+            const extractNum = (key) => {
+                const m = aiText.match(new RegExp('"?' + key + '"?\\s*[:\\s]+(\\d+)', 'i'));
+                return m ? parseInt(m[1]) : 0;
+            };
+            res = {
+                wood: extractNum('wood'),
+                gypsum: extractNum('gypsum'),
+                plastic: extractNum('plastic'),
+                occ: extractNum('occ'),
+                metal: extractNum('metal'),
+                concrete: extractNum('concrete'),
+                block: extractNum('block'),
+                landfill: extractNum('landfill'),
+                confidence: 'low'
+            };
+            // Check if we got any data
+            const total = res.wood + res.gypsum + res.plastic + res.occ + res.metal + res.concrete + res.block + res.landfill;
+            if (total === 0) {
+                // Default fallback - assume mixed debris
+                res = { wood: 20, gypsum: 5, plastic: 5, occ: 15, metal: 5, concrete: 5, block: 5, landfill: 40, confidence: 'low' };
+                toast('⚠️ Could not analyze - using estimates. Please adjust.', 'error');
+            } else if (total !== 100) {
+                // Normalize to 100%
+                const factor = 100 / total;
+                Object.keys(res).forEach(k => {
+                    if (typeof res[k] === 'number') res[k] = Math.round(res[k] * factor);
+                });
+            }
+        }
+        
+        console.log('Parsed result:', res);
         
         ticketSession.debrisImages = photos;
         
