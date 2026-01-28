@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v4.7.1</title>
+<title>DivertScan™ v4.7.2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -179,7 +179,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v4.7.1</span></div>
+<div class="logo">DivertScan™ <span>v4.7.2</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -245,7 +245,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <a href="https://www.tceq.texas.gov/permitting/waste_permits/msw_permits" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:11px;text-align:center">📋 TCEQ</a>
 </div>
 <div style="margin-top:8px;padding:8px;background:var(--slate-700);border-radius:6px;font-size:10px;color:var(--slate-400)">
-<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.7.1/v5: 75%→2pts
+<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.7.2/v5: 75%→2pts
 </div>
 </div>
 <div class="card" style="margin-top:20px">
@@ -1159,8 +1159,21 @@ function nextStep() {
         recalcSession();
     }
     if (currentStep === 2) {
-        if (ticketSession.diversionRate === 0 && !debrisPhotos.some(p => p)) {
-            toast('Add & analyze photos', 'error'); return;
+        console.log('Step 2 validation:', {
+            diversionRate: ticketSession.diversionRate,
+            debrisPhotos: debrisPhotos,
+            hasPhotos: debrisPhotos.some(p => p)
+        });
+        
+        // Check if photos have been analyzed
+        if (!ticketSession.diversionRate || ticketSession.diversionRate === 0) {
+            // Check if photos exist but not analyzed
+            if (debrisPhotos.some(p => p)) {
+                toast('Click "Analyze Materials" first', 'error'); 
+            } else {
+                toast('Upload photos and analyze', 'error');
+            }
+            return;
         }
     }
     if (currentStep === 3) {
@@ -1467,6 +1480,11 @@ async function analyzeDebris() {
         if (ticketSession.aiConfidence === 'low') {
             toast('⚠️ Low confidence - review carefully!', 'error');
         }
+        
+        console.log('Analysis complete:', {
+            diversionRate: ticketSession.diversionRate,
+            materialBreakdown: ticketSession.materialBreakdown
+        });
         
         const divColor = ticketSession.diversionRate >= 75 ? '✅' : ticketSession.diversionRate >= 50 ? '📊' : '⚠️';
         toast(divColor + ' ' + ticketSession.diversionRate + '% diversion detected', 'success');
