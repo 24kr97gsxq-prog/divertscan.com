@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v4.6.1</title>
+<title>DivertScan™ v4.7</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -179,7 +179,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v4.6.1</span></div>
+<div class="logo">DivertScan™ <span>v4.7</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -245,7 +245,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <a href="https://www.tceq.texas.gov/permitting/waste_permits/msw_permits" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:11px;text-align:center">📋 TCEQ</a>
 </div>
 <div style="margin-top:8px;padding:8px;background:var(--slate-700);border-radius:6px;font-size:10px;color:var(--slate-400)">
-<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.6.1/v5: 75%→2pts
+<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.7/v5: 75%→2pts
 </div>
 </div>
 <div class="card" style="margin-top:20px">
@@ -348,7 +348,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </div>
 
 <!-- Step 1: Scale Ticket -->
-<div id="ticketStep1">
+<div id="ticketStep1" style="display:block">
 <h3 style="font-size:16px;margin-bottom:16px;text-align:center">📄 Scale Ticket & Weights</h3>
 <div class="form-group">
 <label class="form-label">Project *</label>
@@ -1088,39 +1088,54 @@ function startNewTicket() {
 }
 
 function showStep(step) {
-    console.log('showStep called with:', step);
+    console.log('=== showStep ===', step);
     currentStep = step;
-    saveTicketSession(); // Auto-save progress
+    saveTicketSession();
     
-    // Update progress dots
-    for (let i = 1; i <= 4; i++) {
-        const dot = document.getElementById('progDot' + i);
-        if (dot) {
-            dot.classList.remove('active', 'complete');
-            if (i < step) dot.classList.add('complete');
-            else if (i === step) dot.classList.add('active');
-        }
+    // EXPLICITLY hide all steps first, then show the current one
+    document.getElementById('ticketStep1').style.display = 'none';
+    document.getElementById('ticketStep2').style.display = 'none';
+    document.getElementById('ticketStep3').style.display = 'none';
+    document.getElementById('ticketStep4').style.display = 'none';
+    
+    // Show current step
+    const currentStepEl = document.getElementById('ticketStep' + step);
+    if (currentStepEl) {
+        currentStepEl.style.display = 'block';
+        console.log('Showing ticketStep' + step);
     }
     
-    // Update step 2 summary (if elements exist)
+    // Update step indicators
+    for (let i = 1; i <= 4; i++) {
+        const stepEl = document.getElementById('step' + i);
+        if (stepEl) {
+            stepEl.className = 'step' + (i < step ? ' complete' : i === step ? ' active' : '');
+        }
+    }
+    for (let i = 1; i <= 3; i++) {
+        const lineEl = document.getElementById('stepLine' + i);
+        if (lineEl) lineEl.className = 'step-line' + (step > i ? ' complete' : '');
+    }
+    
+    // Update step 2 summary
     if (step === 2) {
         const ticketEl = document.getElementById('step2TicketNum');
         const weightEl = document.getElementById('step2NetWeight');
         if (ticketEl) ticketEl.textContent = ticketSession.ticketNumber || 'N/A';
         if (weightEl) weightEl.textContent = (ticketSession.netTons || 0).toFixed(2) + ' T';
     }
-    for (let i = 1; i <= 4; i++) {
-        document.getElementById('ticketStep' + i).classList.toggle('hidden', i !== step);
-        document.getElementById('step' + i).className = 'step' + (i < step ? ' complete' : i === step ? ' active' : '');
-    }
-    for (let i = 1; i <= 3; i++) {
-        document.getElementById('stepLine' + i).className = 'step-line' + (step > i ? ' complete' : '');
-    }
+    
+    // Update buttons
     document.getElementById('prevStepBtn').disabled = step === 1;
     document.getElementById('nextStepBtn').textContent = step === 4 ? '✅ Finalize' : 'Next';
     
+    // Populate step-specific content
     if (step === 3) populateReview();
     if (step === 4) setupSignaturePad();
+    
+    // Scroll modal to top
+    const modalBody = document.querySelector('#ticketModal .modal-body');
+    if (modalBody) modalBody.scrollTop = 0;
 }
 
 function nextStep() {
