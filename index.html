@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ v4.7.2</title>
+<title>DivertScan™ v4.8</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -179,7 +179,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 </head>
 <body>
 <header class="header">
-<div class="logo">DivertScan™ <span>v4.7.2</span></div>
+<div class="logo">DivertScan™ <span>v4.8</span></div>
 <button class="btn btn-secondary btn-sm" onclick="showTab('settings')" style="width:auto">⚙️</button>
 </header>
 <main>
@@ -245,7 +245,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--sl
 <a href="https://www.tceq.texas.gov/permitting/waste_permits/msw_permits" target="_blank" rel="noopener" style="padding:10px;background:var(--slate-700);border-radius:6px;color:var(--emerald-400);text-decoration:none;font-size:11px;text-align:center">📋 TCEQ</a>
 </div>
 <div style="margin-top:8px;padding:8px;background:var(--slate-700);border-radius:6px;font-size:10px;color:var(--slate-400)">
-<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.7.2/v5: 75%→2pts
+<strong>LEED Thresholds:</strong> v4: 50%→1pt, 75%→2pts | v4.8/v5: 75%→2pts
 </div>
 </div>
 <div class="card" style="margin-top:20px">
@@ -1088,7 +1088,14 @@ function startNewTicket() {
 }
 
 function showStep(step) {
-    console.log('=== showStep ===', step);
+    console.log('=== showStep called ===', step, 'from', currentStep);
+    
+    // Validate step number
+    if (step < 1 || step > 4) {
+        console.error('Invalid step:', step);
+        return;
+    }
+    
     currentStep = step;
     saveTicketSession();
     
@@ -1261,14 +1268,10 @@ async function handleTicketFile(e) {
             hideLoading();
             
             // Show success and auto-advance to debris photos
-            toast('✅ Scale ticket read! Moving to photos...', 'success');
+            toast('✅ Scale ticket read! Click Next to continue', 'success');
             
-            // Auto-advance to Step 2 after 1.5 seconds
-            setTimeout(() => {
-                if (ticketSession.grossLbs && ticketSession.tareLbs) {
-                    showStep(2);
-                }
-            }, 1500);
+            // User will click Next manually
+            // (Removed auto-advance as it was causing issues on iPad)
         } catch (err) {
             hideLoading();
             toast(err.message, 'error');
@@ -1487,10 +1490,10 @@ async function analyzeDebris() {
         });
         
         const divColor = ticketSession.diversionRate >= 75 ? '✅' : ticketSession.diversionRate >= 50 ? '📊' : '⚠️';
-        toast(divColor + ' ' + ticketSession.diversionRate + '% diversion detected', 'success');
+        toast(divColor + ' ' + ticketSession.diversionRate + '% diversion - Click Next to continue', 'success');
         
-        // Auto-advance to review step
-        setTimeout(() => showStep(3), 1000);
+        // Enable next button - user will click Next manually
+        // (Removed auto-advance as it was causing issues on iPad)
     } catch (err) {
         console.error('Analysis error:', err);
         let msg = err.message || 'Analysis failed';
