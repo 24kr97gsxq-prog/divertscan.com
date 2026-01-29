@@ -119,7 +119,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.0</span></div>
+<div class="logo">DivertScan™ <span>v5.0.2</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -996,7 +996,30 @@ function goNext() {
             return;
         }
         
+        // Save materials from inputs BEFORE leaving Step 3
+        const keys = ['wood', 'concrete', 'metal', 'cardboard', 'plastic', 'drywall', 'landfill'];
+        let total = 0;
+        
+        keys.forEach(key => {
+            const input = document.getElementById('mat_' + key);
+            if (input) {
+                ticketData.materials[key] = parseInt(input.value) || 0;
+                total += ticketData.materials[key];
+            }
+        });
+        
+        console.log('Materials saved:', ticketData.materials, 'Total:', total);
+        
+        // Validate total
+        if (total < 99 || total > 101) {
+            toast('Materials must total 100% (currently ' + total + '%)', 'error');
+            return;
+        }
+        
+        // Recalculate diversion
+        ticketData.diversionRate = 100 - (ticketData.materials.landfill || 0);
         ticketData.humanVerified = true;
+        
         showStep(4);
         return;
     }
@@ -1227,6 +1250,28 @@ async function analyzeDebris() {
         const match = text.match(/\{[\s\S]*\}/);
         if (match) {
             const result = JSON.parse(match[0]);
+            
+            // Normalize to 100% if needed
+            const keys = ['wood', 'concrete', 'metal', 'cardboard', 'plastic', 'drywall', 'landfill'];
+            let total = 0;
+            keys.forEach(k => { total += (result[k] || 0); });
+            
+            console.log('AI returned total:', total);
+            
+            if (total > 0 && total !== 100) {
+                // Normalize
+                const factor = 100 / total;
+                keys.forEach(k => {
+                    result[k] = Math.round((result[k] || 0) * factor);
+                });
+                // Adjust to exactly 100
+                let newTotal = 0;
+                keys.forEach(k => { newTotal += result[k]; });
+                if (newTotal !== 100) {
+                    result.landfill += (100 - newTotal); // Put any rounding error in landfill
+                }
+            }
+            
             ticketData.materials = result;
             
             // Calculate diversion (everything except landfill)
@@ -1236,6 +1281,7 @@ async function analyzeDebris() {
             document.getElementById('analysisResult').classList.remove('hidden');
             document.getElementById('analysisRate').textContent = ticketData.diversionRate + '%';
             
+            console.log('Normalized materials:', ticketData.materials);
             toast('✅ ' + ticketData.diversionRate + '% diversion - Click Next', 'success');
         } else {
             // Fallback
@@ -1275,15 +1321,26 @@ function populateReviewStep() {
         landfill: '🗑️ Landfill'
     };
     
-    let html = '';
-    for (const [key, value] of Object.entries(materials)) {
-        html += '<div class="material-item">';
-        html += '<span class="material-name">' + (names[key] || key) + '</span>';
-        html += '<div class="material-input"><input type="number" id="mat_' + key + '" value="' + (value || 0) + '" min="0" max="100" onchange="updateMaterial(\'' + key + '\')"><span>%</span></div>';
-        html += '</div>';
-    }
+    const container = document.getElementById('materialsList');
+    container.innerHTML = '';
     
-    document.getElementById('materialsList').innerHTML = html;
+    Object.entries(materials).forEach(([key, value]) => {
+        const div = document.createElement('div');
+        div.className = 'material-item';
+        div.innerHTML = '<span class="material-name">' + (names[key] || key) + '</span>' +
+            '<div class="material-input">' +
+            '<input type="number" id="mat_' + key + '" value="' + (value || 0) + '" min="0" max="100">' +
+            '<span>%</span></div>';
+        
+        // Add event listener properly
+        const input = div.querySelector('input');
+        input.addEventListener('input', function() {
+            updateMaterial(key);
+        });
+        
+        container.appendChild(div);
+    });
+    
     updateMaterialsTotal();
     
     // Reset verification checkbox
@@ -1297,23 +1354,42 @@ function populateReviewStep() {
 function updateMaterial(key) {
     const input = document.getElementById('mat_' + key);
     if (input) {
-        ticketData.materials[key] = parseInt(input.value) || 0;
+        const newValue = parseInt(input.value) || 0;
+        ticketData.materials[key] = newValue;
         
-        // Recalculate diversion
+        // Recalculate diversion (100 - landfill%)
         const landfill = ticketData.materials.landfill || 0;
         ticketData.diversionRate = 100 - landfill;
         document.getElementById('reviewDiversionRate').textContent = ticketData.diversionRate + '%';
         document.getElementById('reviewProgressBar').style.width = Math.min(ticketData.diversionRate, 100) + '%';
+        
+        // Update color based on LEED target
+        const badge = document.getElementById('reviewDiversionRate');
+        if (ticketData.diversionRate >= 75) {
+            badge.style.color = 'var(--emerald-400)';
+        } else if (ticketData.diversionRate >= 50) {
+            badge.style.color = 'var(--amber-400)';
+        } else {
+            badge.style.color = 'var(--red-500)';
+        }
         
         updateMaterialsTotal();
     }
 }
 
 function updateMaterialsTotal() {
+    // Read directly from inputs to ensure accuracy
     let total = 0;
-    for (const value of Object.values(ticketData.materials)) {
-        total += parseInt(value) || 0;
-    }
+    const keys = ['wood', 'concrete', 'metal', 'cardboard', 'plastic', 'drywall', 'landfill'];
+    
+    keys.forEach(key => {
+        const input = document.getElementById('mat_' + key);
+        if (input) {
+            const val = parseInt(input.value) || 0;
+            ticketData.materials[key] = val;
+            total += val;
+        }
+    });
     
     const totalEl = document.getElementById('materialsTotal');
     totalEl.textContent = total + '%';
@@ -1433,15 +1509,33 @@ async function submitTicket() {
         ticketData.signature = signatureCanvas.toDataURL();
     }
     
-    // Check materials total
+    // Read materials fresh from inputs
+    const keys = ['wood', 'concrete', 'metal', 'cardboard', 'plastic', 'drywall', 'landfill'];
     let total = 0;
-    for (const value of Object.values(ticketData.materials)) {
-        total += parseInt(value) || 0;
-    }
-    if (Math.abs(total - 100) > 1) {
-        toast('Materials must total 100%', 'error');
+    let foundInputs = 0;
+    
+    keys.forEach(key => {
+        const input = document.getElementById('mat_' + key);
+        if (input) {
+            foundInputs++;
+            ticketData.materials[key] = parseInt(input.value) || 0;
+            total += ticketData.materials[key];
+        } else {
+            // Fallback to ticketData if input not found
+            total += ticketData.materials[key] || 0;
+        }
+    });
+    
+    console.log('Materials check - Inputs found:', foundInputs, 'Total:', total, ticketData.materials);
+    
+    // Allow some tolerance (98-102%)
+    if (total < 98 || total > 102) {
+        toast('Materials must total 100% (currently ' + total + '%). Go back to Step 3 to adjust.', 'error');
         return;
     }
+    
+    // Recalculate diversion rate
+    ticketData.diversionRate = 100 - (ticketData.materials.landfill || 0);
     
     // Calculate material tons
     const m = ticketData.materials;
