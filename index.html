@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>DivertScan™</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -118,23 +119,56 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v4.9</span></div>
+<div class="logo">DivertScan™ <span>v5.0</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
 <main id="mainContent">
 <div id="dashboardTab">
 <div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
 <div style="font-size:11px;color:var(--slate-400);text-transform:uppercase">Current Project</div>
 <div style="font-size:18px;font-weight:600;margin-top:4px" id="currentProjectName">No Project Selected</div>
+<div style="font-size:12px;color:var(--slate-400)" id="currentProjectHauler"></div>
+</div>
+<button class="btn btn-secondary" onclick="showProjectPicker()" style="padding:8px 12px;font-size:12px">Change</button>
+</div>
 </div>
 
 <button class="btn btn-primary btn-lg" onclick="startNewTicket()">➕ New Ticket</button>
 
 <div class="card" style="margin-top:20px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">Recent Tickets</div>
-<div id="recentTickets" style="color:var(--slate-400);font-size:13px">No tickets yet</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div style="font-size:14px;font-weight:600">Recent Tickets</div>
+<button class="btn btn-secondary" onclick="loadRecentTickets()" style="padding:6px 10px;font-size:11px">Refresh</button>
 </div>
+<div id="recentTickets" style="color:var(--slate-400);font-size:13px">Loading...</div>
+</div>
+
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div style="font-size:14px;font-weight:600">📊 Project Stats</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="text-align:center;padding:12px;background:var(--slate-700);border-radius:8px">
+<div style="font-size:24px;font-weight:700;color:var(--emerald-400)" id="statTotalTons">0.00</div>
+<div style="font-size:11px;color:var(--slate-400)">Total Tons</div>
+</div>
+<div style="text-align:center;padding:12px;background:var(--slate-700);border-radius:8px">
+<div style="font-size:24px;font-weight:700;color:var(--emerald-400)" id="statDiversionRate">0%</div>
+<div style="font-size:11px;color:var(--slate-400)">Diversion Rate</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="projectsTab" class="hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+<h2 style="font-size:18px;font-weight:600">Projects</h2>
+<button class="btn btn-primary" onclick="showNewProjectModal()" style="padding:10px 16px">➕ New Project</button>
+</div>
+<div id="projectsList">Loading projects...</div>
 </div>
 
 <div id="settingsTab" class="hidden">
@@ -143,11 +177,26 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-..." style="margin-bottom:12px">
 <button class="btn btn-primary" onclick="saveApiKey()">Save Key</button>
 </div>
+
+<div class="card">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">🗄️ Supabase Connection</div>
+<div class="form-group">
+<label class="form-label">Project URL</label>
+<input type="text" id="supabaseUrl" class="form-input" placeholder="https://xxxxx.supabase.co">
+</div>
+<div class="form-group">
+<label class="form-label">Anon Key</label>
+<input type="password" id="supabaseKey" class="form-input" placeholder="eyJ...">
+</div>
+<button class="btn btn-primary" onclick="saveSupabaseConfig()">Save & Connect</button>
+<div id="supabaseStatus" style="margin-top:12px;font-size:12px;color:var(--slate-400)"></div>
+</div>
 </div>
 </main>
 
 <nav class="nav">
 <div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
+<div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
 <div class="nav-item" onclick="showTab('settings')">⚙️<span>Settings</span></div>
 </nav>
 
@@ -343,9 +392,72 @@ By signing, I certify that the weights and material percentages are accurate to 
 </div>
 </div>
 
+<!-- New Project Modal -->
+<div id="projectModal" class="modal">
+<div class="modal-content" style="max-width:500px">
+<div class="modal-header">
+<div class="modal-title">New Project</div>
+<button class="modal-close" onclick="closeModal('projectModal')">×</button>
+</div>
+<div class="modal-body">
+<div class="form-group">
+<label class="form-label">Project Name *</label>
+<input type="text" id="projectName" class="form-input" placeholder="e.g., Children's Hospital Phase 2">
+</div>
+<div class="form-group">
+<label class="form-label">Project Address</label>
+<input type="text" id="projectAddress" class="form-input" placeholder="123 Main St, Dallas, TX">
+</div>
+<div class="form-group">
+<label class="form-label">Waste Hauler</label>
+<input type="text" id="projectHauler" class="form-input" placeholder="e.g., B&B Waste Management">
+</div>
+<div class="form-group">
+<label class="form-label">LEED Target (%)</label>
+<input type="number" id="projectLeedTarget" class="form-input" value="75" min="50" max="100">
+</div>
+<div class="form-group">
+<label class="form-label">General Contractor</label>
+<input type="text" id="projectGC" class="form-input" placeholder="e.g., JE Dunn Construction">
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" onclick="closeModal('projectModal')" style="flex:1">Cancel</button>
+<button class="btn btn-primary" onclick="saveProject()" style="flex:1">Save Project</button>
+</div>
+</div>
+</div>
+
+<!-- Project Picker Modal -->
+<div id="projectPickerModal" class="modal">
+<div class="modal-content" style="max-width:500px">
+<div class="modal-header">
+<div class="modal-title">Select Project</div>
+<button class="modal-close" onclick="closeModal('projectPickerModal')">×</button>
+</div>
+<div class="modal-body">
+<div id="projectPickerList">Loading...</div>
+<button class="btn btn-secondary btn-lg" onclick="closeModal('projectPickerModal');showNewProjectModal()" style="margin-top:16px">➕ Create New Project</button>
+</div>
+</div>
+</div>
+
 <script>
+// ========== SUPABASE CONFIG ==========
+const SUPABASE_URL = localStorage.getItem('divertscan_sb_url') || '';
+const SUPABASE_KEY = localStorage.getItem('divertscan_sb_key') || '';
+let sb = null;
+
+// Initialize Supabase if configured
+if (SUPABASE_URL && SUPABASE_KEY && typeof supabase !== 'undefined') {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
 // ========== GLOBAL STATE ==========
 let currentStep = 1;
+let projects = [];
+let currentProject = null;
+let tickets = [];
 let ticketData = {
     projectId: '',
     ticketNumber: '',
@@ -369,7 +481,7 @@ let isDrawing = false;
 
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DivertScan v4.9 initialized');
+    console.log('DivertScan v5.0 initialized');
     
     // Set today's date
     document.getElementById('serviceDate').value = new Date().toISOString().split('T')[0];
@@ -379,21 +491,51 @@ document.addEventListener('DOMContentLoaded', function() {
     if (savedKey) {
         document.getElementById('apiKeyInput').value = savedKey;
     }
+    
+    // Load Supabase config
+    const sbUrl = localStorage.getItem('divertscan_sb_url');
+    const sbKey = localStorage.getItem('divertscan_sb_key');
+    if (sbUrl) document.getElementById('supabaseUrl').value = sbUrl;
+    if (sbKey) document.getElementById('supabaseKey').value = sbKey;
+    
+    // Initialize data
+    initializeApp();
 });
+
+async function initializeApp() {
+    if (sb) {
+        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--emerald-400)">✅ Connected</span>';
+        await loadProjects();
+        await loadRecentTickets();
+        updateStats();
+    } else {
+        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--amber-400)">⚠️ Not configured - go to Settings</span>';
+        document.getElementById('recentTickets').innerHTML = '<p style="color:var(--amber-400)">Configure Supabase in Settings to save tickets</p>';
+    }
+}
 
 // ========== TABS ==========
 function showTab(tab) {
     document.getElementById('dashboardTab').classList.add('hidden');
+    document.getElementById('projectsTab').classList.add('hidden');
     document.getElementById('settingsTab').classList.add('hidden');
     
     if (tab === 'dashboard') {
         document.getElementById('dashboardTab').classList.remove('hidden');
+        loadRecentTickets();
+        updateStats();
+    } else if (tab === 'projects') {
+        document.getElementById('projectsTab').classList.remove('hidden');
+        renderProjectsList();
     } else if (tab === 'settings') {
         document.getElementById('settingsTab').classList.remove('hidden');
     }
     
     document.querySelectorAll('.nav-item').forEach((item, i) => {
-        item.classList.toggle('active', (tab === 'dashboard' && i === 0) || (tab === 'settings' && i === 1));
+        item.classList.remove('active');
+        if ((tab === 'dashboard' && i === 0) || (tab === 'projects' && i === 1) || (tab === 'settings' && i === 2)) {
+            item.classList.add('active');
+        }
     });
 }
 
@@ -406,18 +548,288 @@ function saveApiKey() {
     }
 }
 
+// ========== SUPABASE CONFIG ==========
+function saveSupabaseConfig() {
+    const url = document.getElementById('supabaseUrl').value.trim();
+    const key = document.getElementById('supabaseKey').value.trim();
+    
+    if (!url || !key) {
+        toast('Please enter both URL and Key', 'error');
+        return;
+    }
+    
+    localStorage.setItem('divertscan_sb_url', url);
+    localStorage.setItem('divertscan_sb_key', key);
+    
+    // Reinitialize Supabase
+    if (typeof supabase !== 'undefined') {
+        sb = supabase.createClient(url, key);
+        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--emerald-400)">✅ Connected</span>';
+        toast('Supabase connected!', 'success');
+        initializeApp();
+    }
+}
+
+// ========== PROJECTS ==========
+async function loadProjects() {
+    if (!sb) return;
+    
+    try {
+        const { data, error } = await sb.from('projects').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        projects = data || [];
+        
+        // Load current project from localStorage
+        const savedProjectId = localStorage.getItem('divertscan_current_project');
+        if (savedProjectId) {
+            currentProject = projects.find(p => p.id === savedProjectId);
+        }
+        if (!currentProject && projects.length > 0) {
+            currentProject = projects[0];
+            localStorage.setItem('divertscan_current_project', currentProject.id);
+        }
+        
+        updateProjectDisplay();
+        populateProjectDropdown();
+    } catch (err) {
+        console.error('Error loading projects:', err);
+    }
+}
+
+function updateProjectDisplay() {
+    if (currentProject) {
+        document.getElementById('currentProjectName').textContent = currentProject.name;
+        document.getElementById('currentProjectHauler').textContent = currentProject.waste_hauler || '';
+    } else {
+        document.getElementById('currentProjectName').textContent = 'No Project Selected';
+        document.getElementById('currentProjectHauler').textContent = 'Create a project to get started';
+    }
+}
+
+function populateProjectDropdown() {
+    const select = document.getElementById('ticketProject');
+    select.innerHTML = '<option value="">Select Project...</option>';
+    
+    projects.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name;
+        if (currentProject && p.id === currentProject.id) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+function renderProjectsList() {
+    const container = document.getElementById('projectsList');
+    
+    if (projects.length === 0) {
+        container.innerHTML = '<p style="color:var(--slate-400)">No projects yet. Create your first project!</p>';
+        return;
+    }
+    
+    container.innerHTML = projects.map(p => `
+        <div class="card" style="cursor:pointer" onclick="selectProject('${p.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="font-weight:600">${p.name}</div>
+                    <div style="font-size:12px;color:var(--slate-400)">${p.waste_hauler || 'No hauler set'}</div>
+                </div>
+                ${currentProject && currentProject.id === p.id ? '<span style="color:var(--emerald-400)">✓ Active</span>' : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function selectProject(projectId) {
+    currentProject = projects.find(p => p.id === projectId);
+    localStorage.setItem('divertscan_current_project', projectId);
+    updateProjectDisplay();
+    renderProjectsList();
+    loadRecentTickets();
+    updateStats();
+    toast('Project selected: ' + currentProject.name, 'success');
+}
+
+function showProjectPicker() {
+    const container = document.getElementById('projectPickerList');
+    
+    if (projects.length === 0) {
+        container.innerHTML = '<p style="color:var(--slate-400)">No projects yet.</p>';
+    } else {
+        container.innerHTML = projects.map(p => `
+            <div class="card" style="cursor:pointer;margin-bottom:8px" onclick="selectProject('${p.id}');closeModal('projectPickerModal')">
+                <div style="font-weight:600">${p.name}</div>
+                <div style="font-size:12px;color:var(--slate-400)">${p.waste_hauler || ''}</div>
+            </div>
+        `).join('');
+    }
+    
+    openModal('projectPickerModal');
+}
+
+function showNewProjectModal() {
+    document.getElementById('projectName').value = '';
+    document.getElementById('projectAddress').value = '';
+    document.getElementById('projectHauler').value = '';
+    document.getElementById('projectLeedTarget').value = '75';
+    document.getElementById('projectGC').value = '';
+    openModal('projectModal');
+}
+
+async function saveProject() {
+    const name = document.getElementById('projectName').value.trim();
+    if (!name) {
+        toast('Project name is required', 'error');
+        return;
+    }
+    
+    if (!sb) {
+        toast('Configure Supabase in Settings first', 'error');
+        return;
+    }
+    
+    const projectData = {
+        name: name,
+        address: document.getElementById('projectAddress').value.trim(),
+        waste_hauler: document.getElementById('projectHauler').value.trim(),
+        leed_target: parseInt(document.getElementById('projectLeedTarget').value) || 75,
+        general_contractor: document.getElementById('projectGC').value.trim(),
+        created_at: new Date().toISOString()
+    };
+    
+    try {
+        showLoading('Saving project...');
+        const { data, error } = await sb.from('projects').insert([projectData]).select();
+        hideLoading();
+        
+        if (error) throw error;
+        
+        closeModal('projectModal');
+        toast('Project created!', 'success');
+        
+        await loadProjects();
+        
+        // Auto-select the new project
+        if (data && data[0]) {
+            selectProject(data[0].id);
+        }
+    } catch (err) {
+        hideLoading();
+        console.error('Error saving project:', err);
+        toast('Error: ' + err.message, 'error');
+    }
+}
+
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// ========== TICKETS ==========
+async function loadRecentTickets() {
+    if (!sb || !currentProject) {
+        document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">Select a project to see tickets</p>';
+        return;
+    }
+    
+    try {
+        const { data, error } = await sb
+            .from('tickets')
+            .select('*')
+            .eq('project_id', currentProject.id)
+            .order('created_at', { ascending: false })
+            .limit(10);
+        
+        if (error) throw error;
+        
+        tickets = data || [];
+        renderRecentTickets();
+    } catch (err) {
+        console.error('Error loading tickets:', err);
+        document.getElementById('recentTickets').innerHTML = '<p style="color:var(--red-500)">Error loading tickets</p>';
+    }
+}
+
+function renderRecentTickets() {
+    const container = document.getElementById('recentTickets');
+    
+    if (tickets.length === 0) {
+        container.innerHTML = '<p style="color:var(--slate-400)">No tickets yet for this project</p>';
+        return;
+    }
+    
+    container.innerHTML = tickets.map(t => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--slate-700)">
+            <div>
+                <div style="font-weight:600">#${t.ticket_number || 'N/A'}</div>
+                <div style="font-size:11px;color:var(--slate-400)">${formatDate(t.service_date)}</div>
+            </div>
+            <div style="text-align:right">
+                <div style="color:var(--emerald-400);font-weight:600">${t.diversion_pct || 0}%</div>
+                <div style="font-size:11px;color:var(--slate-400)">${(t.net_tons || 0).toFixed(2)} T</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function updateStats() {
+    if (!sb || !currentProject) {
+        document.getElementById('statTotalTons').textContent = '0.00';
+        document.getElementById('statDiversionRate').textContent = '0%';
+        return;
+    }
+    
+    try {
+        const { data, error } = await sb
+            .from('tickets')
+            .select('net_tons, diversion_pct, landfill_tons')
+            .eq('project_id', currentProject.id);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            const totalTons = data.reduce((sum, t) => sum + (t.net_tons || 0), 0);
+            const totalLandfill = data.reduce((sum, t) => sum + (t.landfill_tons || 0), 0);
+            const diversionRate = totalTons > 0 ? Math.round(((totalTons - totalLandfill) / totalTons) * 100) : 0;
+            
+            document.getElementById('statTotalTons').textContent = totalTons.toFixed(2);
+            document.getElementById('statDiversionRate').textContent = diversionRate + '%';
+        }
+    } catch (err) {
+        console.error('Error updating stats:', err);
+    }
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // ========== TICKET MODAL ==========
 function startNewTicket() {
+    if (!currentProject) {
+        toast('Please select a project first', 'error');
+        showProjectPicker();
+        return;
+    }
+    
     console.log('Starting new ticket');
     currentStep = 1;
     ticketData = {
-        projectId: '',
+        projectId: currentProject.id,
         ticketNumber: '',
         serviceDate: new Date().toISOString().split('T')[0],
         grossLbs: 0,
         tareLbs: 0,
         netTons: 0,
-        hauler: '',
+        hauler: currentProject.waste_hauler || '',
         containerSize: 30,
         photos: [],
         materials: { wood: 20, concrete: 15, metal: 10, cardboard: 20, plastic: 5, drywall: 10, landfill: 20 },
@@ -428,13 +840,14 @@ function startNewTicket() {
     debrisPhotos = [null, null, null];
     
     // Reset form
-    document.getElementById('ticketProject').value = '';
+    populateProjectDropdown();
+    document.getElementById('ticketProject').value = currentProject.id;
     document.getElementById('serviceDate').value = ticketData.serviceDate;
     document.getElementById('ticketNumber').value = '';
     document.getElementById('grossLbs').value = '';
     document.getElementById('tareLbs').value = '';
     document.getElementById('netWeightDisplay').textContent = '0.00 tons';
-    document.getElementById('haulerName').value = '';
+    document.getElementById('haulerName').value = ticketData.hauler;
     document.getElementById('ticketImagePreview').innerHTML = '<span>Upload scale ticket photo</span>';
     document.getElementById('ticketImagePreview').classList.remove('filled');
     
@@ -1002,7 +1415,7 @@ function clearSignature() {
 }
 
 // ========== SUBMIT ==========
-function submitTicket() {
+async function submitTicket() {
     // Check signature
     if (signatureCanvas) {
         const imageData = signatureCtx.getImageData(0, 0, signatureCanvas.width, signatureCanvas.height);
@@ -1030,11 +1443,70 @@ function submitTicket() {
         return;
     }
     
-    // Success!
-    console.log('Ticket submitted:', ticketData);
+    // Calculate material tons
+    const m = ticketData.materials;
+    const netTons = ticketData.netTons;
     
-    closeTicketModal();
-    toast('✅ Ticket submitted successfully!', 'success');
+    const dbRecord = {
+        project_id: ticketData.projectId,
+        ticket_number: ticketData.ticketNumber,
+        service_date: ticketData.serviceDate,
+        hauler: ticketData.hauler,
+        container_size: ticketData.containerSize,
+        gross_lbs: ticketData.grossLbs,
+        tare_lbs: ticketData.tareLbs,
+        net_lbs: ticketData.grossLbs - ticketData.tareLbs,
+        net_tons: netTons,
+        wood_pct: m.wood || 0,
+        concrete_pct: m.concrete || 0,
+        metal_pct: m.metal || 0,
+        cardboard_pct: m.cardboard || 0,
+        plastic_pct: m.plastic || 0,
+        drywall_pct: m.drywall || 0,
+        landfill_pct: m.landfill || 0,
+        wood_tons: ((m.wood || 0) / 100) * netTons,
+        concrete_tons: ((m.concrete || 0) / 100) * netTons,
+        metal_tons: ((m.metal || 0) / 100) * netTons,
+        cardboard_tons: ((m.cardboard || 0) / 100) * netTons,
+        plastic_tons: ((m.plastic || 0) / 100) * netTons,
+        drywall_tons: ((m.drywall || 0) / 100) * netTons,
+        landfill_tons: ((m.landfill || 0) / 100) * netTons,
+        diversion_pct: ticketData.diversionRate,
+        diverted_tons: netTons * (ticketData.diversionRate / 100),
+        human_verified: ticketData.humanVerified,
+        signature: ticketData.signature,
+        signed_at: new Date().toISOString(),
+        is_closed: true,
+        created_at: new Date().toISOString()
+    };
+    
+    if (sb) {
+        try {
+            showLoading('Saving ticket...');
+            const { data, error } = await sb.from('tickets').insert([dbRecord]);
+            hideLoading();
+            
+            if (error) {
+                console.error('Database error:', error);
+                toast('Save error: ' + error.message, 'error');
+                return;
+            }
+            
+            closeTicketModal();
+            toast('✅ Ticket #' + ticketData.ticketNumber + ' saved!', 'success');
+            loadRecentTickets();
+            updateStats();
+        } catch (err) {
+            hideLoading();
+            console.error('Submit error:', err);
+            toast('Error: ' + err.message, 'error');
+        }
+    } else {
+        // No Supabase - just show success
+        console.log('Ticket data (not saved - no DB):', dbRecord);
+        closeTicketModal();
+        toast('✅ Ticket recorded (configure Supabase to save)', 'success');
+    }
 }
 
 // ========== UTILITIES ==========
