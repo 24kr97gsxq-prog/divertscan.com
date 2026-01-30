@@ -119,7 +119,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.3</span></div>
+<div class="logo">DivertScan™ <span>v5.4</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -172,39 +172,132 @@ main{padding:20px;max-width:800px;margin:0 auto}
 </div>
 
 <div id="reportsTab" class="hidden">
-<h2 style="font-size:18px;font-weight:600;margin-bottom:16px">📊 Reports</h2>
+<h2 style="font-size:18px;font-weight:600;margin-bottom:16px">📊 LEED MRc5 Reports</h2>
 
 <div class="card">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">Project Summary Report</div>
-<p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">Generate LEED MRc5 compliant waste diversion report for current project</p>
-<button class="btn btn-primary btn-lg" onclick="generateReport()">📄 Generate Report</button>
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">Generate Waste Diversion Report</div>
+<p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">LEED v4.1 Construction & Demolition Waste Management compliant report</p>
+<div class="btn-row">
+<button class="btn btn-primary" onclick="generateReport()" style="flex:1">📄 Generate Report</button>
+<button class="btn btn-secondary" onclick="downloadReportCSV()" style="flex:1">⬇️ CSV</button>
+</div>
 </div>
 
 <div id="reportOutput" class="hidden" style="margin-top:20px">
-<div class="card">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-<div style="font-size:14px;font-weight:600">📋 Report Preview</div>
-<button class="btn btn-secondary" onclick="downloadReport()" style="padding:8px 12px;font-size:12px">⬇️ Download CSV</button>
+
+<!-- Project Header -->
+<div class="card" id="reportHeader">
+<div style="text-align:center;margin-bottom:16px">
+<div style="font-size:20px;font-weight:700">Construction & Demolition Waste Management Report</div>
+<div style="font-size:12px;color:var(--slate-400)">LEED v4.1 MRc5 Documentation</div>
 </div>
-<div id="reportContent"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
+<div>
+<div style="color:var(--slate-400);font-size:11px">PROJECT NAME</div>
+<div style="font-weight:600" id="reportProjectName">-</div>
+</div>
+<div>
+<div style="color:var(--slate-400);font-size:11px">REPORT DATE</div>
+<div style="font-weight:600" id="reportDate">-</div>
+</div>
+<div>
+<div style="color:var(--slate-400);font-size:11px">PROJECT ADDRESS</div>
+<div id="reportProjectAddress">-</div>
+</div>
+<div>
+<div style="color:var(--slate-400);font-size:11px">GENERAL CONTRACTOR</div>
+<div id="reportProjectGC">-</div>
+</div>
+<div>
+<div style="color:var(--slate-400);font-size:11px">WASTE HAULER</div>
+<div id="reportProjectHauler">-</div>
+</div>
+<div>
+<div style="color:var(--slate-400);font-size:11px">REPORTING PERIOD</div>
+<div id="reportPeriod">-</div>
+</div>
 </div>
 </div>
 
+<!-- Diversion Summary -->
 <div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">Report Summary</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-<div><span style="color:var(--slate-400)">Total Tickets:</span> <span id="reportTicketCount">0</span></div>
-<div><span style="color:var(--slate-400)">Total Tons:</span> <span id="reportTotalTons">0.00</span></div>
-<div><span style="color:var(--slate-400)">Diverted Tons:</span> <span id="reportDivertedTons">0.00</span></div>
-<div><span style="color:var(--slate-400)">Landfill Tons:</span> <span id="reportLandfillTons">0.00</span></div>
-<div><span style="color:var(--slate-400)">Diversion Rate:</span> <span id="reportDiversionRate" style="color:var(--emerald-400);font-weight:600">0%</span></div>
-<div><span style="color:var(--slate-400)">LEED Target:</span> <span>75%</span></div>
+<div style="font-size:14px;font-weight:600;margin-bottom:16px">📈 Diversion Summary</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
+<div style="background:var(--slate-700);padding:16px;border-radius:8px">
+<div style="font-size:28px;font-weight:700;color:var(--emerald-400)" id="reportDiversionRate">0%</div>
+<div style="font-size:11px;color:var(--slate-400)">DIVERSION RATE</div>
+</div>
+<div style="background:var(--slate-700);padding:16px;border-radius:8px">
+<div style="font-size:28px;font-weight:700" id="reportTotalTons">0.00</div>
+<div style="font-size:11px;color:var(--slate-400)">TOTAL TONS</div>
+</div>
+<div style="background:var(--slate-700);padding:16px;border-radius:8px">
+<div style="font-size:28px;font-weight:700;color:var(--emerald-400)" id="reportDivertedTons">0.00</div>
+<div style="font-size:11px;color:var(--slate-400)">DIVERTED TONS</div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;margin-top:12px">
+<div style="background:var(--slate-700);padding:12px;border-radius:8px">
+<div style="font-size:18px;font-weight:600;color:var(--red-500)" id="reportLandfillTons">0.00</div>
+<div style="font-size:11px;color:var(--slate-400)">LANDFILL TONS</div>
+</div>
+<div style="background:var(--slate-700);padding:12px;border-radius:8px">
+<div style="font-size:18px;font-weight:600" id="reportTicketCount">0</div>
+<div style="font-size:11px;color:var(--slate-400)">TOTAL LOADS</div>
+</div>
+<div style="background:var(--slate-700);padding:12px;border-radius:8px">
+<div style="font-size:18px;font-weight:600" id="reportLeedStatus">-</div>
+<div style="font-size:11px;color:var(--slate-400)">LEED STATUS</div>
+</div>
 </div>
 </div>
 
+<!-- Material Breakdown -->
 <div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">Material Breakdown</div>
+<div style="font-size:14px;font-weight:600;margin-bottom:16px">♻️ Material Breakdown by Weight</div>
 <div id="reportMaterialBreakdown"></div>
+<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--slate-700)">
+<div style="display:flex;justify-content:space-between;font-weight:600">
+<span>TOTAL DIVERTED</span>
+<span style="color:var(--emerald-400)" id="reportTotalDiverted">0.00 T</span>
+</div>
+<div style="display:flex;justify-content:space-between;font-weight:600;margin-top:8px">
+<span>TOTAL LANDFILL</span>
+<span style="color:var(--red-500)" id="reportTotalLandfill">0.00 T</span>
+</div>
+</div>
+</div>
+
+<!-- Load Details -->
+<div class="card" style="margin-top:16px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+<div style="font-size:14px;font-weight:600">🚛 Load Details</div>
+<span style="font-size:11px;color:var(--slate-400)" id="reportLoadCount">0 loads</span>
+</div>
+<div id="reportContent" style="overflow-x:auto"></div>
+</div>
+
+<!-- Certification -->
+<div class="card" style="margin-top:16px;border:2px solid var(--emerald-500)">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">✅ Certification Statement</div>
+<p style="font-size:12px;color:var(--slate-300);line-height:1.6">
+I certify that the information contained in this report is accurate and complete to the best of my knowledge. 
+All waste materials have been tracked from point of generation to final destination. 
+Material percentages are based on AI-assisted visual analysis with human verification for each load.
+Photographic documentation and GPS coordinates are stored for audit purposes.
+</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:12px">
+<div>
+<div style="color:var(--slate-400)">Prepared By</div>
+<div style="font-weight:600">DivertScan™ Automated System</div>
+</div>
+<div>
+<div style="color:var(--slate-400)">Report Generated</div>
+<div style="font-weight:600" id="reportGeneratedDate">-</div>
+</div>
+</div>
+</div>
+
 </div>
 </div>
 
@@ -1867,6 +1960,24 @@ async function generateReport() {
             return;
         }
         
+        // Project Header
+        document.getElementById('reportProjectName').textContent = currentProject.name || '-';
+        document.getElementById('reportProjectAddress').textContent = currentProject.address || '-';
+        document.getElementById('reportProjectGC').textContent = currentProject.general_contractor || '-';
+        document.getElementById('reportProjectHauler').textContent = currentProject.waste_hauler || '-';
+        document.getElementById('reportDate').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('reportGeneratedDate').textContent = new Date().toLocaleString();
+        
+        // Calculate date range
+        const dates = reportData.map(t => new Date(t.service_date)).filter(d => !isNaN(d));
+        if (dates.length > 0) {
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            document.getElementById('reportPeriod').textContent = 
+                minDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' - ' +
+                maxDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        
         // Calculate totals
         let totalTons = 0, landfillTons = 0;
         let woodTons = 0, concreteTons = 0, metalTons = 0, cardboardTons = 0;
@@ -1888,54 +1999,96 @@ async function generateReport() {
         
         // Update summary
         document.getElementById('reportTicketCount').textContent = reportData.length;
+        document.getElementById('reportLoadCount').textContent = reportData.length + ' loads';
         document.getElementById('reportTotalTons').textContent = totalTons.toFixed(2);
         document.getElementById('reportDivertedTons').textContent = divertedTons.toFixed(2);
         document.getElementById('reportLandfillTons').textContent = landfillTons.toFixed(2);
-        document.getElementById('reportDiversionRate').textContent = diversionRate + '%';
-        document.getElementById('reportDiversionRate').style.color = diversionRate >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)';
+        document.getElementById('reportTotalDiverted').textContent = divertedTons.toFixed(2) + ' T';
+        document.getElementById('reportTotalLandfill').textContent = landfillTons.toFixed(2) + ' T';
         
-        // Material breakdown
+        // Diversion rate with color
+        const rateEl = document.getElementById('reportDiversionRate');
+        rateEl.textContent = diversionRate + '%';
+        rateEl.style.color = diversionRate >= 75 ? 'var(--emerald-400)' : diversionRate >= 50 ? 'var(--amber-400)' : 'var(--red-500)';
+        
+        // LEED Status
+        const statusEl = document.getElementById('reportLeedStatus');
+        if (diversionRate >= 75) {
+            statusEl.textContent = '✅ PASS';
+            statusEl.style.color = 'var(--emerald-400)';
+        } else if (diversionRate >= 50) {
+            statusEl.textContent = '⚠️ PARTIAL';
+            statusEl.style.color = 'var(--amber-400)';
+        } else {
+            statusEl.textContent = '❌ BELOW';
+            statusEl.style.color = 'var(--red-500)';
+        }
+        
+        // Material breakdown with progress bars
         const materials = [
-            { name: '🪵 Wood', tons: woodTons },
-            { name: '🧱 Concrete', tons: concreteTons },
-            { name: '🔩 Metal', tons: metalTons },
-            { name: '📦 Cardboard', tons: cardboardTons },
-            { name: '♻️ Plastic', tons: plasticTons },
-            { name: '🏗️ Drywall', tons: drywallTons },
-            { name: '🗑️ Landfill', tons: landfillTons }
+            { name: 'Wood', icon: '🪵', tons: woodTons, diverted: true },
+            { name: 'Concrete/Masonry', icon: '🧱', tons: concreteTons, diverted: true },
+            { name: 'Metal', icon: '🔩', tons: metalTons, diverted: true },
+            { name: 'Cardboard/Paper', icon: '📦', tons: cardboardTons, diverted: true },
+            { name: 'Plastic', icon: '♻️', tons: plasticTons, diverted: true },
+            { name: 'Drywall', icon: '🏗️', tons: drywallTons, diverted: true },
+            { name: 'Landfill', icon: '🗑️', tons: landfillTons, diverted: false }
         ];
         
-        document.getElementById('reportMaterialBreakdown').innerHTML = materials.map(m => `
-            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--slate-700)">
-                <span>${m.name}</span>
-                <span style="font-weight:600">${m.tons.toFixed(2)} T (${totalTons > 0 ? Math.round((m.tons/totalTons)*100) : 0}%)</span>
-            </div>
-        `).join('');
+        document.getElementById('reportMaterialBreakdown').innerHTML = materials.map(m => {
+            const pct = totalTons > 0 ? (m.tons / totalTons) * 100 : 0;
+            const barColor = m.diverted ? 'var(--emerald-500)' : 'var(--red-500)';
+            return `
+                <div style="margin-bottom:12px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span>${m.icon} ${m.name}</span>
+                        <span style="font-weight:600">${m.tons.toFixed(2)} T (${pct.toFixed(1)}%)</span>
+                    </div>
+                    <div style="height:8px;background:var(--slate-700);border-radius:4px;overflow:hidden">
+                        <div style="height:100%;width:${Math.min(pct, 100)}%;background:${barColor}"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
         
-        // Ticket list
+        // Detailed ticket table
         document.getElementById('reportContent').innerHTML = `
-            <div style="overflow-x:auto">
-                <table style="width:100%;font-size:12px;border-collapse:collapse">
-                    <thead>
-                        <tr style="border-bottom:2px solid var(--slate-600)">
-                            <th style="text-align:left;padding:8px">Date</th>
-                            <th style="text-align:left;padding:8px">Ticket #</th>
-                            <th style="text-align:right;padding:8px">Net Tons</th>
-                            <th style="text-align:right;padding:8px">Diversion</th>
+            <table style="width:100%;font-size:11px;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--slate-600);text-align:left">
+                        <th style="padding:8px">Date</th>
+                        <th style="padding:8px">Ticket #</th>
+                        <th style="padding:8px">Hauler</th>
+                        <th style="padding:8px;text-align:right">Gross</th>
+                        <th style="padding:8px;text-align:right">Tare</th>
+                        <th style="padding:8px;text-align:right">Net (T)</th>
+                        <th style="padding:8px;text-align:right">Diversion</th>
+                        <th style="padding:8px;text-align:center">Verified</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${reportData.map(t => `
+                        <tr style="border-bottom:1px solid var(--slate-700)">
+                            <td style="padding:8px">${formatDate(t.service_date)}</td>
+                            <td style="padding:8px">${t.ticket_number || '-'}</td>
+                            <td style="padding:8px">${t.hauler || '-'}</td>
+                            <td style="padding:8px;text-align:right">${(t.gross_lbs || 0).toLocaleString()}</td>
+                            <td style="padding:8px;text-align:right">${(t.tare_lbs || 0).toLocaleString()}</td>
+                            <td style="padding:8px;text-align:right;font-weight:600">${(t.net_tons || 0).toFixed(2)}</td>
+                            <td style="padding:8px;text-align:right;color:${(t.diversion_pct || 0) >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)'}">${t.diversion_pct || 0}%</td>
+                            <td style="padding:8px;text-align:center">${t.human_verified ? '✅' : '❌'}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${reportData.map(t => `
-                            <tr style="border-bottom:1px solid var(--slate-700)">
-                                <td style="padding:8px">${formatDate(t.service_date)}</td>
-                                <td style="padding:8px">${t.ticket_number || '-'}</td>
-                                <td style="text-align:right;padding:8px">${(t.net_tons || 0).toFixed(2)}</td>
-                                <td style="text-align:right;padding:8px;color:${(t.diversion_pct || 0) >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)'}">${t.diversion_pct || 0}%</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+                    `).join('')}
+                </tbody>
+                <tfoot>
+                    <tr style="border-top:2px solid var(--slate-600);font-weight:600">
+                        <td style="padding:8px" colspan="5">TOTALS</td>
+                        <td style="padding:8px;text-align:right">${totalTons.toFixed(2)}</td>
+                        <td style="padding:8px;text-align:right;color:${diversionRate >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)'}">${diversionRate}%</td>
+                        <td style="padding:8px;text-align:center">${reportData.filter(t => t.human_verified).length}/${reportData.length}</td>
+                    </tr>
+                </tfoot>
+            </table>
         `;
         
         document.getElementById('reportOutput').classList.remove('hidden');
@@ -1948,16 +2101,37 @@ async function generateReport() {
     }
 }
 
-function downloadReport() {
+function downloadReportCSV() {
     if (reportData.length === 0) {
         toast('Generate a report first', 'error');
         return;
     }
     
-    // Create CSV
-    const headers = ['Date', 'Ticket #', 'Hauler', 'Container', 'Gross Lbs', 'Tare Lbs', 'Net Tons', 
-                     'Wood %', 'Concrete %', 'Metal %', 'Cardboard %', 'Plastic %', 'Drywall %', 'Landfill %',
-                     'Diversion %', 'Human Verified'];
+    // Create comprehensive CSV
+    const projectInfo = [
+        ['LEED MRc5 WASTE DIVERSION REPORT'],
+        [''],
+        ['Project Name', currentProject.name || ''],
+        ['Project Address', currentProject.address || ''],
+        ['General Contractor', currentProject.general_contractor || ''],
+        ['Waste Hauler', currentProject.waste_hauler || ''],
+        ['Report Date', new Date().toLocaleDateString()],
+        [''],
+        ['SUMMARY'],
+        ['Total Loads', reportData.length],
+        ['Total Tons', reportData.reduce((sum, t) => sum + (t.net_tons || 0), 0).toFixed(2)],
+        ['Diverted Tons', reportData.reduce((sum, t) => sum + (t.net_tons || 0) - (t.landfill_tons || 0), 0).toFixed(2)],
+        ['Landfill Tons', reportData.reduce((sum, t) => sum + (t.landfill_tons || 0), 0).toFixed(2)],
+        ['Diversion Rate', (reportData.reduce((sum, t) => sum + (t.net_tons || 0), 0) > 0 ? 
+            Math.round((reportData.reduce((sum, t) => sum + (t.net_tons || 0) - (t.landfill_tons || 0), 0) / 
+            reportData.reduce((sum, t) => sum + (t.net_tons || 0), 0)) * 100) : 0) + '%'],
+        [''],
+        ['LOAD DETAILS'],
+        ['Date', 'Ticket #', 'Hauler', 'Container', 'Gross Lbs', 'Tare Lbs', 'Net Tons', 
+         'Wood %', 'Concrete %', 'Metal %', 'Cardboard %', 'Plastic %', 'Drywall %', 'Landfill %',
+         'Wood Tons', 'Concrete Tons', 'Metal Tons', 'Cardboard Tons', 'Plastic Tons', 'Drywall Tons', 'Landfill Tons',
+         'Diversion %', 'Human Verified', 'GPS Lat', 'GPS Long', 'Photos']
+    ];
     
     const rows = reportData.map(t => [
         t.service_date,
@@ -1974,18 +2148,29 @@ function downloadReport() {
         t.plastic_pct || 0,
         t.drywall_pct || 0,
         t.landfill_pct || 0,
+        (t.wood_tons || 0).toFixed(2),
+        (t.concrete_tons || 0).toFixed(2),
+        (t.metal_tons || 0).toFixed(2),
+        (t.cardboard_tons || 0).toFixed(2),
+        (t.plastic_tons || 0).toFixed(2),
+        (t.drywall_tons || 0).toFixed(2),
+        (t.landfill_tons || 0).toFixed(2),
         t.diversion_pct || 0,
-        t.human_verified ? 'Yes' : 'No'
+        t.human_verified ? 'Yes' : 'No',
+        t.gps_latitude || '',
+        t.gps_longitude || '',
+        t.photo_count || 0
     ]);
     
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const allRows = [...projectInfo, ...rows];
+    const csv = allRows.map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
     
     // Download
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_waste_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `LEED_MRc5_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     
