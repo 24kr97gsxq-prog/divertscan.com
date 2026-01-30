@@ -119,7 +119,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.2</span></div>
+<div class="logo">DivertScan™ <span>v5.3</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -855,6 +855,24 @@ function formatDate(dateStr) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ========== GPS CAPTURE FOR AUDIT TRAIL ==========
+function captureGPS() {
+    if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                ticketData.gpsLatitude = position.coords.latitude;
+                ticketData.gpsLongitude = position.coords.longitude;
+                ticketData.gpsAccuracy = position.coords.accuracy;
+                console.log('GPS captured:', ticketData.gpsLatitude, ticketData.gpsLongitude, '±' + ticketData.gpsAccuracy + 'm');
+            },
+            (error) => {
+                console.log('GPS not available:', error.message);
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }
+}
+
 // ========== TICKET MODAL ==========
 function startNewTicket() {
     if (!currentProject) {
@@ -878,9 +896,18 @@ function startNewTicket() {
         materials: { wood: 20, concrete: 15, metal: 10, cardboard: 20, plastic: 5, drywall: 10, landfill: 20 },
         diversionRate: 0,
         humanVerified: false,
-        signature: null
+        signature: null,
+        scaleTicketPhoto: null,
+        gpsLatitude: null,
+        gpsLongitude: null,
+        gpsAccuracy: null,
+        captureTimestamp: new Date().toISOString(),
+        signedBy: ''
     };
     debrisPhotos = [null, null, null];
+    
+    // Capture GPS location for audit trail
+    captureGPS();
     
     // Reset form
     populateProjectDropdown();
@@ -1084,6 +1111,10 @@ function handleTicketPhoto(event) {
         const img = e.target.result;
         document.getElementById('ticketImagePreview').innerHTML = '<img src="' + img + '">';
         document.getElementById('ticketImagePreview').classList.add('filled');
+        
+        // Store for audit trail
+        ticketData.scaleTicketPhoto = img;
+        ticketData.captureTimestamp = new Date().toISOString();
         
         // Run OCR
         analyzeScaleTicket(img);
@@ -1331,10 +1362,14 @@ LANDFILL (everything else):
 - Anything you cannot clearly identify
 
 REALISTIC RANGES FOR MIXED C&D LOADS:
-- Landfill is typically 15-35% (rarely below 10%)
-- Cardboard is often 15-40% (very common material)
-- Concrete is usually 0-20% (only if you see actual concrete chunks)
-- Pure single-material loads are rare
+- Landfill is typically 20-35% (NEVER below 15% for mixed loads)
+- Even "clean" loads have 15-20% landfill due to contamination
+- Cardboard is often 15-35% 
+- Wood is often 20-45% for framing debris
+- Diversion rates of 65-80% are normal and realistic
+- Rates above 85% are rare and require very clean source-separated material
+
+BE CONSERVATIVE - it's better to slightly underestimate diversion than overestimate.
 
 ANALYZE WHAT YOU ACTUALLY SEE. Return ONLY JSON:
 {"wood":X,"concrete":X,"metal":X,"cardboard":X,"plastic":X,"drywall":X,"landfill":X}
@@ -1398,22 +1433,24 @@ Total must equal 100.` }
             // VALIDATION: Check for suspicious patterns
             let warnings = [];
             
-            // Warning: Landfill too low for mixed load
-            if (result.landfill < 10) {
-                warnings.push('Landfill seems low (' + result.landfill + '%) - mixed loads typically have 15-30%');
-                // Auto-adjust if extremely low
-                if (result.landfill < 5) {
-                    const deficit = 15 - result.landfill;
-                    result.landfill = 15;
-                    // Take from highest category
-                    const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
-                    result[maxKey] = Math.max(0, result[maxKey] - deficit);
-                }
+            // Warning: Landfill too low for mixed load - MINIMUM 15%
+            if (result.landfill < 15) {
+                warnings.push('Landfill adjusted to realistic minimum');
+                const deficit = 15 - result.landfill;
+                result.landfill = 15;
+                // Take from highest category
+                const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
+                result[maxKey] = Math.max(0, result[maxKey] - deficit);
             }
             
-            // Warning: Diversion suspiciously high
-            if (result.landfill < 5 && (result.wood + result.cardboard + result.concrete) > 80) {
-                warnings.push('Diversion rate seems too high - verify materials');
+            // If diversion still above 85%, be more conservative
+            if (result.landfill < 20 && (100 - result.landfill) > 85) {
+                warnings.push('Diversion capped at realistic maximum');
+                const excess = (100 - result.landfill) - 80;
+                result.landfill += excess;
+                // Take from highest category
+                const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
+                result[maxKey] = Math.max(0, result[maxKey] - excess);
             }
             
             // Warning: Concrete high without visible concrete
@@ -1741,11 +1778,17 @@ async function submitTicket() {
         diverted_tons: netTons * (ticketData.diversionRate / 100),
         human_verified: ticketData.humanVerified,
         photo_count: debrisPhotos.filter(p => p).length,
+        scale_ticket_photo: ticketData.scaleTicketPhoto || null,
         debris_photo_1: debrisPhotos[0] || null,
         debris_photo_2: debrisPhotos[1] || null,
         debris_photo_3: debrisPhotos[2] || null,
+        gps_latitude: ticketData.gpsLatitude || null,
+        gps_longitude: ticketData.gpsLongitude || null,
+        gps_accuracy: ticketData.gpsAccuracy || null,
+        capture_timestamp: ticketData.captureTimestamp || new Date().toISOString(),
         signature: ticketData.signature,
         signed_at: new Date().toISOString(),
+        signed_by: ticketData.signedBy || 'Field User',
         is_closed: true,
         created_at: new Date().toISOString()
     };
