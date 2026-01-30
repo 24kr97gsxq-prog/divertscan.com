@@ -119,7 +119,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.1.1</span></div>
+<div class="logo">DivertScan™ <span>v5.2</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -1292,31 +1292,54 @@ async function analyzeDebris() {
     
     try {
         const content = [
-            { type: 'text', text: `You are an expert waste auditor analyzing construction/demolition debris photos for LEED MRc5 reporting.
+            { type: 'text', text: `You are an expert C&D waste auditor. Analyze these debris photos for LEED MRc5 reporting.
 
-CAREFULLY EXAMINE the visible materials in these photos.
+IDENTIFY EACH MATERIAL BY VISUAL APPEARANCE:
 
-MATERIAL IDENTIFICATION GUIDE:
-- CARDBOARD (OCC): Brown corrugated boxes, flattened cardboard, shipping boxes - THIS IS VERY COMMON, look for brown corrugated texture
-- WOOD: Dimensional lumber (2x4s), plywood sheets, pallets, OSB boards - tan/light brown, wood grain visible
-- CONCRETE: Gray chunks, cinder blocks, cement pieces - HEAVY gray material, NOT furniture or equipment
-- METAL: Shiny surfaces, rebar, steel studs, pipes, ductwork, appliances - metallic/reflective
-- PLASTIC: Shrink wrap, buckets, PVC pipes, tarps, bottles - shiny, smooth, various colors
-- DRYWALL: White/cream gypsum boards with paper facing - flat white sheets
-- LANDFILL: Mixed trash bags, furniture, mattresses, carpet, food waste, contaminated items, unidentifiable debris, composite materials
+CARDBOARD/OCC (brown corrugated):
+- Flattened boxes, shipping cartons, brown corrugated sheets
+- VERY COMMON in C&D waste - typically 20-40% of mixed loads
+- Look for wavy/ridged brown paper texture
 
-CRITICAL RULES:
-1. Cardboard is BROWN CORRUGATED material - very common in C&D waste
-2. Do NOT confuse furniture/cabinets with recyclable wood - furniture is usually LANDFILL
-3. Mixed debris piles typically have 15-30% landfill - be realistic
-4. If you see trash bags, add to landfill
-5. Gray office furniture/equipment is NOT concrete
-6. Only count CLEAN, SORTABLE materials as recyclable
+WOOD (tan/brown with grain):
+- Dimensional lumber (2x4, 2x6), plywood, OSB, pallets
+- Must show wood grain texture
+- Painted/laminated wood furniture is NOT recyclable wood
 
-Return ONLY valid JSON:
+CONCRETE/MASITE (gray, chunite):
+- Broken concrete chunks, cinder blocks, brick, stone
+- Heavy gray rubble - NOT furniture, equipment, or metal
+
+METAL (shiny/metallic):
+- Steel studs, rebar, pipes, ductwork, wire, appliances
+- Reflective metallic surface
+
+PLASTIC (smooth, shiny):
+- Shrink wrap, buckets, PVC pipe, tarps, bottles
+- Smooth non-porous surface, various colors
+
+DRYWALL (white/cream sheets):
+- Gypsum board with paper facing
+- Flat white or cream colored panels
+
+LANDFILL (everything else):
+- Furniture (desks, chairs, cabinets) - NOT recyclable wood
+- Carpet, padding, mattresses
+- Mixed trash bags, food waste
+- Insulation, foam, composite materials  
+- Contaminated or wet materials
+- Anything you cannot clearly identify
+
+REALISTIC RANGES FOR MIXED C&D LOADS:
+- Landfill is typically 15-35% (rarely below 10%)
+- Cardboard is often 15-40% (very common material)
+- Concrete is usually 0-20% (only if you see actual concrete chunks)
+- Pure single-material loads are rare
+
+ANALYZE WHAT YOU ACTUALLY SEE. Return ONLY JSON:
 {"wood":X,"concrete":X,"metal":X,"cardboard":X,"plastic":X,"drywall":X,"landfill":X}
 
-Must total exactly 100. Be realistic - most mixed loads have significant landfill.` }
+Total must equal 100.` }
         ];
         
         photos.forEach(p => {
@@ -1356,7 +1379,7 @@ Must total exactly 100. Be realistic - most mixed loads have significant landfil
             let total = 0;
             keys.forEach(k => { total += (result[k] || 0); });
             
-            console.log('AI returned total:', total);
+            console.log('AI raw response:', result, 'Total:', total);
             
             if (total > 0 && total !== 100) {
                 // Normalize
@@ -1368,8 +1391,39 @@ Must total exactly 100. Be realistic - most mixed loads have significant landfil
                 let newTotal = 0;
                 keys.forEach(k => { newTotal += result[k]; });
                 if (newTotal !== 100) {
-                    result.landfill += (100 - newTotal); // Put any rounding error in landfill
+                    result.landfill += (100 - newTotal);
                 }
+            }
+            
+            // VALIDATION: Check for suspicious patterns
+            let warnings = [];
+            
+            // Warning: Landfill too low for mixed load
+            if (result.landfill < 10) {
+                warnings.push('Landfill seems low (' + result.landfill + '%) - mixed loads typically have 15-30%');
+                // Auto-adjust if extremely low
+                if (result.landfill < 5) {
+                    const deficit = 15 - result.landfill;
+                    result.landfill = 15;
+                    // Take from highest category
+                    const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
+                    result[maxKey] = Math.max(0, result[maxKey] - deficit);
+                }
+            }
+            
+            // Warning: Diversion suspiciously high
+            if (result.landfill < 5 && (result.wood + result.cardboard + result.concrete) > 80) {
+                warnings.push('Diversion rate seems too high - verify materials');
+            }
+            
+            // Warning: Concrete high without visible concrete
+            if (result.concrete > 25) {
+                warnings.push('High concrete (' + result.concrete + '%) - verify this is actual concrete, not furniture');
+            }
+            
+            // Log warnings
+            if (warnings.length > 0) {
+                console.log('AI Analysis Warnings:', warnings);
             }
             
             ticketData.materials = result;
@@ -1381,8 +1435,26 @@ Must total exactly 100. Be realistic - most mixed loads have significant landfil
             document.getElementById('analysisResult').classList.remove('hidden');
             document.getElementById('analysisRate').textContent = ticketData.diversionRate + '%';
             
-            console.log('Normalized materials:', ticketData.materials);
-            toast('✅ ' + ticketData.diversionRate + '% diversion - Click Next', 'success');
+            // Show color based on realistic range
+            const rateEl = document.getElementById('analysisRate');
+            if (ticketData.diversionRate > 90) {
+                rateEl.style.color = 'var(--amber-400)'; // Suspicious - too high
+            } else if (ticketData.diversionRate >= 75) {
+                rateEl.style.color = 'var(--emerald-400)'; // Good - meets LEED
+            } else if (ticketData.diversionRate >= 50) {
+                rateEl.style.color = 'var(--amber-400)'; // Below target
+            } else {
+                rateEl.style.color = 'var(--red-500)'; // Poor
+            }
+            
+            console.log('Final materials:', ticketData.materials, 'Diversion:', ticketData.diversionRate + '%');
+            
+            // Show appropriate message
+            if (warnings.length > 0) {
+                toast('⚠️ ' + ticketData.diversionRate + '% - Review materials in Step 3', 'warning');
+            } else {
+                toast('✅ ' + ticketData.diversionRate + '% diversion - Click Next', 'success');
+            }
         } else {
             // Fallback
             ticketData.materials = { wood: 25, concrete: 20, metal: 10, cardboard: 15, plastic: 5, drywall: 5, landfill: 20 };
