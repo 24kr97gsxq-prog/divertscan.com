@@ -119,7 +119,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.0.2</span></div>
+<div class="logo">DivertScan™ <span>v5.0.4</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -312,10 +312,12 @@ main{padding:20px;max-width:800px;margin:0 auto}
 </div>
 
 <input type="file" id="debrisPhotoInput" accept="image/*" style="display:none" onchange="handleDebrisPhoto(event)">
+<input type="file" id="debrisMultiInput" accept="image/*" multiple style="display:none" onchange="handleMultiplePhotos(event)">
+<input type="file" id="debrisCameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleDebrisPhoto(event)">
 
 <div class="btn-row" style="margin-bottom:16px">
-<button class="btn btn-secondary" onclick="triggerDebrisCamera()">📷 Camera</button>
-<button class="btn btn-primary" onclick="document.getElementById('debrisPhotoInput').click()">📁 Upload</button>
+<button class="btn btn-secondary" onclick="document.getElementById('debrisCameraInput').click()">📷 Camera</button>
+<button class="btn btn-primary" onclick="document.getElementById('debrisMultiInput').click()">📁 Upload Multiple</button>
 </div>
 
 <p style="text-align:center;color:var(--slate-400);margin-bottom:16px">Photos: <span id="photoCount">0</span>/3</p>
@@ -1183,6 +1185,39 @@ function handleDebrisPhoto(event) {
     event.target.value = '';
 }
 
+function handleMultiplePhotos(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+    
+    let slotIndex = 0;
+    
+    files.forEach((file, i) => {
+        // Find next empty slot
+        while (slotIndex < 3 && debrisPhotos[slotIndex]) {
+            slotIndex++;
+        }
+        if (slotIndex >= 3) return; // No more slots
+        
+        const reader = new FileReader();
+        const slot = slotIndex;
+        
+        reader.onload = function(e) {
+            const img = e.target.result;
+            debrisPhotos[slot] = img;
+            
+            const slotEl = document.getElementById('photoSlot' + slot);
+            slotEl.innerHTML = '<img src="' + img + '"><button class="remove-btn" onclick="removePhoto(' + slot + ', event)">×</button>';
+            slotEl.classList.add('filled');
+            
+            updatePhotoCount();
+        };
+        reader.readAsDataURL(file);
+        slotIndex++;
+    });
+    
+    event.target.value = '';
+}
+
 function removePhoto(index, event) {
     event.stopPropagation();
     debrisPhotos[index] = null;
@@ -1216,7 +1251,29 @@ async function analyzeDebris() {
     
     try {
         const content = [
-            { type: 'text', text: 'Analyze this construction debris. Estimate volume % of each material. Return ONLY JSON: {"wood":0-100,"concrete":0-100,"metal":0-100,"cardboard":0-100,"plastic":0-100,"drywall":0-100,"landfill":0-100}. Must total 100.' }
+            { type: 'text', text: `You are analyzing a construction/demolition debris container for LEED waste diversion reporting.
+
+LOOK CAREFULLY at the actual materials visible in this specific load. Each load is different.
+
+Estimate the VOLUME percentage of each material you can actually see:
+- wood: lumber, plywood, pallets, OSB, framing (light brown/tan)
+- concrete: concrete chunks, CMU blocks, masite (gray, heavy)
+- metal: rebar, studs, flashing, pipes, ductwork (shiny/metallic)
+- cardboard: boxes, OCC, packaging (brown corrugated)
+- plastic: wrap, buckets, PVC pipe, packaging (shiny, various colors)
+- drywall: gypsum board, sheetrock (white/gray sheets)
+- landfill: mixed trash, insulation, non-recyclables, food waste
+
+IMPORTANT: 
+- Base percentages ONLY on what you actually see, not assumptions
+- If a material is NOT visible, give it 0%
+- Loads vary greatly - some are mostly wood, some mostly cardboard, etc.
+- Be specific to THIS load, not generic estimates
+
+Return ONLY valid JSON (no other text):
+{"wood":X,"concrete":X,"metal":X,"cardboard":X,"plastic":X,"drywall":X,"landfill":X}
+
+Percentages must total exactly 100.` }
         ];
         
         photos.forEach(p => {
@@ -1568,6 +1625,10 @@ async function submitTicket() {
         diversion_pct: ticketData.diversionRate,
         diverted_tons: netTons * (ticketData.diversionRate / 100),
         human_verified: ticketData.humanVerified,
+        photo_count: debrisPhotos.filter(p => p).length,
+        debris_photo_1: debrisPhotos[0] || null,
+        debris_photo_2: debrisPhotos[1] || null,
+        debris_photo_3: debrisPhotos[2] || null,
         signature: ticketData.signature,
         signed_at: new Date().toISOString(),
         is_closed: true,
