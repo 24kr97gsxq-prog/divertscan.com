@@ -7,6 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>DivertScan™</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -119,7 +120,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.4</span></div>
+<div class="logo">DivertScan™ <span>v5.7</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -177,9 +178,10 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <div class="card">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">Generate Waste Diversion Report</div>
 <p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">LEED v4.1 Construction & Demolition Waste Management compliant report</p>
-<div class="btn-row">
-<button class="btn btn-primary" onclick="generateReport()" style="flex:1">📄 Generate Report</button>
-<button class="btn btn-secondary" onclick="downloadReportCSV()" style="flex:1">⬇️ CSV</button>
+<button class="btn btn-primary btn-lg" onclick="generateReport()" style="margin-bottom:12px">📄 Generate Report</button>
+<div class="btn-row" id="reportDownloadBtns" style="display:none">
+<button class="btn btn-secondary" onclick="downloadReportPDF()" style="flex:1">📑 Download PDF</button>
+<button class="btn btn-secondary" onclick="downloadReportCSV()" style="flex:1">📊 Download CSV</button>
 </div>
 </div>
 
@@ -1418,53 +1420,32 @@ async function analyzeDebris() {
         const content = [
             { type: 'text', text: `You are an expert C&D waste auditor. Analyze these debris photos for LEED MRc5 reporting.
 
-IDENTIFY EACH MATERIAL BY VISUAL APPEARANCE:
+MATERIAL IDENTIFICATION:
+- WOOD: lumber, plywood, pallets, OSB, framing - tan/brown with grain
+- CONCRETE/BRICK/MASONRY: gray concrete chunks, cinder blocks, brick, stone
+- METAL: steel studs, rebar, pipes, ductwork, wire - metallic/shiny
+- OCC/CARDBOARD: brown corrugated boxes, shipping cartons
+- PLASTIC: shrink wrap, buckets, PVC pipe, bottles
+- DRYWALL: white/cream gypsum board sheets
+- TRASH/LANDFILL: mixed bags, furniture, carpet, food waste, unidentifiable debris
 
-CARDBOARD/OCC (brown corrugated):
-- Flattened boxes, shipping cartons, brown corrugated sheets
-- VERY COMMON in C&D waste - typically 20-40% of mixed loads
-- Look for wavy/ridged brown paper texture
+REALISTIC PATTERNS FROM ACTUAL RECYCLING FACILITIES:
+- ONE material typically dominates (40-60% of load)
+- Landfill/Trash is typically 20-30% for mixed loads
+- Some materials will be 0% if not visible
+- Construction framing debris: Wood 50-60%, Landfill 20-25%, rest split
+- Demolition debris: Concrete 40-50%, Metal 15-20%, Landfill 20-25%
+- Commercial cleanout: Cardboard 30-40%, Landfill 30-40%
 
-WOOD (tan/brown with grain):
-- Dimensional lumber (2x4, 2x6), plywood, OSB, pallets
-- Must show wood grain texture
-- Painted/laminated wood furniture is NOT recyclable wood
+DO NOT give flat distributions like 15-20% for everything.
+If you see mostly wood, give wood 50%+ and others less.
+If a material is NOT visible, give it 0%.
 
-CONCRETE/MASITE (gray, chunite):
-- Broken concrete chunks, cinder blocks, brick, stone
-- Heavy gray rubble - NOT furniture, equipment, or metal
+Return ONLY JSON:
+{"wood":X,"concrete":X,"metal":X,"cardboard":X,"plastic":X,"drywall":X,"landfill":X}
 
-METAL (shiny/metallic):
-- Steel studs, rebar, pipes, ductwork, wire, appliances
-- Reflective metallic surface
-
-PLASTIC (smooth, shiny):
-- Shrink wrap, buckets, PVC pipe, tarps, bottles
-- Smooth non-porous surface, various colors
-
-DRYWALL (white/cream sheets):
-- Gypsum board with paper facing
-- Flat white or cream colored panels
-
-LANDFILL (everything else):
-- Furniture (desks, chairs, cabinets) - NOT recyclable wood
-- Carpet, padding, mattresses
-- Mixed trash bags, food waste
-- Insulation, foam, composite materials  
-- Contaminated or wet materials
-- Anything you cannot clearly identify
-
-REALISTIC RANGES FOR MIXED C&D LOADS:
-- Landfill is typically 20-35% (NEVER below 15% for mixed loads)
-- Even "clean" loads have 15-20% landfill due to contamination
-- Cardboard is often 15-35% 
-- Wood is often 20-45% for framing debris
-- Diversion rates of 65-80% are normal and realistic
-- Rates above 85% are rare and require very clean source-separated material
-
-BE CONSERVATIVE - it's better to slightly underestimate diversion than overestimate.
-
-ANALYZE WHAT YOU ACTUALLY SEE. Return ONLY JSON:
+Must total exactly 100.` }
+        ];
 {"wood":X,"concrete":X,"metal":X,"cardboard":X,"plastic":X,"drywall":X,"landfill":X}
 
 Total must equal 100.` }
@@ -1523,25 +1504,23 @@ Total must equal 100.` }
                 }
             }
             
-            // VALIDATION: Check for suspicious patterns
+            // VALIDATION: Ensure realistic patterns
             let warnings = [];
             
-            // Warning: Landfill too low for mixed load - MINIMUM 15%
-            if (result.landfill < 15) {
-                warnings.push('Landfill adjusted to realistic minimum');
-                const deficit = 15 - result.landfill;
-                result.landfill = 15;
+            // Minimum 20% landfill for mixed loads (based on HD Waste real data: 23%)
+            if (result.landfill < 20) {
+                const deficit = 20 - result.landfill;
+                result.landfill = 20;
                 // Take from highest category
                 const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
                 result[maxKey] = Math.max(0, result[maxKey] - deficit);
+                warnings.push('Landfill adjusted to realistic minimum (20%)');
             }
             
-            // If diversion still above 85%, be more conservative
-            if (result.landfill < 20 && (100 - result.landfill) > 85) {
-                warnings.push('Diversion capped at realistic maximum');
+            // Cap diversion at 80% (based on real facility data)
+            if ((100 - result.landfill) > 80) {
                 const excess = (100 - result.landfill) - 80;
                 result.landfill += excess;
-                // Take from highest category
                 const maxKey = keys.filter(k => k !== 'landfill').reduce((a, b) => result[a] > result[b] ? a : b);
                 result[maxKey] = Math.max(0, result[maxKey] - excess);
             }
@@ -1936,7 +1915,16 @@ function toast(message, type) {
 let reportData = [];
 
 async function generateReport() {
-    if (!sb || !currentProject) {
+    console.log('generateReport called');
+    console.log('sb:', sb);
+    console.log('currentProject:', currentProject);
+    
+    if (!sb) {
+        toast('Configure Supabase in Settings first', 'error');
+        return;
+    }
+    
+    if (!currentProject) {
         toast('Select a project first', 'error');
         return;
     }
@@ -1944,21 +1932,30 @@ async function generateReport() {
     showLoading('Generating report...');
     
     try {
+        console.log('Fetching tickets for project:', currentProject.id);
+        
         const { data, error } = await sb
             .from('tickets')
             .select('*')
             .eq('project_id', currentProject.id)
             .order('service_date', { ascending: true });
         
-        if (error) throw error;
+        if (error) {
+            console.error('Database error:', error);
+            throw error;
+        }
         
         reportData = data || [];
+        console.log('Tickets found:', reportData.length);
         hideLoading();
         
         if (reportData.length === 0) {
-            toast('No tickets found for this project', 'error');
+            toast('No tickets found for this project. Submit some tickets first!', 'error');
             return;
         }
+        
+        // Show download buttons
+        document.getElementById('reportDownloadBtns').style.display = 'grid';
         
         // Project Header
         document.getElementById('reportProjectName').textContent = currentProject.name || '-';
@@ -2174,7 +2171,202 @@ function downloadReportCSV() {
     a.click();
     URL.revokeObjectURL(url);
     
-    toast('Report downloaded!', 'success');
+    toast('CSV downloaded!', 'success');
+}
+
+function downloadReportPDF() {
+    if (reportData.length === 0) {
+        toast('Generate a report first', 'error');
+        return;
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+    
+    // Calculate totals
+    let totalTons = 0, landfillTons = 0;
+    let woodTons = 0, concreteTons = 0, metalTons = 0, cardboardTons = 0, plasticTons = 0, drywallTons = 0;
+    
+    reportData.forEach(t => {
+        totalTons += t.net_tons || 0;
+        landfillTons += t.landfill_tons || 0;
+        woodTons += t.wood_tons || 0;
+        concreteTons += t.concrete_tons || 0;
+        metalTons += t.metal_tons || 0;
+        cardboardTons += t.cardboard_tons || 0;
+        plasticTons += t.plastic_tons || 0;
+        drywallTons += t.drywall_tons || 0;
+    });
+    
+    const divertedTons = totalTons - landfillTons;
+    const diversionRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
+    
+    let y = 15;
+    
+    // Header - Right aligned company info
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Jaguar Waste Management', 280, y, { align: 'right' });
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('214-487-3457', 280, y, { align: 'right' });
+    
+    // Left side - Recipient
+    y = 15;
+    doc.setFontSize(9);
+    doc.text('ATTN: ' + (currentProject.general_contractor || 'Project Manager'), 14, y);
+    y += 5;
+    doc.text('RE: ' + (currentProject.name || 'Construction Project'), 14, y);
+    y += 8;
+    doc.text('Date: ' + new Date().toLocaleDateString(), 14, y);
+    y += 10;
+    
+    // Letter body
+    doc.text('Dear Client,', 14, y);
+    y += 6;
+    const reportMonth = reportData.length > 0 && reportData[0].service_date ? 
+        new Date(reportData[0].service_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 
+        'Current Period';
+    doc.text('Below are the tonnage reports for ' + reportMonth + '. The report lists all the information needed for each haul.', 14, y);
+    y += 12;
+    
+    // Project Site Address Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, y, 100, 10, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(34, 139, 34); // Green color like HD Waste
+    doc.text(currentProject.address || currentProject.name || 'Project Site', 18, y + 7);
+    doc.setTextColor(0, 0, 0);
+    y += 18;
+    
+    // Table Header
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFillColor(255, 255, 255);
+    
+    const colX = [14, 34, 64, 94, 124, 154, 179, 204, 229, 254];
+    const colW = [20, 30, 30, 30, 30, 25, 25, 25, 25, 25];
+    const headers = ['Month', 'Date', 'W/O & TKT #', 'Total Ton', 'BRK/BLCK/CON', 'Metal/Alum', 'OCC', 'Plastic', 'Wood', 'Trash'];
+    
+    // Draw header row
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.5);
+    headers.forEach((h, i) => {
+        doc.rect(colX[i], y, colW[i], 8);
+        doc.text(h, colX[i] + 2, y + 5.5);
+    });
+    y += 8;
+    
+    // Get month name for first column
+    const monthName = reportData.length > 0 && reportData[0].service_date ? 
+        new Date(reportData[0].service_date).toLocaleDateString('en-US', { month: 'long' }) : '';
+    
+    // Data rows
+    doc.setFont('helvetica', 'normal');
+    let firstRow = true;
+    
+    reportData.forEach((t, idx) => {
+        if (y > 180) {
+            doc.addPage('landscape');
+            y = 20;
+            // Redraw header on new page
+            doc.setFont('helvetica', 'bold');
+            headers.forEach((h, i) => {
+                doc.rect(colX[i], y, colW[i], 8);
+                doc.text(h, colX[i] + 2, y + 5.5);
+            });
+            y += 8;
+            doc.setFont('helvetica', 'normal');
+            firstRow = true;
+        }
+        
+        const rowData = [
+            firstRow ? monthName : '',
+            t.service_date ? new Date(t.service_date).toLocaleDateString('en-US', {month:'numeric', day:'numeric', year:'numeric'}) : '',
+            t.ticket_number || '',
+            (t.net_tons || 0).toFixed(2),
+            (t.concrete_tons || 0) > 0 ? (t.concrete_tons || 0).toFixed(2) : '',
+            (t.metal_tons || 0) > 0 ? (t.metal_tons || 0).toFixed(2) : '',
+            (t.cardboard_tons || 0) > 0 ? (t.cardboard_tons || 0).toFixed(2) : '',
+            (t.plastic_tons || 0) > 0 ? (t.plastic_tons || 0).toFixed(2) : '',
+            (t.wood_tons || 0) > 0 ? (t.wood_tons || 0).toFixed(2) : '',
+            (t.landfill_tons || 0) > 0 ? (t.landfill_tons || 0).toFixed(2) : ''
+        ];
+        
+        rowData.forEach((d, i) => {
+            doc.rect(colX[i], y, colW[i], 6);
+            doc.text(String(d), colX[i] + 2, y + 4);
+        });
+        
+        y += 6;
+        firstRow = false;
+    });
+    
+    // Totals row
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    const totalsData = [
+        '', 'Total:', '', 
+        totalTons.toFixed(2),
+        concreteTons.toFixed(2),
+        metalTons.toFixed(2),
+        cardboardTons.toFixed(2),
+        plasticTons.toFixed(2),
+        woodTons.toFixed(2),
+        landfillTons.toFixed(2)
+    ];
+    
+    totalsData.forEach((d, i) => {
+        doc.rect(colX[i], y, colW[i], 6);
+        doc.text(String(d), colX[i] + 2, y + 4);
+    });
+    y += 6;
+    
+    // Percentage row
+    const pctData = [
+        '', 'Percentage:', '',
+        '',
+        totalTons > 0 ? Math.round((concreteTons/totalTons)*100) + '%' : '0%',
+        totalTons > 0 ? Math.round((metalTons/totalTons)*100) + '%' : '0%',
+        totalTons > 0 ? Math.round((cardboardTons/totalTons)*100) + '%' : '0%',
+        totalTons > 0 ? Math.round((plasticTons/totalTons)*100) + '%' : '0%',
+        totalTons > 0 ? Math.round((woodTons/totalTons)*100) + '%' : '0%',
+        totalTons > 0 ? Math.round((landfillTons/totalTons)*100) + '%' : '0%'
+    ];
+    
+    pctData.forEach((d, i) => {
+        doc.rect(colX[i], y, colW[i], 6);
+        doc.text(String(d), colX[i] + 2, y + 4);
+    });
+    y += 12;
+    
+    // Diversion Summary
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DIVERSION SUMMARY', 14, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Total Diverted: ' + divertedTons.toFixed(2) + ' tons (' + diversionRate + '%)', 14, y);
+    y += 5;
+    doc.text('Total Landfill: ' + landfillTons.toFixed(2) + ' tons (' + (100-diversionRate) + '%)', 14, y);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.text('LEED MRc5 Status: ' + (diversionRate >= 75 ? 'COMPLIANT (>=75%)' : 'NON-COMPLIANT (<75%)'), 14, y);
+    
+    // Footer
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Generated by DivertScan™ | ' + new Date().toLocaleString(), 14, pageHeight - 10);
+    doc.text(currentProject.waste_hauler || 'Jaguar Waste Management', 280, pageHeight - 10, { align: 'right' });
+    
+    // Save
+    doc.save(`Tonnage_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    
+    toast('PDF downloaded!', 'success');
 }
 </script>
 
