@@ -120,7 +120,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <body>
 
 <div class="header">
-<div class="logo">DivertScan™ <span>v5.7</span></div>
+<div class="logo">DivertScan™ <span>v5.8</span></div>
 <button class="modal-close" onclick="showTab('settings')" style="background:transparent;border:none">⚙️</button>
 </div>
 
@@ -1773,6 +1773,8 @@ function clearSignature() {
 
 // ========== SUBMIT ==========
 async function submitTicket() {
+    console.log('submitTicket called');
+    
     // Check signature
     if (signatureCanvas) {
         const imageData = signatureCtx.getImageData(0, 0, signatureCanvas.width, signatureCanvas.height);
@@ -1820,17 +1822,18 @@ async function submitTicket() {
     
     // Calculate material tons
     const m = ticketData.materials;
-    const netTons = ticketData.netTons;
+    const netTons = ticketData.netTons || 0;
     
+    // Build database record with ONLY columns that exist
     const dbRecord = {
         project_id: ticketData.projectId,
-        ticket_number: ticketData.ticketNumber,
-        service_date: ticketData.serviceDate,
-        hauler: ticketData.hauler,
-        container_size: ticketData.containerSize,
-        gross_lbs: ticketData.grossLbs,
-        tare_lbs: ticketData.tareLbs,
-        net_lbs: ticketData.grossLbs - ticketData.tareLbs,
+        ticket_number: ticketData.ticketNumber || '',
+        service_date: ticketData.serviceDate || new Date().toISOString().split('T')[0],
+        hauler: ticketData.hauler || '',
+        container_size: ticketData.containerSize || 30,
+        gross_lbs: ticketData.grossLbs || 0,
+        tare_lbs: ticketData.tareLbs || 0,
+        net_lbs: (ticketData.grossLbs || 0) - (ticketData.tareLbs || 0),
         net_tons: netTons,
         wood_pct: m.wood || 0,
         concrete_pct: m.concrete || 0,
@@ -1848,22 +1851,26 @@ async function submitTicket() {
         landfill_tons: ((m.landfill || 0) / 100) * netTons,
         diversion_pct: ticketData.diversionRate,
         diverted_tons: netTons * (ticketData.diversionRate / 100),
-        human_verified: ticketData.humanVerified,
+        human_verified: ticketData.humanVerified || false,
         photo_count: debrisPhotos.filter(p => p).length,
-        scale_ticket_photo: ticketData.scaleTicketPhoto || null,
-        debris_photo_1: debrisPhotos[0] || null,
-        debris_photo_2: debrisPhotos[1] || null,
-        debris_photo_3: debrisPhotos[2] || null,
-        gps_latitude: ticketData.gpsLatitude || null,
-        gps_longitude: ticketData.gpsLongitude || null,
-        gps_accuracy: ticketData.gpsAccuracy || null,
-        capture_timestamp: ticketData.captureTimestamp || new Date().toISOString(),
-        signature: ticketData.signature,
+        signature: ticketData.signature || null,
         signed_at: new Date().toISOString(),
-        signed_by: ticketData.signedBy || 'Field User',
         is_closed: true,
         created_at: new Date().toISOString()
     };
+    
+    // Only add optional columns if they have values (to avoid column not found errors)
+    if (ticketData.scaleTicketPhoto) dbRecord.scale_ticket_photo = ticketData.scaleTicketPhoto;
+    if (debrisPhotos[0]) dbRecord.debris_photo_1 = debrisPhotos[0];
+    if (debrisPhotos[1]) dbRecord.debris_photo_2 = debrisPhotos[1];
+    if (debrisPhotos[2]) dbRecord.debris_photo_3 = debrisPhotos[2];
+    if (ticketData.gpsLatitude) dbRecord.gps_latitude = ticketData.gpsLatitude;
+    if (ticketData.gpsLongitude) dbRecord.gps_longitude = ticketData.gpsLongitude;
+    if (ticketData.gpsAccuracy) dbRecord.gps_accuracy = ticketData.gpsAccuracy;
+    if (ticketData.captureTimestamp) dbRecord.capture_timestamp = ticketData.captureTimestamp;
+    if (ticketData.signedBy) dbRecord.signed_by = ticketData.signedBy;
+    
+    console.log('dbRecord to save:', Object.keys(dbRecord));
     
     if (sb) {
         try {
@@ -1873,7 +1880,14 @@ async function submitTicket() {
             
             if (error) {
                 console.error('Database error:', error);
-                toast('Save error: ' + error.message, 'error');
+                // Show specific error to help debug
+                if (error.message.includes('column')) {
+                    toast('Database column error: ' + error.message + '. Run schema update SQL.', 'error');
+                } else if (error.message.includes('violates')) {
+                    toast('Database constraint error: ' + error.message, 'error');
+                } else {
+                    toast('Save error: ' + error.message, 'error');
+                }
                 return;
             }
             
