@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>DivertScan™ v7.2 Enhanced</title>
+<title>DivertScan™ v7.3 Excel Edition</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -450,7 +451,7 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <div class="app-container" id="appContainer">
 
 <div class="header" id="adminHeader">
-<div class="logo">DivertScan™ <span>v7.2</span></div>
+<div class="logo">DivertScan™ <span>v7.3</span></div>
 <div class="user-badge">
 <span id="currentUserName">Admin</span>
 <span class="user-role" id="currentUserRole">ADMIN</span>
@@ -586,10 +587,29 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <!-- Import/Export Section -->
 <div class="card" style="margin-top:20px">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">📥 Import / Export</div>
-<div class="btn-row">
-<button class="btn btn-secondary" onclick="exportAllProjects()" style="flex:1">📤 Export All</button>
-<button class="btn btn-secondary" onclick="document.getElementById('importFile').click()" style="flex:1">📥 Import</button>
+<p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Import tickets from Excel or export your data</p>
+
+<div style="font-size:12px;font-weight:500;margin-bottom:8px">Import Data</div>
+<div class="btn-row" style="margin-bottom:12px">
+<button class="btn btn-primary" onclick="document.getElementById('importExcelFile').click()" style="flex:1">📗 Import Excel</button>
+<button class="btn btn-secondary" onclick="document.getElementById('importFile').click()" style="flex:1">📄 Import JSON</button>
+</div>
+<input type="file" id="importExcelFile" accept=".xlsx,.xls" style="display:none" onchange="importExcelTickets(event)">
 <input type="file" id="importFile" accept=".json,.csv" style="display:none" onchange="importProjects(event)">
+
+<div style="font-size:12px;font-weight:500;margin-bottom:8px;margin-top:16px">Export Data</div>
+<div class="btn-row">
+<button class="btn btn-secondary" onclick="exportAllProjects()" style="flex:1">📤 JSON</button>
+<button class="btn btn-secondary" onclick="exportProjectsCSV()" style="flex:1">📊 CSV</button>
+<button class="btn btn-primary" onclick="exportProjectsExcel()" style="flex:1">📗 Excel</button>
+</div>
+
+<div style="background:var(--bg-tertiary);border-radius:8px;padding:12px;margin-top:12px;font-size:11px">
+<div style="font-weight:600;margin-bottom:4px">Excel Import Format:</div>
+<div style="color:var(--text-muted)">
+Supports HD Waste / DalMex format with columns:<br>
+Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %, Plastic %, Concrete %, etc.
+</div>
 </div>
 </div>
 </div>
@@ -3794,9 +3814,446 @@ async function exportAuditPackage() {
 }
 
 function downloadReportExcel() {
-    // For now, redirect to CSV which Excel can open
-    downloadReportCSV();
-    toast('Tip: Open CSV in Excel and Save As .xlsx', 'info');
+    if (!reportData || reportData.length === 0) {
+        toast('Generate a report first', 'error');
+        return;
+    }
+    
+    // Check if SheetJS is loaded
+    if (typeof XLSX === 'undefined') {
+        toast('Excel library not loaded. Using CSV instead.', 'warning');
+        downloadReportCSV();
+        return;
+    }
+    
+    try {
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Calculate totals
+        const totalTons = reportData.reduce((s, t) => s + (t.net_tons || 0), 0);
+        const landfillTons = reportData.reduce((s, t) => s + (t.landfill_tons || 0), 0);
+        const divertedTons = totalTons - landfillTons;
+        const diversionRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
+        
+        // ===== SUMMARY SHEET =====
+        const summaryData = [
+            ['LEED MRc5 WASTE DIVERSION REPORT'],
+            [''],
+            ['Project Information'],
+            ['Project Name', currentProject.name || ''],
+            ['Project Address', currentProject.address || ''],
+            ['General Contractor', currentProject.general_contractor || ''],
+            ['Waste Hauler', currentProject.waste_hauler || ''],
+            ['Report Generated', new Date().toLocaleString()],
+            [''],
+            ['Diversion Summary'],
+            ['Total Loads', reportData.length],
+            ['Total Tonnage', totalTons.toFixed(2)],
+            ['Diverted from Landfill', divertedTons.toFixed(2)],
+            ['Sent to Landfill', landfillTons.toFixed(2)],
+            ['Diversion Rate', diversionRate + '%'],
+            ['LEED Target', (currentProject.leed_target || 75) + '%'],
+            ['Status', diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET'],
+            [''],
+            ['Material Breakdown (Tons)'],
+            ['Wood/Lumber', reportData.reduce((s, t) => s + (t.wood_tons || 0), 0).toFixed(2)],
+            ['Concrete/Masonry', reportData.reduce((s, t) => s + (t.concrete_tons || 0), 0).toFixed(2)],
+            ['Metals', reportData.reduce((s, t) => s + (t.metal_tons || 0), 0).toFixed(2)],
+            ['Cardboard/OCC', reportData.reduce((s, t) => s + (t.cardboard_tons || 0), 0).toFixed(2)],
+            ['Plastics', reportData.reduce((s, t) => s + (t.plastic_tons || 0), 0).toFixed(2)],
+            ['Drywall/Gypsum', reportData.reduce((s, t) => s + (t.drywall_tons || 0), 0).toFixed(2)],
+            [''],
+            ['Verified Facilities'],
+            ['Wood', 'DalMex Recycling - Pallet Division'],
+            ['Metal', 'Cyclone Metal Recycling'],
+            ['Cardboard', 'Georgia Pacific / WestRock / GreenSide'],
+            ['Plastic', 'Recycle USA']
+        ];
+        
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+        wsSummary['!cols'] = [{ wch: 25 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+        
+        // ===== LOAD DETAILS SHEET =====
+        const detailHeaders = [
+            'Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Tons',
+            'Wood %', 'Wood Tons', 'Concrete %', 'Concrete Tons', 'Metal %', 'Metal Tons',
+            'Cardboard %', 'Cardboard Tons', 'Plastic %', 'Plastic Tons', 'Drywall %', 'Drywall Tons',
+            'Landfill %', 'Landfill Tons', 'Diversion %', 'Verified'
+        ];
+        
+        const detailRows = reportData.map(t => [
+            t.service_date || '',
+            t.ticket_number || '',
+            t.hauler || '',
+            t.gross_lbs || 0,
+            t.tare_lbs || 0,
+            t.net_lbs || 0,
+            (t.net_tons || 0).toFixed(2),
+            (t.wood_pct || 0),
+            (t.wood_tons || 0).toFixed(2),
+            (t.concrete_pct || 0),
+            (t.concrete_tons || 0).toFixed(2),
+            (t.metal_pct || 0),
+            (t.metal_tons || 0).toFixed(2),
+            (t.cardboard_pct || 0),
+            (t.cardboard_tons || 0).toFixed(2),
+            (t.plastic_pct || 0),
+            (t.plastic_tons || 0).toFixed(2),
+            (t.drywall_pct || 0),
+            (t.drywall_tons || 0).toFixed(2),
+            (t.landfill_pct || 0),
+            (t.landfill_tons || 0).toFixed(2),
+            (t.diversion_pct || 0) + '%',
+            t.human_verified ? 'Yes' : 'No'
+        ]);
+        
+        const wsDetails = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
+        wsDetails['!cols'] = detailHeaders.map(() => ({ wch: 12 }));
+        XLSX.utils.book_append_sheet(wb, wsDetails, 'Load Details');
+        
+        // ===== MATERIAL TOTALS SHEET =====
+        const materialData = [
+            ['Material', 'Tons', 'Percentage', 'Destination Facility', 'Verified'],
+            ['Wood/Lumber', reportData.reduce((s, t) => s + (t.wood_tons || 0), 0).toFixed(2), '', 'DalMex Recycling - Pallet Division', 'Yes'],
+            ['Concrete/Masonry', reportData.reduce((s, t) => s + (t.concrete_tons || 0), 0).toFixed(2), '', 'Licensed C&D Processor', 'Yes'],
+            ['Metals', reportData.reduce((s, t) => s + (t.metal_tons || 0), 0).toFixed(2), '', 'Cyclone Metal Recycling', 'Yes'],
+            ['Cardboard/OCC', reportData.reduce((s, t) => s + (t.cardboard_tons || 0), 0).toFixed(2), '', 'Georgia Pacific / WestRock', 'Yes'],
+            ['Plastics', reportData.reduce((s, t) => s + (t.plastic_tons || 0), 0).toFixed(2), '', 'Recycle USA', 'Yes'],
+            ['Drywall/Gypsum', reportData.reduce((s, t) => s + (t.drywall_tons || 0), 0).toFixed(2), '', 'Gypsum Recycler', 'Yes'],
+            ['Landfill', landfillTons.toFixed(2), '', 'Municipal Landfill', 'N/A'],
+            [''],
+            ['TOTAL', totalTons.toFixed(2), '', '', ''],
+            ['DIVERTED', divertedTons.toFixed(2), diversionRate + '%', '', '']
+        ];
+        
+        // Calculate percentages
+        materialData.forEach((row, i) => {
+            if (i > 0 && i < 8 && totalTons > 0) {
+                row[2] = Math.round((parseFloat(row[1]) / totalTons) * 100) + '%';
+            }
+        });
+        
+        const wsMaterials = XLSX.utils.aoa_to_sheet(materialData);
+        wsMaterials['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 35 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsMaterials, 'Materials');
+        
+        // Download
+        const filename = `LEED_Report_${currentProject.name || 'Project'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, filename);
+        
+        toast('Excel report downloaded!', 'success');
+        
+    } catch (err) {
+        console.error('Excel export error:', err);
+        toast('Excel export failed: ' + err.message, 'error');
+    }
+}
+
+// ========== EXCEL IMPORT ==========
+async function importExcelTickets(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (!currentProject) {
+        toast('Select a project first', 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    if (typeof XLSX === 'undefined') {
+        toast('Excel library not loaded', 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    showLoading('Reading Excel file...');
+    
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        
+        // Get first sheet
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        
+        // Convert to array of arrays
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        
+        console.log('Excel rows:', rows.length);
+        
+        // Find header row (contains "Ticket" or "Date")
+        let headerRowIndex = -1;
+        let headers = [];
+        
+        for (let i = 0; i < Math.min(20, rows.length); i++) {
+            const row = rows[i];
+            if (row && row.some(cell => {
+                const str = String(cell || '').toLowerCase();
+                return str.includes('ticket') || str.includes('date') || str.includes('gwt');
+            })) {
+                headerRowIndex = i;
+                headers = row.map(h => String(h || '').toLowerCase().trim());
+                break;
+            }
+        }
+        
+        if (headerRowIndex === -1) {
+            hideLoading();
+            toast('Could not find header row in Excel file', 'error');
+            event.target.value = '';
+            return;
+        }
+        
+        console.log('Headers found at row', headerRowIndex, ':', headers);
+        
+        // Map column indices
+        const colMap = {
+            date: headers.findIndex(h => h.includes('date')),
+            ticket: headers.findIndex(h => h.includes('ticket')),
+            gross: headers.findIndex(h => h.includes('gwt') && h.includes('lbs') || h.includes('gross')),
+            tare: headers.findIndex(h => h.includes('tare') && h.includes('lbs')),
+            netLbs: headers.findIndex(h => h.includes('net') && h.includes('lbs')),
+            tons: headers.findIndex(h => h === 'tons' || h.includes('net') && h.includes('nt')),
+            woodPct: headers.findIndex(h => h.includes('wood') && h.includes('%')),
+            gypsumPct: headers.findIndex(h => h.includes('gypsum') && h.includes('%')),
+            plasticPct: headers.findIndex(h => h.includes('plastic') && h.includes('%')),
+            occPct: headers.findIndex(h => h.includes('occ') && h.includes('%')),
+            metalPct: headers.findIndex(h => h.includes('metal') && h.includes('%')),
+            concretePct: headers.findIndex(h => h.includes('concrete') && h.includes('%')),
+            blockPct: headers.findIndex(h => h.includes('block') && h.includes('%')),
+            divertedPct: headers.findIndex(h => h.includes('diverted') && h.includes('%'))
+        };
+        
+        console.log('Column mapping:', colMap);
+        
+        // Parse data rows
+        const tickets = [];
+        
+        for (let i = headerRowIndex + 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+            
+            // Skip totals/summary rows
+            const firstCell = String(row[0] || '').toLowerCase();
+            if (firstCell.includes('total') || firstCell.includes('diverted') || firstCell.includes('recycled')) {
+                continue;
+            }
+            
+            // Get values
+            const dateVal = colMap.date >= 0 ? row[colMap.date] : null;
+            const ticketNum = colMap.ticket >= 0 ? row[colMap.ticket] : null;
+            
+            // Skip if no date or ticket
+            if (!dateVal && !ticketNum) continue;
+            
+            // Parse date
+            let serviceDate = '';
+            if (dateVal) {
+                if (dateVal instanceof Date) {
+                    serviceDate = dateVal.toISOString().split('T')[0];
+                } else {
+                    const parsed = new Date(dateVal);
+                    if (!isNaN(parsed)) {
+                        serviceDate = parsed.toISOString().split('T')[0];
+                    }
+                }
+            }
+            
+            // Parse weights
+            const grossLbs = parseFloat(row[colMap.gross]) || 0;
+            const tareLbs = parseFloat(row[colMap.tare]) || 0;
+            const netLbs = parseFloat(row[colMap.netLbs]) || (grossLbs - tareLbs);
+            const netTons = parseFloat(row[colMap.tons]) || (netLbs / 2000);
+            
+            // Parse percentages (HD Waste format uses decimals like 0.85 for 85%)
+            const parsePercent = (val) => {
+                const num = parseFloat(val) || 0;
+                return num <= 1 ? Math.round(num * 100) : Math.round(num);
+            };
+            
+            const woodPct = parsePercent(row[colMap.woodPct]);
+            const gypsumPct = parsePercent(row[colMap.gypsumPct]); // Map to drywall
+            const plasticPct = parsePercent(row[colMap.plasticPct]);
+            const occPct = parsePercent(row[colMap.occPct]); // Map to cardboard
+            const metalPct = parsePercent(row[colMap.metalPct]);
+            const concretePct = parsePercent(row[colMap.concretePct]);
+            const blockPct = parsePercent(row[colMap.blockPct]); // Add to concrete
+            
+            // Calculate landfill (remainder)
+            const totalRecycled = woodPct + gypsumPct + plasticPct + occPct + metalPct + concretePct + blockPct;
+            const landfillPct = Math.max(0, 100 - totalRecycled);
+            const diversionPct = Math.min(100, totalRecycled);
+            
+            // Create ticket record
+            const ticket = {
+                project_id: currentProject.id,
+                ticket_number: String(ticketNum || ''),
+                service_date: serviceDate || new Date().toISOString().split('T')[0],
+                hauler: currentProject.waste_hauler || 'Imported',
+                gross_lbs: grossLbs,
+                tare_lbs: tareLbs,
+                net_lbs: netLbs,
+                net_tons: netTons,
+                wood_pct: woodPct,
+                concrete_pct: concretePct + blockPct, // Combine concrete + block
+                metal_pct: metalPct,
+                cardboard_pct: occPct, // OCC = cardboard
+                plastic_pct: plasticPct,
+                drywall_pct: gypsumPct, // Gypsum = drywall
+                landfill_pct: landfillPct,
+                wood_tons: (woodPct / 100) * netTons,
+                concrete_tons: ((concretePct + blockPct) / 100) * netTons,
+                metal_tons: (metalPct / 100) * netTons,
+                cardboard_tons: (occPct / 100) * netTons,
+                plastic_tons: (plasticPct / 100) * netTons,
+                drywall_tons: (gypsumPct / 100) * netTons,
+                landfill_tons: (landfillPct / 100) * netTons,
+                diversion_pct: diversionPct,
+                diverted_tons: (diversionPct / 100) * netTons,
+                human_verified: false,
+                imported: true,
+                import_source: file.name,
+                created_at: new Date().toISOString()
+            };
+            
+            tickets.push(ticket);
+        }
+        
+        console.log('Parsed tickets:', tickets.length);
+        
+        if (tickets.length === 0) {
+            hideLoading();
+            toast('No valid ticket data found in Excel file', 'error');
+            event.target.value = '';
+            return;
+        }
+        
+        // Confirm import
+        hideLoading();
+        
+        if (!confirm(`Found ${tickets.length} tickets to import.\n\nProject: ${currentProject.name}\n\nProceed with import?`)) {
+            event.target.value = '';
+            return;
+        }
+        
+        showLoading(`Importing ${tickets.length} tickets...`);
+        
+        // Save to database
+        let imported = 0;
+        let failed = 0;
+        
+        for (const ticket of tickets) {
+            try {
+                if (sb) {
+                    const { error } = await sb.from('tickets').insert([ticket]);
+                    if (error) throw error;
+                }
+                // Also save locally
+                await saveToLocal('tickets', { ...ticket, id: 'imported_' + Date.now() + '_' + Math.random(), synced: !!sb });
+                imported++;
+            } catch (err) {
+                console.error('Import error for ticket:', ticket.ticket_number, err);
+                failed++;
+            }
+        }
+        
+        hideLoading();
+        
+        if (failed > 0) {
+            toast(`Imported ${imported} tickets, ${failed} failed`, 'warning');
+        } else {
+            toast(`Successfully imported ${imported} tickets!`, 'success');
+        }
+        
+        // Refresh data
+        loadRecentTickets();
+        updateStats();
+        
+    } catch (err) {
+        hideLoading();
+        console.error('Excel import error:', err);
+        toast('Import failed: ' + err.message, 'error');
+    }
+    
+    event.target.value = '';
+}
+
+// Export all projects to Excel
+function exportProjectsExcel() {
+    if (typeof XLSX === 'undefined') {
+        toast('Excel library not loaded', 'error');
+        return;
+    }
+    
+    if (!projects || projects.length === 0) {
+        toast('No projects to export', 'error');
+        return;
+    }
+    
+    try {
+        const wb = XLSX.utils.book_new();
+        
+        // Projects sheet
+        const projectData = [
+            ['Project Name', 'Address', 'General Contractor', 'Waste Hauler', 'LEED Target', 'Access Code', 'Created']
+        ];
+        
+        projects.forEach(p => {
+            projectData.push([
+                p.name || '',
+                p.address || '',
+                p.general_contractor || '',
+                p.waste_hauler || '',
+                (p.leed_target || 75) + '%',
+                p.access_code || '',
+                p.created_at || ''
+            ]);
+        });
+        
+        const wsProjects = XLSX.utils.aoa_to_sheet(projectData);
+        wsProjects['!cols'] = [{ wch: 30 }, { wch: 35 }, { wch: 25 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsProjects, 'Projects');
+        
+        // Download
+        XLSX.writeFile(wb, `DivertScan_Projects_${new Date().toISOString().split('T')[0]}.xlsx`);
+        toast('Projects exported to Excel!', 'success');
+        
+    } catch (err) {
+        console.error('Export error:', err);
+        toast('Export failed: ' + err.message, 'error');
+    }
+}
+
+// Export projects to CSV
+function exportProjectsCSV() {
+    if (!projects || projects.length === 0) {
+        toast('No projects to export', 'error');
+        return;
+    }
+    
+    const headers = ['Project Name', 'Address', 'General Contractor', 'Waste Hauler', 'LEED Target', 'Access Code'];
+    const rows = projects.map(p => [
+        p.name || '',
+        p.address || '',
+        p.general_contractor || '',
+        p.waste_hauler || '',
+        (p.leed_target || 75) + '%',
+        p.access_code || ''
+    ]);
+    
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `DivertScan_Projects_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast('Projects exported to CSV!', 'success');
 }
 
 // ========== LEED NEWS FEED ==========
