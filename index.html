@@ -491,22 +491,43 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <!-- Quick Actions -->
 <div class="card" style="background:linear-gradient(135deg,var(--bg-secondary),var(--bg-tertiary))">
 <div style="font-size:12px;font-weight:600;margin-bottom:12px;color:var(--text-secondary)">⚡ Quick Actions</div>
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-<button class="btn btn-primary" onclick="startNewTicket()" style="padding:12px 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+<button class="btn btn-primary" onclick="startNewTicket()" style="padding:12px 8px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px">
 <span style="font-size:18px">➕</span>
 <span>New Ticket</span>
 </button>
-<button class="btn btn-secondary" onclick="showTab('reports');generateReport()" style="padding:12px 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px">
+<button class="btn btn-secondary" onclick="triggerExcelImport()" style="padding:12px 8px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px">
+<span style="font-size:18px">📗</span>
+<span>Import Excel</span>
+</button>
+<button class="btn btn-secondary" onclick="showTab('reports');generateReport()" style="padding:12px 8px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px">
 <span style="font-size:18px">📄</span>
 <span>Report</span>
 </button>
-<button class="btn btn-secondary" onclick="createFullBackup()" style="padding:12px 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px">
+<button class="btn btn-secondary" onclick="createFullBackup()" style="padding:12px 8px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px">
 <span style="font-size:18px">💾</span>
 <span>Backup</span>
 </button>
-<button class="btn btn-secondary" onclick="forceSyncNow()" style="padding:12px 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px">
+<button class="btn btn-secondary" onclick="forceSyncNow()" style="padding:12px 8px;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px">
 <span style="font-size:18px">🔄</span>
 <span>Sync</span>
+</button>
+</div>
+</div>
+
+<!-- MAIN Excel Import Input (hidden) -->
+<input type="file" id="mainExcelImport" accept=".xlsx,.xls" style="display:none" onchange="importExcelTickets(event)">
+
+<!-- Import Excel Card - Prominent on Dashboard -->
+<div class="card" style="margin-top:16px;border:2px solid var(--accent-primary);background:linear-gradient(135deg,var(--bg-secondary),var(--bg-tertiary))">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="font-size:32px">📗</span>
+<div style="flex:1">
+<div style="font-size:15px;font-weight:700;color:var(--accent-primary)">Import Excel Data</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Import tickets from HD Waste / DalMex Excel reports (.xlsx)</div>
+</div>
+<button class="btn btn-primary" onclick="triggerExcelImport()" style="padding:12px 20px;font-size:13px;font-weight:600">
+📗 Import .xlsx
 </button>
 </div>
 </div>
@@ -591,10 +612,9 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 
 <div style="font-size:12px;font-weight:500;margin-bottom:8px">Import Data</div>
 <div class="btn-row" style="margin-bottom:12px">
-<button class="btn btn-primary" onclick="document.getElementById('importExcelFile').click()" style="flex:1">📗 Import Excel</button>
+<button class="btn btn-primary" onclick="triggerExcelImport()" style="flex:1">📗 Import Excel</button>
 <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()" style="flex:1">📄 Import JSON</button>
 </div>
-<input type="file" id="importExcelFile" accept=".xlsx,.xls" style="display:none" onchange="importExcelTickets(event)">
 <input type="file" id="importFile" accept=".json,.csv" style="display:none" onchange="importProjects(event)">
 
 <div style="font-size:12px;font-weight:500;margin-bottom:8px;margin-top:16px">Export Data</div>
@@ -3952,18 +3972,47 @@ function downloadReportExcel() {
 }
 
 // ========== EXCEL IMPORT ==========
+function triggerExcelImport() {
+    // Check if project is selected first
+    if (!currentProject || !currentProject.id) {
+        toast('Please select a project first from the Dashboard', 'warning');
+        // Show project picker
+        if (typeof showProjectPicker === 'function') {
+            setTimeout(() => showProjectPicker(), 500);
+        }
+        return;
+    }
+    
+    // Check if XLSX library loaded
+    if (typeof XLSX === 'undefined') {
+        toast('Excel library still loading... please wait', 'warning');
+        return;
+    }
+    
+    // Trigger file picker
+    const input = document.getElementById('mainExcelImport');
+    if (input) {
+        input.click();
+    } else {
+        console.error('Excel import input not found');
+        toast('Import button error - refresh page', 'error');
+    }
+}
+
 async function importExcelTickets(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    if (!currentProject) {
+    console.log('Import started for file:', file.name);
+    
+    if (!currentProject || !currentProject.id) {
         toast('Select a project first', 'error');
         event.target.value = '';
         return;
     }
     
     if (typeof XLSX === 'undefined') {
-        toast('Excel library not loaded', 'error');
+        toast('Excel library not loaded - refresh page', 'error');
         event.target.value = '';
         return;
     }
