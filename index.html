@@ -721,20 +721,26 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 </div>
 <div id="bulkExportContent" class="hidden">
 <p style="font-size:12px;color:var(--slate-400);margin-bottom:12px">
-Complete documentation package for LEED certification review. Includes:
+Complete documentation package for LEED certification review.
 </p>
-<ul style="font-size:11px;color:var(--slate-300);margin-left:20px;margin-bottom:12px">
-<li>Executive Summary PDF</li>
-<li>Detailed Load Report with photos</li>
-<li>Material breakdown spreadsheet</li>
-<li>GPS verification data</li>
-<li>Signed verification forms</li>
-<li>Facility certifications</li>
-</ul>
-<div class="btn-row" style="margin-bottom:12px">
-<button class="btn btn-secondary" onclick="exportAllTickets()" style="flex:1">📊 Export Data</button>
-<button class="btn btn-primary" onclick="generateAuditPackage()" style="flex:1">📦 Full Audit Package</button>
+
+<!-- Audit Report -->
+<div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(59,130,246,0.1));border:1px solid var(--emerald-500);border-radius:8px;padding:12px;margin-bottom:12px">
+<div style="font-size:13px;font-weight:600;color:var(--emerald-400);margin-bottom:6px">📋 LEED Audit Report</div>
+<p style="font-size:11px;color:var(--slate-300);margin-bottom:8px">Generates a comprehensive multi-page PDF audit report including project summary, material breakdown by load, diversion rates, photo documentation index, facility certifications, and LEED MRc5 compliance status.</p>
+<button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="width:100%">📋 Generate LEED Audit Report (PDF)</button>
 </div>
+
+<!-- Quick Exports -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+<button class="btn btn-secondary" onclick="downloadReportPDF()" style="font-size:11px">📄 Tonnage Report PDF</button>
+<button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Data Export</button>
+<button class="btn btn-secondary" onclick="downloadReportExcel()" style="font-size:11px">📗 Excel Workbook</button>
+<button class="btn btn-secondary" onclick="exportAllProjects()" style="font-size:11px">💾 Full JSON Backup</button>
+</div>
+
+<!-- Full Package -->
+<button class="btn btn-primary" onclick="generateAuditPackage()" style="width:100%;margin-bottom:8px">📦 Download All (Full Audit Package)</button>
 <div id="auditPackageStatus" style="font-size:11px;color:var(--slate-400)"></div>
 </div>
 </div>
@@ -1596,22 +1602,52 @@ function saveSupabaseConfig() {
 
 // ========== PROJECTS ==========
 async function loadProjects() {
-    if (!sb) return;
-    
     try {
-        const { data, error } = await sb.from('projects').select('*').order('created_at', { ascending: false });
-        if (error) throw error;
+        let remoteProjects = [];
+        let localProjects = [];
         
-        projects = data || [];
+        // Try Supabase if configured (with 5s timeout)
+        if (sb) {
+            try {
+                const sbPromise = sb.from('projects').select('*').order('created_at', { ascending: false });
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                if (result && !result.error && result.data) remoteProjects = result.data;
+            } catch (e) {
+                console.log('Supabase projects fetch skipped:', e.message);
+            }
+        }
+        
+        // Always get local projects
+        try {
+            localProjects = await getFromLocal('projects') || [];
+        } catch (e) {
+            console.log('Local projects fetch error:', e.message);
+        }
+        
+        // Merge and dedupe by project name (prefer remote)
+        const projectMap = new Map();
+        localProjects.forEach(p => projectMap.set(p.id || p.name, p));
+        remoteProjects.forEach(p => projectMap.set(p.id || p.name, p));
+        
+        projects = Array.from(projectMap.values());
+        projects.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         
         // Load current project from localStorage
-        const savedProjectId = localStorage.getItem('divertscan_current_project');
-        if (savedProjectId) {
-            currentProject = projects.find(p => p.id === savedProjectId);
+        const savedProject = localStorage.getItem('divertscan_current_project');
+        if (savedProject) {
+            try {
+                const parsed = JSON.parse(savedProject);
+                currentProject = projects.find(p => p.id === (parsed.id || parsed));
+            } catch (e) {
+                currentProject = projects.find(p => p.id === savedProject);
+            }
         }
         if (!currentProject && projects.length > 0) {
             currentProject = projects[0];
-            localStorage.setItem('divertscan_current_project', currentProject.id);
+            localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
         }
         
         updateProjectDisplay();
@@ -1828,12 +1864,8 @@ async function saveProject() {
         return;
     }
     
-    if (!sb) {
-        toast('Configure Supabase in Settings first', 'error');
-        return;
-    }
-    
     const projectData = {
+        id: 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
         name: name,
         address: document.getElementById('projectAddress').value.trim(),
         waste_hauler: document.getElementById('projectHauler').value.trim(),
@@ -1845,20 +1877,40 @@ async function saveProject() {
     
     try {
         showLoading('Saving project...');
-        const { data, error } = await sb.from('projects').insert([projectData]).select();
-        hideLoading();
         
-        if (error) throw error;
+        let savedProject = projectData;
         
-        closeModal('projectModal');
-        toast('Project created!', 'success');
-        
-        await loadProjects();
-        
-        // Auto-select the new project
-        if (data && data[0]) {
-            selectProject(data[0].id);
+        // Try Supabase first with a 5-second timeout
+        if (sb) {
+            try {
+                const sbData = { ...projectData };
+                delete sbData.id;
+                const sbPromise = sb.from('projects').insert([sbData]).select();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Supabase timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                if (result && !result.error && result.data && result.data[0]) {
+                    savedProject = result.data[0];
+                    console.log('Project saved to Supabase:', savedProject.id);
+                }
+            } catch (e) {
+                console.log('Supabase save skipped, using local storage:', e.message);
+            }
         }
+        
+        // Always save locally (works offline, no Supabase needed)
+        await saveToLocal('projects', savedProject);
+        console.log('Project saved locally:', savedProject.id);
+        
+        hideLoading();
+        closeModal('projectModal');
+        toast('Project created: ' + savedProject.name, 'success');
+        
+        // Refresh project list and auto-select
+        await loadProjects();
+        selectProject(savedProject.id);
+        
     } catch (err) {
         hideLoading();
         console.error('Error saving project:', err);
@@ -1876,22 +1928,51 @@ function closeModal(modalId) {
 
 // ========== TICKETS ==========
 async function loadRecentTickets() {
-    if (!sb || !currentProject) {
+    if (!currentProject) {
         document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">Select a project to see tickets</p>';
         return;
     }
     
     try {
-        const { data, error } = await sb
-            .from('tickets')
-            .select('*')
-            .eq('project_id', currentProject.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
+        let remoteTickets = [];
+        let localTickets = [];
         
-        if (error) throw error;
+        // Try Supabase if configured (with 5s timeout)
+        if (sb) {
+            try {
+                const sbPromise = sb
+                    .from('tickets')
+                    .select('*')
+                    .eq('project_id', currentProject.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                if (result && !result.error && result.data) remoteTickets = result.data;
+            } catch (e) {
+                console.log('Supabase tickets fetch skipped:', e.message);
+            }
+        }
         
-        tickets = data || [];
+        // Always get local tickets (Excel imports, manual entries)
+        try {
+            const allLocal = await getFromLocal('tickets') || [];
+            localTickets = allLocal.filter(t => t.project_id === currentProject.id);
+        } catch (e) {
+            console.log('Local tickets fetch error:', e.message);
+        }
+        
+        // Merge and dedupe
+        const ticketMap = new Map();
+        localTickets.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        remoteTickets.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        
+        tickets = Array.from(ticketMap.values());
+        tickets.sort((a, b) => new Date(b.created_at || b.service_date) - new Date(a.created_at || a.service_date));
+        tickets = tickets.slice(0, 20); // Show latest 20
+        
         renderRecentTickets();
     } catch (err) {
         console.error('Error loading tickets:', err);
@@ -2008,9 +2089,231 @@ function viewTicketPhoto(ticketId, photoNum) {
 
 function viewTicketDetails(ticketId) {
     const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) {
+        toast('Ticket not found', 'error');
+        return;
+    }
+    
+    // Build photo gallery HTML
+    let photosHtml = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px">No photos available</div>';
+    const hasPhotos = ticket.debris_photo_1 || ticket.debris_photo_2 || ticket.debris_photo_3 || ticket.scale_ticket_photo;
+    
+    if (hasPhotos) {
+        photosHtml = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">';
+        
+        if (ticket.scale_ticket_photo) {
+            photosHtml += `
+                <div style="grid-column:span 2">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📋 Scale Ticket</div>
+                    <img src="${ticket.scale_ticket_photo}" style="width:100%;border-radius:8px;cursor:pointer;border:2px solid var(--accent-info)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Scale Ticket', '${ticket.scale_ticket_photo.replace(/'/g, "\\'")}')">
+                </div>
+            `;
+        }
+        
+        if (ticket.debris_photo_1) {
+            photosHtml += `
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 1</div>
+                    <img src="${ticket.debris_photo_1}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 1', '${ticket.debris_photo_1.replace(/'/g, "\\'")}')">
+                </div>
+            `;
+        }
+        
+        if (ticket.debris_photo_2) {
+            photosHtml += `
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 2</div>
+                    <img src="${ticket.debris_photo_2}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 2', '${ticket.debris_photo_2.replace(/'/g, "\\'")}')">
+                </div>
+            `;
+        }
+        
+        if (ticket.debris_photo_3) {
+            photosHtml += `
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 3</div>
+                    <img src="${ticket.debris_photo_3}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 3', '${ticket.debris_photo_3.replace(/'/g, "\\'")}')">
+                </div>
+            `;
+        }
+        
+        photosHtml += '</div>';
+    }
+    
+    // Build material breakdown
+    const materials = [
+        { name: 'Wood', pct: ticket.wood_pct || 0, tons: ticket.wood_tons || 0, color: '#8B4513' },
+        { name: 'Metal', pct: ticket.metal_pct || 0, tons: ticket.metal_tons || 0, color: '#708090' },
+        { name: 'Cardboard', pct: ticket.cardboard_pct || 0, tons: ticket.cardboard_tons || 0, color: '#DEB887' },
+        { name: 'Concrete', pct: ticket.concrete_pct || 0, tons: ticket.concrete_tons || 0, color: '#A9A9A9' },
+        { name: 'Plastic', pct: ticket.plastic_pct || 0, tons: ticket.plastic_tons || 0, color: '#4169E1' },
+        { name: 'Drywall', pct: ticket.drywall_pct || 0, tons: ticket.drywall_tons || 0, color: '#F5F5DC' },
+        { name: 'Landfill', pct: ticket.landfill_pct || 0, tons: ticket.landfill_tons || 0, color: '#2F4F4F' }
+    ].filter(m => m.pct > 0);
+    
+    let materialsHtml = materials.map(m => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color)">
+            <div style="width:12px;height:12px;border-radius:2px;background:${m.color}"></div>
+            <div style="flex:1;font-size:12px">${m.name}</div>
+            <div style="font-size:12px;font-weight:600">${m.pct}%</div>
+            <div style="font-size:11px;color:var(--text-muted);width:60px;text-align:right">${m.tons.toFixed(2)} tons</div>
+        </div>
+    `).join('');
+    
+    // Diversion status
+    const diversionPct = ticket.diversion_pct || 0;
+    const diversionColor = diversionPct >= 75 ? 'var(--accent-primary)' : diversionPct >= 50 ? 'var(--accent-warning)' : 'var(--accent-danger)';
+    const diversionStatus = diversionPct >= 75 ? '✅ LEED Compliant' : diversionPct >= 50 ? '⚠️ Below Target' : '❌ Needs Improvement';
+    
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'ticketDetailModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    
+    modal.innerHTML = `
+        <div style="background:var(--bg-secondary);border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;position:relative">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg, var(--accent-primary), var(--accent-info));padding:20px;border-radius:16px 16px 0 0;position:sticky;top:0;z-index:1">
+                <button onclick="document.getElementById('ticketDetailModal').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
+                <div style="font-size:12px;color:rgba(255,255,255,0.8)">SCALE TICKET</div>
+                <div style="font-size:24px;font-weight:700;color:white">#${ticket.ticket_number}</div>
+                <div style="font-size:13px;color:rgba(255,255,255,0.9);margin-top:4px">${new Date(ticket.service_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding:20px">
+                <!-- Quick Stats -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+                    <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center">
+                        <div style="font-size:20px;font-weight:700;color:var(--text-primary)">${(ticket.net_tons || 0).toFixed(2)}</div>
+                        <div style="font-size:10px;color:var(--text-muted)">NET TONS</div>
+                    </div>
+                    <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center">
+                        <div style="font-size:20px;font-weight:700;color:${diversionColor}">${diversionPct}%</div>
+                        <div style="font-size:10px;color:var(--text-muted)">DIVERTED</div>
+                    </div>
+                    <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center">
+                        <div style="font-size:20px;font-weight:700;color:var(--accent-primary)">${((ticket.diverted_tons || 0)).toFixed(2)}</div>
+                        <div style="font-size:10px;color:var(--text-muted)">DIVERTED TONS</div>
+                    </div>
+                </div>
+                
+                <!-- Status Banner -->
+                <div style="background:${diversionColor}20;border:1px solid ${diversionColor};border-radius:8px;padding:12px;margin-bottom:20px;text-align:center">
+                    <span style="font-size:14px;font-weight:600;color:${diversionColor}">${diversionStatus}</span>
+                </div>
+                
+                <!-- Details Grid -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">HAULER</div>
+                        <div style="font-size:13px;font-weight:500">${ticket.hauler || 'N/A'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">IMPORT SOURCE</div>
+                        <div style="font-size:13px;font-weight:500">${ticket.import_source || 'Manual Entry'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">GROSS WEIGHT</div>
+                        <div style="font-size:13px;font-weight:500">${(ticket.gross_lbs || 0).toLocaleString()} lbs</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">TARE WEIGHT</div>
+                        <div style="font-size:13px;font-weight:500">${(ticket.tare_lbs || 0).toLocaleString()} lbs</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">NET WEIGHT</div>
+                        <div style="font-size:13px;font-weight:500">${(ticket.net_lbs || 0).toLocaleString()} lbs</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">VERIFIED</div>
+                        <div style="font-size:13px;font-weight:500">${ticket.human_verified ? '✅ Yes' : '❌ No'}</div>
+                    </div>
+                </div>
+                
+                <!-- GPS if available -->
+                ${ticket.gps_latitude && ticket.gps_longitude ? `
+                    <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;margin-bottom:20px">
+                        <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">📍 GPS COORDINATES</div>
+                        <div style="font-size:12px;font-family:monospace">${ticket.gps_latitude}, ${ticket.gps_longitude}</div>
+                        <a href="https://maps.google.com/?q=${ticket.gps_latitude},${ticket.gps_longitude}" target="_blank" style="font-size:11px;color:var(--accent-info)">View on Google Maps →</a>
+                    </div>
+                ` : ''}
+                
+                <!-- Material Breakdown -->
+                <div style="margin-bottom:20px">
+                    <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">MATERIAL BREAKDOWN</div>
+                    ${materialsHtml || '<div style="color:var(--text-muted);font-size:12px">No material data available</div>'}
+                </div>
+                
+                <!-- Photos Section -->
+                <div>
+                    <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">📷 DOCUMENTATION</div>
+                    ${photosHtml}
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="document.getElementById('ticketDetailModal').remove()" style="flex:1">Close</button>
+                <button class="btn btn-primary" onclick="printTicketDetail('${ticketId}')" style="flex:1">🖨️ Print</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function openPhotoViewer(ticketNum, photoName, photoData) {
+    const viewer = document.createElement('div');
+    viewer.id = 'photoViewerModal';
+    viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+    viewer.onclick = (e) => { if (e.target === viewer) viewer.remove(); };
+    
+    viewer.innerHTML = `
+        <div style="color:white;font-size:14px;margin-bottom:12px">Ticket #${ticketNum} - ${photoName}</div>
+        <img src="${photoData}" style="max-width:90%;max-height:80vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)">
+        <button onclick="document.getElementById('photoViewerModal').remove()" style="margin-top:16px;background:white;color:black;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">Close</button>
+    `;
+    
+    document.body.appendChild(viewer);
+}
+
+function printTicketDetail(ticketId) {
+    const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket) return;
     
-    alert(`Ticket #${ticket.ticket_number}\n\nDate: ${ticket.service_date}\nHauler: ${ticket.hauler}\nNet Tons: ${ticket.net_tons?.toFixed(2)}\nDiversion: ${ticket.diversion_pct}%\n\nFull ticket viewer coming soon!`);
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Ticket #${ticket.ticket_number}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                h1 { color: #059669; }
+                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+                .label { color: #666; font-size: 12px; }
+                .value { font-weight: bold; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background: #f5f5f5; }
+            </style>
+        </head>
+        <body>
+            <h1>Scale Ticket #${ticket.ticket_number}</h1>
+            <p><strong>Date:</strong> ${ticket.service_date}</p>
+            <p><strong>Hauler:</strong> ${ticket.hauler || 'N/A'}</p>
+            <p><strong>Net Tons:</strong> ${(ticket.net_tons || 0).toFixed(2)}</p>
+            <p><strong>Diversion Rate:</strong> ${ticket.diversion_pct || 0}%</p>
+            <p><strong>Human Verified:</strong> ${ticket.human_verified ? 'Yes' : 'No'}</p>
+            <hr>
+            <p style="font-size:11px;color:#666">Generated by DivertScan™ - ${new Date().toLocaleString()}</p>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
 }
 
 function editTicket(ticketId) {
@@ -2043,21 +2346,48 @@ async function deleteTicket(ticketId) {
 }
 
 async function updateStats() {
-    if (!sb || !currentProject) {
+    if (!currentProject) {
         document.getElementById('statTotalTons').textContent = '0.00';
         document.getElementById('statDiversionRate').textContent = '0%';
         return;
     }
     
     try {
-        const { data, error } = await sb
-            .from('tickets')
-            .select('net_tons, diversion_pct, landfill_tons')
-            .eq('project_id', currentProject.id);
+        let remoteData = [];
+        let localData = [];
         
-        if (error) throw error;
+        // Try Supabase (with 5s timeout)
+        if (sb) {
+            try {
+                const sbPromise = sb
+                    .from('tickets')
+                    .select('net_tons, diversion_pct, landfill_tons')
+                    .eq('project_id', currentProject.id);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                if (result && !result.error && result.data) remoteData = result.data;
+            } catch (e) {
+                console.log('Supabase stats fetch skipped:', e.message);
+            }
+        }
         
-        if (data && data.length > 0) {
+        // Always get local
+        try {
+            const allLocal = await getFromLocal('tickets') || [];
+            localData = allLocal.filter(t => t.project_id === currentProject.id);
+        } catch (e) {
+            console.log('Local stats fetch error:', e.message);
+        }
+        
+        // Merge
+        const ticketMap = new Map();
+        localData.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        remoteData.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        const data = Array.from(ticketMap.values());
+        
+        if (data.length > 0) {
             const totalTons = data.reduce((sum, t) => sum + (t.net_tons || 0), 0);
             const totalLandfill = data.reduce((sum, t) => sum + (t.landfill_tons || 0), 0);
             const diversionRate = totalTons > 0 ? Math.round(((totalTons - totalLandfill) / totalTons) * 100) : 0;
@@ -3263,11 +3593,6 @@ async function generateReport() {
     console.log('sb:', sb);
     console.log('currentProject:', currentProject);
     
-    if (!sb) {
-        toast('Configure Supabase in Settings first', 'error');
-        return;
-    }
-    
     if (!currentProject) {
         toast('Select a project first', 'error');
         return;
@@ -3278,23 +3603,65 @@ async function generateReport() {
     try {
         console.log('Fetching tickets for project:', currentProject.id);
         
-        const { data, error } = await sb
-            .from('tickets')
-            .select('*')
-            .eq('project_id', currentProject.id)
-            .order('service_date', { ascending: true });
+        let remoteData = [];
+        let localData = [];
         
-        if (error) {
-            console.error('Database error:', error);
-            throw error;
+        // Try to fetch from Supabase if configured (with 5s timeout)
+        if (sb) {
+            try {
+                const sbPromise = sb
+                    .from('tickets')
+                    .select('*')
+                    .eq('project_id', currentProject.id)
+                    .order('service_date', { ascending: true });
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                
+                if (result && !result.error && result.data) {
+                    remoteData = result.data;
+                    console.log('Remote tickets found:', remoteData.length);
+                }
+            } catch (e) {
+                console.log('Supabase fetch skipped:', e.message);
+            }
         }
         
-        reportData = data || [];
-        console.log('Tickets found:', reportData.length);
+        // Always fetch from local IndexedDB (where Excel imports are stored)
+        try {
+            const allLocalTickets = await getFromLocal('tickets') || [];
+            localData = allLocalTickets.filter(t => t.project_id === currentProject.id);
+            console.log('Local tickets found:', localData.length);
+        } catch (e) {
+            console.log('Local fetch error:', e.message);
+        }
+        
+        // Merge and dedupe by ticket_number (prefer remote if exists in both)
+        const ticketMap = new Map();
+        
+        // Add local tickets first
+        localData.forEach(t => {
+            const key = t.ticket_number || t.id;
+            ticketMap.set(key, t);
+        });
+        
+        // Remote tickets override local (synced data takes precedence)
+        remoteData.forEach(t => {
+            const key = t.ticket_number || t.id;
+            ticketMap.set(key, t);
+        });
+        
+        reportData = Array.from(ticketMap.values());
+        
+        // Sort by service_date
+        reportData.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        
+        console.log('Total merged tickets:', reportData.length);
         hideLoading();
         
         if (reportData.length === 0) {
-            toast('No tickets found for this project. Submit some tickets first!', 'error');
+            toast('No tickets found for this project. Import or submit some tickets first!', 'error');
             return;
         }
         
@@ -3304,7 +3671,7 @@ async function generateReport() {
         // Project Header
         document.getElementById('reportProjectName').textContent = currentProject.name || '-';
         document.getElementById('reportProjectAddress').textContent = currentProject.address || '-';
-        document.getElementById('reportProjectGC').textContent = currentProject.general_contractor || '-';
+        document.getElementById('reportProjectGC').textContent = currentProject.general_contractor || currentProject.contractor || '-';
         document.getElementById('reportProjectHauler').textContent = currentProject.waste_hauler || '-';
         document.getElementById('reportDate').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         document.getElementById('reportGeneratedDate').textContent = new Date().toLocaleString();
@@ -3713,6 +4080,411 @@ function downloadReportPDF() {
     toast('PDF downloaded!', 'success');
 }
 
+// ========== LEED AUDIT REPORT ==========
+async function generateLEEDAuditReport() {
+    if (!currentProject) {
+        toast('Select a project first', 'error');
+        return;
+    }
+    
+    showLoading('Generating LEED Audit Report...');
+    
+    try {
+        // Gather all tickets (local + remote)
+        let allTickets = [];
+        try {
+            const localTickets = await getFromLocal('tickets') || [];
+            allTickets = localTickets.filter(t => t.project_id === currentProject.id);
+        } catch(e) {}
+        
+        if (sb) {
+            try {
+                const tp = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000));
+                const res = await Promise.race([sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date', {ascending:true}), tp]);
+                if (res?.data) {
+                    const map = new Map();
+                    allTickets.forEach(t => map.set(t.ticket_number || t.id, t));
+                    res.data.forEach(t => map.set(t.ticket_number || t.id, t));
+                    allTickets = Array.from(map.values());
+                }
+            } catch(e) {}
+        }
+        
+        allTickets.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        
+        if (allTickets.length === 0) {
+            hideLoading();
+            toast('No tickets found for this project', 'error');
+            return;
+        }
+        
+        // Calculate project-wide stats
+        const totalTons = allTickets.reduce((s, t) => s + (t.net_tons || 0), 0);
+        const landfillTons = allTickets.reduce((s, t) => s + (t.landfill_tons || 0), 0);
+        const divertedTons = totalTons - landfillTons;
+        const divRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
+        const woodTons = allTickets.reduce((s, t) => s + (t.wood_tons || 0), 0);
+        const metalTons = allTickets.reduce((s, t) => s + (t.metal_tons || 0), 0);
+        const cardboardTons = allTickets.reduce((s, t) => s + (t.cardboard_tons || 0), 0);
+        const concreteTons = allTickets.reduce((s, t) => s + (t.concrete_tons || 0), 0);
+        const plasticTons = allTickets.reduce((s, t) => s + (t.plastic_tons || 0), 0);
+        const drywallTons = allTickets.reduce((s, t) => s + (t.drywall_tons || 0), 0);
+        const ticketsWithPhotos = allTickets.filter(t => t.debris_photo_1 || t.debris_photo_2 || t.debris_photo_3 || t.scale_ticket_photo).length;
+        const verifiedCount = allTickets.filter(t => t.human_verified).length;
+        
+        // Group by month
+        const monthlyData = {};
+        allTickets.forEach(t => {
+            const key = t.service_date ? t.service_date.substring(0, 7) : 'Unknown';
+            if (!monthlyData[key]) monthlyData[key] = { tickets: [], tons: 0, diverted: 0, landfill: 0 };
+            monthlyData[key].tickets.push(t);
+            monthlyData[key].tons += t.net_tons || 0;
+            monthlyData[key].landfill += t.landfill_tons || 0;
+            monthlyData[key].diverted += (t.net_tons || 0) - (t.landfill_tons || 0);
+        });
+        
+        // Generate PDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('portrait');
+        const pw = doc.internal.pageSize.width;
+        const ph = doc.internal.pageSize.height;
+        let y = 15;
+        let pageNum = 1;
+        
+        function addFooter() {
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(128);
+            doc.text('DivertScan™ LEED Audit Report | Generated ' + new Date().toLocaleString(), 14, ph - 8);
+            doc.text('Page ' + pageNum, pw - 14, ph - 8, { align: 'right' });
+            doc.setTextColor(0);
+        }
+        
+        function checkPage(needed) {
+            if (y + needed > ph - 20) {
+                addFooter();
+                doc.addPage();
+                pageNum++;
+                y = 15;
+            }
+        }
+        
+        // ===== PAGE 1: COVER =====
+        doc.setFillColor(5, 150, 105);
+        doc.rect(0, 0, pw, 50, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(24);
+        doc.setFont('helvetica', 'bold');
+        doc.text('LEED WASTE MANAGEMENT', pw/2, 22, { align: 'center' });
+        doc.setFontSize(14);
+        doc.text('AUDIT REPORT', pw/2, 32, { align: 'center' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('MRc5 Construction & Demolition Waste Diversion', pw/2, 42, { align: 'center' });
+        
+        doc.setTextColor(0);
+        y = 65;
+        
+        // Project Info Box
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(14, y, pw - 28, 50, 3, 3, 'F');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(currentProject.name || 'Project', 20, y + 12);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Address: ' + (currentProject.address || 'N/A'), 20, y + 20);
+        doc.text('General Contractor: ' + (currentProject.general_contractor || currentProject.contractor || 'N/A'), 20, y + 27);
+        doc.text('Waste Hauler: ' + (currentProject.waste_hauler || 'N/A'), 20, y + 34);
+        doc.text('LEED Target: ' + (currentProject.leed_target || 75) + '% Diversion', 20, y + 41);
+        doc.text('Report Date: ' + new Date().toLocaleDateString(), pw - 20, y + 12, { align: 'right' });
+        doc.text('LEED Version: ' + (currentProject.leed_version || 'v4.1'), pw - 20, y + 20, { align: 'right' });
+        y += 60;
+        
+        // Compliance Status
+        const compliant = divRate >= (currentProject.leed_target || 75);
+        doc.setFillColor(compliant ? 5 : 239, compliant ? 150 : 68, compliant ? 105 : 68);
+        doc.roundedRect(14, y, pw - 28, 18, 3, 3, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(compliant ? '✓ LEED MRc5 COMPLIANT' : '✗ BELOW LEED TARGET', pw/2, y + 12, { align: 'center' });
+        doc.setTextColor(0);
+        y += 28;
+        
+        // Summary Stats Grid
+        const stats = [
+            { label: 'Total Loads', value: allTickets.length.toString() },
+            { label: 'Total Tonnage', value: totalTons.toFixed(2) + ' tons' },
+            { label: 'Diverted', value: divertedTons.toFixed(2) + ' tons' },
+            { label: 'Landfill', value: landfillTons.toFixed(2) + ' tons' },
+            { label: 'Diversion Rate', value: divRate + '%' },
+            { label: 'Verified Loads', value: verifiedCount + '/' + allTickets.length },
+            { label: 'Photo Documentation', value: ticketsWithPhotos + ' loads' },
+            { label: 'Date Range', value: (allTickets[0]?.service_date || 'N/A') + ' to ' + (allTickets[allTickets.length-1]?.service_date || 'N/A') }
+        ];
+        
+        const colWidth = (pw - 28) / 4;
+        stats.forEach((s, i) => {
+            const col = i % 4;
+            const row = Math.floor(i / 4);
+            const sx = 14 + col * colWidth;
+            const sy = y + row * 18;
+            
+            doc.setFillColor(248, 250, 252);
+            doc.roundedRect(sx + 1, sy, colWidth - 2, 16, 2, 2, 'F');
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100);
+            doc.text(s.label, sx + colWidth/2, sy + 5, { align: 'center' });
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.text(s.value, sx + colWidth/2, sy + 12, { align: 'center' });
+        });
+        y += 44;
+        
+        // Material Breakdown Summary
+        checkPage(50);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MATERIAL BREAKDOWN', 14, y);
+        y += 8;
+        
+        const materials = [
+            { name: 'Wood', tons: woodTons, color: [139, 69, 19] },
+            { name: 'Metal', tons: metalTons, color: [112, 128, 144] },
+            { name: 'Cardboard/OCC', tons: cardboardTons, color: [222, 184, 135] },
+            { name: 'Concrete/Masonry', tons: concreteTons, color: [169, 169, 169] },
+            { name: 'Plastic', tons: plasticTons, color: [65, 105, 225] },
+            { name: 'Drywall', tons: drywallTons, color: [245, 245, 220] },
+            { name: 'Landfill', tons: landfillTons, color: [47, 79, 79] }
+        ].filter(m => m.tons > 0);
+        
+        materials.forEach(m => {
+            const pct = totalTons > 0 ? (m.tons / totalTons * 100) : 0;
+            const barWidth = pct * 1.2;
+            
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.text(m.name, 14, y + 4);
+            doc.text(m.tons.toFixed(2) + ' tons (' + pct.toFixed(1) + '%)', pw - 14, y + 4, { align: 'right' });
+            
+            // Bar
+            doc.setFillColor(230, 230, 230);
+            doc.roundedRect(60, y, 80, 5, 1, 1, 'F');
+            doc.setFillColor(m.color[0], m.color[1], m.color[2]);
+            if (barWidth > 0) doc.roundedRect(60, y, Math.min(barWidth, 80), 5, 1, 1, 'F');
+            
+            y += 9;
+        });
+        
+        addFooter();
+        
+        // ===== PAGE 2+: DETAILED LOAD LOG =====
+        doc.addPage('landscape');
+        pageNum++;
+        y = 15;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DETAILED LOAD LOG', 14, y);
+        y += 8;
+        
+        // Table headers
+        const headers = ['#', 'Date', 'Ticket #', 'Net Tons', 'Wood', 'Metal', 'OCC', 'Plastic', 'Conc', 'Drywall', 'Landfill', 'Div %', 'Photos', 'Verified'];
+        const cW = [8, 22, 22, 18, 16, 16, 16, 16, 16, 16, 16, 14, 14, 16];
+        let cx = 14;
+        
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setFillColor(5, 150, 105);
+        doc.setTextColor(255);
+        const hdrH = 7;
+        headers.forEach((h, i) => {
+            doc.rect(cx, y, cW[i], hdrH, 'F');
+            doc.text(h, cx + 1, y + 5);
+            cx += cW[i];
+        });
+        doc.setTextColor(0);
+        y += hdrH;
+        
+        // Data rows
+        doc.setFont('helvetica', 'normal');
+        allTickets.forEach((t, idx) => {
+            if (y > 185) {
+                addFooter();
+                doc.addPage('landscape');
+                pageNum++;
+                y = 15;
+                cx = 14;
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                doc.setFillColor(5, 150, 105);
+                doc.setTextColor(255);
+                headers.forEach((h, i) => {
+                    doc.rect(cx, y, cW[i], hdrH, 'F');
+                    doc.text(h, cx + 1, y + 5);
+                    cx += cW[i];
+                });
+                doc.setTextColor(0);
+                y += hdrH;
+                doc.setFont('helvetica', 'normal');
+            }
+            
+            const photoCount = [t.debris_photo_1, t.debris_photo_2, t.debris_photo_3, t.scale_ticket_photo].filter(Boolean).length;
+            const rowH = 5;
+            const bg = idx % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
+            cx = 14;
+            
+            const rowData = [
+                String(idx + 1),
+                t.service_date ? new Date(t.service_date).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'2-digit'}) : '',
+                t.ticket_number || '',
+                (t.net_tons || 0).toFixed(2),
+                (t.wood_tons || 0) > 0 ? (t.wood_tons || 0).toFixed(2) : '-',
+                (t.metal_tons || 0) > 0 ? (t.metal_tons || 0).toFixed(2) : '-',
+                (t.cardboard_tons || 0) > 0 ? (t.cardboard_tons || 0).toFixed(2) : '-',
+                (t.plastic_tons || 0) > 0 ? (t.plastic_tons || 0).toFixed(2) : '-',
+                (t.concrete_tons || 0) > 0 ? (t.concrete_tons || 0).toFixed(2) : '-',
+                (t.drywall_tons || 0) > 0 ? (t.drywall_tons || 0).toFixed(2) : '-',
+                (t.landfill_tons || 0) > 0 ? (t.landfill_tons || 0).toFixed(2) : '-',
+                (t.diversion_pct || 0) + '%',
+                photoCount > 0 ? photoCount + ' 📷' : '-',
+                t.human_verified ? '✓' : '-'
+            ];
+            
+            rowData.forEach((d, i) => {
+                doc.setFillColor(bg[0], bg[1], bg[2]);
+                doc.rect(cx, y, cW[i], rowH, 'FD');
+                doc.setFontSize(6);
+                doc.text(String(d), cx + 1, y + 3.5);
+                cx += cW[i];
+            });
+            y += rowH;
+        });
+        
+        // Totals row
+        y += 2;
+        cx = 14;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setFillColor(5, 150, 105);
+        doc.setTextColor(255);
+        const totals = ['', 'TOTALS', allTickets.length + ' loads', totalTons.toFixed(2), woodTons.toFixed(2), metalTons.toFixed(2), cardboardTons.toFixed(2), plasticTons.toFixed(2), concreteTons.toFixed(2), drywallTons.toFixed(2), landfillTons.toFixed(2), divRate + '%', ticketsWithPhotos + ' 📷', verifiedCount + '/' + allTickets.length];
+        totals.forEach((d, i) => {
+            doc.rect(cx, y, cW[i], 6, 'F');
+            doc.text(String(d), cx + 1, y + 4);
+            cx += cW[i];
+        });
+        doc.setTextColor(0);
+        
+        addFooter();
+        
+        // ===== MONTHLY SUMMARY PAGE =====
+        doc.addPage('portrait');
+        pageNum++;
+        y = 15;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('MONTHLY DIVERSION SUMMARY', 14, y);
+        y += 10;
+        
+        Object.keys(monthlyData).sort().forEach(month => {
+            checkPage(30);
+            const md = monthlyData[month];
+            const mRate = md.tons > 0 ? Math.round((md.diverted / md.tons) * 100) : 0;
+            const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            
+            doc.setFillColor(248, 250, 252);
+            doc.roundedRect(14, y, pw - 28, 22, 2, 2, 'F');
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(monthLabel, 18, y + 8);
+            
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.text(md.tickets.length + ' loads | ' + md.tons.toFixed(2) + ' total tons | ' + md.diverted.toFixed(2) + ' diverted | ' + md.landfill.toFixed(2) + ' landfill', 18, y + 16);
+            
+            // Rate badge
+            doc.setFillColor(mRate >= 75 ? 5 : mRate >= 50 ? 245 : 239, mRate >= 75 ? 150 : mRate >= 50 ? 158 : 68, mRate >= 75 ? 105 : mRate >= 50 ? 11 : 68);
+            doc.roundedRect(pw - 40, y + 3, 24, 16, 2, 2, 'F');
+            doc.setTextColor(255);
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.text(mRate + '%', pw - 28, y + 14, { align: 'center' });
+            doc.setTextColor(0);
+            
+            y += 26;
+        });
+        
+        // Photo Documentation Index
+        checkPage(30);
+        y += 10;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PHOTO DOCUMENTATION INDEX', 14, y);
+        y += 8;
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        
+        if (ticketsWithPhotos > 0) {
+            doc.text(ticketsWithPhotos + ' of ' + allTickets.length + ' loads have photographic documentation on file.', 14, y);
+            y += 6;
+            doc.text('Photos include debris pile identification images and scale ticket scans.', 14, y);
+            y += 6;
+            doc.text('All photos are stored in the DivertScan™ system and available for auditor review.', 14, y);
+            y += 10;
+            
+            allTickets.filter(t => t.debris_photo_1 || t.scale_ticket_photo).forEach(t => {
+                checkPage(8);
+                const pCnt = [t.debris_photo_1, t.debris_photo_2, t.debris_photo_3].filter(Boolean).length;
+                const hasST = t.scale_ticket_photo ? 'Yes' : 'No';
+                doc.text('Ticket #' + (t.ticket_number || 'N/A') + ' (' + (t.service_date || '') + ') — ' + pCnt + ' debris photo(s), Scale ticket: ' + hasST, 18, y);
+                y += 5;
+            });
+        } else {
+            doc.text('No photographic documentation available. Photos can be attached during ticket entry.', 14, y);
+        }
+        
+        // Certification Statement
+        checkPage(50);
+        y += 10;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('CERTIFICATION', 14, y);
+        y += 8;
+        
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14, y, pw - 28, 45, 3, 3, 'F');
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('I certify that the information contained in this report is accurate and complete to the best of', 20, y + 8);
+        doc.text('my knowledge. All waste diversion data has been collected and verified through the DivertScan™', 20, y + 14);
+        doc.text('waste tracking system with ' + verifiedCount + ' of ' + allTickets.length + ' loads verified by human inspection.', 20, y + 20);
+        y += 28;
+        doc.text('Processing Facility: DalMex Recycling LLC, 2828 Nagel St., Dallas, TX 75220', 20, y);
+        y += 6;
+        doc.text('Signature: _________________________________     Date: _____________', 20, y);
+        
+        addFooter();
+        
+        // Save
+        const filename = 'LEED_Audit_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+        doc.save(filename);
+        
+        hideLoading();
+        toast('LEED Audit Report downloaded! (' + allTickets.length + ' loads, ' + (pageNum) + ' pages)', 'success');
+        
+    } catch (err) {
+        hideLoading();
+        console.error('Audit report error:', err);
+        toast('Error: ' + err.message, 'error');
+    }
+}
+
 // ========== TOGGLE SECTIONS ==========
 function toggleSection(sectionId) {
     const content = document.getElementById(sectionId + 'Content');
@@ -3730,32 +4502,50 @@ function toggleSection(sectionId) {
 // ========== PROJECT SELECT (moved here) ==========
 function selectProject(projectId) {
     currentProject = projects.find(p => p.id === projectId);
-    localStorage.setItem('divertscan_current_project', projectId);
+    if (currentProject) {
+        localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
+    }
     updateProjectDisplay();
     renderProjectsList();
     loadRecentTickets();
     updateStats();
-    toast('Project selected: ' + currentProject.name, 'success');
+    toast('Project selected: ' + (currentProject?.name || 'Unknown'), 'success');
 }
 
 // ========== IMPORT / EXPORT ==========
 async function exportAllProjects() {
-    if (!sb) {
-        toast('Connect to Supabase first', 'error');
-        return;
-    }
-    
     showLoading('Exporting...');
     
     try {
-        const { data: projectsData } = await sb.from('projects').select('*');
-        const { data: ticketsData } = await sb.from('tickets').select('*');
+        let projectsData = [];
+        let ticketsData = [];
+        
+        // Get from local first
+        try {
+            projectsData = await getFromLocal('projects') || [];
+            ticketsData = await getFromLocal('tickets') || [];
+        } catch (e) { console.log('Local export error:', e); }
+        
+        // Try Supabase with timeout for additional data
+        if (sb) {
+            try {
+                const tp = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000));
+                const pRes = await Promise.race([sb.from('projects').select('*'), tp]);
+                const tRes = await Promise.race([sb.from('tickets').select('*'), tp]);
+                if (pRes?.data) {
+                    pRes.data.forEach(p => { if (!projectsData.find(lp => lp.id === p.id)) projectsData.push(p); });
+                }
+                if (tRes?.data) {
+                    tRes.data.forEach(t => { if (!ticketsData.find(lt => lt.ticket_number === t.ticket_number)) ticketsData.push(t); });
+                }
+            } catch (e) { console.log('Supabase export skipped:', e.message); }
+        }
         
         const exportData = {
             exported_at: new Date().toISOString(),
-            version: '6.1',
-            projects: projectsData || [],
-            tickets: ticketsData || []
+            version: '7.4',
+            projects: projectsData,
+            tickets: ticketsData
         };
         
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -3767,7 +4557,7 @@ async function exportAllProjects() {
         URL.revokeObjectURL(url);
         
         hideLoading();
-        toast('Export complete!', 'success');
+        toast(`Export complete! ${projectsData.length} projects, ${ticketsData.length} tickets`, 'success');
     } catch (err) {
         hideLoading();
         toast('Export error: ' + err.message, 'error');
@@ -4838,21 +5628,52 @@ async function generateAuditPackage() {
     document.getElementById('auditPackageStatus').innerHTML = '<span style="color:var(--amber-400)">⏳ Preparing documentation...</span>';
     
     try {
-        // Get all tickets with photos
-        const { data: tickets } = await sb
-            .from('tickets')
-            .select('*')
-            .eq('project_id', currentProject.id)
-            .order('service_date', { ascending: true });
+        // Get tickets from both Supabase AND local storage
+        let remoteTickets = [];
+        let localTickets = [];
         
-        if (!tickets || tickets.length === 0) {
+        // Try Supabase if configured (with 5s timeout)
+        if (sb) {
+            try {
+                const sbPromise = sb
+                    .from('tickets')
+                    .select('*')
+                    .eq('project_id', currentProject.id)
+                    .order('service_date', { ascending: true });
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('timeout')), 5000)
+                );
+                const result = await Promise.race([sbPromise, timeoutPromise]);
+                if (result && !result.error && result.data) remoteTickets = result.data;
+            } catch (e) {
+                console.log('Supabase fetch skipped:', e.message);
+            }
+        }
+        
+        // Always get local tickets (Excel imports stored here)
+        try {
+            const allLocal = await getFromLocal('tickets') || [];
+            localTickets = allLocal.filter(t => t.project_id === currentProject.id);
+        } catch (e) {
+            console.log('Local fetch error:', e.message);
+        }
+        
+        // Merge and dedupe
+        const ticketMap = new Map();
+        localTickets.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        remoteTickets.forEach(t => ticketMap.set(t.ticket_number || t.id, t));
+        
+        const allTickets = Array.from(ticketMap.values());
+        allTickets.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        
+        if (allTickets.length === 0) {
             hideLoading();
             toast('No tickets found', 'error');
             return;
         }
         
         // Store for report generation
-        reportData = tickets;
+        reportData = allTickets;
         
         // Generate AI summary if not already done
         if (!aiSummaryText) {
@@ -4870,10 +5691,16 @@ async function generateAuditPackage() {
         document.getElementById('auditPackageStatus').innerHTML = '<span style="color:var(--amber-400)">⏳ Exporting data spreadsheet...</span>';
         downloadReportCSV();
         
+        // Download Excel if available
+        if (typeof XLSX !== 'undefined') {
+            document.getElementById('auditPackageStatus').innerHTML = '<span style="color:var(--amber-400)">⏳ Creating Excel workbook...</span>';
+            downloadReportExcel();
+        }
+        
         hideLoading();
         document.getElementById('auditPackageStatus').innerHTML = `
             <span style="color:var(--emerald-400)">✅ Audit Package Generated!</span><br>
-            <span style="font-size:10px">• PDF Report downloaded<br>• CSV Data downloaded<br>• ${tickets.length} tickets included</span>
+            <span style="font-size:10px">• PDF Report downloaded<br>• CSV Data downloaded<br>• Excel workbook downloaded<br>• ${allTickets.length} tickets included</span>
         `;
         
         toast('Audit Package complete!', 'success');
@@ -4889,42 +5716,47 @@ async function generateAuditPackage() {
 let comparisonChart = null;
 
 async function loadProjectComparison() {
-    if (!sb) {
-        toast('Connect to database first', 'error');
-        return;
-    }
-    
     showLoading('Loading project comparison...');
     
     try {
-        // Get all projects
-        const { data: allProjects } = await sb.from('projects').select('id, name');
+        // Get all projects from local + remote
+        let allProjects = [];
         
-        if (!allProjects || allProjects.length === 0) {
+        try { allProjects = await getFromLocal('projects') || []; } catch(e) {}
+        
+        if (sb) {
+            try {
+                const tp = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000));
+                const res = await Promise.race([sb.from('projects').select('id, name'), tp]);
+                if (res?.data) {
+                    res.data.forEach(p => { if (!allProjects.find(lp => lp.id === p.id)) allProjects.push(p); });
+                }
+            } catch(e) { console.log('Supabase comparison skipped:', e.message); }
+        }
+        
+        if (allProjects.length === 0) {
             hideLoading();
             toast('No projects found', 'error');
             return;
         }
         
         // Get stats for each project
+        const allTickets = await getFromLocal('tickets') || [];
         const projectStats = [];
         
         for (const proj of allProjects) {
-            const { data: tickets } = await sb
-                .from('tickets')
-                .select('net_tons, landfill_tons')
-                .eq('project_id', proj.id);
+            const projTickets = allTickets.filter(t => t.project_id === proj.id);
             
-            if (tickets && tickets.length > 0) {
-                const totalTons = tickets.reduce((s, t) => s + (t.net_tons || 0), 0);
-                const landfillTons = tickets.reduce((s, t) => s + (t.landfill_tons || 0), 0);
+            if (projTickets.length > 0) {
+                const totalTons = projTickets.reduce((s, t) => s + (t.net_tons || 0), 0);
+                const landfillTons = projTickets.reduce((s, t) => s + (t.landfill_tons || 0), 0);
                 const rate = totalTons > 0 ? Math.round(((totalTons - landfillTons) / totalTons) * 100) : 0;
                 
                 projectStats.push({
                     name: proj.name.substring(0, 20),
                     rate: rate,
                     tons: totalTons,
-                    loads: tickets.length
+                    loads: projTickets.length
                 });
             }
         }
@@ -6679,7 +7511,11 @@ async function saveTicketWithOfflineSupport(ticketRecord) {
             }
             delete remoteRecord.synced;
             
-            const { data, error } = await sb.from('tickets').insert([remoteRecord]).select();
+            const sbPromise = sb.from('tickets').insert([remoteRecord]).select();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Supabase timeout')), 5000)
+            );
+            const { data, error } = await Promise.race([sbPromise, timeoutPromise]);
             
             if (error) throw error;
             
