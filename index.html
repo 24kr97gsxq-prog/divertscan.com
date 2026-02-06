@@ -1670,9 +1670,56 @@ function showTab(tab) {
 // ========== API KEY ==========
 function saveApiKey() {
     const key = document.getElementById('apiKeyInput').value.trim();
-    if (key) {
-        localStorage.setItem('divertscan_openai', key);
-        toast('API key saved!', 'success');
+    if (!key) {
+        toast('Please enter an API key', 'error');
+        return;
+    }
+    
+    // Validate it looks like an Anthropic key
+    if (key.startsWith('sk-') && !key.startsWith('sk-ant-')) {
+        toast('⚠️ This looks like an OpenAI key. You need an Anthropic key (starts with sk-ant-)', 'error');
+        return;
+    }
+    
+    localStorage.setItem('divertscan_openai', key);
+    toast('✅ Anthropic API key saved!', 'success');
+    
+    // Quick validation test
+    testApiKey(key);
+}
+
+async function testApiKey(key) {
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': key,
+                'Content-Type': 'application/json',
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 10,
+                messages: [{ role: 'user', content: 'hi' }]
+            })
+        });
+        
+        if (response.ok) {
+            toast('✅ API key verified - connection working!', 'success');
+        } else {
+            const err = await response.json();
+            if (err.error?.type === 'authentication_error') {
+                toast('❌ Invalid API key - check console.anthropic.com', 'error');
+                localStorage.removeItem('divertscan_openai');
+            } else if (err.error?.type === 'permission_error') {
+                toast('❌ Key lacks permissions - check API settings', 'error');
+            } else {
+                toast('⚠️ Key saved but test returned: ' + (err.error?.message || response.status), 'warning');
+            }
+        }
+    } catch (e) {
+        toast('⚠️ Key saved but could not verify (network issue)', 'warning');
     }
 }
 
@@ -2816,6 +2863,12 @@ async function analyzeScaleTicket(imageData) {
         return;
     }
     
+    // Check if old OpenAI key is stored
+    if (apiKey.startsWith('sk-') && !apiKey.startsWith('sk-ant-')) {
+        toast('⚠️ Old OpenAI key detected - please update to Anthropic key in Settings', 'error');
+        return;
+    }
+    
     showLoading('Reading scale ticket with Claude AI...');
     
     try {
@@ -3040,6 +3093,11 @@ async function analyzeDebris() {
     const apiKey = localStorage.getItem('divertscan_openai');
     if (!apiKey) {
         toast('Add Anthropic API key in Settings', 'error');
+        return;
+    }
+    
+    if (apiKey.startsWith('sk-') && !apiKey.startsWith('sk-ant-')) {
+        toast('⚠️ Old OpenAI key detected - please update to Anthropic key in Settings', 'error');
         return;
     }
     
