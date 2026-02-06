@@ -7780,52 +7780,81 @@ function generateDestinationSummary(ticketMaterials) {
 // Initialize on load
 initMaterialDestinations();
 const DB_NAME = 'DivertScanDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bumped to ensure we're >= any previous version
 let db = null;
 
 async function initIndexedDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         
-        request.onerror = () => reject(request.error);
+        request.onerror = (event) => {
+            console.error('IndexedDB error:', request.error);
+            
+            // If version conflict, try to recover by opening without a version (uses current)
+            if (request.error && request.error.name === 'VersionError') {
+                console.log('Version conflict detected - attempting recovery...');
+                const recoveryRequest = indexedDB.open(DB_NAME);
+                recoveryRequest.onsuccess = () => {
+                    db = recoveryRequest.result;
+                    console.log('IndexedDB recovered at version', db.version);
+                    resolve(db);
+                };
+                recoveryRequest.onerror = () => {
+                    console.error('Recovery failed - deleting and recreating DB');
+                    indexedDB.deleteDatabase(DB_NAME);
+                    // Retry with our version
+                    const retryRequest = indexedDB.open(DB_NAME, DB_VERSION);
+                    retryRequest.onupgradeneeded = createStores;
+                    retryRequest.onsuccess = () => { db = retryRequest.result; resolve(db); };
+                    retryRequest.onerror = () => reject(retryRequest.error);
+                };
+            } else {
+                reject(request.error);
+            }
+        };
+        
         request.onsuccess = () => {
             db = request.result;
-            console.log('IndexedDB initialized');
+            console.log('IndexedDB initialized v' + db.version);
             resolve(db);
         };
         
         request.onupgradeneeded = (event) => {
-            const database = event.target.result;
-            
-            // Projects store
-            if (!database.objectStoreNames.contains('projects')) {
-                const projectStore = database.createObjectStore('projects', { keyPath: 'id' });
-                projectStore.createIndex('synced', 'synced', { unique: false });
-            }
-            
-            // Tickets store
-            if (!database.objectStoreNames.contains('tickets')) {
-                const ticketStore = database.createObjectStore('tickets', { keyPath: 'id' });
-                ticketStore.createIndex('project_id', 'project_id', { unique: false });
-                ticketStore.createIndex('synced', 'synced', { unique: false });
-            }
-            
-            // Drafts store (auto-saved in-progress tickets)
-            if (!database.objectStoreNames.contains('drafts')) {
-                database.createObjectStore('drafts', { keyPath: 'id' });
-            }
-            
-            // Sync queue
-            if (!database.objectStoreNames.contains('syncQueue')) {
-                database.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
-            }
-            
-            // Settings store
-            if (!database.objectStoreNames.contains('settings')) {
-                database.createObjectStore('settings', { keyPath: 'key' });
-            }
+            createStores(event);
         };
     });
+}
+
+function createStores(event) {
+    const database = event.target.result;
+    
+    // Projects store
+    if (!database.objectStoreNames.contains('projects')) {
+        const projectStore = database.createObjectStore('projects', { keyPath: 'id' });
+        projectStore.createIndex('synced', 'synced', { unique: false });
+    }
+    
+    // Tickets store
+    if (!database.objectStoreNames.contains('tickets')) {
+        const ticketStore = database.createObjectStore('tickets', { keyPath: 'id' });
+        ticketStore.createIndex('project_id', 'project_id', { unique: false });
+        ticketStore.createIndex('synced', 'synced', { unique: false });
+    }
+    
+    // Drafts store (auto-saved in-progress tickets)
+    if (!database.objectStoreNames.contains('drafts')) {
+        database.createObjectStore('drafts', { keyPath: 'id' });
+    }
+    
+    // Sync queue
+    if (!database.objectStoreNames.contains('syncQueue')) {
+        database.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+    }
+    
+    // Settings store
+    if (!database.objectStoreNames.contains('settings')) {
+        database.createObjectStore('settings', { keyPath: 'key' });
+    }
 }
 
 // Save to IndexedDB
