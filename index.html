@@ -1489,18 +1489,39 @@ Total: <span id="materialsTotal" style="color:var(--emerald-400);font-weight:700
 </div>
 </div>
 
-<!-- STEP 4: Signature -->
+<!-- STEP 4: Submit (signature optional) -->
 <div id="ticketStep4" class="hidden">
-<h3 style="text-align:center;margin-bottom:16px">✍️ Step 4: Sign & Submit</h3>
+<h3 style="text-align:center;margin-bottom:16px">✅ Step 4: Review & Submit</h3>
 
-<div class="card">
-<p style="font-size:12px;color:var(--slate-400);margin-bottom:12px">Sign below to certify accuracy</p>
-<canvas id="signaturePad" class="signature-pad"></canvas>
-<button class="btn btn-secondary" style="margin-top:12px" onclick="clearSignature()">Clear Signature</button>
+<div class="card" style="margin-bottom:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-size:12px;color:var(--slate-400)">Ticket</span>
+    <span style="font-weight:600" id="step4TicketNum">--</span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-size:12px;color:var(--slate-400)">Date</span>
+    <span style="font-weight:600" id="step4Date">--</span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-size:12px;color:var(--slate-400)">Net Weight</span>
+    <span style="font-weight:600" id="step4Weight">--</span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;color:var(--slate-400)">Diversion Rate</span>
+    <span style="font-weight:600;color:var(--emerald-400)" id="step4Diversion">--</span>
+</div>
 </div>
 
-<p style="font-size:11px;color:var(--slate-400);margin-top:16px;line-height:1.6">
-By signing, I certify that the weights and material percentages are accurate to the best of my knowledge.
+<details style="margin-bottom:12px">
+<summary style="font-size:12px;color:var(--slate-400);cursor:pointer;padding:8px 0">✍️ Optional: Add Signature</summary>
+<div class="card" style="margin-top:8px">
+<canvas id="signaturePad" class="signature-pad"></canvas>
+<button class="btn btn-secondary" style="margin-top:8px;font-size:11px" onclick="clearSignature()">Clear Signature</button>
+</div>
+</details>
+
+<p style="font-size:11px;color:var(--slate-400);line-height:1.6;text-align:center">
+Ticket will be saved with today's date and current material percentages.
 </p>
 </div>
 
@@ -2730,6 +2751,26 @@ function showStep(step) {
     }
     
     if (step === 4) {
+        // Auto-set date if not already set
+        if (!ticketData.serviceDate) {
+            ticketData.serviceDate = new Date().toISOString().split('T')[0];
+        }
+        
+        // Populate summary
+        const s4Ticket = document.getElementById('step4TicketNum');
+        const s4Date = document.getElementById('step4Date');
+        const s4Weight = document.getElementById('step4Weight');
+        const s4Diversion = document.getElementById('step4Diversion');
+        
+        if (s4Ticket) s4Ticket.textContent = ticketData.ticketNumber || '--';
+        if (s4Date) s4Date.textContent = ticketData.serviceDate || new Date().toISOString().split('T')[0];
+        if (s4Weight) s4Weight.textContent = (ticketData.netTons || 0).toFixed(2) + ' T';
+        if (s4Diversion) {
+            const rate = ticketData.diversionRate || 0;
+            s4Diversion.textContent = rate + '%';
+            s4Diversion.style.color = rate >= 75 ? 'var(--emerald-400)' : rate >= 50 ? 'var(--amber-400)' : 'var(--red-500)';
+        }
+        
         setupSignaturePad();
     }
     
@@ -3742,21 +3783,29 @@ function clearSignature() {
 async function submitTicket() {
     console.log('submitTicket called');
     
-    // Check signature
+    // Auto-set date if missing
+    if (!ticketData.serviceDate) {
+        ticketData.serviceDate = new Date().toISOString().split('T')[0];
+    }
+    
+    // Capture signature if provided (optional)
     if (signatureCanvas) {
-        const imageData = signatureCtx.getImageData(0, 0, signatureCanvas.width, signatureCanvas.height);
-        let hasSignature = false;
-        for (let i = 0; i < imageData.data.length; i += 4) {
-            if (imageData.data[i] < 250) { // Not pure white
-                hasSignature = true;
-                break;
+        try {
+            const imageData = signatureCtx.getImageData(0, 0, signatureCanvas.width, signatureCanvas.height);
+            let hasSignature = false;
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                if (imageData.data[i] < 250) {
+                    hasSignature = true;
+                    break;
+                }
             }
+            if (hasSignature) {
+                ticketData.signature = signatureCanvas.toDataURL();
+            }
+        } catch (e) {
+            // Signature pad may not be initialized if details was never opened - that's fine
+            console.log('Signature pad not available:', e.message);
         }
-        if (!hasSignature) {
-            toast('Please sign to submit', 'error');
-            return;
-        }
-        ticketData.signature = signatureCanvas.toDataURL();
     }
     
     // Read materials fresh from inputs
@@ -3796,7 +3845,7 @@ async function submitTicket() {
         project_id: ticketData.projectId,
         ticket_number: ticketData.ticketNumber || '',
         service_date: ticketData.serviceDate || new Date().toISOString().split('T')[0],
-        hauler: ticketData.hauler || '',
+        hauler: ticketData.hauler || currentProject?.waste_hauler || '',
         container_size: ticketData.containerSize || 30,
         gross_lbs: ticketData.grossLbs || 0,
         tare_lbs: ticketData.tareLbs || 0,
