@@ -8253,24 +8253,41 @@ function validateTicketData(data) {
     const errors = [];
     const warnings = [];
     
+    // Support both camelCase (ticketData) and snake_case (dbRecord) field names
+    const projectId = data.projectId || data.project_id;
+    const serviceDate = data.serviceDate || data.service_date;
+    const grossLbs = data.grossLbs || data.gross_lbs;
+    const tareLbs = data.tareLbs || data.tare_lbs;
+    const humanVerified = data.humanVerified || data.human_verified;
+    const diversionRate = data.diversionRate || data.diversion_pct;
+    const materials = data.materials || {
+        wood: data.wood_pct || 0,
+        concrete: data.concrete_pct || 0,
+        metal: data.metal_pct || 0,
+        cardboard: data.cardboard_pct || 0,
+        plastic: data.plastic_pct || 0,
+        drywall: data.drywall_pct || 0,
+        landfill: data.landfill_pct || 0
+    };
+    
     // Required fields
-    if (!data.projectId) errors.push('Project is required');
-    if (!data.serviceDate) errors.push('Service date is required');
+    if (!projectId) errors.push('Project is required');
+    if (!serviceDate) errors.push('Service date is required');
     
     // Weight validation
     if (document.getElementById('validateWeights')?.checked) {
-        if (!data.grossLbs || data.grossLbs <= 0) errors.push('Gross weight is required');
-        if (!data.tareLbs || data.tareLbs <= 0) errors.push('Tare weight is required');
-        if (data.grossLbs && data.tareLbs && data.grossLbs <= data.tareLbs) {
+        if (!grossLbs || grossLbs <= 0) errors.push('Gross weight is required');
+        if (!tareLbs || tareLbs <= 0) errors.push('Tare weight is required');
+        if (grossLbs && tareLbs && grossLbs <= tareLbs) {
             errors.push('Gross weight must be greater than tare weight');
         }
-        if (data.grossLbs > 100000) warnings.push('Gross weight seems unusually high');
-        if (data.tareLbs < 5000) warnings.push('Tare weight seems unusually low');
+        if (grossLbs > 100000) warnings.push('Gross weight seems unusually high');
+        if (tareLbs < 5000) warnings.push('Tare weight seems unusually low');
     }
     
     // Percentage validation
-    if (document.getElementById('validatePercentages')?.checked && data.materials) {
-        const total = Object.values(data.materials).reduce((s, v) => s + (v || 0), 0);
+    if (document.getElementById('validatePercentages')?.checked && materials) {
+        const total = Object.values(materials).reduce((s, v) => s + (v || 0), 0);
         if (Math.abs(total - 100) > 1) {
             errors.push(`Material percentages must total 100% (currently ${total}%)`);
         }
@@ -8284,13 +8301,13 @@ function validateTicketData(data) {
     
     // Verification validation
     if (document.getElementById('requireVerification')?.checked) {
-        if (!data.humanVerified) errors.push('Human verification is required');
+        if (!humanVerified) errors.push('Human verification is required');
     }
     
     // Anomaly detection
     if (document.getElementById('flagAnomalies')?.checked) {
-        if (data.diversionRate > 90) warnings.push('Diversion rate >90% is unusual - please verify');
-        if (data.diversionRate < 30) warnings.push('Diversion rate <30% is below typical range');
+        if (diversionRate > 90) warnings.push('Diversion rate >90% is unusual - please verify');
+        if (diversionRate < 30) warnings.push('Diversion rate <30% is below typical range');
     }
     
     return { valid: errors.length === 0, errors, warnings };
