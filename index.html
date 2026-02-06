@@ -1007,24 +1007,36 @@ Photographic documentation and GPS coordinates are stored for audit purposes.
 
 <div id="settingsTab" class="hidden">
 <div class="card">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">🔑 Anthropic API Key</div>
-<p style="font-size:11px;color:var(--slate-400);margin-bottom:8px">Get your key from console.anthropic.com</p>
-<input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-..." style="margin-bottom:12px">
-<button class="btn btn-primary" onclick="saveApiKey()">Save Key</button>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:600">🔑 Anthropic API Key</div>
+    <div id="apiKeyStatus" style="font-size:11px">--</div>
+</div>
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:8px">Required for scale ticket OCR and debris photo analysis. Get your key from console.anthropic.com</p>
+<div style="display:flex;gap:8px;align-items:center">
+    <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-ant-..." style="margin-bottom:0;flex:1">
+    <button class="btn btn-secondary" onclick="toggleKeyVisibility('apiKeyInput')" style="padding:8px 12px;white-space:nowrap;font-size:11px">👁️</button>
+</div>
+<button class="btn btn-primary" onclick="saveApiKey()" style="margin-top:12px;width:100%">Save Key</button>
 </div>
 
 <div class="card">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">🗄️ Supabase Connection</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:600">🗄️ Supabase Connection</div>
+    <div id="supabaseStatus" style="font-size:11px">--</div>
+</div>
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:8px">Required for cloud sync. App works offline without this.</p>
 <div class="form-group">
 <label class="form-label">Project URL</label>
 <input type="text" id="supabaseUrl" class="form-input" placeholder="https://xxxxx.supabase.co">
 </div>
 <div class="form-group">
 <label class="form-label">Anon Key</label>
-<input type="password" id="supabaseKey" class="form-input" placeholder="eyJ...">
+<div style="display:flex;gap:8px;align-items:center">
+    <input type="password" id="supabaseKey" class="form-input" placeholder="eyJ..." style="margin-bottom:0;flex:1">
+    <button class="btn btn-secondary" onclick="toggleKeyVisibility('supabaseKey')" style="padding:8px 12px;white-space:nowrap;font-size:11px">👁️</button>
 </div>
-<button class="btn btn-primary" onclick="saveSupabaseConfig()">Save & Connect</button>
-<div id="supabaseStatus" style="margin-top:12px;font-size:12px;color:var(--slate-400)"></div>
+</div>
+<button class="btn btn-primary" onclick="saveSupabaseConfig()" style="width:100%">Save & Connect</button>
 </div>
 
 <!-- LEED Rules Configuration -->
@@ -1627,36 +1639,173 @@ let isDrawing = false;
 
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DivertScan v5.0 initialized');
+    console.log('DivertScan v7.6 initialized');
     
     // Set today's date
     document.getElementById('serviceDate').value = new Date().toISOString().split('T')[0];
     
-    // Load API key
-    const savedKey = localStorage.getItem('divertscan_openai');
-    if (savedKey) {
-        document.getElementById('apiKeyInput').value = savedKey;
+    // Restore keys - try localStorage first, then IndexedDB backup
+    restoreAllKeys().then(() => {
+        initializeApp();
+    });
+});
+
+async function restoreAllKeys() {
+    // 1. Load from localStorage
+    let apiKey = localStorage.getItem('divertscan_openai');
+    let sbUrl = localStorage.getItem('divertscan_sb_url');
+    let sbKey = localStorage.getItem('divertscan_sb_key');
+    
+    // 2. If localStorage is empty, try IndexedDB backup
+    if (!apiKey || !sbUrl || !sbKey) {
+        try {
+            await initIndexedDB();
+            if (!apiKey) {
+                const saved = await getFromLocal('settings', 'anthropic_key');
+                if (saved?.value) {
+                    apiKey = saved.value;
+                    localStorage.setItem('divertscan_openai', apiKey);
+                    console.log('Restored Anthropic key from IndexedDB backup');
+                }
+            }
+            if (!sbUrl) {
+                const saved = await getFromLocal('settings', 'supabase_url');
+                if (saved?.value) {
+                    sbUrl = saved.value;
+                    localStorage.setItem('divertscan_sb_url', sbUrl);
+                    console.log('Restored Supabase URL from IndexedDB backup');
+                }
+            }
+            if (!sbKey) {
+                const saved = await getFromLocal('settings', 'supabase_key');
+                if (saved?.value) {
+                    sbKey = saved.value;
+                    localStorage.setItem('divertscan_sb_key', sbKey);
+                    console.log('Restored Supabase key from IndexedDB backup');
+                }
+            }
+        } catch (e) {
+            console.log('IndexedDB key restore skipped:', e.message);
+        }
     }
     
-    // Load Supabase config
-    const sbUrl = localStorage.getItem('divertscan_sb_url');
-    const sbKey = localStorage.getItem('divertscan_sb_key');
+    // 3. Populate input fields
+    if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
     if (sbUrl) document.getElementById('supabaseUrl').value = sbUrl;
     if (sbKey) document.getElementById('supabaseKey').value = sbKey;
     
-    // Initialize data
-    initializeApp();
-});
+    // 4. Reinitialize Supabase if keys restored
+    if (sbUrl && sbKey && !sb && typeof supabase !== 'undefined') {
+        try {
+            sb = supabase.createClient(sbUrl, sbKey);
+        } catch (e) {
+            console.log('Supabase init failed:', e.message);
+        }
+    }
+    
+    // 5. Update status indicators
+    updateKeyStatusIndicators();
+}
+
+function updateKeyStatusIndicators() {
+    const apiKey = localStorage.getItem('divertscan_openai');
+    const sbUrl = localStorage.getItem('divertscan_sb_url');
+    const sbKey = localStorage.getItem('divertscan_sb_key');
+    
+    // API Key status
+    const apiStatus = document.getElementById('apiKeyStatus');
+    if (apiStatus) {
+        if (apiKey) {
+            const masked = apiKey.substring(0, 10) + '...' + apiKey.slice(-4);
+            apiStatus.innerHTML = `<span style="color:var(--emerald-400)">✅ ${masked}</span>`;
+        } else {
+            apiStatus.innerHTML = `<span style="color:var(--red-500)">❌ Not set</span>`;
+        }
+    }
+    
+    // Supabase status
+    const sbStatus = document.getElementById('supabaseStatus');
+    if (sbStatus) {
+        if (sb && sbUrl && sbKey) {
+            sbStatus.innerHTML = `<span style="color:var(--emerald-400)">✅ Connected</span>`;
+        } else if (sbUrl || sbKey) {
+            sbStatus.innerHTML = `<span style="color:var(--amber-400)">⚠️ Incomplete</span>`;
+        } else {
+            sbStatus.innerHTML = `<span style="color:var(--slate-400)">Not configured (offline mode)</span>`;
+        }
+    }
+    
+    // Dashboard warning banner
+    updateDashboardKeyWarning(apiKey, sbUrl, sbKey);
+}
+
+function updateDashboardKeyWarning(apiKey, sbUrl, sbKey) {
+    let banner = document.getElementById('keyWarningBanner');
+    const missing = [];
+    if (!apiKey) missing.push('Anthropic API Key');
+    if (!sbUrl || !sbKey) missing.push('Supabase');
+    
+    if (missing.length === 0) {
+        if (banner) banner.remove();
+        return;
+    }
+    
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'keyWarningBanner';
+        banner.style.cssText = 'background:linear-gradient(135deg,#92400e,#78350f);border:1px solid #b45309;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px;color:#fef3c7;cursor:pointer;';
+        banner.onclick = () => showTab('settings');
+        
+        const dashTab = document.getElementById('dashboardTab');
+        if (dashTab) dashTab.prepend(banner);
+    }
+    
+    banner.innerHTML = `<strong>⚠️ Missing: ${missing.join(' & ')}</strong><br><span style="font-size:11px;opacity:0.8">Tap here to go to Settings and configure</span>`;
+}
+
+function toggleKeyVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+    }
+}
+
+// Helper to read a single record from IndexedDB
+async function getFromLocal(storeName, key) {
+    if (!db) await initIndexedDB();
+    return new Promise((resolve, reject) => {
+        try {
+            const transaction = db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => resolve(null);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
 
 async function initializeApp() {
+    updateKeyStatusIndicators();
+    
     if (sb) {
-        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--emerald-400)">✅ Connected</span>';
         await loadProjects();
         await loadRecentTickets();
         updateStats();
     } else {
-        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--amber-400)">⚠️ Not configured - go to Settings</span>';
-        document.getElementById('recentTickets').innerHTML = '<p style="color:var(--amber-400)">Configure Supabase in Settings to save tickets</p>';
+        // Still functional in offline mode - load from IndexedDB
+        try {
+            await initIndexedDB();
+            const localTickets = await getAllFromLocal('tickets');
+            if (localTickets && localTickets.length > 0) {
+                document.getElementById('recentTickets').innerHTML = `<p style="color:var(--slate-400)">📱 Offline mode - ${localTickets.length} tickets stored locally</p>`;
+            } else {
+                document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">No tickets yet. Scan a scale ticket to get started.</p>';
+            }
+        } catch (e) {
+            document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">Ready to scan tickets.</p>';
+        }
     }
 }
 
@@ -1702,7 +1851,13 @@ function saveApiKey() {
         return;
     }
     
+    // Save to localStorage (primary)
     localStorage.setItem('divertscan_openai', key);
+    
+    // Backup to IndexedDB (survives localStorage clears)
+    saveToLocal('settings', { key: 'anthropic_key', value: key }).catch(() => {});
+    
+    updateKeyStatusIndicators();
     toast('✅ Anthropic API key saved!', 'success');
     
     // Quick validation test
@@ -1754,14 +1909,19 @@ function saveSupabaseConfig() {
         return;
     }
     
+    // Save to localStorage (primary)
     localStorage.setItem('divertscan_sb_url', url);
     localStorage.setItem('divertscan_sb_key', key);
+    
+    // Backup to IndexedDB (survives localStorage clears)
+    saveToLocal('settings', { key: 'supabase_url', value: url }).catch(() => {});
+    saveToLocal('settings', { key: 'supabase_key', value: key }).catch(() => {});
     
     // Reinitialize Supabase
     if (typeof supabase !== 'undefined') {
         sb = supabase.createClient(url, key);
-        document.getElementById('supabaseStatus').innerHTML = '<span style="color:var(--emerald-400)">✅ Connected</span>';
         toast('Supabase connected!', 'success');
+        updateKeyStatusIndicators();
         initializeApp();
     }
 }
@@ -2287,40 +2447,47 @@ function viewTicketDetails(ticketId) {
     const hasPhotos = ticket.debris_photo_1 || ticket.debris_photo_2 || ticket.debris_photo_3 || ticket.scale_ticket_photo;
     
     if (hasPhotos) {
+        // Store photos in reference map for safe viewer access
+        _photoViewerData = {};
+        
         photosHtml = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">';
         
         if (ticket.scale_ticket_photo) {
+            _photoViewerData['st_' + ticketId] = ticket.scale_ticket_photo;
             photosHtml += `
                 <div style="grid-column:span 2">
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📋 Scale Ticket</div>
-                    <img src="${ticket.scale_ticket_photo}" style="width:100%;border-radius:8px;cursor:pointer;border:2px solid var(--accent-info)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Scale Ticket', '${ticket.scale_ticket_photo.replace(/'/g, "\\'")}')">
+                    <img src="${ticket.scale_ticket_photo}" style="width:100%;border-radius:8px;cursor:pointer;border:2px solid var(--accent-info)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Scale Ticket', 'st_${ticketId}')">
                 </div>
             `;
         }
         
         if (ticket.debris_photo_1) {
+            _photoViewerData['dp1_' + ticketId] = ticket.debris_photo_1;
             photosHtml += `
                 <div>
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 1</div>
-                    <img src="${ticket.debris_photo_1}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 1', '${ticket.debris_photo_1.replace(/'/g, "\\'")}')">
+                    <img src="${ticket.debris_photo_1}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 1', 'dp1_${ticketId}')">
                 </div>
             `;
         }
         
         if (ticket.debris_photo_2) {
+            _photoViewerData['dp2_' + ticketId] = ticket.debris_photo_2;
             photosHtml += `
                 <div>
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 2</div>
-                    <img src="${ticket.debris_photo_2}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 2', '${ticket.debris_photo_2.replace(/'/g, "\\'")}')">
+                    <img src="${ticket.debris_photo_2}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 2', 'dp2_${ticketId}')">
                 </div>
             `;
         }
         
         if (ticket.debris_photo_3) {
+            _photoViewerData['dp3_' + ticketId] = ticket.debris_photo_3;
             photosHtml += `
                 <div>
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">📸 Debris Photo 3</div>
-                    <img src="${ticket.debris_photo_3}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 3', '${ticket.debris_photo_3.replace(/'/g, "\\'")}')">
+                    <img src="${ticket.debris_photo_3}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer('${ticket.ticket_number}', 'Debris Photo 3', 'dp3_${ticketId}')">
                 </div>
             `;
         }
@@ -2445,6 +2612,7 @@ function viewTicketDetails(ticketId) {
             <!-- Footer -->
             <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">
                 <button class="btn btn-secondary" onclick="document.getElementById('ticketDetailModal').remove()" style="flex:1">Close</button>
+                <button class="btn btn-secondary" onclick="editTicket('${ticketId}')" style="flex:1">✏️ Edit</button>
                 <button class="btn btn-primary" onclick="printTicketDetail('${ticketId}')" style="flex:1">🖨️ Print</button>
             </div>
         </div>
@@ -2453,17 +2621,33 @@ function viewTicketDetails(ticketId) {
     document.body.appendChild(modal);
 }
 
-function openPhotoViewer(ticketNum, photoName, photoData) {
+// Global photo reference for viewer (avoids base64 in onclick attributes)
+let _photoViewerData = {};
+
+function openPhotoViewer(ticketNum, photoName, photoKey) {
+    const photoData = _photoViewerData[photoKey] || photoKey;
+    
     const viewer = document.createElement('div');
     viewer.id = 'photoViewerModal';
     viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
     viewer.onclick = (e) => { if (e.target === viewer) viewer.remove(); };
     
-    viewer.innerHTML = `
-        <div style="color:white;font-size:14px;margin-bottom:12px">Ticket #${ticketNum} - ${photoName}</div>
-        <img src="${photoData}" style="max-width:90%;max-height:80vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)">
-        <button onclick="document.getElementById('photoViewerModal').remove()" style="margin-top:16px;background:white;color:black;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer">Close</button>
-    `;
+    const title = document.createElement('div');
+    title.style.cssText = 'color:white;font-size:14px;margin-bottom:12px';
+    title.textContent = `Ticket #${ticketNum} - ${photoName}`;
+    
+    const img = document.createElement('img');
+    img.src = photoData;
+    img.style.cssText = 'max-width:90%;max-height:80vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'margin-top:16px;background:white;color:black;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer';
+    closeBtn.onclick = () => viewer.remove();
+    
+    viewer.appendChild(title);
+    viewer.appendChild(img);
+    viewer.appendChild(closeBtn);
     
     document.body.appendChild(viewer);
 }
@@ -2505,7 +2689,217 @@ function printTicketDetail(ticketId) {
 }
 
 function editTicket(ticketId) {
-    toast('Ticket editing coming soon!', 'info');
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) {
+        toast('Ticket not found', 'error');
+        return;
+    }
+    
+    // Close detail modal if open
+    const detailModal = document.getElementById('ticketDetailModal');
+    if (detailModal) detailModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'editTicketModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    
+    modal.innerHTML = `
+        <div style="background:var(--bg-secondary);border-radius:16px;max-width:550px;width:100%;max-height:90vh;overflow-y:auto">
+            <div style="background:linear-gradient(135deg, var(--accent-warning), #b45309);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.7)">EDIT TICKET</div>
+                    <div style="font-size:20px;font-weight:700;color:white">#${ticket.ticket_number}</div>
+                </div>
+                <button onclick="document.getElementById('editTicketModal').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
+            </div>
+            
+            <div style="padding:20px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Ticket #</label>
+                        <input type="text" id="editTicketNum" class="form-input" value="${ticket.ticket_number || ''}">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Service Date</label>
+                        <input type="date" id="editServiceDate" class="form-input" value="${ticket.service_date || ''}">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Hauler</label>
+                        <input type="text" id="editHauler" class="form-input" value="${ticket.hauler || ''}">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Container Size</label>
+                        <select id="editContainerSize" class="form-input">
+                            <option value="20" ${ticket.container_size == 20 ? 'selected' : ''}>20 yd</option>
+                            <option value="30" ${ticket.container_size == 30 ? 'selected' : ''}>30 yd</option>
+                            <option value="40" ${ticket.container_size == 40 ? 'selected' : ''}>40 yd</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">WEIGHTS (lbs)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Gross</label>
+                        <input type="number" id="editGrossLbs" class="form-input" value="${ticket.gross_lbs || 0}">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Tare</label>
+                        <input type="number" id="editTareLbs" class="form-input" value="${ticket.tare_lbs || 0}">
+                    </div>
+                </div>
+                
+                <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">MATERIAL PERCENTAGES (must total 100%)</div>
+                <div id="editMaterialsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">🪵 Wood %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="wood" value="${ticket.wood_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">🪨 Concrete %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="concrete" value="${ticket.concrete_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">🔩 Metal %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="metal" value="${ticket.metal_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">📦 Cardboard %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="cardboard" value="${ticket.cardboard_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">♻️ Plastic %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="plastic" value="${ticket.plastic_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" style="font-size:10px">🏗️ Drywall %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="drywall" value="${ticket.drywall_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;grid-column:span 2">
+                        <label class="form-label" style="font-size:10px">🗑️ Landfill %</label>
+                        <input type="number" class="form-input edit-mat-input" data-mat="landfill" value="${ticket.landfill_pct || 0}" min="0" max="100" onchange="updateEditTotal()">
+                    </div>
+                </div>
+                <div style="text-align:center;margin-bottom:16px">
+                    <span style="font-size:13px">Total: </span>
+                    <span id="editMaterialsTotal" style="font-size:14px;font-weight:700;color:var(--emerald-400)">100%</span>
+                </div>
+            </div>
+            
+            <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="document.getElementById('editTicketModal').remove()" style="flex:1">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEditedTicket('${ticketId}')" style="flex:1">💾 Save Changes</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    updateEditTotal();
+}
+
+function updateEditTotal() {
+    const inputs = document.querySelectorAll('.edit-mat-input');
+    let total = 0;
+    inputs.forEach(inp => total += parseInt(inp.value) || 0);
+    const el = document.getElementById('editMaterialsTotal');
+    if (el) {
+        el.textContent = total + '%';
+        el.style.color = total === 100 ? 'var(--emerald-400)' : 'var(--red-500)';
+    }
+}
+
+async function saveEditedTicket(ticketId) {
+    // Validate materials total
+    const inputs = document.querySelectorAll('.edit-mat-input');
+    let matTotal = 0;
+    const mats = {};
+    inputs.forEach(inp => {
+        const val = parseInt(inp.value) || 0;
+        mats[inp.dataset.mat] = val;
+        matTotal += val;
+    });
+    
+    if (matTotal < 99 || matTotal > 101) {
+        toast('Materials must total 100% (currently ' + matTotal + '%)', 'error');
+        return;
+    }
+    
+    const grossLbs = parseFloat(document.getElementById('editGrossLbs').value) || 0;
+    const tareLbs = parseFloat(document.getElementById('editTareLbs').value) || 0;
+    const netLbs = grossLbs - tareLbs;
+    const netTons = netLbs / 2000;
+    
+    if (grossLbs <= tareLbs) {
+        toast('Gross weight must be greater than tare weight', 'error');
+        return;
+    }
+    
+    const updates = {
+        ticket_number: document.getElementById('editTicketNum').value.trim(),
+        service_date: document.getElementById('editServiceDate').value,
+        hauler: document.getElementById('editHauler').value.trim(),
+        container_size: parseInt(document.getElementById('editContainerSize').value) || 30,
+        gross_lbs: grossLbs,
+        tare_lbs: tareLbs,
+        net_lbs: netLbs,
+        net_tons: netTons,
+        wood_pct: mats.wood || 0,
+        concrete_pct: mats.concrete || 0,
+        metal_pct: mats.metal || 0,
+        cardboard_pct: mats.cardboard || 0,
+        plastic_pct: mats.plastic || 0,
+        drywall_pct: mats.drywall || 0,
+        landfill_pct: mats.landfill || 0,
+        wood_tons: ((mats.wood || 0) / 100) * netTons,
+        concrete_tons: ((mats.concrete || 0) / 100) * netTons,
+        metal_tons: ((mats.metal || 0) / 100) * netTons,
+        cardboard_tons: ((mats.cardboard || 0) / 100) * netTons,
+        plastic_tons: ((mats.plastic || 0) / 100) * netTons,
+        drywall_tons: ((mats.drywall || 0) / 100) * netTons,
+        landfill_tons: ((mats.landfill || 0) / 100) * netTons,
+        diversion_pct: 100 - (mats.landfill || 0),
+        diverted_tons: netTons * ((100 - (mats.landfill || 0)) / 100),
+        updated_at: new Date().toISOString()
+    };
+    
+    showLoading('Saving changes...');
+    
+    try {
+        // Update in Supabase
+        if (sb) {
+            try {
+                const { error } = await sb.from('tickets').update(updates).eq('id', ticketId);
+                if (error) throw error;
+            } catch (e) {
+                console.log('Supabase update skipped:', e.message);
+            }
+        }
+        
+        // Update local
+        const ticketIdx = tickets.findIndex(t => t.id === ticketId);
+        if (ticketIdx >= 0) {
+            Object.assign(tickets[ticketIdx], updates);
+        }
+        
+        // Update IndexedDB
+        try {
+            const localTicket = await getFromLocal('tickets', ticketId);
+            if (localTicket) {
+                Object.assign(localTicket, updates);
+                await saveToLocal('tickets', localTicket);
+            }
+        } catch (e) {}
+        
+        hideLoading();
+        document.getElementById('editTicketModal').remove();
+        renderRecentTickets();
+        updateStats();
+        toast('✅ Ticket updated!', 'success');
+    } catch (err) {
+        hideLoading();
+        toast('Error: ' + err.message, 'error');
+    }
 }
 
 function confirmDeleteTicket(ticketId) {
