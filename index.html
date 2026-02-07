@@ -698,7 +698,7 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 </div>
 
 <div id="reportsTab" class="hidden">
-<h2 style="font-size:18px;font-weight:600;margin-bottom:16px">📊 LEED MRc5 Reports</h2>
+<h2 style="font-size:18px;font-weight:600;margin-bottom:16px">📊 Waste Diversion Reports</h2>
 
 <!-- Report Project Picker -->
 <div class="report-project-bar">
@@ -708,14 +708,86 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 </select>
 </div>
 
-<!-- AI Executive Summary Card -->
-<div class="card" style="background:linear-gradient(135deg,var(--slate-800),var(--slate-700));border:1px solid var(--emerald-500)">
+<!-- Report Output (auto-populates on project select) -->
+<div id="reportOutput" class="hidden" style="margin-top:16px">
+
+<!-- Project Header -->
+<div class="card" id="reportHeader">
+<div style="text-align:center;margin-bottom:16px">
+<div style="font-size:20px;font-weight:700">Construction &amp; Demolition Waste Management Report</div>
+<div style="font-size:12px;color:var(--slate-400)">LEED v4.1/v5 MRc5 — All Materials Processed by Dalmex Recycling LLC</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;margin-bottom:16px">
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">Project Name</div><div style="font-weight:600" id="reportProjectName">-</div></div>
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">Report Date</div><div style="font-weight:600" id="reportDate">-</div></div>
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">Address</div><div id="reportProjectAddress">-</div></div>
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">Waste Hauler</div><div id="reportProjectHauler">-</div></div>
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">General Contractor</div><div id="reportProjectGC">-</div></div>
+<div><div style="color:var(--slate-400);font-size:10px;text-transform:uppercase">Reporting Period</div><div id="reportPeriod">-</div></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+<div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700" id="reportDiversionRate">0%</div><div style="font-size:9px;color:var(--slate-400);text-transform:uppercase">Diversion Rate</div></div>
+<div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700" id="reportTotalTons">0</div><div style="font-size:9px;color:var(--slate-400);text-transform:uppercase">Total Tons</div></div>
+<div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--emerald-400)" id="reportDivertedTons">0</div><div style="font-size:9px;color:var(--slate-400);text-transform:uppercase">Diverted</div></div>
+<div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;text-align:center"><div style="font-size:24px;font-weight:700;color:var(--red-500)" id="reportLandfillTons">0</div><div style="font-size:9px;color:var(--slate-400);text-transform:uppercase">Landfill</div></div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--slate-400);margin-bottom:8px">
+<span><span id="reportTicketCount">0</span> tickets &bull; <span id="reportLoadCount">0</span></span>
+<span id="reportLeedStatus">-</span>
+</div>
+</div>
+
+<!-- Material Breakdown -->
+<div class="card" style="margin-top:12px">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">Material Breakdown</div>
+<div id="reportMaterialBreakdown"></div>
+<div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color)">
+<div><strong style="color:var(--emerald-400)" id="reportTotalDiverted">0 T</strong> <span style="font-size:11px;color:var(--slate-400)">Diverted</span></div>
+<div><strong style="color:var(--red-500)" id="reportTotalLandfill">0 T</strong> <span style="font-size:11px;color:var(--slate-400)">Landfill</span></div>
+</div>
+</div>
+
+<!-- Load Details -->
+<div class="card" style="margin-top:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div style="font-size:14px;font-weight:600">🚛 Load Details</div>
+<select id="reportType" class="form-input" style="width:auto;margin:0;font-size:11px" onchange="generateReport()">
+<option value="summary">Summary Table</option>
+<option value="detailed">Detailed Cards</option>
+</select>
+</div>
+<div id="reportContent" style="overflow-x:auto"></div>
+</div>
+
+<!-- Certification -->
+<div class="card" style="margin-top:12px;border:2px solid var(--emerald-500)">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">✅ Certification Statement</div>
+<p style="font-size:12px;color:var(--slate-300);line-height:1.6">I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. All waste materials have been tracked from point of generation through processing and final disposition.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:12px">
+<div><div style="color:var(--slate-400)">Prepared By</div><div style="font-weight:600">Dalmex Recycling LLC</div><div style="font-size:10px;color:var(--slate-400)">2828 Nagle St., Dallas, TX 75220</div></div>
+<div><div style="color:var(--slate-400)">Report Generated</div><div style="font-weight:600" id="reportGeneratedDate">-</div></div>
+</div>
+</div>
+
+</div>
+
+<!-- Export Actions (shown after report generates) -->
+<div id="reportDownloadBtns" style="display:none;margin-top:16px">
+<div class="card">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">📥 Export Report</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="font-size:12px">📋 LEED Audit PDF</button>
+<button class="btn btn-primary" onclick="downloadBoxTrackerExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 Box Tracker Excel</button>
+<button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Export</button>
+<button class="btn btn-secondary" onclick="downloadReportExcel()" style="font-size:11px">📗 Full Excel</button>
+</div>
+</div>
+
+<!-- AI Summary -->
+<div class="card" style="margin-top:12px;background:linear-gradient(135deg,var(--slate-800),var(--slate-700));border:1px solid var(--emerald-500)">
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
 <span style="font-size:24px">🤖</span>
-<div>
-<div style="font-size:14px;font-weight:600">AI Executive Summary</div>
-<div style="font-size:11px;color:var(--slate-400)">Claude AI writes a professional summary for your LEED submission</div>
-</div>
+<div><div style="font-size:14px;font-weight:600">AI Executive Summary</div><div style="font-size:11px;color:var(--slate-400)">Claude AI writes a professional narrative for your LEED submission</div></div>
 </div>
 <button class="btn btn-primary" onclick="generateAISummary()" style="width:100%">✨ Generate AI Summary</button>
 <div id="aiSummaryResult" class="hidden" style="margin-top:12px;padding:12px;background:var(--slate-800);border-radius:8px;font-size:12px;line-height:1.6;color:var(--slate-200)"></div>
@@ -724,328 +796,21 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 </div>
 </div>
 
-<!-- Main Report Generation -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">Generate Waste Diversion Report</div>
-<p style="font-size:12px;color:var(--slate-400);margin-bottom:16px">LEED v4.1/v5 Construction & Demolition Waste Management compliant report</p>
-
-<div class="form-group">
-<label class="form-label">Report Type</label>
-<select id="reportType" class="form-input">
-<option value="summary">Monthly Summary Report</option>
-<option value="detailed">Detailed Load-by-Load Report</option>
-<option value="leed">LEED MRc5 Submission Package</option>
-<option value="executive">Executive Summary (1-page)</option>
-</select>
-</div>
-
-<button class="btn btn-primary btn-lg" onclick="generateReport()" style="margin-bottom:12px">📄 Generate Report</button>
-
-<div id="reportDownloadBtns" style="display:none">
-<div style="font-size:12px;color:var(--emerald-400);margin-bottom:12px">✅ Report generated successfully!</div>
-<div class="btn-row">
-<button class="btn btn-secondary" onclick="previewReportPDF()" style="flex:1">👁️ Preview</button>
-<button class="btn btn-primary" onclick="downloadReportPDF()" style="flex:1">📥 Download PDF</button>
-</div>
-<div class="btn-row" style="margin-top:8px">
-<button class="btn btn-secondary" onclick="downloadReportCSV()" style="flex:1">📊 CSV</button>
-<button class="btn btn-secondary" onclick="downloadReportExcel()" style="flex:1">📗 Excel</button>
-<button class="btn btn-secondary" onclick="emailReport()" style="flex:1">📧 Email</button>
-</div>
-<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color)">
-<div style="font-size:12px;font-weight:600;color:var(--slate-300);margin-bottom:8px">📊 Box Tracker Format</div>
-<button class="btn btn-primary" onclick="downloadBoxTrackerExcel()" style="width:100%;background:linear-gradient(135deg,#059669,#047857)">📗 Download Box Tracker Report (.xlsx)</button>
-<div style="font-size:10px;color:var(--slate-400);margin-top:4px">Monthly tabs • GWT/Tare/Net • Material % + Tons • Totals & Summary</div>
-</div>
-</div>
-</div>
-
-<div id="reportOutput" class="hidden" style="margin-top:20px">
-
-<!-- Project Header -->
-<div class="card" id="reportHeader">
-<div style="text-align:center;margin-bottom:16px">
-<div style="font-size:20px;font-weight:700">Construction & Demolition Waste Management Report</div>
-<div style="font-size:12px;color:var(--slate-400)">LEED v4.1 MRc5 Documentation</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
-<div>
-<div style="color:var(--slate-400);font-size:11px">PROJECT NAME</div>
-<div style="font-weight:600" id="reportProjectName">-</div>
-</div>
-<div>
-<div style="color:var(--slate-400);font-size:11px">REPORT DATE</div>
-<div style="font-weight:600" id="reportDate">-</div>
-</div>
-<div>
-<div style="color:var(--slate-400);font-size:11px">PROJECT ADDRESS</div>
-<div id="reportProjectAddress">-</div>
-</div>
-<div>
-<div style="color:var(--slate-400);font-size:11px">GENERAL CONTRACTOR</div>
-<div id="reportProjectGC">-</div>
-</div>
-<div>
-<div style="color:var(--slate-400);font-size:11px">WASTE HAULER</div>
-<div id="reportProjectHauler">-</div>
-</div>
-<div>
-<div style="color:var(--slate-400);font-size:11px">REPORTING PERIOD</div>
-<div id="reportPeriod">-</div>
-</div>
-</div>
-</div>
-
-<!-- Diversion Summary -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:16px">📈 Diversion Summary</div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
-<div style="background:var(--slate-700);padding:16px;border-radius:8px">
-<div style="font-size:28px;font-weight:700;color:var(--emerald-400)" id="reportDiversionRate">0%</div>
-<div style="font-size:11px;color:var(--slate-400)">DIVERSION RATE</div>
-</div>
-<div style="background:var(--slate-700);padding:16px;border-radius:8px">
-<div style="font-size:28px;font-weight:700" id="reportTotalTons">0.00</div>
-<div style="font-size:11px;color:var(--slate-400)">TOTAL TONS</div>
-</div>
-<div style="background:var(--slate-700);padding:16px;border-radius:8px">
-<div style="font-size:28px;font-weight:700;color:var(--emerald-400)" id="reportDivertedTons">0.00</div>
-<div style="font-size:11px;color:var(--slate-400)">DIVERTED TONS</div>
-</div>
-</div>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;margin-top:12px">
-<div style="background:var(--slate-700);padding:12px;border-radius:8px">
-<div style="font-size:18px;font-weight:600;color:var(--red-500)" id="reportLandfillTons">0.00</div>
-<div style="font-size:11px;color:var(--slate-400)">LANDFILL TONS</div>
-</div>
-<div style="background:var(--slate-700);padding:12px;border-radius:8px">
-<div style="font-size:18px;font-weight:600" id="reportTicketCount">0</div>
-<div style="font-size:11px;color:var(--slate-400)">TOTAL LOADS</div>
-</div>
-<div style="background:var(--slate-700);padding:12px;border-radius:8px">
-<div style="font-size:18px;font-weight:600" id="reportLeedStatus">-</div>
-<div style="font-size:11px;color:var(--slate-400)">LEED STATUS</div>
-</div>
-</div>
-</div>
-
-<!-- Material Breakdown -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:16px">♻️ Material Breakdown by Weight</div>
-<div id="reportMaterialBreakdown"></div>
-<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--slate-700)">
-<div style="display:flex;justify-content:space-between;font-weight:600">
-<span>TOTAL DIVERTED</span>
-<span style="color:var(--emerald-400)" id="reportTotalDiverted">0.00 T</span>
-</div>
-<div style="display:flex;justify-content:space-between;font-weight:600;margin-top:8px">
-<span>TOTAL LANDFILL</span>
-<span style="color:var(--red-500)" id="reportTotalLandfill">0.00 T</span>
-</div>
-</div>
-</div>
-
-<!-- Load Details -->
-<div class="card" style="margin-top:16px">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-<div style="font-size:14px;font-weight:600">🚛 Load Details</div>
-<span style="font-size:11px;color:var(--slate-400)" id="reportLoadCount">0 loads</span>
-</div>
-<div id="reportContent" style="overflow-x:auto"></div>
-</div>
-
-<!-- Certification -->
-<div class="card" style="margin-top:16px;border:2px solid var(--emerald-500)">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">✅ Certification Statement</div>
-<p style="font-size:12px;color:var(--slate-300);line-height:1.6">
-I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. 
-All waste materials have been tracked from point of generation through processing and final disposition. 
-Material composition percentages are based on AI-assisted visual analysis with human verification for each load.
-Photographic documentation, GPS coordinates, and SHA-256 verification hashes are stored for GBCI audit purposes.
-</p>
-<div class="report-sig-pad-wrap">
-<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Authorized Signature (optional)</div>
-<canvas id="reportSignatureCanvas" width="600" height="100"></canvas>
-<div style="display:flex;gap:8px;margin-top:8px">
-<button class="btn btn-secondary" onclick="clearReportSignature()" style="flex:1;padding:6px;font-size:11px">🗑️ Clear</button>
-<button class="btn btn-primary" onclick="saveReportSignature()" style="flex:1;padding:6px;font-size:11px">💾 Save Signature</button>
-<button class="btn btn-secondary" onclick="printSignedReport()" style="flex:1;padding:6px;font-size:11px">🖨️ Print Report</button>
-</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:12px">
-<div>
-<div style="color:var(--slate-400)">Prepared By</div>
-<div style="font-weight:600">Dalmex Recycling LLC</div>
-<div style="font-size:10px;color:var(--slate-400)">2828 Nagle St., Dallas, TX 75220</div>
-</div>
-<div>
-<div style="color:var(--slate-400)">Report Generated</div>
-<div style="font-weight:600" id="reportGeneratedDate">-</div>
-</div>
-</div>
-</div>
-<!-- Report Options -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer" onclick="toggleSection('reportOptions')">
-⚙️ Report Options <span id="reportOptionsArrow">▼</span>
-</div>
-<div id="reportOptionsContent" class="hidden">
-<div class="form-group">
-<label class="form-label">Date Range</label>
-<div style="display:flex;gap:8px">
-<input type="date" id="reportStartDate" class="form-input" style="flex:1">
-<input type="date" id="reportEndDate" class="form-input" style="flex:1">
-</div>
-</div>
-<div class="form-group">
-<label class="form-label">Include in Report</label>
-<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px">
-<label><input type="checkbox" id="includePhotos" checked> Photos</label>
-<label><input type="checkbox" id="includeGPS" checked> GPS Data</label>
-<label><input type="checkbox" id="includeSignatures" checked> Signatures</label>
-<label><input type="checkbox" id="includeMaterialDetail" checked> Material Detail</label>
-<label><input type="checkbox" id="includeAISummary" checked> AI Summary</label>
-</div>
-</div>
-<div class="form-group">
-<label class="form-label">Branding</label>
-<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px">
-<label><input type="checkbox" id="includeDalMexBranding" checked> DalMex Header</label>
-<label><input type="checkbox" id="includeCertification" checked> Certification Statement</label>
-</div>
-</div>
-</div>
-</div>
-
-<!-- LEED Audit Package -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer" onclick="toggleSection('bulkExport')">
-📦 LEED Audit Package <span id="bulkExportArrow">▼</span>
-</div>
-<div id="bulkExportContent" class="hidden">
-<p style="font-size:12px;color:var(--slate-400);margin-bottom:12px">
-Complete documentation package for LEED certification review.
-</p>
-
-<!-- Audit Report -->
-<div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(59,130,246,0.1));border:1px solid var(--emerald-500);border-radius:8px;padding:12px;margin-bottom:12px">
-<div style="font-size:13px;font-weight:600;color:var(--emerald-400);margin-bottom:6px">📋 LEED Audit Report</div>
-<p style="font-size:11px;color:var(--slate-300);margin-bottom:8px">Multi-page PDF: project summary, material breakdown, diversion rates, photo index, LEED MRc5 compliance.</p>
-<button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="width:100%">📋 Generate LEED Audit Report (PDF)</button>
-</div>
-
-<!-- Certificate of Destruction -->
-<div style="background:linear-gradient(135deg,rgba(239,68,68,0.08),rgba(245,158,11,0.08));border:1px solid var(--amber-500);border-radius:8px;padding:12px;margin-bottom:12px">
-<div style="font-size:13px;font-weight:600;color:var(--amber-400);margin-bottom:6px">🔒 Certificate of Destruction</div>
-<p style="font-size:11px;color:var(--slate-300);margin-bottom:10px">Generate an official certificate verifying materials were securely destroyed/recycled at DalMex Recycling. Used for confidential document destruction (SOP, files, hard drives, etc.).</p>
-<div class="form-group" style="margin-bottom:8px">
-<label class="form-label" style="font-size:11px">Customer / Company Name *</label>
-<input type="text" id="codCustomerName" class="form-input" placeholder="e.g., Junk Luggers" style="font-size:13px">
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Ticket # *</label>
-<input type="text" id="codTicketNumber" class="form-input" placeholder="e.g., 83337" style="font-size:13px">
-</div>
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Date of Service</label>
-<input type="date" id="codServiceDate" class="form-input" style="font-size:13px">
-</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Material Type *</label>
-<select id="codMaterialType" class="form-input" style="font-size:13px">
-<option value="Sorted Office Paper (SOP)">Sorted Office Paper (SOP)</option>
-<option value="Mixed Paper">Mixed Paper</option>
-<option value="Cardboard/OCC">Cardboard/OCC</option>
-<option value="Confidential Documents">Confidential Documents</option>
-<option value="Hard Drives / Electronics">Hard Drives / Electronics</option>
-<option value="Mixed C&D Debris">Mixed C&D Debris</option>
-<option value="Commingled Recyclables">Commingled Recyclables</option>
-<option value="Other">Other</option>
-</select>
-</div>
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Net Weight (lbs) *</label>
-<input type="number" id="codNetWeight" class="form-input" placeholder="e.g., 5100" style="font-size:13px">
-</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Gross Weight (lbs)</label>
-<input type="number" id="codGrossWeight" class="form-input" placeholder="e.g., 18980" style="font-size:13px">
-</div>
-<div class="form-group" style="margin-bottom:0">
-<label class="form-label" style="font-size:11px">Tare Weight (lbs)</label>
-<input type="number" id="codTareWeight" class="form-input" placeholder="e.g., 13880" style="font-size:13px">
-</div>
-</div>
-<div class="form-group" style="margin-bottom:8px">
-<label class="form-label" style="font-size:11px">Destruction Method</label>
-<select id="codMethod" class="form-input" style="font-size:13px">
-<option value="Baled and shipped to certified paper mill for pulping and recycling">Baled & Recycled (Paper Mill)</option>
-<option value="Shredded on-site and baled for recycling">Shredded & Recycled</option>
-<option value="Mechanically shredded and processed for secure destruction">Mechanically Destroyed</option>
-<option value="Processed and recycled through certified downstream facility">Processed & Recycled</option>
-<option value="Sorted, processed, and diverted from landfill for recycling">Sorted & Diverted</option>
-</select>
-</div>
-<div class="form-group" style="margin-bottom:10px">
-<label class="form-label" style="font-size:11px">Additional Notes (optional)</label>
-<input type="text" id="codNotes" class="form-input" placeholder="e.g., COD payment received" style="font-size:13px">
-</div>
+<!-- Certificate of Destruction (collapsed) -->
+<div class="card" style="margin-top:12px">
+<div style="font-size:14px;font-weight:600;cursor:pointer" onclick="toggleSection('codSection')">🔒 Certificate of Destruction <span id="codSectionArrow">▼</span></div>
+<div id="codSectionContent" class="hidden" style="margin-top:12px">
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:10px">Official certificate verifying materials were securely destroyed/recycled at Dalmex Recycling.</p>
+<div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Customer / Company Name *</label><input type="text" id="codCustomerName" class="form-input" placeholder="e.g., Junk Luggers" style="font-size:13px"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:11px">Ticket # *</label><input type="text" id="codTicketNumber" class="form-input" placeholder="e.g., 83337" style="font-size:13px"></div><div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:11px">Date of Service</label><input type="date" id="codServiceDate" class="form-input" style="font-size:13px"></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:11px">Material Type *</label><select id="codMaterialType" class="form-input" style="font-size:13px"><option value="Sorted Office Paper (SOP)">Sorted Office Paper (SOP)</option><option value="Mixed Paper">Mixed Paper</option><option value="Cardboard/OCC">Cardboard/OCC</option><option value="Confidential Documents">Confidential Documents</option><option value="Hard Drives / Electronics">Hard Drives / Electronics</option><option value="Mixed C&amp;D Debris">Mixed C&amp;D Debris</option><option value="Other">Other</option></select></div><div class="form-group" style="margin-bottom:0"><label class="form-label" style="font-size:11px">Net Weight (lbs) *</label><input type="number" id="codNetWeight" class="form-input" placeholder="e.g., 5100" style="font-size:13px"></div></div>
+<div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:11px">Destruction Method</label><select id="codMethod" class="form-input" style="font-size:13px"><option value="Baled and shipped to certified paper mill for pulping and recycling">Baled &amp; Recycled (Paper Mill)</option><option value="Shredded on-site and baled for recycling">Shredded &amp; Recycled</option><option value="Processed and recycled through certified downstream facility">Processed &amp; Recycled</option><option value="Sorted, processed, and diverted from landfill for recycling">Sorted &amp; Diverted</option></select></div>
+<div class="form-group" style="margin-bottom:10px"><label class="form-label" style="font-size:11px">Notes (optional)</label><input type="text" id="codNotes" class="form-input" placeholder="e.g., COD payment received" style="font-size:13px"></div>
 <button class="btn btn-primary" onclick="generateCertificateOfDestruction()" style="width:100%;background:linear-gradient(135deg,#d97706,#b45309)">🔒 Generate Certificate of Destruction (PDF)</button>
 </div>
-
-<!-- Quick Exports -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-<button class="btn btn-secondary" onclick="downloadReportPDF()" style="font-size:11px">📄 Tonnage Report PDF</button>
-<button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Data Export</button>
-<button class="btn btn-secondary" onclick="downloadReportExcel()" style="font-size:11px">📗 Excel Workbook</button>
-<button class="btn btn-secondary" onclick="downloadBoxTrackerExcel()" style="font-size:11px">📗 Box Tracker Excel</button>
-<button class="btn btn-secondary" onclick="exportAllProjects()" style="font-size:11px">💾 Full JSON Backup</button>
-</div>
-
-<!-- Full Package -->
-<button class="btn btn-primary" onclick="generateAuditPackage()" style="width:100%;margin-bottom:8px">📦 Download All (Full Audit Package)</button>
-<div id="auditPackageStatus" style="font-size:11px;color:var(--slate-400)"></div>
 </div>
 </div>
 
-<!-- Project Comparison -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer" onclick="toggleSection('projectComparison')">
-📈 Project Comparison <span id="projectComparisonArrow">▼</span>
-</div>
-<div id="projectComparisonContent" class="hidden">
-<p style="font-size:12px;color:var(--slate-400);margin-bottom:12px">
-Compare diversion rates across all your projects
-</p>
-<div id="projectComparisonChart" style="min-height:200px;background:var(--slate-700);border-radius:8px;padding:12px">
-<canvas id="comparisonChart"></canvas>
-</div>
-<button class="btn btn-secondary" onclick="loadProjectComparison()" style="margin-top:12px;width:100%">🔄 Load Comparison</button>
-</div>
-</div>
-
-<!-- LEED News Feed -->
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer" onclick="toggleSection('newsFeed')">
-📰 LEED MRc5 Industry News <span id="newsFeedArrow">▼</span>
-</div>
-<div id="newsFeedContent" class="hidden">
-<div id="leedNewsList" style="font-size:12px">
-<div style="padding:12px 0;border-bottom:1px solid var(--slate-700)">
-<div style="color:var(--emerald-400);font-weight:600">Loading news...</div>
-</div>
-</div>
-<button class="btn btn-secondary" onclick="refreshLeedNews()" style="margin-top:12px;width:100%">🔄 Refresh News</button>
-</div>
-</div>
-
-
-</div>
 </div>
 
 <div id="settingsTab" class="hidden">
