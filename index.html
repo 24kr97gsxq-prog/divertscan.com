@@ -385,7 +385,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 .loading-overlay.active{display:flex}
 
 /* Nav */
-.nav{position:fixed;bottom:0;left:0;right:0;background:var(--slate-800);border-top:1px solid var(--slate-700);display:flex;justify-content:space-around;padding:8px 0;z-index:100}
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--nav-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--border-color);display:flex;justify-content:space-around;padding:8px 0;z-index:9999}
 .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--slate-500);font-size:10px;padding:8px 12px;cursor:pointer}
 .nav-item.active{color:var(--emerald-400)}
 .nav-item svg{width:24px;height:24px}
@@ -1027,7 +1027,9 @@ Photographic documentation, GPS coordinates, and SHA-256 verification hashes are
 <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Authorized Signature (optional)</div>
 <canvas id="reportSignatureCanvas" width="600" height="100"></canvas>
 <div style="display:flex;gap:8px;margin-top:8px">
-<button class="btn btn-secondary" onclick="clearReportSignature()" style="flex:1;padding:6px;font-size:11px">Clear</button>
+<button class="btn btn-secondary" onclick="clearReportSignature()" style="flex:1;padding:6px;font-size:11px">🗑️ Clear</button>
+<button class="btn btn-primary" onclick="saveReportSignature()" style="flex:1;padding:6px;font-size:11px">💾 Save Signature</button>
+<button class="btn btn-secondary" onclick="printSignedReport()" style="flex:1;padding:6px;font-size:11px">🖨️ Print Report</button>
 </div>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:12px">
@@ -1342,19 +1344,6 @@ Compact mode (more content)
 
 </div>
 </main>
-
-<nav class="nav" id="adminNav">
-<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
-<div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
-<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
-<div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
-</nav>
-
-<!-- Customer Nav (simplified) -->
-<nav class="nav hidden" id="customerNav">
-<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Dashboard</span></div>
-<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
-</nav>
 
 <!-- Toast -->
 <div id="toast" class="toast"></div>
@@ -1870,6 +1859,12 @@ function showTab(tab) {
         document.getElementById('reportsTab').classList.remove('hidden');
         populateReportProjectDropdown();
         setTimeout(initReportSignaturePad, 100);
+        // Auto-generate if a project is already selected
+        if (currentProject) {
+            const sel = document.getElementById('reportProjectSelect');
+            if (sel && !sel.value) sel.value = currentProject.id;
+            generateReport();
+        }
     } else if (tab === 'settings') {
         document.getElementById('settingsTab').classList.remove('hidden');
     }
@@ -7092,7 +7087,9 @@ function onReportProjectChange() {
     
     if (indicator) indicator.classList.add('active');
     localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
-    toast('Report project: ' + (currentProject.name || pid), 'success');
+    
+    // Auto-generate report when project is selected
+    generateReport();
 }
 
 // Populate report project dropdown (called from loadProjects and showTab)
@@ -7264,6 +7261,39 @@ function clearReportSignature() {
         reportSigCtx.fillStyle = 'white';
         reportSigCtx.fillRect(0, 0, reportSigCanvas.width, reportSigCanvas.height);
     }
+}
+
+function saveReportSignature() {
+    if (!reportSigCanvas) { toast('Signature pad not ready', 'error'); return; }
+    var imgd = reportSigCtx.getImageData(0, 0, reportSigCanvas.width, reportSigCanvas.height);
+    var hasSig = false;
+    for (var i = 0; i < imgd.data.length; i += 4) { if (imgd.data[i] < 250) { hasSig = true; break; } }
+    if (!hasSig) { toast('Please sign before saving', 'error'); return; }
+    localStorage.setItem('divertscan_report_signature', reportSigCanvas.toDataURL('image/png'));
+    localStorage.setItem('divertscan_report_sig_date', new Date().toISOString());
+    toast('Signature saved!', 'success');
+}
+
+function printSignedReport() {
+    if (!reportData || reportData.length === 0) { toast('Generate a report first', 'error'); return; }
+    var sigImg = '';
+    if (reportSigCanvas && reportSigCtx) {
+        var id2 = reportSigCtx.getImageData(0, 0, reportSigCanvas.width, reportSigCanvas.height);
+        for (var j = 0; j < id2.data.length; j += 4) { if (id2.data[j] < 250) { sigImg = reportSigCanvas.toDataURL('image/png'); break; } }
+    }
+    if (!sigImg) sigImg = localStorage.getItem('divertscan_report_signature') || '';
+    var totalT = 0, lfT = 0;
+    reportData.forEach(function(t) { totalT += t.net_tons || 0; lfT += t.landfill_tons || 0; });
+    var divT = totalT - lfT;
+    var divR = totalT > 0 ? Math.round((divT / totalT) * 100) : 0;
+    var rows = reportData.map(function(t) {
+        return '<tr><td>' + formatDate(t.service_date) + '</td><td>' + (t.ticket_number || '-') + '</td><td>' + (t.hauler || '-') + '</td><td style="text-align:right">' + (t.gross_lbs || 0).toLocaleString() + '</td><td style="text-align:right">' + (t.tare_lbs || 0).toLocaleString() + '</td><td style="text-align:right;font-weight:700">' + (t.net_tons || 0).toFixed(2) + '</td><td style="text-align:right;color:' + ((t.diversion_pct || 0) >= 75 ? '#2ecc71' : '#e67e22') + '">' + (t.diversion_pct || 0) + '%</td><td style="text-align:center">' + (t.human_verified ? '✅' : '❌') + '</td></tr>';
+    }).join('');
+    var sigHtml = sigImg ? '<div style="margin-top:20px"><p style="font-size:11px;color:#666">Authorized Signature:</p><img src="' + sigImg + '" style="max-width:300px;height:60px;border-bottom:1px solid #333"></div>' : '<div style="margin-top:30px;border-bottom:1px solid #333;width:300px"></div><p style="font-size:10px;color:#666">Authorized Signature</p>';
+    var w = window.open('', '_blank');
+    w.document.write('<!DOCTYPE html><html><head><title>DivertScan Report</title><style>body{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px;color:#1a1a1a;font-size:12px}.hdr{background:#2d5a27;color:white;padding:16px;text-align:center;border-radius:4px}.hdr h1{margin:0;font-size:18px}.hdr p{margin:2px 0 0;opacity:0.8;font-size:11px}table{width:100%;border-collapse:collapse;margin:16px 0}th{background:#f0f0f0;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:2px solid #2d5a27}td{padding:6px 8px;border-bottom:1px solid #ddd}tfoot td{font-weight:700;border-top:2px solid #2d5a27}.stats{display:flex;gap:16px;margin:16px 0}.stat{flex:1;background:#f8f8f8;padding:12px;text-align:center;border-radius:4px;border-left:3px solid #2d5a27}.stat .v{font-size:22px;font-weight:700}.stat .l{font-size:9px;color:#666;text-transform:uppercase}.cert{border:2px solid #2d5a27;padding:16px;border-radius:4px;margin-top:20px}@media print{body{padding:10px}.hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="hdr"><h1>Construction &amp; Demolition Waste Management Report</h1><p>LEED v4.1/v5 MRc5 Documentation — DivertScan™ by Dalmex Recycling LLC</p></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0;font-size:12px"><div><strong>Project:</strong> ' + (currentProject ? currentProject.name : '-') + '</div><div><strong>Report Date:</strong> ' + new Date().toLocaleDateString() + '</div><div><strong>Address:</strong> ' + (currentProject ? (currentProject.address || '-') : '-') + '</div><div><strong>Hauler:</strong> ' + (currentProject ? (currentProject.waste_hauler || '-') : '-') + '</div></div><div class="stats"><div class="stat"><div class="v" style="color:#2d5a27">' + divR + '%</div><div class="l">Diversion Rate</div></div><div class="stat"><div class="v">' + totalT.toFixed(2) + '</div><div class="l">Total Tons</div></div><div class="stat"><div class="v" style="color:#2d5a27">' + divT.toFixed(2) + '</div><div class="l">Diverted</div></div><div class="stat"><div class="v" style="color:#c0392b">' + lfT.toFixed(2) + '</div><div class="l">Landfill</div></div></div><table><thead><tr><th>Date</th><th>Ticket #</th><th>Hauler</th><th style="text-align:right">Gross</th><th style="text-align:right">Tare</th><th style="text-align:right">Net (T)</th><th style="text-align:right">Diversion</th><th style="text-align:center">Verified</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="5">TOTALS</td><td style="text-align:right">' + totalT.toFixed(2) + '</td><td style="text-align:right;color:#2d5a27">' + divR + '%</td><td style="text-align:center">' + reportData.filter(function(t){return t.human_verified}).length + '/' + reportData.length + '</td></tr></tfoot></table><div class="cert"><strong>✅ Certification Statement</strong><p>I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. All waste materials have been tracked from point of generation through processing and final disposition.</p>' + sigHtml + '<p style="font-size:10px;color:#666;margin-top:12px">Dalmex Recycling LLC | 2828 Nagle St., Dallas, TX 75220 | (214) 352-2000</p><p style="font-size:10px;color:#666">Generated: ' + new Date().toLocaleString() + '</p></div></body></html>');
+    w.document.close();
+    setTimeout(function() { w.print(); }, 600);
 }
 
 // Add New Facility Modal (was missing — button existed but function didn't)
@@ -9590,6 +9620,19 @@ window.onload = async function() {
 </script>
 
 </div><!-- End app-container -->
+
+<!-- Navigation bars OUTSIDE app-container for reliable position:fixed on iPad Safari -->
+<nav class="nav" id="adminNav">
+<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
+<div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
+<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
+<div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
+</nav>
+
+<nav class="nav hidden" id="customerNav">
+<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Dashboard</span></div>
+<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
+</nav>
 
 </body>
 </html>
