@@ -782,11 +782,9 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <div class="card">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">📥 Export Report</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-<button class="btn btn-primary" onclick="previewLEEDAuditPDF()" style="font-size:12px">👁️ View PDF Report</button>
 <button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="font-size:12px">📋 Download LEED PDF</button>
 <button class="btn btn-primary" onclick="shareLEEDPDF()" style="font-size:12px;background:linear-gradient(135deg,#3b82f6,#1d4ed8)">📤 Share PDF</button>
-<button class="btn btn-primary" onclick="downloadReportExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 LEED Excel Report</button>
-<button class="btn btn-secondary" onclick="downloadBoxTrackerExcel()" style="font-size:11px">📗 DivertScan™ Excel</button>
+<button class="btn btn-primary" onclick="downloadReportExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 Export Excel</button>
 <button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Export</button>
 </div>
 </div>
@@ -5052,6 +5050,22 @@ async function generateLEEDAuditReport() {
 
 // Preview LEED Audit PDF in browser (opens in new tab for viewing)
 async function previewLEEDAuditPDF() {
+    if (!currentProject) { toast('Select a project first', 'error'); return; }
+    var data = (reportData && reportData.length > 0) ? reportData : tickets;
+    if (!data || data.length === 0) { toast('No ticket data available', 'error'); return; }
+    try {
+        showLoading('Building PDF...');
+        var pdfBlob = await buildLEEDPDFBlob(data);
+        var filename = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+        var url = URL.createObjectURL(pdfBlob);
+        var a = document.createElement('a');
+        a.href = url; a.download = filename; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(function() { if (a.parentNode) document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+        hideLoading();
+        toast('PDF downloaded!', 'success');
+    } catch(err) { hideLoading(); toast('PDF error: '+err.message, 'error'); }
+}
 
 // ===== SHARE PDF via Web Share API (iPad Safari) =====
 async function shareLEEDPDF() {
@@ -5063,14 +5077,12 @@ async function shareLEEDPDF() {
     showLoading('Building PDF for sharing...');
     
     try {
-        // Build the LEED PDF using jsPDF (same as generateLEEDAuditReport but output as blob)
         var pdfBlob = await buildLEEDPDFBlob(data);
         var filename = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
         var pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
         
         hideLoading();
         
-        // Use Web Share API if available (iPad Safari supports this)
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             await navigator.share({
                 title: 'LEED Waste Diversion Report — ' + (currentProject.name || ''),
@@ -5079,7 +5091,6 @@ async function shareLEEDPDF() {
             });
             toast('PDF shared!', 'success');
         } else {
-            // Fallback: download the file
             var url = URL.createObjectURL(pdfBlob);
             var a = document.createElement('a');
             a.href = url; a.download = filename; a.style.display = 'none';
@@ -5180,12 +5191,11 @@ async function buildLEEDPDFBlob(data) {
     });
     y += 24;
     
-    // Material breakdown
+    // Material breakdown table
     chkPg(60);
     doc.setFontSize(11); doc.setFont('helvetica','bold');
     doc.text('MATERIAL BREAKDOWN & END MARKETS', 14, y); y += 8;
     
-    // Table header
     doc.setFillColor(64,145,108); doc.setTextColor(255); doc.setFontSize(8); doc.setFont('helvetica','bold');
     var mhX = 14;
     var mhW = [45, 20, 15, pw-28-45-20-15];
@@ -5213,7 +5223,6 @@ async function buildLEEDPDFBlob(data) {
         });
         y += 6;
     });
-    // Landfill + Totals rows
     doc.setFillColor(255,243,243);
     var rx2=14; ['Landfill',landfillTons.toFixed(2),(totalTons>0?Math.round(landfillTons/totalTons*100):0)+'%','Municipal Landfill'].forEach(function(d,j){
         doc.rect(rx2,y,mhW[j],6,'FD'); doc.text(String(d),rx2+2,y+4); rx2+=mhW[j];
@@ -5227,7 +5236,6 @@ async function buildLEEDPDFBlob(data) {
     
     // === PAGE 2: LOAD DETAILS (landscape) ===
     doc.addPage('landscape'); pageNum++; y=15;
-    var lpw = doc.internal.pageSize.width;
     
     doc.setFontSize(12); doc.setFont('helvetica','bold');
     doc.text('DETAILED LOAD LOG — ' + data.length + ' Loads', 14, y); y+=8;
@@ -5301,115 +5309,6 @@ async function buildLEEDPDFBlob(data) {
     return doc.output('blob');
 }
 
-    if (!currentProject) {
-        toast('Select a project first', 'error');
-        return;
-    }
-    
-    // Build the same report HTML as the LEED audit but open in a new tab
-    var data = (reportData && reportData.length > 0) ? reportData : tickets;
-    if (!data || data.length === 0) {
-        toast('No ticket data available', 'error');
-        return;
-    }
-    
-    var totalTons = data.reduce(function(s,t){return s+(t.net_tons||0)},0);
-    var landfillTons = data.reduce(function(s,t){return s+(t.landfill_tons||0)},0);
-    var divertedTons = totalTons - landfillTons;
-    var diversionRate = totalTons > 0 ? Math.round((divertedTons/totalTons)*100) : 0;
-    var occTons = data.reduce(function(s,t){return s+(t.cardboard_tons||0)},0);
-    var woodTons = data.reduce(function(s,t){return s+(t.wood_tons||0)},0);
-    var metalTons = data.reduce(function(s,t){return s+(t.metal_tons||0)},0);
-    var plasticTons = data.reduce(function(s,t){return s+(t.plastic_tons||0)},0);
-    
-    var statusText = diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : diversionRate + '% — BELOW ' + (currentProject.leed_target || 75) + '% TARGET';
-    var statusColor = diversionRate >= (currentProject.leed_target || 75) ? '#1B7A3D' : '#B45309';
-    
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>LEED Waste Diversion Report - ' + (currentProject.name || '') + '</title>';
-    html += '<style>body{font-family:Calibri,Arial,sans-serif;margin:20px;color:#333}';
-    html += 'h1{color:#1B4332;border-bottom:3px solid #2D6A4F;padding-bottom:8px;font-size:22px}';
-    html += '.branding{background:#1B4332;color:white;padding:12px 20px;border-radius:4px;margin-bottom:16px;font-size:13px}';
-    html += '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}';
-    html += '.info-grid div{padding:6px 12px;background:#F0FFF4;border-radius:4px;font-size:13px}';
-    html += '.info-grid label{color:#666;font-size:11px;display:block}';
-    html += '.metrics{display:flex;gap:16px;margin:16px 0}';
-    html += '.metric{flex:1;text-align:center;padding:16px;border-radius:8px;background:#F8F9FA;border:1px solid #DEE2E6}';
-    html += '.metric .val{font-size:28px;font-weight:700}';
-    html += '.metric .lbl{font-size:11px;color:#666;margin-top:4px}';
-    html += 'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}';
-    html += 'th{background:#40916C;color:white;padding:8px 10px;text-align:left;font-size:11px}';
-    html += 'td{padding:6px 10px;border:1px solid #DEE2E6}';
-    html += 'tr:nth-child(even){background:#F0FFF4}';
-    html += '.totals td{background:#B7E4C7;font-weight:bold}';
-    html += '.right{text-align:right}';
-    html += '.footer{margin-top:32px;padding-top:12px;border-top:2px solid #2D6A4F;font-size:11px;color:#666;text-align:center}';
-    html += '@media print{body{margin:10px}h1{font-size:18px}.metric .val{font-size:22px}}';
-    html += '</style></head><body>';
-    
-    html += '<div class="branding"><b>Dalmex Recycling LLC</b> | 2828 Nagle St., Dallas, TX 75220 | (214) 352-2000</div>';
-    html += '<h1>LEED MRc5 Waste Diversion Report</h1>';
-    html += '<p style="color:#666;font-size:12px;margin-top:-8px">All Materials Processed by Dalmex Recycling LLC, Dallas TX</p>';
-    
-    html += '<div class="info-grid">';
-    html += '<div><label>Project</label><b>' + (currentProject.name || '') + '</b></div>';
-    html += '<div><label>Report Date</label>' + new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) + '</div>';
-    html += '<div><label>Address</label>' + (currentProject.address || '') + '</div>';
-    html += '<div><label>Waste Hauler</label>' + (currentProject.waste_hauler || '') + '</div>';
-    html += '<div><label>General Contractor</label>' + (currentProject.general_contractor || '') + '</div>';
-    html += '<div><label>LEED Target</label>' + (currentProject.leed_target || 75) + '%</div>';
-    html += '</div>';
-    
-    html += '<div class="metrics">';
-    html += '<div class="metric"><div class="val" style="color:' + statusColor + '">' + diversionRate + '%</div><div class="lbl">Diversion Rate — ' + statusText + '</div></div>';
-    html += '<div class="metric"><div class="val">' + totalTons.toFixed(2) + '</div><div class="lbl">Total Tons</div></div>';
-    html += '<div class="metric"><div class="val" style="color:#1B7A3D">' + divertedTons.toFixed(2) + '</div><div class="lbl">Diverted</div></div>';
-    html += '<div class="metric"><div class="val" style="color:#DC3545">' + landfillTons.toFixed(2) + '</div><div class="lbl">Landfill</div></div>';
-    html += '</div>';
-    
-    html += '<h2>Material Breakdown &amp; End Markets</h2>';
-    html += '<table><tr><th>Material Stream</th><th class="right">Tons</th><th class="right">%</th><th>End Market</th></tr>';
-    var mats = [
-        ['OCC / Paper / Fiber', occTons, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber'],
-        ['Wood / Pallets', woodTons, 'Dalmex Pallets (In-House Reuse)'],
-        ['Metal / Scrap', metalTons, 'CMC · Cyclone Metal Recycling'],
-        ['Plastic', plasticTons, 'American Recycling Arkansas']
-    ];
-    mats.forEach(function(m) {
-        html += '<tr><td><b>' + m[0] + '</b></td><td class="right">' + m[1].toFixed(2) + '</td><td class="right">' + (totalTons > 0 ? Math.round(m[1]/totalTons*100) : 0) + '%</td><td>' + m[2] + '</td></tr>';
-    });
-    html += '<tr><td>Landfill</td><td class="right">' + landfillTons.toFixed(2) + '</td><td class="right">' + (totalTons > 0 ? Math.round(landfillTons/totalTons*100) : 0) + '%</td><td>Municipal Landfill</td></tr>';
-    html += '<tr class="totals"><td><b>TOTAL</b></td><td class="right"><b>' + totalTons.toFixed(2) + '</b></td><td class="right"><b>100%</b></td><td><b>' + diversionRate + '% Diverted</b></td></tr>';
-    html += '</table>';
-    
-    html += '<h2>Load Details (' + data.length + ' loads)</h2>';
-    html += '<table><tr><th>Date</th><th>Ticket #</th><th>Hauler</th><th class="right">Gross</th><th class="right">Tare</th><th class="right">Net</th><th class="right">Tons</th><th class="right">OCC%</th><th class="right">Wood%</th><th class="right">Metal%</th><th class="right">Plastic%</th><th class="right">Diversion</th></tr>';
-    data.forEach(function(t) {
-        var dp = t.diversion_pct || 0;
-        html += '<tr><td>' + (t.service_date||'') + '</td><td>' + (t.ticket_number||'') + '</td><td>' + (t.hauler||'') + '</td>';
-        html += '<td class="right">' + (t.gross_lbs||0).toLocaleString() + '</td><td class="right">' + (t.tare_lbs||0).toLocaleString() + '</td>';
-        html += '<td class="right">' + (t.net_lbs||0).toLocaleString() + '</td><td class="right">' + (t.net_tons||0).toFixed(2) + '</td>';
-        html += '<td class="right">' + (t.cardboard_pct||0) + '%</td><td class="right">' + (t.wood_pct||0) + '%</td>';
-        html += '<td class="right">' + (t.metal_pct||0) + '%</td><td class="right">' + (t.plastic_pct||0) + '%</td>';
-        html += '<td class="right" style="color:' + (dp>=75?'#1B7A3D':'#B45309') + ';font-weight:bold">' + dp + '%</td></tr>';
-    });
-    html += '</table>';
-    
-    html += '<h2>Certification</h2>';
-    html += '<p style="font-size:12px;line-height:1.6">I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. All waste materials have been tracked from point of generation through processing and final disposition.</p>';
-    html += '<div style="display:flex;gap:40px;margin-top:24px"><div style="flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px">Authorized Signature / Date</div><div style="flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px">Title</div></div>';
-    
-    html += '<div class="footer">Generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString() + '</div>';
-    html += '</body></html>';
-    
-    var w = window.open('', '_blank');
-    if (w) {
-        w.document.write(html);
-        w.document.close();
-        toast('Report opened in new tab — use browser Print (Ctrl+P) to save as PDF', 'success');
-    } else {
-        toast('Pop-up blocked — allow pop-ups for this site', 'error');
-    }
-}
 
 // ========== CERTIFICATE OF DESTRUCTION ==========
 function generateCertificateOfDestruction() {
