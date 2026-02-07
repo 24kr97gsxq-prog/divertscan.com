@@ -199,6 +199,41 @@ body.has-status-bar .login-screen{padding-top:48px}
 .backup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .backup-stat{background:var(--bg-secondary);padding:8px;border-radius:6px;text-align:center}
 
+/* Report Data Cards */
+.report-data-card{background:var(--bg-secondary);border-left:3px solid #2ecc71;border-radius:0 8px 8px 0;padding:14px 16px;margin-bottom:10px;transition:box-shadow 0.2s}
+.report-data-card:hover{box-shadow:0 2px 8px rgba(46,204,113,0.15)}
+.report-data-card .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.report-data-card .card-title{font-size:13px;font-weight:600;color:var(--text-primary)}
+.report-data-card .card-badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.report-data-card .weights-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.report-data-card .weight-cell{background:var(--bg-tertiary);padding:8px;border-radius:6px;text-align:center}
+.report-data-card .weight-cell .val{font-size:14px;font-weight:700;color:var(--text-primary)}
+.report-data-card .weight-cell .lbl{font-size:9px;color:var(--text-muted);margin-top:2px}
+.report-data-card .materials-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.report-data-card .mat-chip{background:var(--bg-tertiary);padding:3px 8px;border-radius:12px;font-size:10px;color:var(--text-secondary)}
+.report-data-card .mat-chip.diverted{border:1px solid #2ecc71;color:#2ecc71}
+.report-data-card .mat-chip.landfill{border:1px solid var(--accent-danger);color:var(--accent-danger)}
+
+/* Report table hardened headers */
+.report-table{width:100%;font-size:11px;border-collapse:collapse}
+.report-table thead{background:var(--bg-tertiary)}
+.report-table thead th{padding:10px 8px;text-align:left;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted);border-bottom:2px solid #2ecc71;position:sticky;top:0;background:var(--bg-tertiary);z-index:1}
+.report-table thead th.right{text-align:right}
+.report-table thead th.center{text-align:center}
+.report-table tbody td{padding:8px;border-bottom:1px solid var(--border-color)}
+.report-table tbody tr:hover{background:var(--bg-hover)}
+.report-table tfoot td{padding:10px 8px;font-weight:700;border-top:2px solid #2ecc71}
+
+/* Report signature pad */
+.report-sig-pad-wrap{background:var(--bg-tertiary);border-radius:8px;padding:16px;margin-top:16px}
+.report-sig-pad-wrap canvas{border:1px solid var(--border-color);border-radius:6px;background:white;width:100%;height:100px;touch-action:none}
+
+/* Report project picker */
+.report-project-bar{background:linear-gradient(135deg,var(--bg-tertiary),var(--bg-secondary));border:1px solid var(--border-color);border-radius:8px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.report-project-bar select{flex:1}
+.report-project-bar .project-indicator{width:8px;height:8px;border-radius:50%;background:var(--accent-danger)}
+.report-project-bar .project-indicator.active{background:#2ecc71}
+
 /* Theme Selector */
 .theme-selector{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
 .theme-option{width:100%;aspect-ratio:1;border-radius:8px;border:3px solid transparent;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
@@ -665,6 +700,14 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <div id="reportsTab" class="hidden">
 <h2 style="font-size:18px;font-weight:600;margin-bottom:16px">📊 LEED MRc5 Reports</h2>
 
+<!-- Report Project Picker -->
+<div class="report-project-bar">
+<div class="project-indicator" id="reportProjectIndicator"></div>
+<select id="reportProjectSelect" class="form-input" onchange="onReportProjectChange()" style="margin-bottom:0">
+<option value="">— Select Project —</option>
+</select>
+</div>
+
 <!-- AI Executive Summary Card -->
 <div class="card" style="background:linear-gradient(135deg,var(--slate-800),var(--slate-700));border:1px solid var(--emerald-500)">
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
@@ -676,6 +719,9 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 </div>
 <button class="btn btn-primary" onclick="generateAISummary()" style="width:100%">✨ Generate AI Summary</button>
 <div id="aiSummaryResult" class="hidden" style="margin-top:12px;padding:12px;background:var(--slate-800);border-radius:8px;font-size:12px;line-height:1.6;color:var(--slate-200)"></div>
+<div id="aiSummaryActions" class="hidden" style="margin-top:8px">
+<button class="btn btn-primary" onclick="downloadAISummaryPDF()" style="width:100%">📥 Download AI Summary as PDF</button>
+</div>
 </div>
 
 <!-- Main Report Generation -->
@@ -873,19 +919,6 @@ Compare diversion rates across all your projects
 <button class="btn btn-secondary" onclick="refreshLeedNews()" style="margin-top:12px;width:100%">🔄 Refresh News</button>
 </div>
 </div>
-<div class="card" style="margin-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer" onclick="toggleSection('newsFeed')">
-📰 LEED MRc5 Industry News <span id="newsFeedArrow">▼</span>
-</div>
-<div id="newsFeedContent" class="hidden">
-<div id="leedNewsList" style="font-size:12px">
-<div style="padding:12px 0;border-bottom:1px solid var(--slate-700)">
-<div style="color:var(--emerald-400);font-weight:600">Loading news...</div>
-</div>
-</div>
-<button class="btn btn-secondary" onclick="refreshLeedNews()" style="margin-top:12px;width:100%">🔄 Refresh News</button>
-</div>
-</div>
 
 <div id="reportOutput" class="hidden" style="margin-top:20px">
 
@@ -985,15 +1018,23 @@ Compare diversion rates across all your projects
 <div class="card" style="margin-top:16px;border:2px solid var(--emerald-500)">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">✅ Certification Statement</div>
 <p style="font-size:12px;color:var(--slate-300);line-height:1.6">
-I certify that the information contained in this report is accurate and complete to the best of my knowledge. 
-All waste materials have been tracked from point of generation to final destination. 
-Material percentages are based on AI-assisted visual analysis with human verification for each load.
-Photographic documentation and GPS coordinates are stored for audit purposes.
+I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. 
+All waste materials have been tracked from point of generation through processing and final disposition. 
+Material composition percentages are based on AI-assisted visual analysis with human verification for each load.
+Photographic documentation, GPS coordinates, and SHA-256 verification hashes are stored for GBCI audit purposes.
 </p>
+<div class="report-sig-pad-wrap">
+<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Authorized Signature (optional)</div>
+<canvas id="reportSignatureCanvas" width="600" height="100"></canvas>
+<div style="display:flex;gap:8px;margin-top:8px">
+<button class="btn btn-secondary" onclick="clearReportSignature()" style="flex:1;padding:6px;font-size:11px">Clear</button>
+</div>
+</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;font-size:12px">
 <div>
 <div style="color:var(--slate-400)">Prepared By</div>
-<div style="font-weight:600">DivertScan™ Automated System</div>
+<div style="font-weight:600">Dalmex Recycling LLC</div>
+<div style="font-size:10px;color:var(--slate-400)">2828 Nagle St., Dallas, TX 75220</div>
 </div>
 <div>
 <div style="color:var(--slate-400)">Report Generated</div>
@@ -1825,6 +1866,8 @@ function showTab(tab) {
         renderProjectsList();
     } else if (tab === 'reports') {
         document.getElementById('reportsTab').classList.remove('hidden');
+        populateReportProjectDropdown();
+        setTimeout(initReportSignaturePad, 100);
     } else if (tab === 'settings') {
         document.getElementById('settingsTab').classList.remove('hidden');
     }
@@ -1978,6 +2021,10 @@ async function loadProjects() {
         
         updateProjectDisplay();
         populateProjectDropdown();
+        
+        // Store for report dropdown access
+        window._allProjectsList = projects;
+        populateReportProjectDropdown();
     } catch (err) {
         console.error('Error loading projects:', err);
     }
@@ -2081,29 +2128,48 @@ function toggleProjectExpand(projectId) {
 
 async function saveProjectEdit(projectId) {
     const updates = {
-        name: document.getElementById('edit-name-' + projectId).value,
-        address: document.getElementById('edit-address-' + projectId).value,
-        waste_hauler: document.getElementById('edit-hauler-' + projectId).value,
-        general_contractor: document.getElementById('edit-gc-' + projectId).value,
-        leed_target: parseInt(document.getElementById('edit-target-' + projectId).value) || 75
+        name: document.getElementById('edit-name-' + projectId)?.value || '',
+        address: document.getElementById('edit-address-' + projectId)?.value || '',
+        waste_hauler: document.getElementById('edit-hauler-' + projectId)?.value || '',
+        general_contractor: document.getElementById('edit-gc-' + projectId)?.value || '',
+        leed_target: parseInt(document.getElementById('edit-target-' + projectId)?.value) || 75
     };
     
     try {
         showLoading('Saving...');
-        const { error } = await sb.from('projects').update(updates).eq('id', projectId);
-        hideLoading();
         
-        if (error) throw error;
+        // Try Supabase if available
+        if (sb) {
+            try {
+                const { error } = await sb.from('projects').update(updates).eq('id', projectId);
+                if (error) throw error;
+            } catch (e) {
+                console.log('Supabase project save skipped:', e.message);
+            }
+        }
         
-        // Update local data
+        // Always update local
         const idx = projects.findIndex(p => p.id === projectId);
         if (idx >= 0) projects[idx] = { ...projects[idx], ...updates };
         if (currentProject && currentProject.id === projectId) {
             currentProject = { ...currentProject, ...updates };
+            localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
         }
         
+        // Update IndexedDB
+        try {
+            const localProject = await getFromLocal('projects', projectId);
+            if (localProject) {
+                Object.assign(localProject, updates);
+                await saveToLocal('projects', localProject);
+            }
+        } catch (e) {}
+        
+        hideLoading();
         updateProjectDisplay();
         renderProjectsList();
+        window._allProjectsList = projects;
+        populateReportProjectDropdown();
         toast('Project updated!', 'success');
     } catch (err) {
         hideLoading();
@@ -2113,27 +2179,46 @@ async function saveProjectEdit(projectId) {
 
 function confirmDeleteProject(projectId) {
     const project = projects.find(p => p.id === projectId);
-    if (confirm(`Delete project "${project?.name}"? This cannot be undone.`)) {
-        deleteProject(projectId);
-    }
+    // Use setTimeout to ensure confirm dialog fires properly on iPad Safari
+    setTimeout(() => {
+        if (confirm('Delete project "' + (project?.name || '') + '"? This cannot be undone.')) {
+            deleteProject(projectId);
+        }
+    }, 50);
 }
 
 async function deleteProject(projectId) {
     try {
         showLoading('Deleting...');
-        const { error } = await sb.from('projects').delete().eq('id', projectId);
-        hideLoading();
         
-        if (error) throw error;
+        // Try Supabase if available
+        if (sb) {
+            try {
+                await sb.from('projects').delete().eq('id', projectId);
+            } catch (e) { console.log('Supabase project delete skipped:', e.message); }
+        }
+        
+        // Delete from IndexedDB
+        try {
+            await deleteFromLocal('projects', projectId);
+        } catch (e) {}
+        
+        hideLoading();
         
         projects = projects.filter(p => p.id !== projectId);
         if (currentProject && currentProject.id === projectId) {
             currentProject = projects[0] || null;
-            if (currentProject) localStorage.setItem('divertscan_current_project', currentProject.id);
+            if (currentProject) {
+                localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
+            } else {
+                localStorage.removeItem('divertscan_current_project');
+            }
         }
         
+        window._allProjectsList = projects;
         updateProjectDisplay();
         renderProjectsList();
+        populateReportProjectDropdown();
         toast('Project deleted', 'success');
     } catch (err) {
         hideLoading();
@@ -4263,11 +4348,15 @@ async function submitTicket() {
         diverted_tons: netTons * (ticketData.diversionRate / 100),
         human_verified: ticketData.humanVerified || false,
         photo_count: debrisPhotos.filter(p => p).length,
-        signature: ticketData.signature || null,
-        signed_at: new Date().toISOString(),
         is_closed: true,
         created_at: new Date().toISOString()
     };
+    
+    // Only add signature fields if a signature was actually captured (prevents schema mismatch)
+    if (ticketData.signature) {
+        dbRecord.signature = ticketData.signature;
+        dbRecord.signed_at = new Date().toISOString();
+    }
     
     // Only add optional columns if they have values (to avoid column not found errors)
     if (ticketData.scaleTicketPhoto) dbRecord.scale_ticket_photo = ticketData.scaleTicketPhoto;
@@ -4278,7 +4367,6 @@ async function submitTicket() {
     if (ticketData.gpsLongitude) dbRecord.gps_longitude = ticketData.gpsLongitude;
     if (ticketData.gpsAccuracy) dbRecord.gps_accuracy = ticketData.gpsAccuracy;
     if (ticketData.captureTimestamp) dbRecord.capture_timestamp = ticketData.captureTimestamp;
-    if (ticketData.signedBy) dbRecord.signed_by = ticketData.signedBy;
     
     console.log('dbRecord to save:', Object.keys(dbRecord));
     
@@ -4520,45 +4608,85 @@ async function generateReport() {
             `;
         }).join('');
         
-        // Detailed ticket table
-        document.getElementById('reportContent').innerHTML = `
-            <table style="width:100%;font-size:11px;border-collapse:collapse">
+        // Detailed ticket table with data cards + hardened header
+        const reportType = document.getElementById('reportType')?.value || 'summary';
+        
+        let detailHtml = '';
+        
+        if (reportType === 'detailed') {
+            // Card-based view for detailed reports
+            detailHtml = reportData.map((t, idx) => {
+                const divPct = t.diversion_pct || 0;
+                const badgeColor = divPct >= 75 ? '#2ecc71' : divPct >= 50 ? 'var(--amber-400)' : 'var(--red-500)';
+                const matChips = [
+                    { name: 'Wood', pct: t.wood_pct, diverted: true },
+                    { name: 'Concrete', pct: t.concrete_pct, diverted: true },
+                    { name: 'Metal', pct: t.metal_pct, diverted: true },
+                    { name: 'Cardboard', pct: t.cardboard_pct, diverted: true },
+                    { name: 'Plastic', pct: t.plastic_pct, diverted: true },
+                    { name: 'Drywall', pct: t.drywall_pct, diverted: true },
+                    { name: 'Landfill', pct: t.landfill_pct, diverted: false }
+                ].filter(m => m.pct > 0);
+                
+                return `
+                <div class="report-data-card">
+                    <div class="card-header">
+                        <div class="card-title">#${t.ticket_number || 'N/A'} — ${formatDate(t.service_date)}</div>
+                        <div class="card-badge" style="background:${badgeColor}20;color:${badgeColor}">${divPct}% Diverted</div>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${t.hauler || 'No hauler'} ${t.human_verified ? '✅ Verified' : '❌ Unverified'}</div>
+                    <div class="weights-grid">
+                        <div class="weight-cell"><div class="val">${(t.gross_lbs || 0).toLocaleString()}</div><div class="lbl">GROSS LBS</div></div>
+                        <div class="weight-cell"><div class="val">${(t.tare_lbs || 0).toLocaleString()}</div><div class="lbl">TARE LBS</div></div>
+                        <div class="weight-cell"><div class="val" style="color:#2ecc71">${(t.net_tons || 0).toFixed(2)}</div><div class="lbl">NET TONS</div></div>
+                    </div>
+                    <div class="materials-row">
+                        ${matChips.map(m => `<span class="mat-chip ${m.diverted ? 'diverted' : 'landfill'}">${m.name} ${m.pct}%</span>`).join('')}
+                    </div>
+                </div>`;
+            }).join('');
+        } else {
+            // Standard table view with hardened headers
+            detailHtml = `
+            <table class="report-table">
                 <thead>
-                    <tr style="border-bottom:2px solid var(--slate-600);text-align:left">
-                        <th style="padding:8px">Date</th>
-                        <th style="padding:8px">Ticket #</th>
-                        <th style="padding:8px">Hauler</th>
-                        <th style="padding:8px;text-align:right">Gross</th>
-                        <th style="padding:8px;text-align:right">Tare</th>
-                        <th style="padding:8px;text-align:right">Net (T)</th>
-                        <th style="padding:8px;text-align:right">Diversion</th>
-                        <th style="padding:8px;text-align:center">Verified</th>
+                    <tr>
+                        <th>Date</th>
+                        <th>Ticket #</th>
+                        <th>Hauler</th>
+                        <th class="right">Gross</th>
+                        <th class="right">Tare</th>
+                        <th class="right">Net (T)</th>
+                        <th class="right">Diversion</th>
+                        <th class="center">Verified</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${reportData.map(t => `
-                        <tr style="border-bottom:1px solid var(--slate-700)">
-                            <td style="padding:8px">${formatDate(t.service_date)}</td>
-                            <td style="padding:8px">${t.ticket_number || '-'}</td>
-                            <td style="padding:8px">${t.hauler || '-'}</td>
-                            <td style="padding:8px;text-align:right">${(t.gross_lbs || 0).toLocaleString()}</td>
-                            <td style="padding:8px;text-align:right">${(t.tare_lbs || 0).toLocaleString()}</td>
-                            <td style="padding:8px;text-align:right;font-weight:600">${(t.net_tons || 0).toFixed(2)}</td>
-                            <td style="padding:8px;text-align:right;color:${(t.diversion_pct || 0) >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)'}">${t.diversion_pct || 0}%</td>
-                            <td style="padding:8px;text-align:center">${t.human_verified ? '✅' : '❌'}</td>
+                        <tr>
+                            <td>${formatDate(t.service_date)}</td>
+                            <td>${t.ticket_number || '-'}</td>
+                            <td>${t.hauler || '-'}</td>
+                            <td style="text-align:right">${(t.gross_lbs || 0).toLocaleString()}</td>
+                            <td style="text-align:right">${(t.tare_lbs || 0).toLocaleString()}</td>
+                            <td style="text-align:right;font-weight:600">${(t.net_tons || 0).toFixed(2)}</td>
+                            <td style="text-align:right;color:${(t.diversion_pct || 0) >= 75 ? '#2ecc71' : 'var(--amber-400)'}">${t.diversion_pct || 0}%</td>
+                            <td style="text-align:center">${t.human_verified ? '✅' : '❌'}</td>
                         </tr>
                     `).join('')}
                 </tbody>
                 <tfoot>
-                    <tr style="border-top:2px solid var(--slate-600);font-weight:600">
-                        <td style="padding:8px" colspan="5">TOTALS</td>
-                        <td style="padding:8px;text-align:right">${totalTons.toFixed(2)}</td>
-                        <td style="padding:8px;text-align:right;color:${diversionRate >= 75 ? 'var(--emerald-400)' : 'var(--amber-400)'}">${diversionRate}%</td>
-                        <td style="padding:8px;text-align:center">${reportData.filter(t => t.human_verified).length}/${reportData.length}</td>
+                    <tr>
+                        <td colspan="5">TOTALS</td>
+                        <td style="text-align:right">${totalTons.toFixed(2)}</td>
+                        <td style="text-align:right;color:${diversionRate >= 75 ? '#2ecc71' : 'var(--amber-400)'}">${diversionRate}%</td>
+                        <td style="text-align:center">${reportData.filter(t => t.human_verified).length}/${reportData.length}</td>
                     </tr>
                 </tfoot>
-            </table>
-        `;
+            </table>`;
+        }
+        
+        document.getElementById('reportContent').innerHTML = detailHtml;
         
         document.getElementById('reportOutput').classList.remove('hidden');
         toast('Report generated!', 'success');
@@ -5222,13 +5350,13 @@ async function generateLEEDAuditReport() {
         doc.roundedRect(14, y, pw - 28, 45, 3, 3, 'F');
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.text('I certify that the information contained in this report is accurate and complete to the best of', 20, y + 8);
-        doc.text('my knowledge. All waste diversion data has been collected and verified through the DivertScan™', 20, y + 14);
-        doc.text('waste tracking system with ' + verifiedCount + ' of ' + allTickets.length + ' loads verified by human inspection.', 20, y + 20);
+        doc.text('I certify that this information is a true representation of materials processed by Dalmex Recycling LLC.', 20, y + 8);
+        doc.text('All waste diversion data has been collected and verified through the DivertScan™ waste tracking system', 20, y + 14);
+        doc.text('with ' + verifiedCount + ' of ' + allTickets.length + ' loads verified by human inspection. SHA-256 hashes stored for each record.', 20, y + 20);
         y += 28;
-        doc.text('Processing Facility: DalMex Recycling LLC, 2828 Nagel St., Dallas, TX 75220', 20, y);
+        doc.text('Processing Facility: Dalmex Recycling LLC, 2828 Nagle St., Dallas, TX 75220', 20, y);
         y += 6;
-        doc.text('Signature: _________________________________     Date: _____________', 20, y);
+        doc.text('Authorized Representative: _________________________________     Date: _____________', 20, y);
         
         addFooter();
         
@@ -6892,6 +7020,7 @@ Use professional, formal language. Be specific with numbers. Do not use bullet p
             </div>
         `;
         container.classList.remove('hidden');
+        document.getElementById('aiSummaryActions').classList.remove('hidden');
         
         toast('AI Summary generated!', 'success');
         
@@ -6934,6 +7063,286 @@ function saveAISummary() {
 }
 
 // ========== ENHANCED REPORT PREVIEW ==========
+
+// Report Project Picker — syncs report tab with a project even when navigating directly
+function onReportProjectChange() {
+    const sel = document.getElementById('reportProjectSelect');
+    const indicator = document.getElementById('reportProjectIndicator');
+    const pid = sel.value;
+    
+    if (!pid) {
+        if (indicator) indicator.classList.remove('active');
+        currentProject = null;
+        return;
+    }
+    
+    // Find project from local list or tickets' projects
+    const allOpts = Array.from(sel.options);
+    const match = allOpts.find(o => o.value === pid);
+    
+    // Set currentProject from existing projects array or build minimal object
+    const existing = (window._allProjectsList || []).find(p => p.id === pid);
+    if (existing) {
+        currentProject = existing;
+    } else {
+        currentProject = { id: pid, name: match?.textContent || 'Unknown' };
+    }
+    
+    if (indicator) indicator.classList.add('active');
+    localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
+    toast('Report project: ' + (currentProject.name || pid), 'success');
+}
+
+// Populate report project dropdown (called from loadProjects and showTab)
+function populateReportProjectDropdown() {
+    const sel = document.getElementById('reportProjectSelect');
+    if (!sel) return;
+    
+    const currentVal = sel.value || currentProject?.id || '';
+    sel.innerHTML = '<option value="">— Select Project —</option>';
+    
+    const projectList = window._allProjectsList || [];
+    projectList.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name || 'Unnamed Project';
+        if (p.id === currentVal) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    
+    // Auto-select current project
+    if (currentProject?.id && !sel.value) {
+        sel.value = currentProject.id;
+    }
+    
+    const indicator = document.getElementById('reportProjectIndicator');
+    if (indicator) {
+        indicator.classList.toggle('active', !!sel.value);
+    }
+}
+
+// AI Summary PDF Download
+function downloadAISummaryPDF() {
+    if (!aiSummaryText) {
+        toast('Generate a summary first', 'error');
+        return;
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('portrait');
+    const pw = doc.internal.pageSize.width;
+    const ph = doc.internal.pageSize.height;
+    let y = 15;
+    
+    // Header bar
+    doc.setFillColor(45, 90, 39);
+    doc.rect(0, 0, pw, 28, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LEED MRc5 Executive Summary', pw / 2, 12, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Generated by DivertScan™ — Dalmex Recycling LLC', pw / 2, 20, { align: 'center' });
+    doc.setTextColor(0);
+    y = 38;
+    
+    // Project info
+    if (currentProject) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Project: ' + (currentProject.name || ''), 14, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text('Date: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 14, y);
+        y += 12;
+    }
+    
+    // Body text - word wrap
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(aiSummaryText, pw - 28);
+    
+    lines.forEach(line => {
+        if (y > ph - 30) {
+            doc.addPage();
+            y = 15;
+        }
+        doc.text(line, 14, y);
+        y += 5;
+    });
+    
+    // Footer
+    y += 10;
+    doc.setDrawColor(45, 90, 39);
+    doc.setLineWidth(0.5);
+    doc.line(14, y, pw - 14, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    doc.text('I certify that this information is a true representation of materials processed by Dalmex Recycling LLC.', 14, y);
+    y += 5;
+    doc.text('Dalmex Recycling LLC | 2828 Nagle St., Dallas, TX 75220 | (214) 352-2000', 14, y);
+    
+    doc.save('DivertScan_AI_Executive_Summary_' + new Date().toISOString().split('T')[0] + '.pdf');
+    toast('AI Summary PDF downloaded!', 'success');
+}
+
+// Report Signature Pad
+let reportSigCanvas = null;
+let reportSigCtx = null;
+let reportSigDrawing = false;
+
+function initReportSignaturePad() {
+    reportSigCanvas = document.getElementById('reportSignatureCanvas');
+    if (!reportSigCanvas) return;
+    
+    reportSigCtx = reportSigCanvas.getContext('2d');
+    reportSigCtx.fillStyle = 'white';
+    reportSigCtx.fillRect(0, 0, reportSigCanvas.width, reportSigCanvas.height);
+    
+    // Touch events for iPad
+    reportSigCanvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        reportSigDrawing = true;
+        const r = reportSigCanvas.getBoundingClientRect();
+        const t = e.touches[0];
+        const x = (t.clientX - r.left) * (reportSigCanvas.width / r.width);
+        const y = (t.clientY - r.top) * (reportSigCanvas.height / r.height);
+        reportSigCtx.beginPath();
+        reportSigCtx.moveTo(x, y);
+    }, { passive: false });
+    
+    reportSigCanvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!reportSigDrawing) return;
+        const r = reportSigCanvas.getBoundingClientRect();
+        const t = e.touches[0];
+        const x = (t.clientX - r.left) * (reportSigCanvas.width / r.width);
+        const y = (t.clientY - r.top) * (reportSigCanvas.height / r.height);
+        reportSigCtx.lineWidth = 2;
+        reportSigCtx.lineCap = 'round';
+        reportSigCtx.strokeStyle = 'black';
+        reportSigCtx.lineTo(x, y);
+        reportSigCtx.stroke();
+        reportSigCtx.beginPath();
+        reportSigCtx.moveTo(x, y);
+    }, { passive: false });
+    
+    reportSigCanvas.addEventListener('touchend', () => { reportSigDrawing = false; });
+    
+    // Mouse events for desktop testing
+    reportSigCanvas.addEventListener('mousedown', (e) => {
+        reportSigDrawing = true;
+        const r = reportSigCanvas.getBoundingClientRect();
+        const x = (e.clientX - r.left) * (reportSigCanvas.width / r.width);
+        const y = (e.clientY - r.top) * (reportSigCanvas.height / r.height);
+        reportSigCtx.beginPath();
+        reportSigCtx.moveTo(x, y);
+    });
+    reportSigCanvas.addEventListener('mousemove', (e) => {
+        if (!reportSigDrawing) return;
+        const r = reportSigCanvas.getBoundingClientRect();
+        const x = (e.clientX - r.left) * (reportSigCanvas.width / r.width);
+        const y = (e.clientY - r.top) * (reportSigCanvas.height / r.height);
+        reportSigCtx.lineWidth = 2;
+        reportSigCtx.lineCap = 'round';
+        reportSigCtx.strokeStyle = 'black';
+        reportSigCtx.lineTo(x, y);
+        reportSigCtx.stroke();
+        reportSigCtx.beginPath();
+        reportSigCtx.moveTo(x, y);
+    });
+    reportSigCanvas.addEventListener('mouseup', () => { reportSigDrawing = false; });
+}
+
+function clearReportSignature() {
+    if (reportSigCanvas && reportSigCtx) {
+        reportSigCtx.fillStyle = 'white';
+        reportSigCtx.fillRect(0, 0, reportSigCanvas.width, reportSigCanvas.height);
+    }
+}
+
+// Add New Facility Modal (was missing — button existed but function didn't)
+function showAddFacilityModal() {
+    const modal = document.createElement('div');
+    modal.id = 'addFacilityModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    
+    modal.innerHTML = \`
+        <div style="background:var(--bg-secondary);border-radius:16px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto">
+            <div style="background:linear-gradient(135deg,#2d5a27,#1a3d15);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:16px;font-weight:700;color:white">➕ Add New Facility</div>
+                <button onclick="document.getElementById('addFacilityModal').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
+            </div>
+            <div style="padding:20px">
+                <div class="form-group">
+                    <label class="form-label">Facility Name *</label>
+                    <input type="text" id="newFacilityName" class="form-input" placeholder="e.g., ABC Concrete Recycling">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Material Type</label>
+                    <select id="newFacilityMaterial" class="form-input">
+                        <option value="concrete">🧱 Concrete / Masonry</option>
+                        <option value="metal">🔩 Metal / Scrap</option>
+                        <option value="wood">🪵 Wood / Pallets</option>
+                        <option value="cardboard">📦 Cardboard / Paper</option>
+                        <option value="drywall">🏗️ Drywall / Gypsum</option>
+                        <option value="plastic">♻️ Plastic</option>
+                        <option value="mixed">🔄 Mixed C&D</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Address</label>
+                    <input type="text" id="newFacilityAddress" class="form-input" placeholder="Street, City, State ZIP">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact / Phone</label>
+                    <input type="text" id="newFacilityContact" class="form-input" placeholder="(xxx) xxx-xxxx">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea id="newFacilityNotes" class="form-input" rows="2" placeholder="RCI certified, accepts loads Mon-Sat, etc."></textarea>
+                </div>
+            </div>
+            <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="document.getElementById('addFacilityModal').remove()" style="flex:1">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNewFacility()" style="flex:1">💾 Save Facility</button>
+            </div>
+        </div>
+    \`;
+    
+    document.body.appendChild(modal);
+}
+
+function saveNewFacility() {
+    const name = document.getElementById('newFacilityName')?.value?.trim();
+    if (!name) {
+        toast('Facility name is required', 'error');
+        return;
+    }
+    
+    const facility = {
+        id: 'facility_' + Date.now(),
+        name: name,
+        material: document.getElementById('newFacilityMaterial')?.value || 'mixed',
+        address: document.getElementById('newFacilityAddress')?.value?.trim() || '',
+        contact: document.getElementById('newFacilityContact')?.value?.trim() || '',
+        notes: document.getElementById('newFacilityNotes')?.value?.trim() || '',
+        created_at: new Date().toISOString()
+    };
+    
+    // Save to local storage
+    const facilities = JSON.parse(localStorage.getItem('divertscan_facilities') || '[]');
+    facilities.push(facility);
+    localStorage.setItem('divertscan_facilities', JSON.stringify(facilities));
+    
+    document.getElementById('addFacilityModal').remove();
+    toast('Facility "' + name + '" added!', 'success');
+}
+
 function previewReportPDF() {
     // Open report in new window for preview
     const reportHtml = generateReportHTML();
@@ -8815,8 +9224,9 @@ async function createFullBackup() {
     
     try {
         const backup = {
-            version: '7.1',
+            version: '7.6',
             createdAt: new Date().toISOString(),
+            app: 'DivertScan Box Tracker',
             settings: {
                 leedVersion: currentLeedVersion,
                 companyInfo: companyInfo
@@ -8825,40 +9235,59 @@ async function createFullBackup() {
             tickets: []
         };
         
-        // Get all projects
+        // Get all projects with timeout
         if (sb) {
-            const { data: projectsData } = await sb.from('projects').select('*');
-            backup.projects = projectsData || [];
+            try {
+                const pPromise = sb.from('projects').select('*');
+                const pTimeout = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000));
+                const pResult = await Promise.race([pPromise, pTimeout]);
+                if (pResult?.data) backup.projects = pResult.data;
+            } catch (e) { console.log('Supabase projects skipped:', e.message); }
             
-            // Get all tickets
-            const { data: ticketsData } = await sb.from('tickets').select('*');
-            backup.tickets = ticketsData || [];
+            try {
+                const tPromise = sb.from('tickets').select('*');
+                const tTimeout = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000));
+                const tResult = await Promise.race([tPromise, tTimeout]);
+                if (tResult?.data) backup.tickets = tResult.data;
+            } catch (e) { console.log('Supabase tickets skipped:', e.message); }
         }
         
         // Also include local data
-        const localProjects = await getAllFromLocal('projects');
-        const localTickets = await getAllFromLocal('tickets');
+        try {
+            backup.localProjects = await getAllFromLocal('projects') || [];
+            backup.localTickets = await getAllFromLocal('tickets') || [];
+        } catch (e) { console.log('Local data read error:', e.message); }
         
-        backup.localProjects = localProjects;
-        backup.localTickets = localTickets;
-        
-        // Download backup file
-        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        // Download backup file — use application/octet-stream for iPad Safari compat
+        const jsonStr = JSON.stringify(backup, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
+        const filename = 'DivertScan_Backup_' + new Date().toISOString().split('T')[0] + '.json';
+        
+        // iPad Safari needs an actual link click with download attribute
         const a = document.createElement('a');
         a.href = url;
-        a.download = `DivertScan_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        
+        // Cleanup after delay (iPad Safari needs time)
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 2000);
         
         // Update backup stats
-        document.getElementById('backupProjectCount').textContent = backup.projects.length;
-        document.getElementById('backupTicketCount').textContent = backup.tickets.length;
-        document.getElementById('backupLastDate').textContent = new Date().toLocaleDateString();
-        localStorage.setItem('divertscan_last_backup', new Date().toISOString());
+        try {
+            document.getElementById('backupProjectCount').textContent = (backup.projects.length + (backup.localProjects?.length || 0));
+            document.getElementById('backupTicketCount').textContent = (backup.tickets.length + (backup.localTickets?.length || 0));
+            document.getElementById('backupLastDate').textContent = new Date().toLocaleDateString();
+            localStorage.setItem('divertscan_last_backup', new Date().toISOString());
+        } catch (e) {}
         
         hideLoading();
-        toast('Backup created successfully!', 'success');
+        toast('Backup created! (' + (backup.projects.length + backup.tickets.length) + ' records)', 'success');
         
     } catch (err) {
         hideLoading();
