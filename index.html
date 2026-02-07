@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>DivertScan™ v7.6 Box Tracker Edition</title>
+<title>DivertScan™ v7.7 Box Tracker Edition</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -432,7 +432,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <div class="login-logo">
 <h1>🔄 DivertScan™</h1>
 <p>Enterprise Waste Diversion Tracking</p>
-<p style="font-size:10px;color:var(--emerald-400);margin-top:4px">v7.1 Bulletproof Edition</p>
+<p style="font-size:10px;color:var(--emerald-400);margin-top:4px">v7.7 Build 020726</p>
 </div>
 
 <div class="login-box">
@@ -478,7 +478,7 @@ Access codes are provided by DalMex Recycling for viewing your project reports.
 </div>
 
 <p style="margin-top:20px;color:var(--slate-500);font-size:10px">
-DivertScan™ v7.0 Enterprise • Powered by Claude AI
+DivertScan™ v7.7 Enterprise • Powered by Claude AI
 </p>
 </div>
 
@@ -486,7 +486,7 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <div class="app-container" id="appContainer">
 
 <div class="header" id="adminHeader">
-<div class="logo">DivertScan™ <span>v7.6</span></div>
+<div class="logo">DivertScan™ <span>v7.7</span></div>
 <div class="user-badge">
 <span id="currentUserName">Admin</span>
 <span class="user-role" id="currentUserRole">ADMIN</span>
@@ -559,7 +559,7 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <span style="font-size:32px">📗</span>
 <div style="flex:1">
 <div style="font-size:15px;font-weight:700;color:var(--accent-primary)">Import Excel Data</div>
-<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Import tickets from HD Waste / DalMex Excel reports (.xlsx)</div>
+<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Import tickets from DalMex Excel reports (.xlsx)</div>
 </div>
 <button class="btn btn-primary" onclick="triggerExcelImport()" style="padding:12px 20px;font-size:13px;font-weight:600">
 📗 Import .xlsx
@@ -690,7 +690,7 @@ DivertScan™ v7.0 Enterprise • Powered by Claude AI
 <div style="background:var(--bg-tertiary);border-radius:8px;padding:12px;margin-top:12px;font-size:11px">
 <div style="font-weight:600;margin-bottom:4px">Excel Import Format:</div>
 <div style="color:var(--text-muted)">
-Supports HD Waste / DalMex format with columns:<br>
+Supports DalMex format with columns:<br>
 Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %, Plastic %, Concrete %, etc.
 </div>
 </div>
@@ -4617,14 +4617,12 @@ async function generateReport() {
             statusEl.style.color = 'var(--red-500)';
         }
         
-        // Material breakdown with progress bars
+        // Material breakdown with progress bars — 5 streams
         const materials = [
-            { name: 'Wood', icon: '🪵', tons: woodTons, diverted: true },
-            { name: 'Concrete/Masonry', icon: '🧱', tons: concreteTons, diverted: true },
-            { name: 'Metal', icon: '🔩', tons: metalTons, diverted: true },
-            { name: 'Cardboard/Paper', icon: '📦', tons: cardboardTons, diverted: true },
+            { name: 'OCC / Paper', icon: '📦', tons: cardboardTons, diverted: true },
+            { name: 'Wood / Pallets', icon: '🪵', tons: woodTons, diverted: true },
+            { name: 'Metal / Scrap', icon: '🔩', tons: metalTons, diverted: true },
             { name: 'Plastic', icon: '♻️', tons: plasticTons, diverted: true },
-            { name: 'Drywall', icon: '🏗️', tons: drywallTons, diverted: true },
             { name: 'Landfill', icon: '🗑️', tons: landfillTons, diverted: false }
         ];
         
@@ -4650,76 +4648,119 @@ async function generateReport() {
         let detailHtml = '';
         
         if (reportType === 'detailed') {
-            // Card-based view for detailed reports
+            // Card-based view for detailed reports with photos
             detailHtml = reportData.map((t, idx) => {
                 const divPct = t.diversion_pct || 0;
                 const badgeColor = divPct >= 75 ? '#2ecc71' : divPct >= 50 ? 'var(--amber-400)' : 'var(--red-500)';
                 const matChips = [
+                    { name: 'OCC/Paper', pct: t.cardboard_pct, diverted: true },
                     { name: 'Wood', pct: t.wood_pct, diverted: true },
-                    { name: 'Concrete', pct: t.concrete_pct, diverted: true },
                     { name: 'Metal', pct: t.metal_pct, diverted: true },
-                    { name: 'Cardboard', pct: t.cardboard_pct, diverted: true },
                     { name: 'Plastic', pct: t.plastic_pct, diverted: true },
-                    { name: 'Drywall', pct: t.drywall_pct, diverted: true },
                     { name: 'Landfill', pct: t.landfill_pct, diverted: false }
                 ].filter(m => m.pct > 0);
                 
-                return `
-                <div class="report-data-card">
-                    <div class="card-header">
-                        <div class="card-title">#${t.ticket_number || 'N/A'} — ${formatDate(t.service_date)}</div>
-                        <div class="card-badge" style="background:${badgeColor}20;color:${badgeColor}">${divPct}% Diverted</div>
-                    </div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${t.hauler || 'No hauler'} ${t.human_verified ? '✅ Verified' : '❌ Unverified'}</div>
-                    <div class="weights-grid">
-                        <div class="weight-cell"><div class="val">${(t.gross_lbs || 0).toLocaleString()}</div><div class="lbl">GROSS LBS</div></div>
-                        <div class="weight-cell"><div class="val">${(t.tare_lbs || 0).toLocaleString()}</div><div class="lbl">TARE LBS</div></div>
-                        <div class="weight-cell"><div class="val" style="color:#2ecc71">${(t.net_tons || 0).toFixed(2)}</div><div class="lbl">NET TONS</div></div>
-                    </div>
-                    <div class="materials-row">
-                        ${matChips.map(m => `<span class="mat-chip ${m.diverted ? 'diverted' : 'landfill'}">${m.name} ${m.pct}%</span>`).join('')}
-                    </div>
-                </div>`;
+                // Build photo thumbnails
+                var photoHtml = '';
+                var hasAnyPhoto = t.scale_ticket_photo || t.debris_photo_1 || t.debris_photo_2 || t.debris_photo_3;
+                if (hasAnyPhoto) {
+                    var tid = t.id || t.ticket_number || idx;
+                    photoHtml = '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">';
+                    if (t.scale_ticket_photo) {
+                        _photoViewerData['rpt_st_' + tid] = t.scale_ticket_photo;
+                        photoHtml += '<div style="text-align:center"><img src="' + t.scale_ticket_photo + '" style="width:70px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid var(--accent-info)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Scale Ticket\', \'rpt_st_' + tid + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Scale Ticket</div></div>';
+                    }
+                    if (t.debris_photo_1) {
+                        _photoViewerData['rpt_dp1_' + tid] = t.debris_photo_1;
+                        photoHtml += '<div style="text-align:center"><img src="' + t.debris_photo_1 + '" style="width:70px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Debris Photo 1\', \'rpt_dp1_' + tid + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 1</div></div>';
+                    }
+                    if (t.debris_photo_2) {
+                        _photoViewerData['rpt_dp2_' + tid] = t.debris_photo_2;
+                        photoHtml += '<div style="text-align:center"><img src="' + t.debris_photo_2 + '" style="width:70px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Debris Photo 2\', \'rpt_dp2_' + tid + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 2</div></div>';
+                    }
+                    if (t.debris_photo_3) {
+                        _photoViewerData['rpt_dp3_' + tid] = t.debris_photo_3;
+                        photoHtml += '<div style="text-align:center"><img src="' + t.debris_photo_3 + '" style="width:70px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Debris Photo 3\', \'rpt_dp3_' + tid + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 3</div></div>';
+                    }
+                    photoHtml += '</div>';
+                }
+                
+                return '<div class="report-data-card">' +
+                    '<div class="card-header">' +
+                        '<div class="card-title">#' + (t.ticket_number || 'N/A') + ' — ' + formatDate(t.service_date) + '</div>' +
+                        '<div class="card-badge" style="background:' + badgeColor + '20;color:' + badgeColor + '">' + divPct + '% Diverted</div>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">' + (t.hauler || 'No hauler') + ' ' + (t.human_verified ? '✅ Verified' : '❌ Unverified') + '</div>' +
+                    '<div class="weights-grid">' +
+                        '<div class="weight-cell"><div class="val">' + (t.gross_lbs || 0).toLocaleString() + '</div><div class="lbl">GROSS LBS</div></div>' +
+                        '<div class="weight-cell"><div class="val">' + (t.tare_lbs || 0).toLocaleString() + '</div><div class="lbl">TARE LBS</div></div>' +
+                        '<div class="weight-cell"><div class="val" style="color:#2ecc71">' + (t.net_tons || 0).toFixed(2) + '</div><div class="lbl">NET TONS</div></div>' +
+                    '</div>' +
+                    '<div class="materials-row">' +
+                        matChips.map(function(m) { return '<span class="mat-chip ' + (m.diverted ? 'diverted' : 'landfill') + '">' + m.name + ' ' + m.pct + '%</span>'; }).join('') +
+                    '</div>' +
+                    photoHtml +
+                '</div>';
             }).join('');
         } else {
-            // Standard table view with hardened headers
-            detailHtml = `
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Ticket #</th>
-                        <th>Hauler</th>
-                        <th class="right">Gross</th>
-                        <th class="right">Tare</th>
-                        <th class="right">Net (T)</th>
-                        <th class="right">Diversion</th>
-                        <th class="center">Verified</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${reportData.map(t => `
-                        <tr>
-                            <td>${formatDate(t.service_date)}</td>
-                            <td>${t.ticket_number || '-'}</td>
-                            <td>${t.hauler || '-'}</td>
-                            <td style="text-align:right">${(t.gross_lbs || 0).toLocaleString()}</td>
-                            <td style="text-align:right">${(t.tare_lbs || 0).toLocaleString()}</td>
-                            <td style="text-align:right;font-weight:600">${(t.net_tons || 0).toFixed(2)}</td>
-                            <td style="text-align:right;color:${(t.diversion_pct || 0) >= 75 ? '#2ecc71' : 'var(--amber-400)'}">${t.diversion_pct || 0}%</td>
-                            <td style="text-align:center">${t.human_verified ? '✅' : '❌'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="5">TOTALS</td>
-                        <td style="text-align:right">${totalTons.toFixed(2)}</td>
-                        <td style="text-align:right;color:${diversionRate >= 75 ? '#2ecc71' : 'var(--amber-400)'}">${diversionRate}%</td>
-                        <td style="text-align:center">${reportData.filter(t => t.human_verified).length}/${reportData.length}</td>
-                    </tr>
-                </tfoot>
-            </table>`;
+            // Standard table view with materials and photos
+            detailHtml = '<table class="report-table"><thead><tr>' +
+                '<th>Date</th><th>Ticket #</th><th>Hauler</th><th class="right">Net (T)</th>' +
+                '<th>Materials</th><th class="right">Diversion</th><th class="center">Photos</th><th class="center">Verified</th>' +
+                '</tr></thead><tbody>';
+            
+            reportData.forEach(function(t, idx) {
+                var tid = t.id || t.ticket_number || idx;
+                var divColor = (t.diversion_pct || 0) >= 75 ? '#2ecc71' : 'var(--amber-400)';
+                
+                // Material chips inline
+                var mats = [
+                    { n: 'OCC', p: t.cardboard_pct },
+                    { n: 'Wood', p: t.wood_pct },
+                    { n: 'Metal', p: t.metal_pct },
+                    { n: 'Plastic', p: t.plastic_pct },
+                    { n: 'Landfill', p: t.landfill_pct }
+                ].filter(function(m) { return m.p > 0; });
+                var matStr = mats.map(function(m) {
+                    var cls = m.n === 'Landfill' ? 'landfill' : 'diverted';
+                    return '<span class="mat-chip ' + cls + '" style="font-size:9px;padding:1px 5px">' + m.n + ' ' + m.p + '%</span>';
+                }).join(' ');
+                
+                // Photo icons
+                var photoStr = '';
+                var photoCount = 0;
+                if (t.scale_ticket_photo) {
+                    _photoViewerData['rts_' + tid] = t.scale_ticket_photo;
+                    photoStr += '<img src="' + t.scale_ticket_photo + '" style="width:28px;height:28px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid var(--accent-info)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Scale Ticket\', \'rts_' + tid + '\')" title="Scale Ticket"> ';
+                    photoCount++;
+                }
+                if (t.debris_photo_1) {
+                    _photoViewerData['rtd1_' + tid] = t.debris_photo_1;
+                    photoStr += '<img src="' + t.debris_photo_1 + '" style="width:28px;height:28px;object-fit:cover;border-radius:3px;cursor:pointer;border:1px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (t.ticket_number || '') + '\', \'Debris 1\', \'rtd1_' + tid + '\')" title="Debris Photo"> ';
+                    photoCount++;
+                }
+                if (!photoStr) photoStr = '<span style="color:var(--text-muted);font-size:10px">—</span>';
+                
+                detailHtml += '<tr>' +
+                    '<td>' + formatDate(t.service_date) + '</td>' +
+                    '<td>' + (t.ticket_number || '-') + '</td>' +
+                    '<td>' + (t.hauler || '-') + '</td>' +
+                    '<td style="text-align:right;font-weight:600">' + (t.net_tons || 0).toFixed(2) + '</td>' +
+                    '<td><div style="display:flex;flex-wrap:wrap;gap:2px">' + matStr + '</div></td>' +
+                    '<td style="text-align:right;color:' + divColor + '">' + (t.diversion_pct || 0) + '%</td>' +
+                    '<td style="text-align:center">' + photoStr + '</td>' +
+                    '<td style="text-align:center">' + (t.human_verified ? '✅' : '❌') + '</td>' +
+                '</tr>';
+            });
+            
+            detailHtml += '</tbody><tfoot><tr>' +
+                '<td colspan="3">TOTALS</td>' +
+                '<td style="text-align:right">' + totalTons.toFixed(2) + '</td>' +
+                '<td></td>' +
+                '<td style="text-align:right;color:' + (diversionRate >= 75 ? '#2ecc71' : 'var(--amber-400)') + '">' + diversionRate + '%</td>' +
+                '<td></td>' +
+                '<td style="text-align:center">' + reportData.filter(function(t){return t.human_verified}).length + '/' + reportData.length + '</td>' +
+                '</tr></tfoot></table>';
         }
         
         document.getElementById('reportContent').innerHTML = detailHtml;
@@ -4878,7 +4919,7 @@ function downloadReportPDF() {
     doc.rect(14, y, 100, 10, 'F');
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(34, 139, 34); // Green color like HD Waste
+    doc.setTextColor(34, 139, 34); // Dalmex green
     doc.text(currentProject.address || currentProject.name || 'Project Site', 18, y + 7);
     doc.setTextColor(0, 0, 0);
     y += 18;
@@ -6541,7 +6582,7 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
         logMsg(`⚠️ Unmatched columns (using fallback positions): ${missedCols.join(', ')}`);
     }
     
-    // Fallback to position-based if header matching fails (HD Waste format)
+    // Fallback to position-based if header matching fails (legacy format)
     if (colMap.date === -1 && headers[0] === 'date') colMap.date = 0;
     if (colMap.ticket === -1 && headers[1]?.includes('ticket')) colMap.ticket = 1;
     if (colMap.gross === -1) colMap.gross = 2;
