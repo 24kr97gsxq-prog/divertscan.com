@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
-<title>DivertScan™ v7.7 Box Tracker Edition</title>
+<title>DivertScan™ v7.7 Enterprise Edition</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -489,10 +489,14 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 
 <div class="header" id="adminHeader">
 <div class="logo">DivertScan™ <span>v7.7</span></div>
+<div style="display:flex;align-items:center;gap:6px">
+<button onclick="startNewTicket()" style="background:var(--emerald-500);border:none;color:white;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap" class="admin-only">➕ Ticket</button>
+<button onclick="showNewProjectModal()" style="background:var(--accent-info);border:none;color:white;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap" class="admin-only">📁 Project</button>
 <div class="user-badge">
 <span id="currentUserName">Admin</span>
 <span class="user-role" id="currentUserRole">ADMIN</span>
 <button class="logout-btn" onclick="doLogout()">Logout</button>
+</div>
 </div>
 </div>
 
@@ -780,8 +784,9 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
 <button class="btn btn-primary" onclick="previewLEEDAuditPDF()" style="font-size:12px">👁️ View PDF Report</button>
 <button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="font-size:12px">📋 Download LEED PDF</button>
+<button class="btn btn-primary" onclick="shareLEEDPDF()" style="font-size:12px;background:linear-gradient(135deg,#3b82f6,#1d4ed8)">📤 Share PDF</button>
 <button class="btn btn-primary" onclick="downloadReportExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 LEED Excel Report</button>
-<button class="btn btn-secondary" onclick="downloadBoxTrackerExcel()" style="font-size:11px">📗 Box Tracker Excel</button>
+<button class="btn btn-secondary" onclick="downloadBoxTrackerExcel()" style="font-size:11px">📗 DivertScan™ Excel</button>
 <button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Export</button>
 </div>
 </div>
@@ -1150,6 +1155,12 @@ Compact mode (more content)
 </div>
 
 <div style="font-size:10px;color:var(--slate-400);margin-top:6px;font-style:italic">Partner loads go direct — scale ticket from partner facility counts for LEED credit</div>
+</div>
+
+<!-- Dynamic custom facilities (user-added with edit/delete) -->
+<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color)">
+<div style="font-size:11px;font-weight:600;color:var(--slate-400);margin-bottom:6px">📋 CUSTOM FACILITIES</div>
+<div id="customFacilitiesList"></div>
 </div>
 </div>
 
@@ -4991,26 +5002,26 @@ async function generateLEEDAuditReport() {
     
     try {
         // Gather all tickets (local + remote)
-        let allTickets = [];
+        var allTickets = [];
         try {
-            const localTickets = await getAllFromLocal('tickets') || [];
-            allTickets = localTickets.filter(t => t.project_id === currentProject.id);
+            var localTickets = await getAllFromLocal('tickets') || [];
+            allTickets = localTickets.filter(function(t) { return t.project_id === currentProject.id; });
         } catch(e) {}
         
         if (sb) {
             try {
-                const tp = new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 5000));
-                const res = await Promise.race([sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date', {ascending:true}), tp]);
-                if (res?.data) {
-                    const map = new Map();
-                    allTickets.forEach(t => map.set(t.ticket_number || t.id, t));
-                    res.data.forEach(t => map.set(t.ticket_number || t.id, t));
+                var tp = new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, 5000); });
+                var res = await Promise.race([sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date', {ascending:true}), tp]);
+                if (res && res.data) {
+                    var map = new Map();
+                    allTickets.forEach(function(t) { map.set(t.ticket_number || t.id, t); });
+                    res.data.forEach(function(t) { map.set(t.ticket_number || t.id, t); });
                     allTickets = Array.from(map.values());
                 }
             } catch(e) {}
         }
         
-        allTickets.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        allTickets.sort(function(a,b) { return new Date(a.service_date) - new Date(b.service_date); });
         
         if (allTickets.length === 0) {
             hideLoading();
@@ -5018,370 +5029,19 @@ async function generateLEEDAuditReport() {
             return;
         }
         
-        // Calculate project-wide stats
-        const totalTons = allTickets.reduce((s, t) => s + (t.net_tons || 0), 0);
-        const landfillTons = allTickets.reduce((s, t) => s + (t.landfill_tons || 0), 0);
-        const divertedTons = totalTons - landfillTons;
-        const divRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
-        const woodTons = allTickets.reduce((s, t) => s + (t.wood_tons || 0), 0);
-        const metalTons = allTickets.reduce((s, t) => s + (t.metal_tons || 0), 0);
-        const cardboardTons = allTickets.reduce((s, t) => s + (t.cardboard_tons || 0), 0);
-        const concreteTons = allTickets.reduce((s, t) => s + (t.concrete_tons || 0), 0);
-        const plasticTons = allTickets.reduce((s, t) => s + (t.plastic_tons || 0), 0);
-        const drywallTons = allTickets.reduce((s, t) => s + (t.drywall_tons || 0), 0);
-        const ticketsWithPhotos = allTickets.filter(t => t.debris_photo_1 || t.debris_photo_2 || t.debris_photo_3 || t.scale_ticket_photo).length;
-        const verifiedCount = allTickets.filter(t => t.human_verified).length;
+        // Use shared PDF builder for consistent styling
+        var pdfBlob = await buildLEEDPDFBlob(allTickets);
+        var filename = 'LEED_Audit_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
         
-        // Group by month
-        const monthlyData = {};
-        allTickets.forEach(t => {
-            const key = t.service_date ? t.service_date.substring(0, 7) : 'Unknown';
-            if (!monthlyData[key]) monthlyData[key] = { tickets: [], tons: 0, diverted: 0, landfill: 0 };
-            monthlyData[key].tickets.push(t);
-            monthlyData[key].tons += t.net_tons || 0;
-            monthlyData[key].landfill += t.landfill_tons || 0;
-            monthlyData[key].diverted += (t.net_tons || 0) - (t.landfill_tons || 0);
-        });
-        
-        // Generate PDF
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('portrait');
-        const pw = doc.internal.pageSize.width;
-        const ph = doc.internal.pageSize.height;
-        let y = 15;
-        let pageNum = 1;
-        
-        function addFooter() {
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(128);
-            doc.text('DivertScan™ LEED Audit Report | Dalmex Recycling LLC | Generated ' + new Date().toLocaleString(), 14, ph - 8);
-            doc.text('Page ' + pageNum, pw - 14, ph - 8, { align: 'right' });
-            doc.setTextColor(0);
-        }
-        
-        function checkPage(needed) {
-            if (y + needed > ph - 20) {
-                addFooter();
-                doc.addPage();
-                pageNum++;
-                y = 15;
-            }
-        }
-        
-        // ===== PAGE 1: COVER =====
-        doc.setFillColor(5, 150, 105);
-        doc.rect(0, 0, pw, 55, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Dalmex Recycling LLC | 2828 Nagle St., Dallas, TX 75220', pw/2, 12, { align: 'center' });
-        doc.setFontSize(24);
-        doc.setFont('helvetica', 'bold');
-        doc.text('LEED WASTE MANAGEMENT', pw/2, 28, { align: 'center' });
-        doc.setFontSize(14);
-        doc.text('AUDIT REPORT', pw/2, 38, { align: 'center' });
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('MRc5 Construction & Demolition Waste Diversion', pw/2, 48, { align: 'center' });
-        
-        doc.setTextColor(0);
-        y = 70;
-        
-        // Project Info Box
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(14, y, pw - 28, 50, 3, 3, 'F');
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text(currentProject.name || 'Project', 20, y + 12);
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Address: ' + (currentProject.address || 'N/A'), 20, y + 20);
-        doc.text('General Contractor: ' + (currentProject.general_contractor || currentProject.contractor || 'N/A'), 20, y + 27);
-        doc.text('Waste Hauler: ' + (currentProject.waste_hauler || 'N/A'), 20, y + 34);
-        doc.text('LEED Target: ' + (currentProject.leed_target || 75) + '% Diversion', 20, y + 41);
-        doc.text('Report Date: ' + new Date().toLocaleDateString(), pw - 20, y + 12, { align: 'right' });
-        doc.text('Processing Facility: Dalmex Recycling LLC', pw - 20, y + 20, { align: 'right' });
-        y += 60;
-        
-        // Compliance Status — green for pass, amber for below (not red)
-        const compliant = divRate >= (currentProject.leed_target || 75);
-        if (compliant) {
-            doc.setFillColor(5, 150, 105);
-        } else {
-            doc.setFillColor(180, 83, 9); // Amber-700 instead of red
-        }
-        doc.roundedRect(14, y, pw - 28, 18, 3, 3, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text(compliant ? '✓ LEED MRc5 COMPLIANT' : '⚠ ' + divRate + '% — BELOW ' + (currentProject.leed_target || 75) + '% LEED TARGET', pw/2, y + 12, { align: 'center' });
-        doc.setTextColor(0);
-        y += 28;
-        
-        // Summary Stats Grid
-        const stats = [
-            { label: 'Total Loads', value: allTickets.length.toString() },
-            { label: 'Total Tonnage', value: totalTons.toFixed(2) + ' tons' },
-            { label: 'Diverted', value: divertedTons.toFixed(2) + ' tons' },
-            { label: 'Landfill', value: landfillTons.toFixed(2) + ' tons' },
-            { label: 'Diversion Rate', value: divRate + '%' },
-            { label: 'Processing Facility', value: 'Dalmex Recycling LLC' },
-            { label: 'Photo Documentation', value: ticketsWithPhotos + ' loads' },
-            { label: 'Date Range', value: (allTickets[0]?.service_date || 'N/A') + ' to ' + (allTickets[allTickets.length-1]?.service_date || 'N/A') }
-        ];
-        
-        const colWidth = (pw - 28) / 4;
-        stats.forEach((s, i) => {
-            const col = i % 4;
-            const row = Math.floor(i / 4);
-            const sx = 14 + col * colWidth;
-            const sy = y + row * 18;
-            
-            doc.setFillColor(248, 250, 252);
-            doc.roundedRect(sx + 1, sy, colWidth - 2, 16, 2, 2, 'F');
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(100);
-            doc.text(s.label, sx + colWidth/2, sy + 5, { align: 'center' });
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0);
-            doc.text(s.value, sx + colWidth/2, sy + 12, { align: 'center' });
-        });
-        y += 44;
-        
-        // Material Breakdown Summary
-        checkPage(50);
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('MATERIAL BREAKDOWN', 14, y);
-        y += 8;
-        
-        const materials = [
-            { name: 'OCC / Paper / Fiber', tons: cardboardTons, color: [222, 184, 135] },
-            { name: 'Wood / Pallets', tons: woodTons, color: [139, 69, 19] },
-            { name: 'Metal / Scrap', tons: metalTons, color: [112, 128, 144] },
-            { name: 'Plastic', tons: plasticTons, color: [65, 105, 225] },
-            { name: 'Landfill', tons: landfillTons, color: [47, 79, 79] }
-        ].filter(m => m.tons > 0);
-        
-        materials.forEach(m => {
-            const pct = totalTons > 0 ? (m.tons / totalTons * 100) : 0;
-            const barWidth = pct * 1.2;
-            
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.text(m.name, 14, y + 4);
-            doc.text(m.tons.toFixed(2) + ' tons (' + pct.toFixed(1) + '%)', pw - 14, y + 4, { align: 'right' });
-            
-            // Bar
-            doc.setFillColor(230, 230, 230);
-            doc.roundedRect(60, y, 80, 5, 1, 1, 'F');
-            doc.setFillColor(m.color[0], m.color[1], m.color[2]);
-            if (barWidth > 0) doc.roundedRect(60, y, Math.min(barWidth, 80), 5, 1, 1, 'F');
-            
-            y += 9;
-        });
-        
-        addFooter();
-        
-        // ===== PAGE 2+: DETAILED LOAD LOG =====
-        doc.addPage('landscape');
-        pageNum++;
-        y = 15;
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('DETAILED LOAD LOG', 14, y);
-        y += 8;
-        
-        // Table headers
-        const headers = ['#', 'Date', 'Ticket #', 'Net Tons', 'Wood', 'Metal', 'OCC', 'Plastic', 'Conc', 'Drywall', 'Landfill', 'Div %', 'Photos', 'Verified'];
-        const cW = [8, 22, 22, 18, 16, 16, 16, 16, 16, 16, 16, 14, 14, 16];
-        let cx = 14;
-        
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'bold');
-        doc.setFillColor(5, 150, 105);
-        doc.setTextColor(255);
-        const hdrH = 7;
-        headers.forEach((h, i) => {
-            doc.rect(cx, y, cW[i], hdrH, 'F');
-            doc.text(h, cx + 1, y + 5);
-            cx += cW[i];
-        });
-        doc.setTextColor(0);
-        y += hdrH;
-        
-        // Data rows
-        doc.setFont('helvetica', 'normal');
-        allTickets.forEach((t, idx) => {
-            if (y > 185) {
-                addFooter();
-                doc.addPage('landscape');
-                pageNum++;
-                y = 15;
-                cx = 14;
-                doc.setFontSize(7);
-                doc.setFont('helvetica', 'bold');
-                doc.setFillColor(5, 150, 105);
-                doc.setTextColor(255);
-                headers.forEach((h, i) => {
-                    doc.rect(cx, y, cW[i], hdrH, 'F');
-                    doc.text(h, cx + 1, y + 5);
-                    cx += cW[i];
-                });
-                doc.setTextColor(0);
-                y += hdrH;
-                doc.setFont('helvetica', 'normal');
-            }
-            
-            const photoCount = [t.debris_photo_1, t.debris_photo_2, t.debris_photo_3, t.scale_ticket_photo].filter(Boolean).length;
-            const rowH = 5;
-            const bg = idx % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
-            cx = 14;
-            
-            const rowData = [
-                String(idx + 1),
-                t.service_date ? new Date(t.service_date).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'2-digit'}) : '',
-                t.ticket_number || '',
-                (t.net_tons || 0).toFixed(2),
-                (t.wood_tons || 0) > 0 ? (t.wood_tons || 0).toFixed(2) : '-',
-                (t.metal_tons || 0) > 0 ? (t.metal_tons || 0).toFixed(2) : '-',
-                (t.cardboard_tons || 0) > 0 ? (t.cardboard_tons || 0).toFixed(2) : '-',
-                (t.plastic_tons || 0) > 0 ? (t.plastic_tons || 0).toFixed(2) : '-',
-                (t.concrete_tons || 0) > 0 ? (t.concrete_tons || 0).toFixed(2) : '-',
-                (t.drywall_tons || 0) > 0 ? (t.drywall_tons || 0).toFixed(2) : '-',
-                (t.landfill_tons || 0) > 0 ? (t.landfill_tons || 0).toFixed(2) : '-',
-                (t.diversion_pct || 0) + '%',
-                photoCount > 0 ? photoCount + ' 📷' : '-',
-                t.human_verified ? '✓' : '-'
-            ];
-            
-            rowData.forEach((d, i) => {
-                doc.setFillColor(bg[0], bg[1], bg[2]);
-                doc.rect(cx, y, cW[i], rowH, 'FD');
-                doc.setFontSize(6);
-                doc.text(String(d), cx + 1, y + 3.5);
-                cx += cW[i];
-            });
-            y += rowH;
-        });
-        
-        // Totals row
-        y += 2;
-        cx = 14;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.setFillColor(5, 150, 105);
-        doc.setTextColor(255);
-        const totals = ['', 'TOTALS', allTickets.length + ' loads', totalTons.toFixed(2), woodTons.toFixed(2), metalTons.toFixed(2), cardboardTons.toFixed(2), plasticTons.toFixed(2), concreteTons.toFixed(2), drywallTons.toFixed(2), landfillTons.toFixed(2), divRate + '%', ticketsWithPhotos + ' 📷', verifiedCount + '/' + allTickets.length];
-        totals.forEach((d, i) => {
-            doc.rect(cx, y, cW[i], 6, 'F');
-            doc.text(String(d), cx + 1, y + 4);
-            cx += cW[i];
-        });
-        doc.setTextColor(0);
-        
-        addFooter();
-        
-        // ===== MONTHLY SUMMARY PAGE =====
-        doc.addPage('portrait');
-        pageNum++;
-        y = 15;
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('MONTHLY DIVERSION SUMMARY', 14, y);
-        y += 10;
-        
-        Object.keys(monthlyData).sort().forEach(month => {
-            checkPage(30);
-            const md = monthlyData[month];
-            const mRate = md.tons > 0 ? Math.round((md.diverted / md.tons) * 100) : 0;
-            const monthLabel = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            
-            doc.setFillColor(248, 250, 252);
-            doc.roundedRect(14, y, pw - 28, 22, 2, 2, 'F');
-            
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.text(monthLabel, 18, y + 8);
-            
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.text(md.tickets.length + ' loads | ' + md.tons.toFixed(2) + ' total tons | ' + md.diverted.toFixed(2) + ' diverted | ' + md.landfill.toFixed(2) + ' landfill', 18, y + 16);
-            
-            // Rate badge
-            doc.setFillColor(mRate >= 75 ? 5 : mRate >= 50 ? 245 : 239, mRate >= 75 ? 150 : mRate >= 50 ? 158 : 68, mRate >= 75 ? 105 : mRate >= 50 ? 11 : 68);
-            doc.roundedRect(pw - 40, y + 3, 24, 16, 2, 2, 'F');
-            doc.setTextColor(255);
-            doc.setFontSize(11);
-            doc.setFont('helvetica', 'bold');
-            doc.text(mRate + '%', pw - 28, y + 14, { align: 'center' });
-            doc.setTextColor(0);
-            
-            y += 26;
-        });
-        
-        // Photo Documentation Index
-        checkPage(30);
-        y += 10;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('PHOTO DOCUMENTATION INDEX', 14, y);
-        y += 8;
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        
-        if (ticketsWithPhotos > 0) {
-            doc.text(ticketsWithPhotos + ' of ' + allTickets.length + ' loads have photographic documentation on file.', 14, y);
-            y += 6;
-            doc.text('Photos include debris pile identification images and scale ticket scans.', 14, y);
-            y += 6;
-            doc.text('All photos are stored in the DivertScan™ system and available for auditor review.', 14, y);
-            y += 10;
-            
-            allTickets.filter(t => t.debris_photo_1 || t.scale_ticket_photo).forEach(t => {
-                checkPage(8);
-                const pCnt = [t.debris_photo_1, t.debris_photo_2, t.debris_photo_3].filter(Boolean).length;
-                const hasST = t.scale_ticket_photo ? 'Yes' : 'No';
-                doc.text('Ticket #' + (t.ticket_number || 'N/A') + ' (' + (t.service_date || '') + ') — ' + pCnt + ' debris photo(s), Scale ticket: ' + hasST, 18, y);
-                y += 5;
-            });
-        } else {
-            doc.text('No photographic documentation available. Photos can be attached during ticket entry.', 14, y);
-        }
-        
-        // Certification Statement
-        checkPage(50);
-        y += 10;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('CERTIFICATION', 14, y);
-        y += 8;
-        
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(14, y, pw - 28, 45, 3, 3, 'F');
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.text('I certify that this information is a true representation of materials processed by Dalmex Recycling LLC.', 20, y + 8);
-        doc.text('All waste diversion data has been collected and verified through the DivertScan™ waste tracking system', 20, y + 14);
-        doc.text('with ' + verifiedCount + ' of ' + allTickets.length + ' loads verified by human inspection. SHA-256 hashes stored for each record.', 20, y + 20);
-        y += 28;
-        doc.text('Processing Facility: Dalmex Recycling LLC, 2828 Nagle St., Dallas, TX 75220', 20, y);
-        y += 6;
-        doc.text('Authorized Representative: _________________________________     Date: _____________', 20, y);
-        
-        addFooter();
-        
-        // Save
-        const filename = 'LEED_Audit_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
-        doc.save(filename);
+        // Download
+        var url = URL.createObjectURL(pdfBlob);
+        var a = document.createElement('a');
+        a.href = url; a.download = filename; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(function() { if (a.parentNode) document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
         
         hideLoading();
-        toast('LEED Audit Report downloaded! (' + allTickets.length + ' loads, ' + (pageNum) + ' pages)', 'success');
+        toast('LEED Report downloaded! (' + allTickets.length + ' loads)', 'success');
         
     } catch (err) {
         hideLoading();
@@ -5392,6 +5052,255 @@ async function generateLEEDAuditReport() {
 
 // Preview LEED Audit PDF in browser (opens in new tab for viewing)
 async function previewLEEDAuditPDF() {
+
+// ===== SHARE PDF via Web Share API (iPad Safari) =====
+async function shareLEEDPDF() {
+    if (!currentProject) { toast('Select a project first', 'error'); return; }
+    
+    var data = (reportData && reportData.length > 0) ? reportData : tickets;
+    if (!data || data.length === 0) { toast('No ticket data — generate report first', 'error'); return; }
+    
+    showLoading('Building PDF for sharing...');
+    
+    try {
+        // Build the LEED PDF using jsPDF (same as generateLEEDAuditReport but output as blob)
+        var pdfBlob = await buildLEEDPDFBlob(data);
+        var filename = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+        var pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+        
+        hideLoading();
+        
+        // Use Web Share API if available (iPad Safari supports this)
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+                title: 'LEED Waste Diversion Report — ' + (currentProject.name || ''),
+                text: 'LEED MRc5 Diversion Report by Dalmex Recycling LLC',
+                files: [pdfFile]
+            });
+            toast('PDF shared!', 'success');
+        } else {
+            // Fallback: download the file
+            var url = URL.createObjectURL(pdfBlob);
+            var a = document.createElement('a');
+            a.href = url; a.download = filename; a.style.display = 'none';
+            document.body.appendChild(a); a.click();
+            setTimeout(function() { if (a.parentNode) document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+            toast('PDF downloaded (sharing not supported on this device)', 'success');
+        }
+    } catch (err) {
+        hideLoading();
+        if (err.name === 'AbortError') { toast('Share cancelled', 'info'); }
+        else { toast('Share error: ' + err.message, 'error'); }
+    }
+}
+
+// Build LEED PDF as Blob (shared by download + share functions)
+async function buildLEEDPDFBlob(data) {
+    var totalTons = data.reduce(function(s,t){return s+(t.net_tons||0)},0);
+    var landfillTons = data.reduce(function(s,t){return s+(t.landfill_tons||0)},0);
+    var divertedTons = totalTons - landfillTons;
+    var divRate = totalTons > 0 ? Math.round((divertedTons/totalTons)*100) : 0;
+    var woodTons = data.reduce(function(s,t){return s+(t.wood_tons||0)},0);
+    var metalTons = data.reduce(function(s,t){return s+(t.metal_tons||0)},0);
+    var cardboardTons = data.reduce(function(s,t){return s+(t.cardboard_tons||0)},0);
+    var concreteTons = data.reduce(function(s,t){return s+(t.concrete_tons||0)},0);
+    var plasticTons = data.reduce(function(s,t){return s+(t.plastic_tons||0)},0);
+    var drywallTons = data.reduce(function(s,t){return s+(t.drywall_tons||0)},0);
+    var ticketsWithPhotos = data.filter(function(t){return t.debris_photo_1||t.debris_photo_2||t.debris_photo_3||t.scale_ticket_photo}).length;
+    var verifiedCount = data.filter(function(t){return t.human_verified}).length;
+    
+    var jsPDFLib = window.jspdf;
+    var doc = new jsPDFLib.jsPDF('portrait');
+    var pw = doc.internal.pageSize.width;
+    var ph = doc.internal.pageSize.height;
+    var y = 15;
+    var pageNum = 1;
+    
+    function addFtr() {
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(128);
+        doc.text('DivertScan™ LEED Diversion Report | Dalmex Recycling LLC | ' + new Date().toLocaleString(), 14, ph-8);
+        doc.text('Page ' + pageNum, pw-14, ph-8, {align:'right'}); doc.setTextColor(0);
+    }
+    function chkPg(n) { if(y+n > ph-20) { addFtr(); doc.addPage(); pageNum++; y=15; } }
+    
+    // COVER — Dalmex green header
+    doc.setFillColor(27,67,50);
+    doc.rect(0,0,pw,55,'F');
+    doc.setTextColor(255);
+    doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.text('Dalmex Recycling LLC | 2828 Nagle St., Dallas, TX 75220 | (214) 352-2000', pw/2, 12, {align:'center'});
+    doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text('LEED WASTE MANAGEMENT', pw/2, 28, {align:'center'});
+    doc.setFontSize(14);
+    doc.text('DIVERSION REPORT', pw/2, 38, {align:'center'});
+    doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.text('MRc5 Construction & Demolition Waste | DivertScan™', pw/2, 48, {align:'center'});
+    doc.setTextColor(0);
+    y = 70;
+    
+    // Project Info
+    doc.setFillColor(240,255,244);
+    doc.roundedRect(14,y,pw-28,45,3,3,'F');
+    doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text(currentProject.name || 'Project', 20, y+10);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Address: ' + (currentProject.address||'N/A'), 20, y+18);
+    doc.text('General Contractor: ' + (currentProject.general_contractor||currentProject.contractor||'N/A'), 20, y+25);
+    doc.text('Waste Hauler: ' + (currentProject.waste_hauler||'N/A'), 20, y+32);
+    doc.text('LEED Target: ' + (currentProject.leed_target||75) + '%', 20, y+39);
+    doc.text('Report Date: ' + new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}), pw-20, y+10, {align:'right'});
+    doc.text('Processing: Dalmex Recycling LLC', pw-20, y+18, {align:'right'});
+    y += 52;
+    
+    // Compliance bar
+    var compliant = divRate >= (currentProject.leed_target||75);
+    doc.setFillColor(compliant ? 27 : 180, compliant ? 122 : 83, compliant ? 61 : 9);
+    doc.roundedRect(14,y,pw-28,16,3,3,'F');
+    doc.setTextColor(255); doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text(compliant ? '✓ LEED MRc5 COMPLIANT — '+divRate+'% DIVERSION' : '⚠ '+divRate+'% — BELOW '+(currentProject.leed_target||75)+'% TARGET', pw/2, y+11, {align:'center'});
+    doc.setTextColor(0);
+    y += 24;
+    
+    // Stats grid
+    var metrics = [
+        {l:'Total Loads', v:data.length.toString()},
+        {l:'Total Tons', v:totalTons.toFixed(2)},
+        {l:'Diverted', v:divertedTons.toFixed(2)+' T'},
+        {l:'Landfill', v:landfillTons.toFixed(2)+' T'}
+    ];
+    var mw = (pw-28)/4;
+    metrics.forEach(function(m,i) {
+        var mx = 14+i*mw;
+        doc.setFillColor(248,250,252);
+        doc.roundedRect(mx+1,y,mw-2,16,2,2,'F');
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(100);
+        doc.text(m.l, mx+mw/2, y+5, {align:'center'});
+        doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(0);
+        doc.text(m.v, mx+mw/2, y+13, {align:'center'});
+    });
+    y += 24;
+    
+    // Material breakdown
+    chkPg(60);
+    doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text('MATERIAL BREAKDOWN & END MARKETS', 14, y); y += 8;
+    
+    // Table header
+    doc.setFillColor(64,145,108); doc.setTextColor(255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    var mhX = 14;
+    var mhW = [45, 20, 15, pw-28-45-20-15];
+    ['Material Stream','Tons','%','End Market Destination'].forEach(function(h,i) {
+        doc.rect(mhX,y,mhW[i],7,'F'); doc.text(h, mhX+2, y+5); mhX += mhW[i];
+    });
+    doc.setTextColor(0); y += 7;
+    
+    var matList = [
+        ['OCC / Paper / Fiber', cardboardTons, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper'],
+        ['Wood / Pallets', woodTons, 'Dalmex Pallets (In-House Reuse)'],
+        ['Metal / Scrap', metalTons, 'CMC · Cyclone Metal Recycling'],
+        ['Plastic', plasticTons, 'American Recycling Arkansas'],
+        ['Concrete / Block', concreteTons, 'Big City Concrete (Partner)'],
+        ['Drywall / Gypsum', drywallTons, 'USA Gypsum (Partner)']
+    ];
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    matList.forEach(function(m,i) {
+        if (m[1] <= 0) return;
+        var bg = i%2===0 ? [255,255,255] : [240,255,244];
+        doc.setFillColor(bg[0],bg[1],bg[2]);
+        var rx = 14;
+        [m[0], m[1].toFixed(2), (totalTons>0?Math.round(m[1]/totalTons*100):0)+'%', m[2]].forEach(function(d,j) {
+            doc.rect(rx,y,mhW[j],6,'FD'); doc.text(String(d), rx+2, y+4); rx+=mhW[j];
+        });
+        y += 6;
+    });
+    // Landfill + Totals rows
+    doc.setFillColor(255,243,243);
+    var rx2=14; ['Landfill',landfillTons.toFixed(2),(totalTons>0?Math.round(landfillTons/totalTons*100):0)+'%','Municipal Landfill'].forEach(function(d,j){
+        doc.rect(rx2,y,mhW[j],6,'FD'); doc.text(String(d),rx2+2,y+4); rx2+=mhW[j];
+    }); y+=6;
+    doc.setFont('helvetica','bold'); doc.setFillColor(183,228,199);
+    rx2=14; ['TOTAL',totalTons.toFixed(2),'100%',divRate+'% Diverted'].forEach(function(d,j){
+        doc.rect(rx2,y,mhW[j],7,'FD'); doc.text(String(d),rx2+2,y+5); rx2+=mhW[j];
+    }); y+=10;
+    
+    addFtr();
+    
+    // === PAGE 2: LOAD DETAILS (landscape) ===
+    doc.addPage('landscape'); pageNum++; y=15;
+    var lpw = doc.internal.pageSize.width;
+    
+    doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text('DETAILED LOAD LOG — ' + data.length + ' Loads', 14, y); y+=8;
+    
+    var hds = ['#','Date','Ticket','Hauler','Gross','Tare','Net','Tons','Wood%','Metal%','OCC%','Plastic%','Div%','Verified'];
+    var cw2 = [8,22,22,30,22,22,22,18,14,14,14,14,16,18];
+    
+    function drawHdr2() {
+        var hx=14; doc.setFillColor(27,67,50); doc.setTextColor(255); doc.setFontSize(7); doc.setFont('helvetica','bold');
+        hds.forEach(function(h,i) { doc.rect(hx,y,cw2[i],7,'F'); doc.text(h,hx+1,y+5); hx+=cw2[i]; });
+        doc.setTextColor(0); y+=7; doc.setFont('helvetica','normal');
+    }
+    drawHdr2();
+    
+    data.forEach(function(t,idx) {
+        if (y > 185) { addFtr(); doc.addPage('landscape'); pageNum++; y=15; drawHdr2(); }
+        var bg2 = idx%2===0 ? [255,255,255] : [248,250,252];
+        doc.setFillColor(bg2[0],bg2[1],bg2[2]); doc.setFontSize(6);
+        var cx2=14;
+        var rd = [
+            String(idx+1),
+            t.service_date ? new Date(t.service_date).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'}) : '',
+            t.ticket_number||'',
+            (t.hauler||'').substring(0,18),
+            (t.gross_lbs||0).toLocaleString(),
+            (t.tare_lbs||0).toLocaleString(),
+            (t.net_lbs||0).toLocaleString(),
+            (t.net_tons||0).toFixed(2),
+            (t.wood_pct||0)+'%',
+            (t.metal_pct||0)+'%',
+            (t.cardboard_pct||0)+'%',
+            (t.plastic_pct||0)+'%',
+            (t.diversion_pct||0)+'%',
+            t.human_verified ? '✓' : '-'
+        ];
+        rd.forEach(function(d,i) { doc.rect(cx2,y,cw2[i],5,'FD'); doc.text(String(d),cx2+1,y+3.5); cx2+=cw2[i]; });
+        y+=5;
+    });
+    
+    // Totals row
+    y+=2; doc.setFont('helvetica','bold'); doc.setFontSize(7);
+    doc.setFillColor(27,67,50); doc.setTextColor(255);
+    var cx3=14;
+    var tots = ['','TOTALS',data.length+'','',
+        data.reduce(function(s,t){return s+(t.gross_lbs||0)},0).toLocaleString(),
+        data.reduce(function(s,t){return s+(t.tare_lbs||0)},0).toLocaleString(),
+        data.reduce(function(s,t){return s+(t.net_lbs||0)},0).toLocaleString(),
+        totalTons.toFixed(2),'','','','',divRate+'%',verifiedCount+'/'+data.length];
+    tots.forEach(function(d,i) { doc.rect(cx3,y,cw2[i],6,'F'); doc.text(String(d),cx3+1,y+4); cx3+=cw2[i]; });
+    doc.setTextColor(0);
+    
+    addFtr();
+    
+    // === CERTIFICATION PAGE ===
+    doc.addPage('portrait'); pageNum++; y=20;
+    doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text('CERTIFICATION STATEMENT', 14, y); y+=10;
+    
+    doc.setFillColor(248,250,252);
+    doc.roundedRect(14,y,pw-28,40,3,3,'F');
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('I certify that this information is a true representation of materials processed by Dalmex Recycling LLC.', 20, y+8);
+    doc.text('All waste diversion data has been collected and verified through the DivertScan™ tracking system.', 20, y+15);
+    doc.text(verifiedCount+' of '+data.length+' loads verified by human inspection. SHA-256 hashes stored for each record.', 20, y+22);
+    y+=32;
+    doc.text('Processing Facility: Dalmex Recycling LLC, 2828 Nagle St., Dallas, TX 75220', 20, y); y+=8;
+    doc.text('Authorized Signature: _________________________________     Date: _____________', 20, y);
+    
+    addFtr();
+    
+    return doc.output('blob');
+}
+
     if (!currentProject) {
         toast('Select a project first', 'error');
         return;
@@ -6061,11 +5970,11 @@ function downloadBoxTrackerExcel() {
         var rows = [];
 
         // Header section
-        rows.push(['Waste Diversion Report — ' + (currentProject.name || 'Project')]);
+        rows.push(['DivertScan™ LEED Diversion Report — ' + (currentProject.name || 'Project')]);
         rows.push(['Processing Facility: Dalmex Recycling LLC, 2828 Nagle St., Dallas, TX 75220']);
-        rows.push(['Company: ' + (currentProject.waste_hauler || '')]);
+        rows.push(['Hauler: ' + (currentProject.waste_hauler || '')]);
         rows.push(['Location: ' + (currentProject.address || '')]);
-        rows.push(['Report by: Robert Vandling | robert@dalmexrecycling.com']);
+        rows.push(['General Contractor: ' + (currentProject.general_contractor || '')]);
         rows.push(['Generated: ' + new Date().toLocaleString()]);
         rows.push([]);
 
@@ -6166,12 +6075,12 @@ function downloadBoxTrackerExcel() {
 
         XLSX.utils.book_append_sheet(wb, ws, 'Waste Diversion Report');
 
-        var filename = 'BoxTracker_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+        var filename = 'DivertScan_LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
         XLSX.writeFile(wb, filename);
-        toast('Box Tracker report downloaded (single tab, ' + data.length + ' loads)', 'success');
+        toast('DivertScan™ report downloaded (single tab, ' + data.length + ' loads)', 'success');
     } catch (err) {
-        console.error('Box Tracker export error:', err);
-        toast('Box Tracker export failed: ' + err.message, 'error');
+        console.error('DivertScan™ export error:', err);
+        toast('DivertScan™ export failed: ' + err.message, 'error');
     }
 }
 
@@ -7495,8 +7404,127 @@ function saveNewFacility() {
     facilities.push(facility);
     localStorage.setItem('divertscan_facilities', JSON.stringify(facilities));
     
+    // Also save to Supabase if available
+    if (sb) {
+        try { sb.from('facilities').insert([facility]).then(function(){}); } catch(e) {}
+    }
+    
     document.getElementById('addFacilityModal').remove();
+    renderCustomFacilities();
     toast('Facility "' + name + '" added!', 'success');
+}
+
+// ===== FACILITY EDIT / DELETE CRUD =====
+function deleteFacility(facilityId) {
+    setTimeout(function() {
+        if (!confirm('Delete this facility?')) return;
+        
+        var facilities = JSON.parse(localStorage.getItem('divertscan_facilities') || '[]');
+        facilities = facilities.filter(function(f) { return f.id !== facilityId; });
+        localStorage.setItem('divertscan_facilities', JSON.stringify(facilities));
+        
+        // Also delete from Supabase
+        if (sb) {
+            try { sb.from('facilities').delete().eq('id', facilityId).then(function(){}); } catch(e) {}
+        }
+        
+        renderCustomFacilities();
+        toast('Facility deleted', 'success');
+    }, 100);
+}
+
+function editFacility(facilityId) {
+    var facilities = JSON.parse(localStorage.getItem('divertscan_facilities') || '[]');
+    var fac = facilities.find(function(f) { return f.id === facilityId; });
+    if (!fac) { toast('Facility not found', 'error'); return; }
+    
+    var modal = document.createElement('div');
+    modal.id = 'editFacilityModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    
+    var matOptions = ['concrete','metal','wood','cardboard','drywall','plastic','mixed','ewaste','asphalt','soil'].map(function(m) {
+        return '<option value="'+m+'"'+(fac.material===m?' selected':'')+'>'+m.charAt(0).toUpperCase()+m.slice(1)+'</option>';
+    }).join('');
+    
+    modal.innerHTML = '<div style="background:var(--bg-secondary);border-radius:16px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto">' +
+        '<div style="background:linear-gradient(135deg,#2d5a27,#1a3d15);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">' +
+            '<div style="font-size:16px;font-weight:700;color:white">✏️ Edit Facility</div>' +
+            '<button onclick="document.getElementById(\'editFacilityModal\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>' +
+        '</div>' +
+        '<div style="padding:20px">' +
+            '<div class="form-group"><label class="form-label">Facility Name *</label><input type="text" id="editFacName" class="form-input" value="'+((fac.name||'').replace(/"/g,'&quot;'))+'"></div>' +
+            '<div class="form-group"><label class="form-label">Material Type</label><select id="editFacMaterial" class="form-input">'+matOptions+'</select></div>' +
+            '<div class="form-group"><label class="form-label">Address</label><input type="text" id="editFacAddress" class="form-input" value="'+((fac.address||'').replace(/"/g,'&quot;'))+'"></div>' +
+            '<div class="form-group"><label class="form-label">Contact / Phone</label><input type="text" id="editFacContact" class="form-input" value="'+((fac.contact||'').replace(/"/g,'&quot;'))+'"></div>' +
+            '<div class="form-group"><label class="form-label">Notes</label><textarea id="editFacNotes" class="form-input" rows="2">'+((fac.notes||''))+'</textarea></div>' +
+        '</div>' +
+        '<div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">' +
+            '<button class="btn btn-secondary" onclick="document.getElementById(\'editFacilityModal\').remove()" style="flex:1">Cancel</button>' +
+            '<button class="btn btn-primary" onclick="saveEditFacility(\''+facilityId+'\')" style="flex:1">💾 Save Changes</button>' +
+        '</div>' +
+    '</div>';
+    
+    document.body.appendChild(modal);
+}
+
+function saveEditFacility(facilityId) {
+    var name = document.getElementById('editFacName')?.value?.trim();
+    if (!name) { toast('Name is required', 'error'); return; }
+    
+    var facilities = JSON.parse(localStorage.getItem('divertscan_facilities') || '[]');
+    var idx = facilities.findIndex(function(f) { return f.id === facilityId; });
+    if (idx === -1) { toast('Facility not found', 'error'); return; }
+    
+    facilities[idx].name = name;
+    facilities[idx].material = document.getElementById('editFacMaterial')?.value || 'mixed';
+    facilities[idx].address = document.getElementById('editFacAddress')?.value?.trim() || '';
+    facilities[idx].contact = document.getElementById('editFacContact')?.value?.trim() || '';
+    facilities[idx].notes = document.getElementById('editFacNotes')?.value?.trim() || '';
+    facilities[idx].updated_at = new Date().toISOString();
+    
+    localStorage.setItem('divertscan_facilities', JSON.stringify(facilities));
+    
+    // Supabase update
+    if (sb) {
+        try { sb.from('facilities').update(facilities[idx]).eq('id', facilityId).then(function(){}); } catch(e) {}
+    }
+    
+    document.getElementById('editFacilityModal').remove();
+    renderCustomFacilities();
+    toast('Facility updated!', 'success');
+}
+
+// Render user-added custom facilities with edit/delete
+function renderCustomFacilities() {
+    var container = document.getElementById('customFacilitiesList');
+    if (!container) return;
+    
+    var facilities = JSON.parse(localStorage.getItem('divertscan_facilities') || '[]');
+    
+    if (facilities.length === 0) {
+        container.innerHTML = '<div style="font-size:11px;color:var(--slate-500);font-style:italic;padding:8px">No custom facilities added yet.</div>';
+        return;
+    }
+    
+    var matIcons = {concrete:'🧱',metal:'🔩',wood:'🪵',cardboard:'📦',drywall:'🏗️',plastic:'♻️',mixed:'🔄',ewaste:'🖥️',asphalt:'🪨',soil:'🌍'};
+    
+    container.innerHTML = facilities.map(function(f) {
+        var icon = matIcons[f.material] || '📋';
+        return '<div style="background:var(--slate-700);border-radius:8px;padding:10px;border-left:3px solid var(--accent-info);margin-bottom:6px" id="fac-'+f.id+'">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                '<div style="flex:1">' +
+                    '<div style="font-size:12px;font-weight:600">'+icon+' '+f.name+'</div>' +
+                    '<div style="font-size:10px;color:var(--accent-info)">'+(f.address||f.material||'Custom')+'</div>' +
+                    (f.notes ? '<div style="font-size:9px;color:var(--slate-400);margin-top:2px">'+f.notes+'</div>' : '') +
+                '</div>' +
+                '<div style="display:flex;gap:4px;flex-shrink:0">' +
+                    '<button onclick="editFacility(\''+f.id+'\')" ontouchend="event.preventDefault();editFacility(\''+f.id+'\')" style="background:var(--accent-info);border:none;color:white;width:28px;height:28px;border-radius:6px;font-size:12px;cursor:pointer" title="Edit">✏️</button>' +
+                    '<button onclick="deleteFacility(\''+f.id+'\')" ontouchend="event.preventDefault();deleteFacility(\''+f.id+'\')" style="background:var(--accent-danger);border:none;color:white;width:28px;height:28px;border-radius:6px;font-size:12px;cursor:pointer" title="Delete">🗑️</button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }).join('');
 }
 
 function previewReportPDF() {
@@ -9151,12 +9179,160 @@ function forceSyncNow() {
         toast('Supabase not configured — nothing to sync', 'error');
         return;
     }
-    toast('🔄 Syncing...', 'success');
-    syncPendingData().then(function() {
-        toast('✅ Sync complete!', 'success');
-    }).catch(function(err) {
-        toast('Sync error: ' + err.message, 'error');
-    });
+    
+    // Show sync status modal
+    showSyncStatusModal();
+}
+
+function showSyncStatusModal() {
+    // Remove existing
+    var old = document.getElementById('syncStatusModal');
+    if (old) old.remove();
+    
+    var modal = document.createElement('div');
+    modal.id = 'syncStatusModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    
+    modal.innerHTML = '<div style="background:var(--bg-secondary);border-radius:16px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto">' +
+        '<div style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">' +
+            '<div style="font-size:16px;font-weight:700;color:white">🔄 Sync Status</div>' +
+            '<button onclick="document.getElementById(\'syncStatusModal\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>' +
+        '</div>' +
+        '<div id="syncStatusContent" style="padding:20px">' +
+            '<div style="text-align:center;padding:20px"><div style="font-size:24px">🔄</div><div style="color:var(--text-secondary);margin-top:8px">Checking sync queue...</div></div>' +
+        '</div>' +
+    '</div>';
+    
+    document.body.appendChild(modal);
+    
+    // Run sync with detailed status
+    runDetailedSync();
+}
+
+async function runDetailedSync() {
+    var content = document.getElementById('syncStatusContent');
+    if (!content) return;
+    
+    try {
+        var queue = await getAllFromLocal('syncQueue');
+        
+        if (queue.length === 0) {
+            var lastSync = localStorage.getItem('divertscan_last_sync');
+            content.innerHTML = '<div style="text-align:center;padding:20px">' +
+                '<div style="font-size:48px;margin-bottom:12px">✅</div>' +
+                '<div style="font-size:16px;font-weight:600;color:var(--emerald-400)">All Synced!</div>' +
+                '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px">No pending items in sync queue.</div>' +
+                (lastSync ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Last sync: '+new Date(lastSync).toLocaleString()+'</div>' : '') +
+            '</div>';
+            toast('✅ Everything is synced!', 'success');
+            return;
+        }
+        
+        // Show items being synced
+        content.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Syncing '+queue.length+' item(s)...</div>' +
+            '<div id="syncItemList"></div>';
+        
+        var itemList = document.getElementById('syncItemList');
+        var synced = 0;
+        var failed = 0;
+        var failedItems = [];
+        
+        for (var i = 0; i < queue.length; i++) {
+            var item = queue[i];
+            var label = (item.table||'unknown') + ' — ' + (item.action||'?');
+            if (item.data && item.data.ticket_number) label = 'Ticket #' + item.data.ticket_number + ' — ' + (item.action||'?');
+            else if (item.data && item.data.name) label = item.data.name + ' — ' + (item.action||'?');
+            
+            // Show progress
+            itemList.innerHTML += '<div id="sync-item-'+i+'" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--slate-700)">' +
+                '<span id="sync-icon-'+i+'" style="font-size:14px">⏳</span>' +
+                '<div style="flex:1;font-size:12px">'+label+'</div>' +
+                '<span id="sync-status-'+i+'" style="font-size:10px;color:var(--text-muted)">syncing...</span>' +
+            '</div>';
+            
+            try {
+                if (item.action === 'insert') {
+                    var r = await sb.from(item.table).insert([item.data]);
+                    if (r.error) throw r.error;
+                } else if (item.action === 'update') {
+                    var r2 = await sb.from(item.table).update(item.data).eq('id', item.data.id);
+                    if (r2.error) throw r2.error;
+                } else if (item.action === 'delete') {
+                    var r3 = await sb.from(item.table).delete().eq('id', item.data.id);
+                    if (r3.error) throw r3.error;
+                }
+                
+                await deleteFromLocal('syncQueue', item.id);
+                synced++;
+                
+                var iconEl = document.getElementById('sync-icon-'+i);
+                var statusEl = document.getElementById('sync-status-'+i);
+                if (iconEl) iconEl.textContent = '✅';
+                if (statusEl) { statusEl.textContent = 'done'; statusEl.style.color = 'var(--emerald-400)'; }
+                
+            } catch (err) {
+                failed++;
+                var errMsg = err.message || err.details || 'Unknown error';
+                // Handle common errors
+                if (errMsg.includes('storage') || errMsg.includes('bucket') || errMsg.includes('photo')) {
+                    errMsg = 'Photo upload failed — Supabase storage bucket not configured';
+                } else if (errMsg.includes('timeout') || errMsg.includes('TIMEOUT')) {
+                    errMsg = 'Request timed out — will retry';
+                } else if (errMsg.includes('duplicate') || errMsg.includes('already exists') || errMsg.includes('23505')) {
+                    errMsg = 'Record already exists in database';
+                    // Remove duplicate from queue since it's already synced
+                    await deleteFromLocal('syncQueue', item.id);
+                }
+                
+                failedItems.push({label: label, error: errMsg});
+                
+                var iconEl2 = document.getElementById('sync-icon-'+i);
+                var statusEl2 = document.getElementById('sync-status-'+i);
+                var rowEl = document.getElementById('sync-item-'+i);
+                if (iconEl2) iconEl2.textContent = '❌';
+                if (statusEl2) { statusEl2.textContent = errMsg; statusEl2.style.color = 'var(--red-500)'; }
+                if (rowEl) rowEl.style.background = 'rgba(239,68,68,0.1)';
+                
+                // Increment retries (don't remove - let user retry)
+                item.retries = (item.retries || 0) + 1;
+                if (item.retries < 5) {
+                    await saveToLocal('syncQueue', item);
+                } else {
+                    await deleteFromLocal('syncQueue', item.id);
+                }
+            }
+        }
+        
+        // Summary
+        var summaryHtml = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);text-align:center">';
+        if (failed === 0) {
+            summaryHtml += '<div style="font-size:14px;font-weight:600;color:var(--emerald-400)">✅ All '+synced+' item(s) synced successfully!</div>';
+            localStorage.setItem('divertscan_last_sync', new Date().toISOString());
+        } else {
+            summaryHtml += '<div style="font-size:14px;font-weight:600;color:var(--amber-400)">⚠ '+synced+' synced, '+failed+' failed</div>';
+            summaryHtml += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Failed items will auto-retry on next sync</div>';
+        }
+        summaryHtml += '</div>';
+        content.innerHTML += summaryHtml;
+        
+        // Update global status
+        pendingSyncItems = await getAllFromLocal('syncQueue');
+        updateSyncStatus();
+        
+        if (failed === 0) toast('✅ Sync complete!', 'success');
+        else toast('⚠ '+failed+' item(s) failed to sync', 'error');
+        
+        await loadProjects();
+        await loadRecentTickets();
+        
+    } catch (err) {
+        content.innerHTML = '<div style="text-align:center;padding:20px">' +
+            '<div style="font-size:48px;margin-bottom:12px">⚠️</div>' +
+            '<div style="font-size:14px;color:var(--red-500)">Sync Error</div>' +
+            '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px">'+err.message+'</div>' +
+        '</div>';
+    }
 }
 
 // ========== AUTO-SAVE DRAFTS ==========
@@ -9491,7 +9667,7 @@ async function createFullBackup() {
         const backup = {
             version: '7.7',
             createdAt: new Date().toISOString(),
-            app: 'DivertScan Box Tracker',
+            app: 'DivertScan Enterprise',
             settings: {
                 leedVersion: currentLeedVersion,
                 companyInfo: companyInfo
@@ -9800,6 +9976,9 @@ async function initBulletproof() {
     
     // Start autosave
     startAutosave();
+    
+    // Render custom facilities
+    renderCustomFacilities();
     
     // Update local storage stats
     updateLocalStorageStats();
