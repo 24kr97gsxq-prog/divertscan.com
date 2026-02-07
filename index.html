@@ -4893,7 +4893,7 @@ async function generateLEEDAuditReport() {
             doc.setFontSize(7);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(128);
-            doc.text('DivertScan™ LEED Audit Report | Generated ' + new Date().toLocaleString(), 14, ph - 8);
+            doc.text('DivertScan™ LEED Audit Report | Dalmex Recycling LLC | Generated ' + new Date().toLocaleString(), 14, ph - 8);
             doc.text('Page ' + pageNum, pw - 14, ph - 8, { align: 'right' });
             doc.setTextColor(0);
         }
@@ -4909,19 +4909,22 @@ async function generateLEEDAuditReport() {
         
         // ===== PAGE 1: COVER =====
         doc.setFillColor(5, 150, 105);
-        doc.rect(0, 0, pw, 50, 'F');
+        doc.rect(0, 0, pw, 55, 'F');
         doc.setTextColor(255);
-        doc.setFontSize(24);
-        doc.setFont('helvetica', 'bold');
-        doc.text('LEED WASTE MANAGEMENT', pw/2, 22, { align: 'center' });
-        doc.setFontSize(14);
-        doc.text('AUDIT REPORT', pw/2, 32, { align: 'center' });
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('MRc5 Construction & Demolition Waste Diversion', pw/2, 42, { align: 'center' });
+        doc.text('Dalmex Recycling LLC | 2828 Nagle St., Dallas, TX 75220', pw/2, 12, { align: 'center' });
+        doc.setFontSize(24);
+        doc.setFont('helvetica', 'bold');
+        doc.text('LEED WASTE MANAGEMENT', pw/2, 28, { align: 'center' });
+        doc.setFontSize(14);
+        doc.text('AUDIT REPORT', pw/2, 38, { align: 'center' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('MRc5 Construction & Demolition Waste Diversion', pw/2, 48, { align: 'center' });
         
         doc.setTextColor(0);
-        y = 65;
+        y = 70;
         
         // Project Info Box
         doc.setFillColor(245, 245, 245);
@@ -4936,17 +4939,21 @@ async function generateLEEDAuditReport() {
         doc.text('Waste Hauler: ' + (currentProject.waste_hauler || 'N/A'), 20, y + 34);
         doc.text('LEED Target: ' + (currentProject.leed_target || 75) + '% Diversion', 20, y + 41);
         doc.text('Report Date: ' + new Date().toLocaleDateString(), pw - 20, y + 12, { align: 'right' });
-        doc.text('LEED Version: ' + (currentProject.leed_version || 'v4.1'), pw - 20, y + 20, { align: 'right' });
+        doc.text('Processing Facility: Dalmex Recycling LLC', pw - 20, y + 20, { align: 'right' });
         y += 60;
         
-        // Compliance Status
+        // Compliance Status — green for pass, amber for below (not red)
         const compliant = divRate >= (currentProject.leed_target || 75);
-        doc.setFillColor(compliant ? 5 : 239, compliant ? 150 : 68, compliant ? 105 : 68);
+        if (compliant) {
+            doc.setFillColor(5, 150, 105);
+        } else {
+            doc.setFillColor(180, 83, 9); // Amber-700 instead of red
+        }
         doc.roundedRect(14, y, pw - 28, 18, 3, 3, 'F');
         doc.setTextColor(255);
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text(compliant ? '✓ LEED MRc5 COMPLIANT' : '✗ BELOW LEED TARGET', pw/2, y + 12, { align: 'center' });
+        doc.text(compliant ? '✓ LEED MRc5 COMPLIANT' : '⚠ ' + divRate + '% — BELOW ' + (currentProject.leed_target || 75) + '% LEED TARGET', pw/2, y + 12, { align: 'center' });
         doc.setTextColor(0);
         y += 28;
         
@@ -4957,7 +4964,7 @@ async function generateLEEDAuditReport() {
             { label: 'Diverted', value: divertedTons.toFixed(2) + ' tons' },
             { label: 'Landfill', value: landfillTons.toFixed(2) + ' tons' },
             { label: 'Diversion Rate', value: divRate + '%' },
-            { label: 'Verified Loads', value: verifiedCount + '/' + allTickets.length },
+            { label: 'Processing Facility', value: 'Dalmex Recycling LLC' },
             { label: 'Photo Documentation', value: ticketsWithPhotos + ' loads' },
             { label: 'Date Range', value: (allTickets[0]?.service_date || 'N/A') + ' to ' + (allTickets[allTickets.length-1]?.service_date || 'N/A') }
         ];
@@ -4990,12 +4997,10 @@ async function generateLEEDAuditReport() {
         y += 8;
         
         const materials = [
-            { name: 'Wood', tons: woodTons, color: [139, 69, 19] },
-            { name: 'Metal', tons: metalTons, color: [112, 128, 144] },
-            { name: 'Cardboard/OCC', tons: cardboardTons, color: [222, 184, 135] },
-            { name: 'Concrete/Masonry', tons: concreteTons, color: [169, 169, 169] },
+            { name: 'OCC / Paper / Fiber', tons: cardboardTons, color: [222, 184, 135] },
+            { name: 'Wood / Pallets', tons: woodTons, color: [139, 69, 19] },
+            { name: 'Metal / Scrap', tons: metalTons, color: [112, 128, 144] },
             { name: 'Plastic', tons: plasticTons, color: [65, 105, 225] },
-            { name: 'Drywall', tons: drywallTons, color: [245, 245, 220] },
             { name: 'Landfill', tons: landfillTons, color: [47, 79, 79] }
         ].filter(m => m.tons > 0);
         
@@ -5246,13 +5251,13 @@ async function previewLEEDAuditPDF() {
     var metalTons = data.reduce(function(s,t){return s+(t.metal_tons||0)},0);
     var plasticTons = data.reduce(function(s,t){return s+(t.plastic_tons||0)},0);
     
-    var statusText = diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET';
+    var statusText = diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : diversionRate + '% — BELOW ' + (currentProject.leed_target || 75) + '% TARGET';
     var statusColor = diversionRate >= (currentProject.leed_target || 75) ? '#1B7A3D' : '#B45309';
     
     var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>LEED Waste Diversion Report - ' + (currentProject.name || '') + '</title>';
     html += '<style>body{font-family:Calibri,Arial,sans-serif;margin:20px;color:#333}';
     html += 'h1{color:#1B4332;border-bottom:3px solid #2D6A4F;padding-bottom:8px;font-size:22px}';
-    html += 'h2{color:#2D6A4F;font-size:16px;margin-top:24px;border-bottom:1px solid #B7E4C7;padding-bottom:4px}';
+    html += '.branding{background:#1B4332;color:white;padding:12px 20px;border-radius:4px;margin-bottom:16px;font-size:13px}';
     html += '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}';
     html += '.info-grid div{padding:6px 12px;background:#F0FFF4;border-radius:4px;font-size:13px}';
     html += '.info-grid label{color:#666;font-size:11px;display:block}';
@@ -5270,6 +5275,7 @@ async function previewLEEDAuditPDF() {
     html += '@media print{body{margin:10px}h1{font-size:18px}.metric .val{font-size:22px}}';
     html += '</style></head><body>';
     
+    html += '<div class="branding"><b>Dalmex Recycling LLC</b> | 2828 Nagle St., Dallas, TX 75220 | (214) 352-2000</div>';
     html += '<h1>LEED MRc5 Waste Diversion Report</h1>';
     html += '<p style="color:#666;font-size:12px;margin-top:-8px">All Materials Processed by Dalmex Recycling LLC, Dallas TX</p>';
     
@@ -5827,7 +5833,6 @@ function downloadReportExcel() {
 
 // ========== BOX TRACKER EXCEL REPORT ==========
 function downloadBoxTrackerExcel() {
-    // Works with or without prior generateReport - pulls data fresh
     if (!currentProject) {
         toast('Select a project first', 'error');
         return;
@@ -5837,178 +5842,127 @@ function downloadBoxTrackerExcel() {
         return;
     }
 
-    // Use reportData if available, otherwise use tickets array
-    let data = (reportData && reportData.length > 0) ? reportData : tickets;
+    var data = (reportData && reportData.length > 0) ? reportData : tickets;
     if (!data || data.length === 0) {
-        toast('No ticket data available. Generate a report or load tickets first.', 'error');
+        toast('No ticket data available', 'error');
         return;
     }
 
     try {
-        // Group tickets by month
-        const byMonth = {};
-        data.forEach(t => {
-            const d = t.service_date ? new Date(t.service_date) : new Date(t.created_at);
-            const key = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-            if (!byMonth[key]) byMonth[key] = [];
-            byMonth[key].push(t);
-        });
+        data.sort(function(a, b) { return new Date(a.service_date) - new Date(b.service_date); });
+        
+        var wb = XLSX.utils.book_new();
+        var rows = [];
 
-        // Sort months chronologically
-        const sortedMonths = Object.keys(byMonth).sort((a, b) => new Date(a + ' 1') - new Date(b + ' 1'));
+        // Header section
+        rows.push(['Waste Diversion Report — ' + (currentProject.name || 'Project')]);
+        rows.push(['Processing Facility: Dalmex Recycling LLC, 2828 Nagle St., Dallas, TX 75220']);
+        rows.push(['Company: ' + (currentProject.waste_hauler || '')]);
+        rows.push(['Location: ' + (currentProject.address || '')]);
+        rows.push(['Report by: Robert Vandling | robert@dalmexrecycling.com']);
+        rows.push(['Generated: ' + new Date().toLocaleString()]);
+        rows.push([]);
 
-        const wb = XLSX.utils.book_new();
+        // Column headers
+        var headers = ['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)',
+            'Net (lbs)','Tons','OCC %','OCC Tons','Wood %','Wood Tons',
+            'Metal %','Metal Tons','Plastic %','Plastic Tons',
+            'Total Diverted','Diverted %','Landfill Tons','Landfill %'];
+        rows.push(headers);
 
-        sortedMonths.forEach(monthLabel => {
-            const monthTickets = byMonth[monthLabel];
-            monthTickets.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        // Data rows
+        var tGross=0,tTare=0,tNet=0,tTons=0,tOCC=0,tWood=0,tMet=0,tPlas=0,tDiv=0,tLF=0;
+        data.forEach(function(t) {
+            var gross = t.gross_lbs || 0;
+            var tare = t.tare_lbs || 0;
+            var net = t.net_lbs || (gross - tare);
+            var tons = t.net_tons || (net / 2000);
+            var occP = (t.cardboard_pct || 0) / 100;
+            var woodP = (t.wood_pct || 0) / 100;
+            var metalP = (t.metal_pct || 0) / 100;
+            var plasticP = (t.plastic_pct || 0) / 100;
+            var occT = tons * occP;
+            var woodT = tons * woodP;
+            var metalT = tons * metalP;
+            var plasticT = tons * plasticP;
+            var totalDiv = occT + woodT + metalT + plasticT;
+            var divPct = tons > 0 ? totalDiv / tons : 0;
+            var lfTons = t.landfill_tons || (tons - totalDiv);
+            var lfPct = tons > 0 ? lfTons / tons : 0;
 
-            // Build sheet data matching Ross's exact format
-            const rows = [];
-
-            // Header section (rows 1-7 in the array, will be rows 7-13 visually)
-            rows.push([`Waste Diversion Report for ${monthLabel}`]);
-            rows.push([`Company: ${currentProject.waste_hauler || 'Jaguar Waste Management'}`]);
-            rows.push([`Location: ${currentProject.address || ''}`]);
-            rows.push([`Project: ${currentProject.name || ''}`]);
-            rows.push([`Report by: Dalmex Recycling`]);
-            rows.push([`Contact: Robert Vandling`]);
-            rows.push(['Email: robert@dalmexrecycling.com']);
-            rows.push([]); // Blank row
-
-            // Column headers
-            const headers = ['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)',
-                'Net (lbs)','Tons','Wood %','Wood','Gypsum %','Gypsum',
-                'Plastic %','Plastic','OCC %','OCC','Metal %','Metal',
-                'Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %'];
-            rows.push(headers);
-
-            // Data rows
-            const dataStartRow = rows.length + 1; // 1-indexed Excel row
-            monthTickets.forEach(t => {
-                const r = rows.length + 1; // Excel row number for this row
-                const gross = t.gross_lbs || 0;
-                const tare = t.tare_lbs || 0;
-                const net = t.net_lbs || (gross - tare);
-                const tons = t.net_tons || (net / 2000);
-
-                // Material percentages (stored as 0-100 in DivertScan, Ross wants 0-1 decimals)
-                const woodP = (t.wood_pct || 0) / 100;
-                const gypsumP = (t.drywall_pct || 0) / 100;
-                const plasticP = (t.plastic_pct || 0) / 100;
-                const occP = (t.cardboard_pct || 0) / 100;
-                const metalP = (t.metal_pct || 0) / 100;
-                // Concrete in DivertScan may include block - split back out
-                const concreteP = 0; // Most C&D debris doesn't split concrete/block
-                const blockP = 0;
-                const concreteCombinedP = (t.concrete_pct || 0) / 100;
-
-                const woodT = tons * woodP;
-                const gypsumT = tons * gypsumP;
-                const plasticT = tons * plasticP;
-                const occT = tons * occP;
-                const metalT = tons * metalP;
-                const concreteT = tons * concreteCombinedP;
-                const blockT = 0;
-                const totalDiv = woodT + gypsumT + plasticT + occT + metalT + concreteT + blockT;
-                const divPct = tons > 0 ? totalDiv / tons : 0;
-
-                rows.push([
-                    t.service_date ? new Date(t.service_date) : '',
-                    parseInt(t.ticket_number) || t.ticket_number || '',
-                    gross, gross / 2000,
-                    tare, tare / 2000,
-                    net, tons,
-                    woodP, woodT,
-                    gypsumP, gypsumT,
-                    plasticP, plasticT,
-                    occP, occT,
-                    metalP, metalT,
-                    concreteCombinedP, concreteT,
-                    0, blockT,
-                    totalDiv, divPct
-                ]);
-            });
-
-            const dataEndRow = rows.length; // Last data row (1-indexed)
-
-            // Blank row then Totals
-            rows.push([]);
-            const totalsRowIdx = rows.length; // 0-indexed in array
-
-            // Calculate totals
-            let tGross=0,tTare=0,tNet=0,tTons=0,tWood=0,tGyp=0,tPlas=0,tOCC=0,tMet=0,tCon=0,tBlk=0,tDiv=0;
-            monthTickets.forEach(t => {
-                const gross = t.gross_lbs || 0;
-                const tare = t.tare_lbs || 0;
-                const net = t.net_lbs || (gross - tare);
-                const tons = t.net_tons || (net / 2000);
-                tGross += gross; tTare += tare; tNet += net; tTons += tons;
-                tWood += tons * (t.wood_pct || 0) / 100;
-                tGyp += tons * (t.drywall_pct || 0) / 100;
-                tPlas += tons * (t.plastic_pct || 0) / 100;
-                tOCC += tons * (t.cardboard_pct || 0) / 100;
-                tMet += tons * (t.metal_pct || 0) / 100;
-                tCon += tons * (t.concrete_pct || 0) / 100;
-                tDiv += tons * ((t.wood_pct||0)+(t.drywall_pct||0)+(t.plastic_pct||0)+(t.cardboard_pct||0)+(t.metal_pct||0)+(t.concrete_pct||0)) / 100;
-            });
+            tGross += gross; tTare += tare; tNet += net; tTons += tons;
+            tOCC += occT; tWood += woodT; tMet += metalT; tPlas += plasticT;
+            tDiv += totalDiv; tLF += lfTons;
 
             rows.push([
-                'Totals', '',
-                tGross, tGross/2000, tTare, tTare/2000, tNet, tTons,
-                tTons > 0 ? tWood/tTons : 0, tWood,
-                tTons > 0 ? tGyp/tTons : 0, tGyp,
-                tTons > 0 ? tPlas/tTons : 0, tPlas,
-                tTons > 0 ? tOCC/tTons : 0, tOCC,
-                tTons > 0 ? tMet/tTons : 0, tMet,
-                tTons > 0 ? tCon/tTons : 0, tCon,
-                0, tBlk,
-                tDiv, tTons > 0 ? tDiv/tTons : 0
+                t.service_date ? new Date(t.service_date) : '',
+                parseInt(t.ticket_number) || t.ticket_number || '',
+                gross, gross / 2000,
+                tare, tare / 2000,
+                net, tons,
+                occP, occT,
+                woodP, woodT,
+                metalP, metalT,
+                plasticP, plasticT,
+                totalDiv, divPct,
+                lfTons, lfPct
             ]);
-
-            // Summary section
-            rows.push([]);
-            rows.push(['Total  Tonnage', tTons]);
-            rows.push(['Diverted from landfill', tDiv]);
-            rows.push(['Recycled Material %', tTons > 0 ? tDiv/tTons : 0]);
-
-            // Create sheet
-            const ws = XLSX.utils.aoa_to_sheet(rows);
-
-            // Apply number formats
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            for (let R = 9; R <= range.e.r; R++) { // Data rows start at array index 9
-                for (let C = 0; C <= 23; C++) {
-                    const addr = XLSX.utils.encode_cell({r: R, c: C});
-                    if (!ws[addr]) continue;
-                    if (C === 0 && ws[addr].v instanceof Date) ws[addr].z = 'm/d/yyyy';
-                    else if (C === 2 || C === 4 || C === 6) ws[addr].z = '#,##0';
-                    else if (C === 3 || C === 5 || C === 7) ws[addr].z = '0.00';
-                    else if (C === 8 || C === 10 || C === 12 || C === 14 || C === 16 || C === 18 || C === 20 || C === 23) ws[addr].z = '0%';
-                    else if (C === 9 || C === 11 || C === 13 || C === 15 || C === 17 || C === 19 || C === 21 || C === 22) ws[addr].z = '0.00';
-                }
-            }
-
-            // Format summary row percentages
-            const summaryPctRow = rows.length - 1;
-            const summaryAddr = XLSX.utils.encode_cell({r: summaryPctRow, c: 1});
-            if (ws[summaryAddr]) ws[summaryAddr].z = '0%';
-
-            // Column widths
-            ws['!cols'] = [
-                {wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
-                {wch:8},{wch:8},{wch:10},{wch:10},{wch:10},{wch:10},{wch:8},{wch:8},
-                {wch:8},{wch:8},{wch:12},{wch:10},{wch:8},{wch:8},{wch:14},{wch:12}
-            ];
-
-            // Truncate sheet name to 31 chars (Excel limit)
-            const sheetName = monthLabel.length > 31 ? monthLabel.substring(0, 31) : monthLabel;
-            XLSX.utils.book_append_sheet(wb, ws, sheetName);
         });
 
-        const filename = `BoxTracker_${currentProject.name || 'Project'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        // Blank row then Totals
+        rows.push([]);
+        rows.push([
+            'TOTALS', '',
+            tGross, tGross/2000, tTare, tTare/2000, tNet, tTons,
+            tTons > 0 ? tOCC/tTons : 0, tOCC,
+            tTons > 0 ? tWood/tTons : 0, tWood,
+            tTons > 0 ? tMet/tTons : 0, tMet,
+            tTons > 0 ? tPlas/tTons : 0, tPlas,
+            tDiv, tTons > 0 ? tDiv/tTons : 0,
+            tLF, tTons > 0 ? tLF/tTons : 0
+        ]);
+
+        // Summary
+        rows.push([]);
+        rows.push(['Total Tonnage', tTons.toFixed(2)]);
+        rows.push(['Diverted from Landfill', tDiv.toFixed(2)]);
+        rows.push(['Diversion Rate', tTons > 0 ? (tDiv/tTons*100).toFixed(1) + '%' : '0%']);
+        rows.push(['LEED Target', (currentProject.leed_target || 75) + '%']);
+        rows.push(['Status', (tTons > 0 && tDiv/tTons*100 >= (currentProject.leed_target || 75)) ? 'COMPLIANT' : 'BELOW TARGET']);
+        rows.push([]);
+        rows.push(['End Markets:']);
+        rows.push(['OCC/Paper', 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber']);
+        rows.push(['Wood', 'Dalmex Pallets (In-House Reuse)']);
+        rows.push(['Metal', 'CMC (Commercial Metals) · Cyclone Metal Recycling']);
+        rows.push(['Plastic', 'American Recycling Arkansas']);
+
+        var ws = XLSX.utils.aoa_to_sheet(rows);
+
+        // Apply number formats
+        var range = XLSX.utils.decode_range(ws['!ref']);
+        for (var R = 8; R <= range.e.r; R++) {
+            for (var C = 0; C <= 19; C++) {
+                var addr = XLSX.utils.encode_cell({r: R, c: C});
+                if (!ws[addr]) continue;
+                if (C === 0 && ws[addr].v instanceof Date) ws[addr].z = 'm/d/yyyy';
+                else if (C === 2 || C === 4 || C === 6) ws[addr].z = '#,##0';
+                else if (C === 3 || C === 5 || C === 7) ws[addr].z = '0.00';
+                else if (C === 8 || C === 10 || C === 12 || C === 14 || C === 17 || C === 19) ws[addr].z = '0%';
+                else if (C === 9 || C === 11 || C === 13 || C === 15 || C === 16 || C === 18) ws[addr].z = '0.00';
+            }
+        }
+
+        ws['!cols'] = [
+            {wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
+            {wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:10},{wch:10},
+            {wch:14},{wch:12},{wch:12},{wch:10}
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Waste Diversion Report');
+
+        var filename = 'BoxTracker_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
         XLSX.writeFile(wb, filename);
-        toast(`Box Tracker report downloaded! (${sortedMonths.length} monthly tabs)`, 'success');
+        toast('Box Tracker report downloaded (single tab, ' + data.length + ' loads)', 'success');
     } catch (err) {
         console.error('Box Tracker export error:', err);
         toast('Box Tracker export failed: ' + err.message, 'error');
