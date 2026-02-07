@@ -1683,11 +1683,13 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DivertScan v7.6 initialized');
     
     // Set today's date
-    document.getElementById('serviceDate').value = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('serviceDate');
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
     
-    // Restore keys - try localStorage first, then IndexedDB backup
+    // Restore keys from IndexedDB backup if localStorage was cleared
+    // Do NOT call initializeApp() here — window.onload handles login flow
     restoreAllKeys().then(() => {
-        initializeApp();
+        console.log('Keys restored, waiting for login check...');
     });
 });
 
@@ -9566,19 +9568,25 @@ async function initBulletproof() {
 }
 
 // Override initial app load to check session first
-const originalInit = window.onload;
 window.onload = async function() {
     // Load company info
     const savedCompany = localStorage.getItem('divertscan_company');
     if (savedCompany) {
-        companyInfo = JSON.parse(savedCompany);
+        try { companyInfo = JSON.parse(savedCompany); } catch(e) {}
     }
+    
+    // Ensure keys are restored before doing anything
+    await restoreAllKeys();
     
     // Initialize bulletproof features
     await initBulletproof();
     
+    // Check for existing session — if found, skip login screen
     if (!checkExistingSession()) {
-        // Stay on login screen
+        // No session — stay on login screen, make sure it's visible
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('appContainer').classList.remove('active');
+        console.log('No session found — showing login screen');
     }
 };
 </script>
