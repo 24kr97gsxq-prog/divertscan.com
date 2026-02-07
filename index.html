@@ -776,10 +776,11 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <div class="card">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">📥 Export Report</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-<button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="font-size:12px">📋 LEED Audit PDF</button>
-<button class="btn btn-primary" onclick="downloadBoxTrackerExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 Box Tracker Excel</button>
+<button class="btn btn-primary" onclick="previewLEEDAuditPDF()" style="font-size:12px">👁️ View PDF Report</button>
+<button class="btn btn-primary" onclick="generateLEEDAuditReport()" style="font-size:12px">📋 Download LEED PDF</button>
+<button class="btn btn-primary" onclick="downloadReportExcel()" style="font-size:12px;background:linear-gradient(135deg,#059669,#047857)">📗 LEED Excel Report</button>
+<button class="btn btn-secondary" onclick="downloadBoxTrackerExcel()" style="font-size:11px">📗 Box Tracker Excel</button>
 <button class="btn btn-secondary" onclick="downloadReportCSV()" style="font-size:11px">📊 CSV Export</button>
-<button class="btn btn-secondary" onclick="downloadReportExcel()" style="font-size:11px">📗 Full Excel</button>
 </div>
 </div>
 
@@ -5222,6 +5223,117 @@ async function generateLEEDAuditReport() {
     }
 }
 
+// Preview LEED Audit PDF in browser (opens in new tab for viewing)
+async function previewLEEDAuditPDF() {
+    if (!currentProject) {
+        toast('Select a project first', 'error');
+        return;
+    }
+    
+    // Build the same report HTML as the LEED audit but open in a new tab
+    var data = (reportData && reportData.length > 0) ? reportData : tickets;
+    if (!data || data.length === 0) {
+        toast('No ticket data available', 'error');
+        return;
+    }
+    
+    var totalTons = data.reduce(function(s,t){return s+(t.net_tons||0)},0);
+    var landfillTons = data.reduce(function(s,t){return s+(t.landfill_tons||0)},0);
+    var divertedTons = totalTons - landfillTons;
+    var diversionRate = totalTons > 0 ? Math.round((divertedTons/totalTons)*100) : 0;
+    var occTons = data.reduce(function(s,t){return s+(t.cardboard_tons||0)},0);
+    var woodTons = data.reduce(function(s,t){return s+(t.wood_tons||0)},0);
+    var metalTons = data.reduce(function(s,t){return s+(t.metal_tons||0)},0);
+    var plasticTons = data.reduce(function(s,t){return s+(t.plastic_tons||0)},0);
+    
+    var statusText = diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET';
+    var statusColor = diversionRate >= (currentProject.leed_target || 75) ? '#1B7A3D' : '#B45309';
+    
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>LEED Waste Diversion Report - ' + (currentProject.name || '') + '</title>';
+    html += '<style>body{font-family:Calibri,Arial,sans-serif;margin:20px;color:#333}';
+    html += 'h1{color:#1B4332;border-bottom:3px solid #2D6A4F;padding-bottom:8px;font-size:22px}';
+    html += 'h2{color:#2D6A4F;font-size:16px;margin-top:24px;border-bottom:1px solid #B7E4C7;padding-bottom:4px}';
+    html += '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}';
+    html += '.info-grid div{padding:6px 12px;background:#F0FFF4;border-radius:4px;font-size:13px}';
+    html += '.info-grid label{color:#666;font-size:11px;display:block}';
+    html += '.metrics{display:flex;gap:16px;margin:16px 0}';
+    html += '.metric{flex:1;text-align:center;padding:16px;border-radius:8px;background:#F8F9FA;border:1px solid #DEE2E6}';
+    html += '.metric .val{font-size:28px;font-weight:700}';
+    html += '.metric .lbl{font-size:11px;color:#666;margin-top:4px}';
+    html += 'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}';
+    html += 'th{background:#40916C;color:white;padding:8px 10px;text-align:left;font-size:11px}';
+    html += 'td{padding:6px 10px;border:1px solid #DEE2E6}';
+    html += 'tr:nth-child(even){background:#F0FFF4}';
+    html += '.totals td{background:#B7E4C7;font-weight:bold}';
+    html += '.right{text-align:right}';
+    html += '.footer{margin-top:32px;padding-top:12px;border-top:2px solid #2D6A4F;font-size:11px;color:#666;text-align:center}';
+    html += '@media print{body{margin:10px}h1{font-size:18px}.metric .val{font-size:22px}}';
+    html += '</style></head><body>';
+    
+    html += '<h1>LEED MRc5 Waste Diversion Report</h1>';
+    html += '<p style="color:#666;font-size:12px;margin-top:-8px">All Materials Processed by Dalmex Recycling LLC, Dallas TX</p>';
+    
+    html += '<div class="info-grid">';
+    html += '<div><label>Project</label><b>' + (currentProject.name || '') + '</b></div>';
+    html += '<div><label>Report Date</label>' + new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) + '</div>';
+    html += '<div><label>Address</label>' + (currentProject.address || '') + '</div>';
+    html += '<div><label>Waste Hauler</label>' + (currentProject.waste_hauler || '') + '</div>';
+    html += '<div><label>General Contractor</label>' + (currentProject.general_contractor || '') + '</div>';
+    html += '<div><label>LEED Target</label>' + (currentProject.leed_target || 75) + '%</div>';
+    html += '</div>';
+    
+    html += '<div class="metrics">';
+    html += '<div class="metric"><div class="val" style="color:' + statusColor + '">' + diversionRate + '%</div><div class="lbl">Diversion Rate — ' + statusText + '</div></div>';
+    html += '<div class="metric"><div class="val">' + totalTons.toFixed(2) + '</div><div class="lbl">Total Tons</div></div>';
+    html += '<div class="metric"><div class="val" style="color:#1B7A3D">' + divertedTons.toFixed(2) + '</div><div class="lbl">Diverted</div></div>';
+    html += '<div class="metric"><div class="val" style="color:#DC3545">' + landfillTons.toFixed(2) + '</div><div class="lbl">Landfill</div></div>';
+    html += '</div>';
+    
+    html += '<h2>Material Breakdown &amp; End Markets</h2>';
+    html += '<table><tr><th>Material Stream</th><th class="right">Tons</th><th class="right">%</th><th>End Market</th></tr>';
+    var mats = [
+        ['OCC / Paper / Fiber', occTons, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber'],
+        ['Wood / Pallets', woodTons, 'Dalmex Pallets (In-House Reuse)'],
+        ['Metal / Scrap', metalTons, 'CMC · Cyclone Metal Recycling'],
+        ['Plastic', plasticTons, 'American Recycling Arkansas']
+    ];
+    mats.forEach(function(m) {
+        html += '<tr><td><b>' + m[0] + '</b></td><td class="right">' + m[1].toFixed(2) + '</td><td class="right">' + (totalTons > 0 ? Math.round(m[1]/totalTons*100) : 0) + '%</td><td>' + m[2] + '</td></tr>';
+    });
+    html += '<tr><td>Landfill</td><td class="right">' + landfillTons.toFixed(2) + '</td><td class="right">' + (totalTons > 0 ? Math.round(landfillTons/totalTons*100) : 0) + '%</td><td>Municipal Landfill</td></tr>';
+    html += '<tr class="totals"><td><b>TOTAL</b></td><td class="right"><b>' + totalTons.toFixed(2) + '</b></td><td class="right"><b>100%</b></td><td><b>' + diversionRate + '% Diverted</b></td></tr>';
+    html += '</table>';
+    
+    html += '<h2>Load Details (' + data.length + ' loads)</h2>';
+    html += '<table><tr><th>Date</th><th>Ticket #</th><th>Hauler</th><th class="right">Gross</th><th class="right">Tare</th><th class="right">Net</th><th class="right">Tons</th><th class="right">OCC%</th><th class="right">Wood%</th><th class="right">Metal%</th><th class="right">Plastic%</th><th class="right">Diversion</th></tr>';
+    data.forEach(function(t) {
+        var dp = t.diversion_pct || 0;
+        html += '<tr><td>' + (t.service_date||'') + '</td><td>' + (t.ticket_number||'') + '</td><td>' + (t.hauler||'') + '</td>';
+        html += '<td class="right">' + (t.gross_lbs||0).toLocaleString() + '</td><td class="right">' + (t.tare_lbs||0).toLocaleString() + '</td>';
+        html += '<td class="right">' + (t.net_lbs||0).toLocaleString() + '</td><td class="right">' + (t.net_tons||0).toFixed(2) + '</td>';
+        html += '<td class="right">' + (t.cardboard_pct||0) + '%</td><td class="right">' + (t.wood_pct||0) + '%</td>';
+        html += '<td class="right">' + (t.metal_pct||0) + '%</td><td class="right">' + (t.plastic_pct||0) + '%</td>';
+        html += '<td class="right" style="color:' + (dp>=75?'#1B7A3D':'#B45309') + ';font-weight:bold">' + dp + '%</td></tr>';
+    });
+    html += '</table>';
+    
+    html += '<h2>Certification</h2>';
+    html += '<p style="font-size:12px;line-height:1.6">I certify that this information is a true representation of materials processed by Dalmex Recycling LLC. All waste materials have been tracked from point of generation through processing and final disposition.</p>';
+    html += '<div style="display:flex;gap:40px;margin-top:24px"><div style="flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px">Authorized Signature / Date</div><div style="flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px">Title</div></div>';
+    
+    html += '<div class="footer">Generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString() + '</div>';
+    html += '</body></html>';
+    
+    var w = window.open('', '_blank');
+    if (w) {
+        w.document.write(html);
+        w.document.close();
+        toast('Report opened in new tab — use browser Print (Ctrl+P) to save as PDF', 'success');
+    } else {
+        toast('Pop-up blocked — allow pop-ups for this site', 'error');
+    }
+}
+
 // ========== CERTIFICATE OF DESTRUCTION ==========
 function generateCertificateOfDestruction() {
     const customer = document.getElementById('codCustomerName').value.trim();
@@ -5582,127 +5694,130 @@ function downloadReportExcel() {
         return;
     }
     
-    // Check if SheetJS is loaded
-    if (typeof XLSX === 'undefined') {
-        toast('Excel library not loaded. Using CSV instead.', 'warning');
-        downloadReportCSV();
-        return;
-    }
-    
     try {
-        // Create workbook
-        const wb = XLSX.utils.book_new();
-        
         // Calculate totals
-        const totalTons = reportData.reduce((s, t) => s + (t.net_tons || 0), 0);
-        const landfillTons = reportData.reduce((s, t) => s + (t.landfill_tons || 0), 0);
-        const divertedTons = totalTons - landfillTons;
-        const diversionRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
+        var totalTons = reportData.reduce(function(s, t) { return s + (t.net_tons || 0); }, 0);
+        var landfillTons = reportData.reduce(function(s, t) { return s + (t.landfill_tons || 0); }, 0);
+        var divertedTons = totalTons - landfillTons;
+        var diversionRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
+        var occTons = reportData.reduce(function(s, t) { return s + (t.cardboard_tons || 0); }, 0);
+        var woodTons = reportData.reduce(function(s, t) { return s + (t.wood_tons || 0); }, 0);
+        var metalTons = reportData.reduce(function(s, t) { return s + (t.metal_tons || 0); }, 0);
+        var plasticTons = reportData.reduce(function(s, t) { return s + (t.plastic_tons || 0); }, 0);
         
-        // ===== SUMMARY SHEET =====
-        const summaryData = [
-            ['LEED MRc5 WASTE DIVERSION REPORT'],
-            [''],
-            ['Project Information'],
-            ['Project Name', currentProject.name || ''],
-            ['Project Address', currentProject.address || ''],
-            ['General Contractor', currentProject.general_contractor || ''],
-            ['Waste Hauler', currentProject.waste_hauler || ''],
-            ['Report Generated', new Date().toLocaleString()],
-            [''],
-            ['Diversion Summary'],
-            ['Total Loads', reportData.length],
-            ['Total Tonnage', totalTons.toFixed(2)],
-            ['Diverted from Landfill', divertedTons.toFixed(2)],
-            ['Sent to Landfill', landfillTons.toFixed(2)],
-            ['Diversion Rate', diversionRate + '%'],
-            ['LEED Target', (currentProject.leed_target || 75) + '%'],
-            ['Status', diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET'],
-            [''],
-            ['Material Breakdown (Tons) — Processed by Dalmex Recycling LLC'],
-            ['OCC / Paper / Fiber', reportData.reduce((s, t) => s + (t.cardboard_tons || 0), 0).toFixed(2)],
-            ['Wood / Pallets', reportData.reduce((s, t) => s + (t.wood_tons || 0), 0).toFixed(2)],
-            ['Metal / Scrap', reportData.reduce((s, t) => s + (t.metal_tons || 0), 0).toFixed(2)],
-            ['Plastic', reportData.reduce((s, t) => s + (t.plastic_tons || 0), 0).toFixed(2)],
-            [''],
-            ['Verified End Markets — All Processed by Dalmex Recycling LLC'],
-            ['OCC/Paper', 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber'],
-            ['Wood', 'Dalmex Pallets (In-House Reuse)'],
-            ['Metal', 'CMC (Commercial Metals) · Cyclone Metal Recycling'],
-            ['Plastic', 'American Recycling Arkansas']
+        // Build styled HTML table that Excel renders with borders/shading
+        var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        html += '<head><meta charset="utf-8"><style>';
+        html += 'td, th { border: 1px solid #999; padding: 6px 10px; font-family: Calibri, Arial; font-size: 11pt; }';
+        html += '.header { background-color: #1B4332; color: white; font-weight: bold; font-size: 14pt; text-align: center; }';
+        html += '.subheader { background-color: #2D6A4F; color: white; font-weight: bold; font-size: 10pt; }';
+        html += '.section-title { background-color: #D8F3DC; font-weight: bold; font-size: 11pt; color: #1B4332; }';
+        html += '.col-header { background-color: #40916C; color: white; font-weight: bold; font-size: 10pt; text-align: center; }';
+        html += '.data { background-color: #FFFFFF; }';
+        html += '.data-alt { background-color: #F0FFF4; }';
+        html += '.number { text-align: right; }';
+        html += '.pct-good { text-align: right; color: #1B7A3D; font-weight: bold; }';
+        html += '.pct-warn { text-align: right; color: #B45309; font-weight: bold; }';
+        html += '.totals { background-color: #B7E4C7; font-weight: bold; }';
+        html += '.compliant { background-color: #D4EDDA; color: #155724; font-weight: bold; font-size: 12pt; text-align: center; }';
+        html += '.below { background-color: #F8D7DA; color: #721C24; font-weight: bold; font-size: 12pt; text-align: center; }';
+        html += '.end-market { background-color: #EBF5FB; font-size: 10pt; }';
+        html += '</style></head><body>';
+        
+        html += '<table>';
+        
+        // === TITLE ===
+        html += '<tr><td class="header" colspan="12">LEED MRc5 WASTE DIVERSION REPORT</td></tr>';
+        html += '<tr><td class="subheader" colspan="12">All Materials Processed by Dalmex Recycling LLC, Dallas TX</td></tr>';
+        html += '<tr><td colspan="12"></td></tr>';
+        
+        // === PROJECT INFO ===
+        html += '<tr><td class="section-title" colspan="12">PROJECT INFORMATION</td></tr>';
+        html += '<tr><td class="data"><b>Project</b></td><td class="data" colspan="5">' + (currentProject.name || '') + '</td>';
+        html += '<td class="data"><b>Report Date</b></td><td class="data" colspan="4">' + new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) + '</td></tr>';
+        html += '<tr><td class="data"><b>Address</b></td><td class="data" colspan="5">' + (currentProject.address || '') + '</td>';
+        html += '<td class="data"><b>Hauler</b></td><td class="data" colspan="4">' + (currentProject.waste_hauler || '') + '</td></tr>';
+        html += '<tr><td class="data"><b>General Contractor</b></td><td class="data" colspan="5">' + (currentProject.general_contractor || '') + '</td>';
+        html += '<td class="data"><b>LEED Target</b></td><td class="data" colspan="4">' + (currentProject.leed_target || 75) + '%</td></tr>';
+        html += '<tr><td colspan="12"></td></tr>';
+        
+        // === DIVERSION SUMMARY ===
+        html += '<tr><td class="section-title" colspan="12">DIVERSION SUMMARY</td></tr>';
+        html += '<tr><td class="col-header" colspan="3">Total Loads</td><td class="col-header" colspan="3">Total Tonnage</td><td class="col-header" colspan="2">Diverted</td><td class="col-header" colspan="2">Landfill</td><td class="col-header" colspan="2">Diversion Rate</td></tr>';
+        var statusClass = diversionRate >= (currentProject.leed_target || 75) ? 'compliant' : 'below';
+        html += '<tr><td class="data number" colspan="3">' + reportData.length + '</td><td class="data number" colspan="3">' + totalTons.toFixed(2) + ' T</td><td class="data pct-good" colspan="2">' + divertedTons.toFixed(2) + ' T</td><td class="data pct-warn" colspan="2">' + landfillTons.toFixed(2) + ' T</td><td class="' + statusClass + '" colspan="2">' + diversionRate + '%</td></tr>';
+        html += '<tr><td colspan="12"></td></tr>';
+        
+        // === MATERIAL BREAKDOWN ===
+        html += '<tr><td class="section-title" colspan="12">MATERIAL BREAKDOWN &amp; END MARKETS</td></tr>';
+        html += '<tr><td class="col-header" colspan="2">Material Stream</td><td class="col-header">Tons</td><td class="col-header">% of Total</td><td class="col-header" colspan="6">End Market Destination</td><td class="col-header" colspan="2">Status</td></tr>';
+        
+        var matRows = [
+            ['OCC / Paper / Fiber', occTons, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber'],
+            ['Wood / Pallets', woodTons, 'Dalmex Pallets (In-House Reuse)'],
+            ['Metal / Scrap', metalTons, 'CMC (Commercial Metals) · Cyclone Metal Recycling'],
+            ['Plastic', plasticTons, 'American Recycling Arkansas']
         ];
+        matRows.forEach(function(m, i) {
+            var cls = i % 2 === 0 ? 'data' : 'data-alt';
+            var pct = totalTons > 0 ? Math.round((m[1] / totalTons) * 100) : 0;
+            html += '<tr><td class="' + cls + '" colspan="2"><b>' + m[0] + '</b></td><td class="' + cls + ' number">' + m[1].toFixed(2) + '</td><td class="' + cls + ' number">' + pct + '%</td><td class="end-market" colspan="6">' + m[2] + '</td><td class="' + cls + ' pct-good" colspan="2">✓ Verified</td></tr>';
+        });
+        html += '<tr><td class="data" colspan="2">Landfill</td><td class="data number">' + landfillTons.toFixed(2) + '</td><td class="data number">' + (totalTons > 0 ? Math.round((landfillTons/totalTons)*100) : 0) + '%</td><td class="data" colspan="6">Municipal Landfill</td><td class="data pct-warn" colspan="2">N/A</td></tr>';
+        html += '<tr><td class="totals" colspan="2"><b>TOTAL</b></td><td class="totals number"><b>' + totalTons.toFixed(2) + '</b></td><td class="totals number"><b>100%</b></td><td class="totals" colspan="6"></td><td class="totals pct-good" colspan="2"><b>' + diversionRate + '% Diverted</b></td></tr>';
+        html += '<tr><td colspan="12"></td></tr>';
         
-        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-        wsSummary['!cols'] = [{ wch: 25 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+        // === LOAD DETAILS ===
+        html += '<tr><td class="section-title" colspan="12">LOAD DETAILS</td></tr>';
+        html += '<tr><td class="col-header">Date</td><td class="col-header">Ticket #</td><td class="col-header">Hauler</td><td class="col-header">Gross (lbs)</td><td class="col-header">Tare (lbs)</td><td class="col-header">Net (lbs)</td><td class="col-header">Tons</td><td class="col-header">OCC %</td><td class="col-header">Wood %</td><td class="col-header">Metal %</td><td class="col-header">Plastic %</td><td class="col-header">Diversion %</td></tr>';
         
-        // ===== LOAD DETAILS SHEET =====
-        const detailHeaders = [
-            'Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Tons',
-            'Wood %', 'Wood Tons', 'Concrete %', 'Concrete Tons', 'Metal %', 'Metal Tons',
-            'Cardboard %', 'Cardboard Tons', 'Plastic %', 'Plastic Tons', 'Drywall %', 'Drywall Tons',
-            'Landfill %', 'Landfill Tons', 'Diversion %', 'Verified'
-        ];
-        
-        const detailRows = reportData.map(t => [
-            t.service_date || '',
-            t.ticket_number || '',
-            t.hauler || '',
-            t.gross_lbs || 0,
-            t.tare_lbs || 0,
-            t.net_lbs || 0,
-            (t.net_tons || 0).toFixed(2),
-            (t.wood_pct || 0),
-            (t.wood_tons || 0).toFixed(2),
-            (t.concrete_pct || 0),
-            (t.concrete_tons || 0).toFixed(2),
-            (t.metal_pct || 0),
-            (t.metal_tons || 0).toFixed(2),
-            (t.cardboard_pct || 0),
-            (t.cardboard_tons || 0).toFixed(2),
-            (t.plastic_pct || 0),
-            (t.plastic_tons || 0).toFixed(2),
-            (t.drywall_pct || 0),
-            (t.drywall_tons || 0).toFixed(2),
-            (t.landfill_pct || 0),
-            (t.landfill_tons || 0).toFixed(2),
-            (t.diversion_pct || 0) + '%',
-            t.human_verified ? 'Yes' : 'No'
-        ]);
-        
-        const wsDetails = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
-        wsDetails['!cols'] = detailHeaders.map(() => ({ wch: 12 }));
-        XLSX.utils.book_append_sheet(wb, wsDetails, 'Load Details');
-        
-        // ===== MATERIAL TOTALS SHEET =====
-        const materialData = [
-            ['Material Stream', 'Tons', 'Percentage', 'End Market Destination', 'Verified'],
-            ['OCC / Paper / Fiber', reportData.reduce((s, t) => s + (t.cardboard_tons || 0), 0).toFixed(2), '', 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber', 'Yes'],
-            ['Wood / Pallets', reportData.reduce((s, t) => s + (t.wood_tons || 0), 0).toFixed(2), '', 'Dalmex Pallets (In-House Reuse)', 'Yes'],
-            ['Metal / Scrap', reportData.reduce((s, t) => s + (t.metal_tons || 0), 0).toFixed(2), '', 'CMC (Commercial Metals) · Cyclone Metal Recycling', 'Yes'],
-            ['Plastic', reportData.reduce((s, t) => s + (t.plastic_tons || 0), 0).toFixed(2), '', 'American Recycling Arkansas', 'Yes'],
-            ['Landfill', landfillTons.toFixed(2), '', 'Municipal Landfill', 'N/A'],
-            [''],
-            ['TOTAL', totalTons.toFixed(2), '', '', ''],
-            ['DIVERTED', divertedTons.toFixed(2), diversionRate + '%', '', '']
-        ];
-        
-        // Calculate percentages
-        materialData.forEach((row, i) => {
-            if (i > 0 && i < 8 && totalTons > 0) {
-                row[2] = Math.round((parseFloat(row[1]) / totalTons) * 100) + '%';
-            }
+        reportData.forEach(function(t, i) {
+            var cls = i % 2 === 0 ? 'data' : 'data-alt';
+            var divPct = t.diversion_pct || 0;
+            var pctCls = divPct >= 75 ? 'pct-good' : 'pct-warn';
+            html += '<tr>' +
+                '<td class="' + cls + '">' + (t.service_date || '') + '</td>' +
+                '<td class="' + cls + '">' + (t.ticket_number || '') + '</td>' +
+                '<td class="' + cls + '">' + (t.hauler || '') + '</td>' +
+                '<td class="' + cls + ' number">' + (t.gross_lbs || 0).toLocaleString() + '</td>' +
+                '<td class="' + cls + ' number">' + (t.tare_lbs || 0).toLocaleString() + '</td>' +
+                '<td class="' + cls + ' number">' + (t.net_lbs || 0).toLocaleString() + '</td>' +
+                '<td class="' + cls + ' number">' + (t.net_tons || 0).toFixed(2) + '</td>' +
+                '<td class="' + cls + ' number">' + (t.cardboard_pct || 0) + '%</td>' +
+                '<td class="' + cls + ' number">' + (t.wood_pct || 0) + '%</td>' +
+                '<td class="' + cls + ' number">' + (t.metal_pct || 0) + '%</td>' +
+                '<td class="' + cls + ' number">' + (t.plastic_pct || 0) + '%</td>' +
+                '<td class="' + cls + ' ' + pctCls + '">' + divPct + '%</td>' +
+            '</tr>';
         });
         
-        const wsMaterials = XLSX.utils.aoa_to_sheet(materialData);
-        wsMaterials['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 35 }, { wch: 10 }];
-        XLSX.utils.book_append_sheet(wb, wsMaterials, 'Materials');
+        // Totals row
+        var tGross = reportData.reduce(function(s,t){return s+(t.gross_lbs||0)},0);
+        var tTare = reportData.reduce(function(s,t){return s+(t.tare_lbs||0)},0);
+        var tNet = reportData.reduce(function(s,t){return s+(t.net_lbs||0)},0);
+        html += '<tr><td class="totals" colspan="3"><b>TOTALS</b></td>';
+        html += '<td class="totals number"><b>' + tGross.toLocaleString() + '</b></td>';
+        html += '<td class="totals number"><b>' + tTare.toLocaleString() + '</b></td>';
+        html += '<td class="totals number"><b>' + tNet.toLocaleString() + '</b></td>';
+        html += '<td class="totals number"><b>' + totalTons.toFixed(2) + '</b></td>';
+        html += '<td class="totals" colspan="4"></td>';
+        html += '<td class="totals pct-good"><b>' + diversionRate + '%</b></td></tr>';
         
-        // Download
-        const filename = `LEED_Report_${currentProject.name || 'Project'}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        XLSX.writeFile(wb, filename);
+        html += '<tr><td colspan="12"></td></tr>';
+        html += '<tr><td class="data" colspan="12" style="font-size:9pt;color:#666;">Report generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString() + '</td></tr>';
         
-        toast('Excel report downloaded!', 'success');
+        html += '</table></body></html>';
+        
+        // Download as .xls (HTML table format Excel understands with full styling)
+        var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xls';
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        toast('LEED Excel report downloaded (single tab with styling)', 'success');
         
     } catch (err) {
         console.error('Excel export error:', err);
