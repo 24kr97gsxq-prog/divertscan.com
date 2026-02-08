@@ -1663,11 +1663,11 @@ function showTab(tab) {
     
     if (tab === 'dashboard') {
         document.getElementById('dashboardTab').classList.remove('hidden');
-        loadRecentTickets();
-        updateStats();
+        // Always refresh tickets for current project when returning to Dashboard
+        loadAllTicketsForProject();
     } else if (tab === 'projects') {
         document.getElementById('projectsTab').classList.remove('hidden');
-        renderProjectsList();
+        loadProjects(); // Full refresh to update ticket counts and stats
     } else if (tab === 'reports') {
         document.getElementById('reportsTab').classList.remove('hidden');
         populateReportProjectDropdown();
@@ -2381,6 +2381,8 @@ async function loadRecentTickets() {
         
         renderRecentTickets();
         updateTicketCount();
+        updateStats();
+        updateLeedPredictor();
     } catch (err) {
         console.error('Error loading tickets:', err);
         document.getElementById('recentTickets').innerHTML = '<p style="color:var(--red-500)">Error loading tickets</p>';
@@ -5751,13 +5753,57 @@ function selectProject(projectId) {
     if (currentProject) {
         localStorage.setItem('divertscan_current_project', JSON.stringify(currentProject));
     }
-    // BUG FIX: Clear stale report data when switching projects
+    // Clear stale report data when switching projects
     resetReportState();
     updateProjectDisplay();
     renderProjectsList();
-    loadRecentTickets();
-    updateStats();
-    toast('Project selected: ' + (currentProject?.name || 'Unknown'), 'success');
+    // Load ALL tickets for this project (not limited to 50)
+    loadAllTicketsForProject();
+    toast('Project: ' + (currentProject?.name || 'Unknown'), 'success');
+}
+
+// Load all tickets for the current project — no limit, updates everything
+async function loadAllTicketsForProject() {
+    if (!currentProject) return;
+    
+    try {
+        var remoteT = [];
+        var localT = [];
+        var fetches = [];
+        
+        if (sb) {
+            fetches.push(
+                Promise.race([
+                    sb.from('tickets').select('*').eq('project_id', currentProject.id).order('created_at', {ascending:false}),
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                ]).then(function(res){ if(res && !res.error && res.data) remoteT = res.data; })
+                .catch(function(e){ console.log('Fetch skipped:', e.message); })
+            );
+        }
+        
+        fetches.push((async function(){
+            try {
+                var all = await getAllFromLocal('tickets') || [];
+                localT = all.filter(function(t){return t.project_id === currentProject.id});
+            } catch(e){}
+        })());
+        
+        await Promise.all(fetches);
+        
+        // Merge and dedupe
+        var map = new Map();
+        localT.forEach(function(t){map.set(t.ticket_number||t.id, t)});
+        remoteT.forEach(function(t){map.set(t.ticket_number||t.id, t)});
+        tickets = Array.from(map.values());
+        tickets.sort(function(a,b){return new Date(b.created_at||b.service_date)-new Date(a.created_at||a.service_date)});
+        
+        renderRecentTickets();
+        updateTicketCount();
+        updateStats();
+        updateLeedPredictor();
+    } catch(e) {
+        console.error('Error loading tickets:', e);
+    }
 }
 
 // Reset all report containers to prevent ghosting between projects
@@ -10401,6 +10447,17 @@ window.onload = async function() {
 <div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
 <div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
 <div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
+<div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
+</nav>
+
+<nav class="nav hidden" id="customerNav">
+<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Dashboard</span></div>
+<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
+</nav>
+
+</body>
+</html>
+ onclick="showTab('reports')">📊<span>Reports</span></div>
 <div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
 </nav>
 
