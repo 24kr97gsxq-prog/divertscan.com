@@ -3178,10 +3178,41 @@ function showStep(step) {
     if (step === 2) {
         document.getElementById('step2TicketNum').textContent = ticketData.ticketNumber || '--';
         document.getElementById('step2NetWeight').textContent = ticketData.netTons.toFixed(2) + ' T';
+        
+        // Show photos-optional message for partner tickets
+        var photoWarning = document.querySelector('#ticketStep2 p[style*="amber"]');
+        if (photoWarning) {
+            if (ticketData.directToEndMarket) {
+                photoWarning.innerHTML = '📷 Photos are <strong>optional</strong> for partner facility loads. Tap Next to skip.';
+                photoWarning.style.color = 'var(--slate-400)';
+            } else {
+                photoWarning.innerHTML = '⚠️ Upload at least 1 photo of debris';
+                photoWarning.style.color = 'var(--amber-400)';
+            }
+        }
     }
     
     if (step === 3) {
         populateReviewStep();
+        
+        // Adjust verification text for partner/direct-to-end-market tickets
+        var verifyText = document.querySelector('#verificationBox .verify-text');
+        var verifyDesc = document.querySelector('#verificationBox .verify-desc');
+        if (ticketData.directToEndMarket) {
+            if (verifyText) verifyText.textContent = '✅ Partner Facility Verification';
+            if (verifyDesc) verifyDesc.textContent = 'I confirm this load was delivered to the partner facility and the scale ticket weight is correct. Photos not required for direct-to-end-market loads.';
+            // Auto-check for partner tickets
+            var cb = document.getElementById('humanVerifyCheckbox');
+            if (cb) cb.checked = true;
+            // Mark step 2 indicator as skipped
+            var step2Ind = document.getElementById('stepIndicator2');
+            if (step2Ind) { step2Ind.classList.add('complete'); step2Ind.textContent = '—'; step2Ind.title = 'Photos skipped — partner facility'; }
+        } else {
+            if (verifyText) verifyText.textContent = '⚠️ REQUIRED: Human Verification';
+            if (verifyDesc) verifyDesc.textContent = 'I have reviewed the photos and confirm the material percentages are accurate or have been corrected.';
+            var step2Ind2 = document.getElementById('stepIndicator2');
+            if (step2Ind2) step2Ind2.textContent = '2';
+        }
     }
     
     if (step === 4) {
@@ -3279,6 +3310,27 @@ function goNext() {
     
     // STEP 2 VALIDATION
     if (currentStep === 2) {
+        // Partner tickets can skip photos entirely
+        if (ticketData.directToEndMarket && ticketData.partnerFacility) {
+            // Auto-set materials from partner map if not already done
+            if (ticketData.diversionRate === 0) {
+                var partnerMaterialMap2 = {
+                    'big_city_concrete': { concrete: 100 },
+                    'usa_gypsum': { drywall: 100 },
+                    'ewaste_recycler': { plastic: 100 },
+                    'asphalt_recycler': { concrete: 100 },
+                    'soil_recycler': { concrete: 100 }
+                };
+                var pm = partnerMaterialMap2[ticketData.partnerFacility] || { concrete: 100 };
+                ticketData.materials = { wood: 0, concrete: 0, metal: 0, cardboard: 0, plastic: 0, drywall: 0, landfill: 0 };
+                Object.keys(pm).forEach(function(k) { ticketData.materials[k] = pm[k]; });
+                ticketData.diversionRate = 100;
+                ticketData.humanVerified = true;
+            }
+            showStep(3);
+            return;
+        }
+        
         if (ticketData.diversionRate === 0) {
             if (debrisPhotos.some(p => p)) {
                 toast('Click "Analyze Materials" first', 'error');
