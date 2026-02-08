@@ -1621,6 +1621,7 @@ async function getFromLocal(storeName, key) {
 
 async function initializeApp() {
     updateKeyStatusIndicators();
+    renderAllFacilities();
     
     if (sb) {
         await loadProjects();
@@ -1676,6 +1677,7 @@ function showTab(tab) {
         if (su) document.getElementById('supabaseUrl').value = su;
         if (sk) document.getElementById('supabaseKey').value = sk;
         updateKeyStatusIndicators();
+        renderAllFacilities();
     }
     
     document.querySelectorAll('.nav-item').forEach((item, i) => {
@@ -4573,7 +4575,7 @@ async function generateReport() {
                 '<th style="color:var(--emerald-400)">Date</th><th style="color:var(--emerald-400)">Ticket #</th><th style="color:var(--emerald-400)">Hauler</th>' +
                 '<th class="right" style="color:var(--emerald-400)">Gross (lbs)</th><th class="right" style="color:var(--emerald-400)">Tare (lbs)</th>' +
                 '<th class="right" style="color:var(--emerald-400)">Net (T)</th>' +
-                '<th style="color:var(--emerald-400)">Materials</th><th class="right" style="color:var(--emerald-400)">Diversion</th><th class="center" style="color:var(--emerald-400)">Photos</th><th class="center" style="color:var(--emerald-400)">Verified</th>' +
+                '<th style="color:var(--emerald-400)">Materials</th><th class="right" style="color:var(--emerald-400)">Diversion</th><th class="center" style="color:var(--emerald-400)">Photos</th><th class="center" style="color:var(--emerald-400)">Verified</th><th class="center" style="color:var(--emerald-400)">Actions</th>' +
                 '</tr></thead><tbody>';
             
             reportData.forEach(function(t, idx) {
@@ -4621,6 +4623,7 @@ async function generateReport() {
                     '<td style="text-align:right;color:' + divColor + '">' + (t.diversion_pct || 0) + '%</td>' +
                     '<td style="text-align:center">' + photoStr + '</td>' +
                     '<td style="text-align:center">' + (t.human_verified ? '✅' : '❌') + '</td>' +
+                    '<td style="text-align:center;white-space:nowrap"><button onclick="editTicket(\'' + t.id + '\')" ontouchend="event.preventDefault();editTicket(\'' + t.id + '\')" style="background:var(--accent-info);border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="Edit">✏️</button><button onclick="generateTicketCOD(\'' + t.id + '\')" ontouchend="event.preventDefault();generateTicketCOD(\'' + t.id + '\')" style="background:#7c3aed;border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="COD">📜</button><button onclick="confirmDeleteTicket(\'' + t.id + '\')" ontouchend="event.preventDefault();confirmDeleteTicket(\'' + t.id + '\')" style="background:var(--accent-danger);border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="Delete">🗑️</button></td>' +
                 '</tr>';
             });
             
@@ -4631,6 +4634,7 @@ async function generateReport() {
                 '<td style="text-align:right;color:' + (diversionRate >= 75 ? '#2ecc71' : 'var(--amber-400)') + ';font-weight:700">' + diversionRate + '%</td>' +
                 '<td></td>' +
                 '<td style="text-align:center">' + reportData.filter(function(t){return t.human_verified}).length + '/' + reportData.length + '</td>' +
+                '<td></td>' +
                 '</tr></tfoot></table>';
         }
         
@@ -8227,24 +8231,22 @@ async function updateCharts() {
 
 // ========== LEED PREDICTOR ==========
 async function updateLeedPredictor() {
-    if (!sb || !currentProject) {
+    if (!currentProject) {
         document.getElementById('predictorStatus').textContent = '--';
         document.getElementById('predictorMessage').textContent = 'Select a project';
         return;
     }
     
     try {
-        const { data } = await sb
-            .from('tickets')
-            .select('net_tons, landfill_tons, diversion_pct, created_at')
-            .eq('project_id', currentProject.id)
-            .order('created_at', { ascending: true });
+        // Use local tickets array first (matches what user sees)
+        var data = tickets.filter(function(t) { return t.project_id === currentProject.id; });
         
         if (!data || data.length === 0) {
             document.getElementById('predictorStatus').textContent = 'N/A';
             document.getElementById('predictorMessage').textContent = 'Add tickets to see prediction';
             document.getElementById('predictorCurrent').textContent = '0%';
             document.getElementById('predictorProgressBar').style.width = '0%';
+            document.getElementById('predictorProgressBar').style.background = 'var(--slate-600)';
             return;
         }
         
