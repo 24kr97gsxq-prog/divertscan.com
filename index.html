@@ -4456,11 +4456,17 @@ async function generateReport() {
     
     try {
         
-        let remoteData = [];
-        let localData = [];
+        // FAST PATH: Use global tickets array if it has data for this project
+        var projectTickets = tickets.filter(function(t){return t.project_id === projectIdForQuery});
         
-        // Fetch Supabase + IndexedDB IN PARALLEL (was sequential)
-        var fetchPromises = [];
+        if (projectTickets.length > 0) {
+            reportData = projectTickets.slice();
+            reportData.sort(function(a,b){return new Date(a.service_date)-new Date(b.service_date)});
+        } else {
+            // Fetch from Supabase + IndexedDB in parallel
+            let remoteData = [];
+            let localData = [];
+            var fetchPromises = [];
         
         if (sb) {
             fetchPromises.push(
@@ -4503,6 +4509,7 @@ async function generateReport() {
         
         // Sort by service_date
         reportData.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
+        } // end else (fetch path)
         
         hideLoading();
         
@@ -4753,8 +4760,12 @@ async function generateReport() {
 }
 
 function downloadReportCSV() {
+    // Use reportData if available, fall back to global tickets for current project
+    if (reportData.length === 0 && tickets.length > 0 && currentProject) {
+        reportData = tickets.filter(function(t){return t.project_id === currentProject.id});
+    }
     if (reportData.length === 0) {
-        toast('Generate a report first', 'error');
+        toast('No tickets found — select a project with tickets', 'error');
         return;
     }
     
@@ -5033,27 +5044,27 @@ async function generateLEEDAuditReport() {
     showLoading('Generating LEED Audit Report...');
     
     try {
-        // Gather all tickets (local + remote)
-        var allTickets = [];
-        try {
-            var localTickets = await getAllFromLocal('tickets') || [];
-            allTickets = localTickets.filter(function(t) { return t.project_id === currentProject.id; });
-        } catch(e) {}
+        // Use global tickets array first (already populated by Projects/Dashboard)
+        var allTickets = tickets.filter(function(t) { return t.project_id === currentProject.id; });
         
-        if (sb) {
-            try {
-                var tp = new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, 5000); });
-                var res = await Promise.race([sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date', {ascending:true}), tp]);
-                if (res && res.data) {
-                    var map = new Map();
-                    allTickets.forEach(function(t) { map.set(t.ticket_number || t.id, t); });
-                    res.data.forEach(function(t) { map.set(t.ticket_number || t.id, t); });
-                    allTickets = Array.from(map.values());
-                }
-            } catch(e) {}
+        // If global array is empty, fetch fresh
+        if (allTickets.length === 0) {
+            var localT = []; var remoteT = [];
+            var fetches = [];
+            fetches.push((async function() { try { var a = await getAllFromLocal('tickets') || []; localT = a.filter(function(t){return t.project_id === currentProject.id}); } catch(e){} })());
+            if (sb) {
+                fetches.push(Promise.race([
+                    sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date',{ascending:true}),
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                ]).then(function(res){ if(res&&res.data) remoteT=res.data; }).catch(function(){}));
+            }
+            await Promise.all(fetches);
+            var map = new Map();
+            localT.forEach(function(t){map.set(t.ticket_number||t.id, t)});
+            remoteT.forEach(function(t){map.set(t.ticket_number||t.id, t)});
+            allTickets = Array.from(map.values());
+            allTickets.sort(function(a,b){return new Date(a.service_date)-new Date(b.service_date)});
         }
-        
-        allTickets.sort(function(a,b) { return new Date(a.service_date) - new Date(b.service_date); });
         
         if (allTickets.length === 0) {
             hideLoading();
@@ -5911,8 +5922,12 @@ async function exportAuditPackage() {
 }
 
 function downloadReportExcel() {
+    // Use reportData if available, fall back to global tickets for current project
+    if ((!reportData || reportData.length === 0) && tickets.length > 0 && currentProject) {
+        reportData = tickets.filter(function(t){return t.project_id === currentProject.id});
+    }
     if (!reportData || reportData.length === 0) {
-        toast('Generate a report first', 'error');
+        toast('No tickets found — select a project with tickets', 'error');
         return;
     }
     if (typeof XLSX === 'undefined') {
@@ -9602,6 +9617,10 @@ async function saveDraft() {
 }
 
 async function checkForDraft() {
+    // Only check once per session
+    if (window._draftChecked) return false;
+    window._draftChecked = true;
+    
     try {
         const draft = await getFromLocal('drafts', 'current_draft');
         
@@ -9609,16 +9628,28 @@ async function checkForDraft() {
             const savedTime = new Date(draft.savedAt);
             const age = Date.now() - savedTime.getTime();
             
-            // If draft is less than 24 hours old
-            if (age < 24 * 60 * 60 * 1000) {
-                if (confirm(`Found unsaved ticket from ${savedTime.toLocaleString()}. Restore it?`)) {
-                    restoreDraft(draft);
-                    return true;
-                }
+            // Auto-clear drafts older than 4 hours
+            if (age > 4 * 60 * 60 * 1000) {
+                await clearDraft();
+                return false;
+            }
+            
+            // Only restore if draft has meaningful data (at least a ticket number or weight)
+            if (!draft.ticketNumber && !draft.grossLbs) {
+                await clearDraft();
+                return false;
+            }
+            
+            if (confirm('Found unsaved ticket from ' + savedTime.toLocaleString() + '. Restore it?')) {
+                restoreDraft(draft);
+                return true;
+            } else {
+                // User declined — clear the draft so it doesn't ask again
+                await clearDraft();
             }
         }
     } catch (err) {
-        console.log('No draft found');
+        // No draft or error — silent
     }
     return false;
 }
