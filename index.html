@@ -5766,6 +5766,10 @@ function downloadReportExcel() {
         toast('Generate a report first', 'error');
         return;
     }
+    if (typeof XLSX === 'undefined') {
+        toast('Excel library not loaded — refresh and try again', 'error');
+        return;
+    }
     
     try {
         // Calculate totals
@@ -5778,119 +5782,124 @@ function downloadReportExcel() {
         var metalTons = reportData.reduce(function(s, t) { return s + (t.metal_tons || 0); }, 0);
         var plasticTons = reportData.reduce(function(s, t) { return s + (t.plastic_tons || 0); }, 0);
         
-        // Build styled HTML table that Excel renders with borders/shading
-        var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-        html += '<head><meta charset="utf-8"><style>';
-        html += 'td, th { border: 1px solid #999; padding: 6px 10px; font-family: Calibri, Arial; font-size: 11pt; }';
-        html += '.header { background-color: #1B4332; color: white; font-weight: bold; font-size: 14pt; text-align: center; }';
-        html += '.subheader { background-color: #2D6A4F; color: white; font-weight: bold; font-size: 10pt; }';
-        html += '.section-title { background-color: #D8F3DC; font-weight: bold; font-size: 11pt; color: #1B4332; }';
-        html += '.col-header { background-color: #40916C; color: white; font-weight: bold; font-size: 10pt; text-align: center; }';
-        html += '.data { background-color: #FFFFFF; }';
-        html += '.data-alt { background-color: #F0FFF4; }';
-        html += '.number { text-align: right; }';
-        html += '.pct-good { text-align: right; color: #1B7A3D; font-weight: bold; }';
-        html += '.pct-warn { text-align: right; color: #B45309; font-weight: bold; }';
-        html += '.totals { background-color: #B7E4C7; font-weight: bold; }';
-        html += '.compliant { background-color: #D4EDDA; color: #155724; font-weight: bold; font-size: 12pt; text-align: center; }';
-        html += '.below { background-color: #F8D7DA; color: #721C24; font-weight: bold; font-size: 12pt; text-align: center; }';
-        html += '.end-market { background-color: #EBF5FB; font-size: 10pt; }';
-        html += '</style></head><body>';
+        var wb = XLSX.utils.book_new();
+        var rows = [];
         
-        html += '<table>';
-        
-        // === TITLE ===
-        html += '<tr><td class="header" colspan="12">LEED MRc5 WASTE DIVERSION REPORT</td></tr>';
-        html += '<tr><td class="subheader" colspan="12">All Materials Processed by Dalmex Recycling LLC, Dallas TX</td></tr>';
-        html += '<tr><td colspan="12"></td></tr>';
+        // === HEADER ===
+        rows.push(['DivertScan™ LEED MRc5 WASTE DIVERSION REPORT']);
+        rows.push(['All Materials Processed by Dalmex Recycling LLC, Dallas TX']);
+        rows.push([]);
         
         // === PROJECT INFO ===
-        html += '<tr><td class="section-title" colspan="12">PROJECT INFORMATION</td></tr>';
-        html += '<tr><td class="data"><b>Project</b></td><td class="data" colspan="5">' + (currentProject.name || '') + '</td>';
-        html += '<td class="data"><b>Report Date</b></td><td class="data" colspan="4">' + new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) + '</td></tr>';
-        html += '<tr><td class="data"><b>Address</b></td><td class="data" colspan="5">' + (currentProject.address || '') + '</td>';
-        html += '<td class="data"><b>Hauler</b></td><td class="data" colspan="4">' + (currentProject.waste_hauler || '') + '</td></tr>';
-        html += '<tr><td class="data"><b>General Contractor</b></td><td class="data" colspan="5">' + (currentProject.general_contractor || '') + '</td>';
-        html += '<td class="data"><b>LEED Target</b></td><td class="data" colspan="4">' + (currentProject.leed_target || 75) + '%</td></tr>';
-        html += '<tr><td colspan="12"></td></tr>';
+        rows.push(['PROJECT INFORMATION']);
+        rows.push(['Project', currentProject.name || '', '', 'Report Date', new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})]);
+        rows.push(['Address', currentProject.address || '', '', 'Waste Hauler', currentProject.waste_hauler || '']);
+        rows.push(['General Contractor', currentProject.general_contractor || '', '', 'LEED Target', (currentProject.leed_target || 75) + '%']);
+        rows.push(['Processing Facility', 'Dalmex Recycling LLC', '', 'Diversion Rate', diversionRate + '%']);
+        rows.push([]);
         
         // === DIVERSION SUMMARY ===
-        html += '<tr><td class="section-title" colspan="12">DIVERSION SUMMARY</td></tr>';
-        html += '<tr><td class="col-header" colspan="3">Total Loads</td><td class="col-header" colspan="3">Total Tonnage</td><td class="col-header" colspan="2">Diverted</td><td class="col-header" colspan="2">Landfill</td><td class="col-header" colspan="2">Diversion Rate</td></tr>';
-        var statusClass = diversionRate >= (currentProject.leed_target || 75) ? 'compliant' : 'below';
-        html += '<tr><td class="data number" colspan="3">' + reportData.length + '</td><td class="data number" colspan="3">' + totalTons.toFixed(2) + ' T</td><td class="data pct-good" colspan="2">' + divertedTons.toFixed(2) + ' T</td><td class="data pct-warn" colspan="2">' + landfillTons.toFixed(2) + ' T</td><td class="' + statusClass + '" colspan="2">' + diversionRate + '%</td></tr>';
-        html += '<tr><td colspan="12"></td></tr>';
+        rows.push(['DIVERSION SUMMARY']);
+        rows.push(['Total Loads', 'Total Tons', 'Diverted Tons', 'Landfill Tons', 'Diversion Rate', 'LEED Status']);
+        rows.push([
+            reportData.length,
+            totalTons,
+            divertedTons,
+            landfillTons,
+            diversionRate / 100,
+            diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET'
+        ]);
+        rows.push([]);
         
         // === MATERIAL BREAKDOWN ===
-        html += '<tr><td class="section-title" colspan="12">MATERIAL BREAKDOWN &amp; END MARKETS</td></tr>';
-        html += '<tr><td class="col-header" colspan="2">Material Stream</td><td class="col-header">Tons</td><td class="col-header">% of Total</td><td class="col-header" colspan="6">End Market Destination</td><td class="col-header" colspan="2">Status</td></tr>';
-        
-        var matRows = [
-            ['OCC / Paper / Fiber', occTons, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber'],
-            ['Wood / Pallets', woodTons, 'Dalmex Pallets (In-House Reuse)'],
-            ['Metal / Scrap', metalTons, 'CMC (Commercial Metals) · Cyclone Metal Recycling'],
-            ['Plastic', plasticTons, 'American Recycling Arkansas']
-        ];
-        matRows.forEach(function(m, i) {
-            var cls = i % 2 === 0 ? 'data' : 'data-alt';
-            var pct = totalTons > 0 ? Math.round((m[1] / totalTons) * 100) : 0;
-            html += '<tr><td class="' + cls + '" colspan="2"><b>' + m[0] + '</b></td><td class="' + cls + ' number">' + m[1].toFixed(2) + '</td><td class="' + cls + ' number">' + pct + '%</td><td class="end-market" colspan="6">' + m[2] + '</td><td class="' + cls + ' pct-good" colspan="2">✓ Verified</td></tr>';
-        });
-        html += '<tr><td class="data" colspan="2">Landfill</td><td class="data number">' + landfillTons.toFixed(2) + '</td><td class="data number">' + (totalTons > 0 ? Math.round((landfillTons/totalTons)*100) : 0) + '%</td><td class="data" colspan="6">Municipal Landfill</td><td class="data pct-warn" colspan="2">N/A</td></tr>';
-        html += '<tr><td class="totals" colspan="2"><b>TOTAL</b></td><td class="totals number"><b>' + totalTons.toFixed(2) + '</b></td><td class="totals number"><b>100%</b></td><td class="totals" colspan="6"></td><td class="totals pct-good" colspan="2"><b>' + diversionRate + '% Diverted</b></td></tr>';
-        html += '<tr><td colspan="12"></td></tr>';
+        rows.push(['MATERIAL BREAKDOWN & END MARKETS']);
+        rows.push(['Material Stream', 'Tons', '% of Total', 'End Market Destination', 'Status']);
+        rows.push(['OCC / Paper / Fiber', occTons, totalTons > 0 ? occTons/totalTons : 0, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber', 'Verified']);
+        rows.push(['Wood / Pallets', woodTons, totalTons > 0 ? woodTons/totalTons : 0, 'Dalmex Pallets (In-House Reuse)', 'Verified']);
+        rows.push(['Metal / Scrap', metalTons, totalTons > 0 ? metalTons/totalTons : 0, 'CMC · Cyclone Metal Recycling', 'Verified']);
+        rows.push(['Plastic', plasticTons, totalTons > 0 ? plasticTons/totalTons : 0, 'American Recycling Arkansas', 'Verified']);
+        rows.push(['Landfill', landfillTons, totalTons > 0 ? landfillTons/totalTons : 0, 'Municipal Landfill', 'N/A']);
+        rows.push(['TOTAL', totalTons, 1, diversionRate + '% Diverted', '']);
+        rows.push([]);
         
         // === LOAD DETAILS ===
-        html += '<tr><td class="section-title" colspan="12">LOAD DETAILS</td></tr>';
-        html += '<tr><td class="col-header">Date</td><td class="col-header">Ticket #</td><td class="col-header">Hauler</td><td class="col-header">Gross (lbs)</td><td class="col-header">Tare (lbs)</td><td class="col-header">Net (lbs)</td><td class="col-header">Tons</td><td class="col-header">OCC %</td><td class="col-header">Wood %</td><td class="col-header">Metal %</td><td class="col-header">Plastic %</td><td class="col-header">Diversion %</td></tr>';
+        rows.push(['LOAD DETAILS']);
+        rows.push(['Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net Tons', 'OCC %', 'Wood %', 'Metal %', 'Plastic %', 'Diversion %', 'Verified']);
         
-        reportData.forEach(function(t, i) {
-            var cls = i % 2 === 0 ? 'data' : 'data-alt';
-            var divPct = t.diversion_pct || 0;
-            var pctCls = divPct >= 75 ? 'pct-good' : 'pct-warn';
-            html += '<tr>' +
-                '<td class="' + cls + '">' + (t.service_date || '') + '</td>' +
-                '<td class="' + cls + '">' + (t.ticket_number || '') + '</td>' +
-                '<td class="' + cls + '">' + (t.hauler || '') + '</td>' +
-                '<td class="' + cls + ' number">' + (t.gross_lbs || 0).toLocaleString() + '</td>' +
-                '<td class="' + cls + ' number">' + (t.tare_lbs || 0).toLocaleString() + '</td>' +
-                '<td class="' + cls + ' number">' + (t.net_lbs || 0).toLocaleString() + '</td>' +
-                '<td class="' + cls + ' number">' + (t.net_tons || 0).toFixed(2) + '</td>' +
-                '<td class="' + cls + ' number">' + (t.cardboard_pct || 0) + '%</td>' +
-                '<td class="' + cls + ' number">' + (t.wood_pct || 0) + '%</td>' +
-                '<td class="' + cls + ' number">' + (t.metal_pct || 0) + '%</td>' +
-                '<td class="' + cls + ' number">' + (t.plastic_pct || 0) + '%</td>' +
-                '<td class="' + cls + ' ' + pctCls + '">' + divPct + '%</td>' +
-            '</tr>';
+        reportData.forEach(function(t) {
+            rows.push([
+                t.service_date || '',
+                t.ticket_number || '',
+                t.hauler || '',
+                t.gross_lbs || 0,
+                t.tare_lbs || 0,
+                t.net_lbs || 0,
+                t.net_tons || 0,
+                (t.cardboard_pct || 0) / 100,
+                (t.wood_pct || 0) / 100,
+                (t.metal_pct || 0) / 100,
+                (t.plastic_pct || 0) / 100,
+                (t.diversion_pct || 0) / 100,
+                t.human_verified ? 'Yes' : 'No'
+            ]);
         });
         
         // Totals row
         var tGross = reportData.reduce(function(s,t){return s+(t.gross_lbs||0)},0);
         var tTare = reportData.reduce(function(s,t){return s+(t.tare_lbs||0)},0);
         var tNet = reportData.reduce(function(s,t){return s+(t.net_lbs||0)},0);
-        html += '<tr><td class="totals" colspan="3"><b>TOTALS</b></td>';
-        html += '<td class="totals number"><b>' + tGross.toLocaleString() + '</b></td>';
-        html += '<td class="totals number"><b>' + tTare.toLocaleString() + '</b></td>';
-        html += '<td class="totals number"><b>' + tNet.toLocaleString() + '</b></td>';
-        html += '<td class="totals number"><b>' + totalTons.toFixed(2) + '</b></td>';
-        html += '<td class="totals" colspan="4"></td>';
-        html += '<td class="totals pct-good"><b>' + diversionRate + '%</b></td></tr>';
+        rows.push(['TOTALS', reportData.length + ' loads', '', tGross, tTare, tNet, totalTons, '', '', '', '', diversionRate / 100, '']);
+        rows.push([]);
+        rows.push(['Report generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString()]);
         
-        html += '<tr><td colspan="12"></td></tr>';
-        html += '<tr><td class="data" colspan="12" style="font-size:9pt;color:#666;">Report generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString() + '</td></tr>';
+        // Build worksheet
+        var ws = XLSX.utils.aoa_to_sheet(rows);
         
-        html += '</table></body></html>';
+        // Column widths
+        ws['!cols'] = [
+            {wch:22},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}
+        ];
         
-        // Download as .xls (HTML table format Excel understands with full styling)
-        var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xls';
-        a.click();
-        URL.revokeObjectURL(url);
+        // Apply number formats to data rows
+        var dataStartRow = rows.indexOf(rows.find(function(r) { return r[0] === 'Date' && r[1] === 'Ticket #'; })) + 1;
+        if (dataStartRow > 0) {
+            for (var R = dataStartRow; R < dataStartRow + reportData.length + 1; R++) {
+                for (var C = 0; C <= 12; C++) {
+                    var addr = XLSX.utils.encode_cell({r: R, c: C});
+                    if (!ws[addr]) continue;
+                    if (C === 3 || C === 4 || C === 5) ws[addr].z = '#,##0';
+                    else if (C === 6) ws[addr].z = '0.00';
+                    else if (C >= 7 && C <= 11) ws[addr].z = '0%';
+                }
+            }
+        }
         
-        toast('LEED Excel report downloaded (single tab with styling)', 'success');
+        // Format material % column
+        for (var mr = 0; mr < rows.length; mr++) {
+            var c2addr = XLSX.utils.encode_cell({r: mr, c: 2});
+            if (ws[c2addr] && typeof ws[c2addr].v === 'number' && ws[c2addr].v > 0 && ws[c2addr].v <= 1) {
+                ws[c2addr].z = '0%';
+            }
+            // Diversion rate cell
+            var c4addr = XLSX.utils.encode_cell({r: mr, c: 4});
+            if (ws[c4addr] && typeof ws[c4addr].v === 'number' && ws[c4addr].v > 0 && ws[c4addr].v <= 1) {
+                ws[c4addr].z = '0%';
+            }
+        }
+        
+        // Summary diversion rate
+        var sumRow = rows.indexOf(rows.find(function(r) { return r[0] === reportData.length; }));
+        if (sumRow >= 0) {
+            var drAddr = XLSX.utils.encode_cell({r: sumRow, c: 4});
+            if (ws[drAddr]) ws[drAddr].z = '0%';
+        }
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'LEED Diversion Report');
+        
+        var filename = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+        XLSX.writeFile(wb, filename);
+        
+        toast('Excel report downloaded!', 'success');
         
     } catch (err) {
         console.error('Excel export error:', err);
