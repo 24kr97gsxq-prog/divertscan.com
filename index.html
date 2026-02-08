@@ -623,7 +623,10 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 
 <!-- LEED Compliance Predictor -->
 <div class="prediction-card" id="leedPredictor">
-<div class="prediction-title">🎯 LEED MRc5 Compliance Forecast</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<div class="prediction-title" style="margin:0">🎯 LEED MRc5 Compliance Forecast</div>
+<span style="font-size:10px;color:var(--slate-400)" id="predictorTicketCount"></span>
+</div>
 <div style="display:flex;justify-content:space-between;align-items:center">
 <div>
 <div class="prediction-value" id="predictorStatus">--</div>
@@ -642,6 +645,9 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 <span>50%</span>
 <span>75% (LEED)</span>
 <span>100%</span>
+</div>
+<div id="predictorActions" style="margin-top:12px;display:none">
+<button class="btn btn-primary" onclick="openTicketModal()" ontouchend="event.preventDefault();openTicketModal()" style="width:100%;padding:10px;font-size:12px">➕ Add Ticket to Improve Forecast</button>
 </div>
 </div>
 
@@ -8354,9 +8360,14 @@ async function updateCharts() {
 
 // ========== LEED PREDICTOR ==========
 async function updateLeedPredictor() {
+    var countEl = document.getElementById('predictorTicketCount');
+    var actionsEl = document.getElementById('predictorActions');
+    
     if (!currentProject) {
         document.getElementById('predictorStatus').textContent = '--';
         document.getElementById('predictorMessage').textContent = 'Select a project';
+        if (countEl) countEl.textContent = '';
+        if (actionsEl) actionsEl.style.display = 'none';
         return;
     }
     
@@ -8364,12 +8375,17 @@ async function updateLeedPredictor() {
         // Use local tickets array first (matches what user sees)
         var data = tickets.filter(function(t) { return t.project_id === currentProject.id; });
         
+        // Update ticket count
+        if (countEl) countEl.textContent = data.length + ' ticket' + (data.length !== 1 ? 's' : '');
+        
         if (!data || data.length === 0) {
-            document.getElementById('predictorStatus').textContent = 'N/A';
-            document.getElementById('predictorMessage').textContent = 'Add tickets to see prediction';
+            document.getElementById('predictorStatus').textContent = 'NO DATA';
+            document.getElementById('predictorStatus').style.color = 'var(--slate-400)';
+            document.getElementById('predictorMessage').textContent = 'Add your first ticket to start tracking';
             document.getElementById('predictorCurrent').textContent = '0%';
             document.getElementById('predictorProgressBar').style.width = '0%';
             document.getElementById('predictorProgressBar').style.background = 'var(--slate-600)';
+            if (actionsEl) actionsEl.style.display = 'block';
             return;
         }
         
@@ -8407,17 +8423,20 @@ async function updateLeedPredictor() {
         if (currentRate >= target) {
             document.getElementById('predictorStatus').textContent = '✅ ON TRACK';
             document.getElementById('predictorStatus').style.color = 'var(--emerald-400)';
-            document.getElementById('predictorMessage').textContent = `Exceeding ${target}% target by ${currentRate - target}%`;
+            document.getElementById('predictorMessage').textContent = 'Exceeding ' + target + '% target by ' + (currentRate - target) + '%';
+            if (actionsEl) actionsEl.style.display = 'none';
         } else if (currentRate >= target - 10) {
             document.getElementById('predictorStatus').textContent = '⚠️ CLOSE';
             document.getElementById('predictorStatus').style.color = 'var(--amber-400)';
-            const needed = target - currentRate;
-            document.getElementById('predictorMessage').textContent = `Need ${needed}% more diversion to reach target`;
+            var needed = target - currentRate;
+            document.getElementById('predictorMessage').textContent = 'Need ' + needed + '% more diversion to reach target';
+            if (actionsEl) actionsEl.style.display = 'block';
         } else {
             document.getElementById('predictorStatus').textContent = '❌ AT RISK';
             document.getElementById('predictorStatus').style.color = 'var(--red-500)';
-            const needed = target - currentRate;
-            document.getElementById('predictorMessage').textContent = `${needed}% below target - increase recycling`;
+            var needed2 = target - currentRate;
+            document.getElementById('predictorMessage').textContent = needed2 + '% below target — increase recycling';
+            if (actionsEl) actionsEl.style.display = 'block';
         }
         
         // Add trend indicator
@@ -9617,9 +9636,9 @@ async function saveDraft() {
 }
 
 async function checkForDraft() {
-    // Only check once per session
-    if (window._draftChecked) return false;
-    window._draftChecked = true;
+    // Only check once per browser session (survives reload, clears when tab closes)
+    if (sessionStorage.getItem('ds_draft_checked')) return false;
+    sessionStorage.setItem('ds_draft_checked', '1');
     
     try {
         const draft = await getFromLocal('drafts', 'current_draft');
@@ -9628,13 +9647,13 @@ async function checkForDraft() {
             const savedTime = new Date(draft.savedAt);
             const age = Date.now() - savedTime.getTime();
             
-            // Auto-clear drafts older than 4 hours
-            if (age > 4 * 60 * 60 * 1000) {
+            // Auto-clear drafts older than 1 hour
+            if (age > 60 * 60 * 1000) {
                 await clearDraft();
                 return false;
             }
             
-            // Only restore if draft has meaningful data (at least a ticket number or weight)
+            // Only restore if draft has meaningful data
             if (!draft.ticketNumber && !draft.grossLbs) {
                 await clearDraft();
                 return false;
@@ -9644,7 +9663,7 @@ async function checkForDraft() {
                 restoreDraft(draft);
                 return true;
             } else {
-                // User declined — clear the draft so it doesn't ask again
+                // User declined — clear the draft permanently
                 await clearDraft();
             }
         }
@@ -10337,7 +10356,15 @@ async function initBulletproof() {
         setupRealtimeSync();
     }
     
-    // Check for draft on startup
+    // Auto-purge old drafts silently (before check runs)
+    try {
+        var oldDraft = await getFromLocal('drafts', 'current_draft');
+        if (oldDraft && oldDraft.savedAt && (Date.now() - new Date(oldDraft.savedAt).getTime() > 60*60*1000)) {
+            await clearDraft(); // silently clear drafts older than 1 hour
+        }
+    } catch(e) {}
+    
+    // Check for draft on startup (only once per browser session)
     checkForDraft();
     
     console.log('DivertScan v7.2 Enhanced initialized');
