@@ -603,10 +603,6 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 </select>
 </div>
 <div id="recentTickets" style="color:var(--text-secondary);font-size:13px;max-height:600px;overflow-y:auto">Loading...</div>
-<!-- Bulk Delete All -->
-<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--slate-700)">
-<button class="btn" onclick="confirmDeleteAllTickets()" style="width:100%;background:rgba(239,68,68,0.15);color:var(--red-400);border:1px solid var(--red-500);font-size:11px;padding:8px">🗑️ Delete ALL Tickets for This Project</button>
-</div>
 </div>
 
 <div class="card">
@@ -1824,26 +1820,28 @@ async function loadProjects() {
         let remoteProjects = [];
         let localProjects = [];
         
-        // Try Supabase if configured (with 5s timeout)
+        // Fetch Supabase + IndexedDB IN PARALLEL
+        var fetches = [];
+        
         if (sb) {
-            try {
-                const sbPromise = sb.from('projects').select('*').order('created_at', { ascending: false });
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('timeout')), 5000)
-                );
-                const result = await Promise.race([sbPromise, timeoutPromise]);
-                if (result && !result.error && result.data) remoteProjects = result.data;
-            } catch (e) {
-                console.log('Supabase projects fetch skipped:', e.message);
-            }
+            fetches.push(
+                Promise.race([
+                    sb.from('projects').select('*').order('created_at', {ascending:false}),
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                ]).then(function(result) {
+                    if (result && !result.error && result.data) remoteProjects = result.data;
+                }).catch(function(e) { console.log('Supabase projects fetch skipped:', e.message); })
+            );
         }
         
-        // Always get local projects
-        try {
-            localProjects = await getAllFromLocal('projects') || [];
-        } catch (e) {
-            console.log('Local projects fetch error:', e.message);
-        }
+        fetches.push(
+            (async function() {
+                try { localProjects = await getAllFromLocal('projects') || []; }
+                catch(e) { console.log('Local projects fetch error:', e.message); }
+            })()
+        );
+        
+        await Promise.all(fetches);
         
         // Merge and dedupe by project name (prefer remote)
         const projectMap = new Map();
@@ -1913,66 +1911,189 @@ function renderProjectsList() {
     }
     
     container.innerHTML = projects.map(p => `
-        <div class="card" style="margin-bottom:12px" id="project-card-${p.id}">
-            <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleProjectExpand('${p.id}')">
+        <div class="card" style="margin-bottom:12px;cursor:pointer" id="project-card-${p.id}" onclick="expandProjectView('${p.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:center">
                 <div style="flex:1">
                     <div style="font-weight:600;display:flex;align-items:center;gap:8px">
-                        <span id="project-arrow-${p.id}">▶</span>
+                        <span id="project-arrow-${p.id}" style="font-size:10px;color:var(--slate-400)">▶</span>
                         ${p.name}
                         ${currentProject && currentProject.id === p.id ? '<span style="background:var(--emerald-500);color:white;padding:2px 8px;border-radius:10px;font-size:10px">ACTIVE</span>' : ''}
                     </div>
-                    <div style="font-size:12px;color:var(--slate-400);margin-left:20px">${p.address || 'No address'}</div>
+                    <div style="font-size:12px;color:var(--slate-400);margin-left:20px">${p.address || 'No address'}${p.waste_hauler ? ' · ' + p.waste_hauler : ''}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                    <div id="project-stat-tons-${p.id}" style="font-size:14px;font-weight:700;color:var(--accent-primary)">—</div>
+                    <div style="font-size:9px;color:var(--slate-400)">tons</div>
                 </div>
             </div>
-            <div id="project-expand-${p.id}" class="hidden" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--slate-700)">
-                <div class="form-group">
-                    <label class="form-label">Project Name</label>
-                    <input type="text" class="form-input" id="edit-name-${p.id}" value="${p.name || ''}">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Address</label>
-                    <input type="text" class="form-input" id="edit-address-${p.id}" value="${p.address || ''}">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Waste Hauler</label>
-                    <input type="text" class="form-input" id="edit-hauler-${p.id}" value="${p.waste_hauler || ''}">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">General Contractor</label>
-                    <input type="text" class="form-input" id="edit-gc-${p.id}" value="${p.general_contractor || ''}">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">LEED Target %</label>
-                    <input type="number" class="form-input" id="edit-target-${p.id}" value="${p.leed_target || 75}" min="50" max="100">
-                </div>
-                <div class="btn-row" style="margin-top:16px">
-                    <button class="btn btn-primary" onclick="saveProjectEdit('${p.id}')" style="flex:1">💾 Save</button>
-                    <button class="btn btn-secondary" onclick="selectProject('${p.id}')" style="flex:1">✓ Set Active</button>
-                    <button class="btn btn-secondary" onclick="viewProjectTickets('${p.id}')" style="flex:1">📋 Tickets</button>
-                    <button class="btn" onclick="confirmDeleteProject('${p.id}')" ontouchend="event.preventDefault();confirmDeleteProject('${p.id}')" style="background:var(--red-500);color:white">🗑️</button>
-                </div>
-            </div>
+            <!-- Expanded content loads dynamically -->
+            <div id="project-expand-${p.id}" class="hidden" onclick="event.stopPropagation()"></div>
         </div>
     `).join('');
 }
 
-function toggleProjectExpand(projectId) {
-    const content = document.getElementById('project-expand-' + projectId);
-    const arrow = document.getElementById('project-arrow-' + projectId);
+async function expandProjectView(projectId) {
+    var expandEl = document.getElementById('project-expand-' + projectId);
+    var arrowEl = document.getElementById('project-arrow-' + projectId);
+    if (!expandEl) return;
     
-    if (content.classList.contains('hidden')) {
-        // Close all others first
-        projects.forEach(p => {
-            document.getElementById('project-expand-' + p.id)?.classList.add('hidden');
-            const a = document.getElementById('project-arrow-' + p.id);
-            if (a) a.textContent = '▶';
-        });
-        content.classList.remove('hidden');
-        arrow.textContent = '▼';
-    } else {
-        content.classList.add('hidden');
-        arrow.textContent = '▶';
+    // Toggle off if already open
+    if (!expandEl.classList.contains('hidden')) {
+        expandEl.classList.add('hidden');
+        if (arrowEl) arrowEl.textContent = '▶';
+        return;
     }
+    
+    // Close all others
+    projects.forEach(function(p) {
+        var el = document.getElementById('project-expand-' + p.id);
+        var ar = document.getElementById('project-arrow-' + p.id);
+        if (el) el.classList.add('hidden');
+        if (ar) ar.textContent = '▶';
+    });
+    
+    expandEl.classList.remove('hidden');
+    if (arrowEl) arrowEl.textContent = '▼';
+    
+    // Set as active project
+    var proj = projects.find(function(p) { return p.id === projectId; });
+    if (proj) {
+        currentProject = proj;
+        localStorage.setItem('divertscan_current_project', JSON.stringify(proj));
+        updateProjectDisplay();
+    }
+    
+    // Show loading
+    expandEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--slate-400)">Loading project data...</div>';
+    
+    // Fetch tickets for this project
+    var projTickets = [];
+    if (sb) {
+        try {
+            var result = await Promise.race([
+                sb.from('tickets').select('*').eq('project_id', projectId).order('created_at', {ascending:false}),
+                new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},5000)})
+            ]);
+            if (result && !result.error && result.data) projTickets = result.data;
+        } catch(e) {}
+    }
+    // Merge local
+    try {
+        var allLocal = await getAllFromLocal('tickets') || [];
+        var localFiltered = allLocal.filter(function(t){return t.project_id === projectId});
+        var tMap = new Map();
+        localFiltered.forEach(function(t){tMap.set(t.ticket_number||t.id, t)});
+        projTickets.forEach(function(t){tMap.set(t.ticket_number||t.id, t)});
+        projTickets = Array.from(tMap.values());
+        projTickets.sort(function(a,b){return new Date(b.created_at||b.service_date) - new Date(a.created_at||a.service_date)});
+    } catch(e) {}
+    
+    // Calculate stats
+    var totalTons = projTickets.reduce(function(s,t){return s+(t.net_tons||0)},0);
+    var landfillTons = projTickets.reduce(function(s,t){return s+(t.landfill_tons||0)},0);
+    var divRate = totalTons > 0 ? Math.round(((totalTons-landfillTons)/totalTons)*100) : 0;
+    
+    // Update the mini stat on the card header
+    var statEl = document.getElementById('project-stat-tons-' + projectId);
+    if (statEl) statEl.textContent = totalTons.toFixed(2);
+    
+    // Build the expanded view
+    var html = '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--slate-700)">';
+    
+    // Project info bar
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:11px">';
+    html += '<div><span style="color:var(--slate-400)">Address:</span> ' + (proj.address||'—') + '</div>';
+    html += '<div><span style="color:var(--slate-400)">Hauler:</span> ' + (proj.waste_hauler||'—') + '</div>';
+    html += '<div><span style="color:var(--slate-400)">GC:</span> ' + (proj.general_contractor||'—') + '</div>';
+    html += '<div><span style="color:var(--slate-400)">LEED Target:</span> ' + (proj.leed_target||75) + '%</div>';
+    html += '</div>';
+    
+    // Stats row
+    var statColor = divRate >= 75 ? 'var(--emerald-400)' : divRate >= 50 ? 'var(--amber-400)' : 'var(--red-400)';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px">';
+    html += '<div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px"><div style="font-size:18px;font-weight:700;color:var(--accent-primary)">' + totalTons.toFixed(2) + '</div><div style="font-size:9px;color:var(--slate-400)">Total Tons</div></div>';
+    html += '<div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px"><div style="font-size:18px;font-weight:700;color:' + statColor + '">' + divRate + '%</div><div style="font-size:9px;color:var(--slate-400)">Diversion</div></div>';
+    html += '<div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px"><div style="font-size:18px;font-weight:700;color:var(--emerald-400)">' + (totalTons-landfillTons).toFixed(2) + '</div><div style="font-size:9px;color:var(--slate-400)">Diverted</div></div>';
+    html += '<div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px"><div style="font-size:18px;font-weight:700;color:var(--red-400)">' + landfillTons.toFixed(2) + '</div><div style="font-size:9px;color:var(--slate-400)">Landfill</div></div>';
+    html += '</div>';
+    
+    // Export buttons
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+    html += '<button class="btn btn-primary" onclick="event.stopPropagation();generateLEEDAuditReport()" ontouchend="event.stopPropagation();event.preventDefault();generateLEEDAuditReport()" style="flex:1;padding:8px;font-size:11px">📄 PDF Report</button>';
+    html += '<button class="btn btn-secondary" onclick="event.stopPropagation();downloadReportExcel()" ontouchend="event.stopPropagation();event.preventDefault();downloadReportExcel()" style="flex:1;padding:8px;font-size:11px">📊 Excel</button>';
+    html += '<button class="btn btn-secondary" onclick="event.stopPropagation();shareLEEDPDF()" ontouchend="event.stopPropagation();event.preventDefault();shareLEEDPDF()" style="flex:1;padding:8px;font-size:11px">📤 Share</button>';
+    html += '<button class="btn btn-secondary" onclick="event.stopPropagation();toggleProjectEditFields(\'' + projectId + '\')" ontouchend="event.stopPropagation();event.preventDefault();toggleProjectEditFields(\'' + projectId + '\')" style="padding:8px;font-size:11px">✏️ Edit</button>';
+    html += '<button class="btn" onclick="event.stopPropagation();confirmDeleteProject(\'' + projectId + '\')" ontouchend="event.stopPropagation();event.preventDefault();confirmDeleteProject(\'' + projectId + '\')" style="background:var(--red-500);color:white;padding:8px;font-size:11px">🗑️</button>';
+    html += '</div>';
+    
+    // Collapsible edit fields
+    html += '<div id="project-edit-fields-' + projectId + '" class="hidden" style="margin-bottom:16px;padding:12px;background:var(--bg-tertiary);border-radius:8px">';
+    html += '<div class="form-group"><label class="form-label">Project Name</label><input type="text" class="form-input" id="edit-name-' + projectId + '" value="' + (proj.name||'').replace(/"/g,'&quot;') + '"></div>';
+    html += '<div class="form-group"><label class="form-label">Address</label><input type="text" class="form-input" id="edit-address-' + projectId + '" value="' + (proj.address||'').replace(/"/g,'&quot;') + '"></div>';
+    html += '<div class="form-group"><label class="form-label">Waste Hauler</label><input type="text" class="form-input" id="edit-hauler-' + projectId + '" value="' + (proj.waste_hauler||'').replace(/"/g,'&quot;') + '"></div>';
+    html += '<div class="form-group"><label class="form-label">General Contractor</label><input type="text" class="form-input" id="edit-gc-' + projectId + '" value="' + (proj.general_contractor||'').replace(/"/g,'&quot;') + '"></div>';
+    html += '<div class="form-group"><label class="form-label">LEED Target %</label><input type="number" class="form-input" id="edit-target-' + projectId + '" value="' + (proj.leed_target||75) + '" min="50" max="100"></div>';
+    html += '<button class="btn btn-primary" onclick="event.stopPropagation();saveProjectEdit(\'' + projectId + '\')" style="width:100%;margin-top:8px">💾 Save Changes</button>';
+    html += '</div>';
+    
+    // Tickets table
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span>📋 Tickets (' + projTickets.length + ')</span>';
+    html += '</div>';
+    
+    if (projTickets.length === 0) {
+        html += '<div style="padding:16px;text-align:center;color:var(--slate-400);font-size:12px">No tickets yet for this project. Scan a scale ticket to get started.</div>';
+    } else {
+        html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">';
+        html += '<thead><tr style="background:var(--bg-tertiary)">';
+        html += '<th style="padding:6px 4px;text-align:left;color:var(--emerald-400);font-size:9px">Date</th>';
+        html += '<th style="padding:6px 4px;text-align:left;color:var(--emerald-400);font-size:9px">Ticket #</th>';
+        html += '<th style="padding:6px 4px;text-align:left;color:var(--emerald-400);font-size:9px">Hauler</th>';
+        html += '<th style="padding:6px 4px;text-align:right;color:var(--emerald-400);font-size:9px">Gross</th>';
+        html += '<th style="padding:6px 4px;text-align:right;color:var(--emerald-400);font-size:9px">Tare</th>';
+        html += '<th style="padding:6px 4px;text-align:right;color:var(--emerald-400);font-size:9px">Net(T)</th>';
+        html += '<th style="padding:6px 4px;text-align:right;color:var(--emerald-400);font-size:9px">Div%</th>';
+        html += '<th style="padding:6px 4px;text-align:center;color:var(--emerald-400);font-size:9px">Actions</th>';
+        html += '</tr></thead><tbody>';
+        
+        projTickets.forEach(function(t) {
+            var divP = t.diversion_pct || 0;
+            var dColor = divP >= 75 ? 'var(--emerald-400)' : divP >= 50 ? 'var(--amber-400)' : 'var(--red-400)';
+            html += '<tr style="border-bottom:1px solid var(--slate-700)">';
+            html += '<td style="padding:6px 4px;white-space:nowrap">' + formatDate(t.service_date) + '</td>';
+            html += '<td style="padding:6px 4px;font-weight:600">' + (t.ticket_number||'—') + '</td>';
+            html += '<td style="padding:6px 4px;color:var(--slate-400)">' + (t.hauler||'—') + '</td>';
+            html += '<td style="padding:6px 4px;text-align:right;color:var(--slate-400)">' + (t.gross_lbs||0).toLocaleString() + '</td>';
+            html += '<td style="padding:6px 4px;text-align:right;color:var(--slate-400)">' + (t.tare_lbs||0).toLocaleString() + '</td>';
+            html += '<td style="padding:6px 4px;text-align:right;font-weight:600">' + (t.net_tons||0).toFixed(2) + '</td>';
+            html += '<td style="padding:6px 4px;text-align:right;color:' + dColor + ';font-weight:600">' + divP + '%</td>';
+            html += '<td style="padding:6px 4px;text-align:center;white-space:nowrap">';
+            html += '<button onclick="event.stopPropagation();editTicket(\'' + t.id + '\')" ontouchend="event.stopPropagation();event.preventDefault();editTicket(\'' + t.id + '\')" style="background:var(--accent-info);border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="Edit">✏️</button>';
+            html += '<button onclick="event.stopPropagation();generateTicketCOD(\'' + t.id + '\')" ontouchend="event.stopPropagation();event.preventDefault();generateTicketCOD(\'' + t.id + '\')" style="background:#7c3aed;border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="COD">📜</button>';
+            html += '<button onclick="event.stopPropagation();confirmDeleteTicket(\'' + t.id + '\')" ontouchend="event.stopPropagation();event.preventDefault();confirmDeleteTicket(\'' + t.id + '\')" style="background:var(--accent-danger);border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer;margin:1px" title="Delete">🗑️</button>';
+            html += '</td>';
+            html += '</tr>';
+        });
+        
+        // Totals row
+        html += '<tr style="border-top:2px solid var(--emerald-500);font-weight:700">';
+        html += '<td colspan="5" style="padding:6px 4px">TOTALS</td>';
+        html += '<td style="padding:6px 4px;text-align:right">' + totalTons.toFixed(2) + '</td>';
+        html += '<td style="padding:6px 4px;text-align:right;color:' + statColor + '">' + divRate + '%</td>';
+        html += '<td></td></tr>';
+        html += '</tbody></table></div>';
+    }
+    
+    html += '</div>';
+    expandEl.innerHTML = html;
+    
+    // Store these tickets in the global array so export functions work
+    tickets = projTickets;
+}
+
+function toggleProjectEditFields(projectId) {
+    var el = document.getElementById('project-edit-fields-' + projectId);
+    if (el) el.classList.toggle('hidden');
 }
 
 async function saveProjectEdit(projectId) {
@@ -2210,32 +2331,30 @@ async function loadRecentTickets() {
         let remoteTickets = [];
         let localTickets = [];
         
-        // Try Supabase if configured (with 5s timeout)
+        // Fetch Supabase + IndexedDB IN PARALLEL
+        var fetches = [];
+        
         if (sb) {
-            try {
-                const sbPromise = sb
-                    .from('tickets')
-                    .select('*')
-                    .eq('project_id', currentProject.id)
-                    .order('created_at', { ascending: false })
-                    .limit(20);
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('timeout')), 5000)
-                );
-                const result = await Promise.race([sbPromise, timeoutPromise]);
-                if (result && !result.error && result.data) remoteTickets = result.data;
-            } catch (e) {
-                console.log('Supabase tickets fetch skipped:', e.message);
-            }
+            fetches.push(
+                Promise.race([
+                    sb.from('tickets').select('*').eq('project_id', currentProject.id).order('created_at', {ascending:false}).limit(50),
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                ]).then(function(result) {
+                    if (result && !result.error && result.data) remoteTickets = result.data;
+                }).catch(function(e) { console.log('Supabase tickets fetch skipped:', e.message); })
+            );
         }
         
-        // Always get local tickets (Excel imports, manual entries)
-        try {
-            const allLocal = await getAllFromLocal('tickets') || [];
-            localTickets = allLocal.filter(t => t.project_id === currentProject.id);
-        } catch (e) {
-            console.log('Local tickets fetch error:', e.message);
-        }
+        fetches.push(
+            (async function() {
+                try {
+                    var allLocal = await getAllFromLocal('tickets') || [];
+                    localTickets = allLocal.filter(function(t){return t.project_id === currentProject.id});
+                } catch(e) { console.log('Local tickets fetch error:', e.message); }
+            })()
+        );
+        
+        await Promise.all(fetches);
         
         // Merge and dedupe
         const ticketMap = new Map();
@@ -3261,7 +3380,7 @@ async function analyzeScaleTicket(imageData) {
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 1024,
+                max_tokens: 768,
                 messages: [{
                     role: 'user',
                     content: [
@@ -3275,22 +3394,17 @@ async function analyzeScaleTicket(imageData) {
                         },
                         { 
                             type: 'text', 
-                            text: `Extract ALL information from this scale ticket. Read every field carefully.
+                            text: `You are reading a construction/demolition scale ticket. These are often handwritten, carbon-copy, or thermal printed. Read EVERY field carefully — look for faded ink, overlapping text, and poor handwriting.
 
-Return ONLY valid JSON with this structure (use null for any field you cannot read):
-{
-  "ticket_number": "string",
-  "date": "MM/DD/YYYY",
-  "gross_lbs": number,
-  "tare_lbs": number,
-  "net_lbs": number,
-  "hauler": "string",
-  "vehicle_id": "string or null",
-  "material_type": "string or null",
-  "customer": "string or null"
-}
+Return ONLY JSON:
+{"ticket_number":"string","date":"MM/DD/YYYY","gross_lbs":number,"tare_lbs":number,"net_lbs":number,"hauler":"string","vehicle_id":"string or null","material_type":"string or null","customer":"string or null"}
 
-IMPORTANT: Read the actual numbers on the ticket. Do not estimate or guess weights.` 
+RULES:
+- Read actual numbers — do NOT estimate or round weights
+- If handwriting is ambiguous (e.g. 3 vs 8, 1 vs 7), note the most likely reading
+- Net = Gross minus Tare. If net_lbs is not printed, calculate it
+- Use null for truly unreadable fields, not empty strings
+- Dates may be in various formats — normalize to MM/DD/YYYY` 
                         }
                     ]
                 }]
@@ -3307,14 +3421,12 @@ IMPORTANT: Read the actual numbers on the ticket. Do not estimate or guess weigh
         }
         
         let text = data.content[0].text;
-        console.log('Scale ticket OCR response:', text);
         text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
         
         const match = text.match(/\{[\s\S]*\}/);
         
         if (match) {
             const result = JSON.parse(match[0]);
-            console.log('Parsed scale ticket:', result);
             
             document.getElementById('ticketNumber').value = result.ticket_number || '';
             document.getElementById('grossLbs').value = result.gross_lbs || '';
@@ -3415,8 +3527,8 @@ function compressImageForAPI(dataUrl, maxSizeBytes = 4500000) {
             let width = img.width;
             let height = img.height;
             
-            // Scale down large images (iPad photos can be 4032x3024)
-            const maxDim = 2048;
+            // Scale down — 1600px balances OCR accuracy on handwriting with upload speed
+            const maxDim = 1600;
             if (width > maxDim || height > maxDim) {
                 const ratio = Math.min(maxDim / width, maxDim / height);
                 width = Math.round(width * ratio);
@@ -3428,24 +3540,16 @@ function compressImageForAPI(dataUrl, maxSizeBytes = 4500000) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Try quality levels until under limit
-            let quality = 0.8;
-            let result = canvas.toDataURL('image/jpeg', quality);
+            // Single-pass compression at 0.65 quality — fast, small enough for API
+            let result = canvas.toDataURL('image/jpeg', 0.65);
             let resultSize = Math.round((result.length - result.indexOf(',') - 1) * 0.75);
             
-            while (resultSize > maxSizeBytes && quality > 0.3) {
-                quality -= 0.1;
-                result = canvas.toDataURL('image/jpeg', quality);
-                resultSize = Math.round((result.length - result.indexOf(',') - 1) * 0.75);
-            }
-            
-            // If still too big, scale down further
+            // Only retry if still over limit
             if (resultSize > maxSizeBytes) {
-                const ratio = 0.6;
-                canvas.width = Math.round(width * ratio);
-                canvas.height = Math.round(height * ratio);
+                canvas.width = Math.round(width * 0.5);
+                canvas.height = Math.round(height * 0.5);
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                result = canvas.toDataURL('image/jpeg', 0.7);
+                result = canvas.toDataURL('image/jpeg', 0.6);
             }
             
             console.log(`Image compressed: ${(currentSize/1024/1024).toFixed(1)}MB → ${(Math.round((result.length - result.indexOf(',') - 1) * 0.75)/1024/1024).toFixed(1)}MB (${width}x${height})`);
@@ -3561,70 +3665,15 @@ async function analyzeDebris() {
             }
         }));
         
-        // ENHANCED PROMPT with quality check, contamination detection, and reasoning
-        const prompt = `You are a veteran C&D waste auditor working at a recycling facility in Dallas, TX. You process 50+ loads per day. Analyze these construction debris photos.
+        // Optimized prompt — shorter = faster first-token response
+        const prompt = `C&D waste auditor at Dalmex Recycling, Dallas TX. Estimate material composition percentages from these debris photos.
 
-NOTE: Actual weights are captured separately from the scale ticket. Your job is ONLY to estimate material composition percentages based on what you see.
+RULES: Only count CLEAN SORTABLE materials as recyclable. Broken/contaminated/painted wood = landfill. Mixed tangled debris = landfill. Landfill usually 25%+ for mixed loads. Max 3-4 non-zero categories. Total must equal 100. Err toward MORE landfill.
 
-CRITICAL RULES FOR ESTIMATION:
-1. You can ONLY identify what is CLEARLY VISIBLE. Do NOT assume hidden materials.
-2. MOST loads are messier than they look. Default to higher landfill.
-3. If you see mixed/tangled debris that would be hard to sort by hand, that is LANDFILL, not recyclable.
-4. Broken, contaminated, painted, or treated wood = LANDFILL, not wood recycling.
-5. Only count CLEAN, SORTABLE materials as recyclable.
-6. Nails, fasteners, small metal pieces embedded in wood = NOT separable metal.
-7. Dirty or wet cardboard = LANDFILL.
-8. If material is ambiguous or hard to identify = LANDFILL.
+BENCHMARKS: Clean wood loads: Wood 45-55%, Landfill 25-35%. Mixed demo: Wood 25-35%, Concrete 10-20%, Landfill 30-40%. Loads above 80% diversion are rare (<10%).
 
-REAL FACILITY BENCHMARKS (Dalmex Recycling, Dallas TX - actual weighed data):
-- Clean wood-heavy loads: Wood 45-55%, Landfill 25-35%, Metal 5-8%, other 5-10%
-- Mixed demo loads: Wood 25-35%, Concrete 10-20%, Landfill 30-40%, Metal 5-10%
-- Concrete-heavy loads: Concrete 40-55%, Landfill 20-30%, Metal 5-10%, Wood 5-15%
-- Typical overall diversion rate across ALL loads: 62-72%
-- Loads above 80% diversion are RARE (< 10% of loads)
-- Loads above 85% diversion are EXTREMELY RARE (< 2% of loads)
-
-PERCENTAGE RULES:
-- Landfill should almost ALWAYS be 25% or higher for mixed loads
-- ONE material dominates most loads (35-55% range, not higher)
-- Materials with less than 3% visible should be reported as 0%
-- Do NOT spread small amounts across many categories - that looks fake
-- Maximum 3-4 non-zero material categories for a typical load
-- If diversion would exceed 75%, double-check your landfill estimate
-
-PHOTO QUALITY: Rate as "good", "fair", or "poor".
-CONTAMINATION: Note any contamination (wet materials, paint, soil, food waste, hazmat).
-
-Return ONLY valid JSON:
-{
-  "quality": {
-    "rating": "good|fair|poor",
-    "issues": ["list of issues if any"]
-  },
-  "fill_level": {
-    "percentage": 75,
-    "description": "brief fill level description"
-  },
-  "contamination": {
-    "detected": true|false,
-    "types": ["contamination types if any"],
-    "impact": "how contamination affects recyclability"
-  },
-  "materials": {
-    "wood": 0,
-    "concrete": 0,
-    "metal": 0,
-    "cardboard": 0,
-    "plastic": 0,
-    "drywall": 0,
-    "landfill": 0
-  },
-  "reasoning": "2-3 sentences explaining what you see and why you assigned these percentages",
-  "dominant_material": "name of most prominent material",
-  "confidence": "high|medium|low"
-}
-
-Materials must total exactly 100. Err on the side of MORE landfill, not less.`;
+Return ONLY JSON:
+{"quality":{"rating":"good|fair|poor","issues":[]},"fill_level":{"percentage":75,"description":"brief"},"contamination":{"detected":false,"types":[],"impact":""},"materials":{"wood":0,"concrete":0,"metal":0,"cardboard":0,"plastic":0,"drywall":0,"landfill":0},"reasoning":"2 sentences","dominant_material":"name","confidence":"high|medium|low"}`;
 
         showLoading('Analyzing materials with Claude AI...');
         
@@ -3638,7 +3687,7 @@ Materials must total exactly 100. Err on the side of MORE landfill, not less.`;
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 2048,
+                max_tokens: 1024,
                 messages: [{
                     role: 'user',
                     content: [
@@ -3659,13 +3708,11 @@ Materials must total exactly 100. Err on the side of MORE landfill, not less.`;
         }
         
         let text = data.content[0].text;
-        console.log('Claude full response:', text);
         text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
         
         const match = text.match(/\{[\s\S]*\}/);
         if (match) {
             const analysis = JSON.parse(match[0]);
-            console.log('Parsed analysis:', analysis);
             
             // Store full analysis
             ticketData.aiAnalysis = analysis;
@@ -4323,9 +4370,6 @@ function toast(message, type) {
 let reportData = [];
 
 async function generateReport() {
-    console.log('generateReport called');
-    console.log('sb:', sb);
-    console.log('currentProject:', currentProject);
     
     // BUG FIX: Sync currentProject from report dropdown if available
     var reportSel = document.getElementById('reportProjectSelect');
@@ -4346,46 +4390,38 @@ async function generateReport() {
     }
     
     var projectIdForQuery = currentProject.id;
-    console.log('Querying tickets for project ID:', projectIdForQuery);
     
     showLoading('Generating report...');
     
     try {
-        console.log('Fetching tickets for project:', projectIdForQuery);
         
         let remoteData = [];
         let localData = [];
         
-        // Try to fetch from Supabase if configured (with 5s timeout)
+        // Fetch Supabase + IndexedDB IN PARALLEL (was sequential)
+        var fetchPromises = [];
+        
         if (sb) {
-            try {
-                const sbPromise = sb
-                    .from('tickets')
-                    .select('*')
-                    .eq('project_id', projectIdForQuery)
-                    .order('service_date', { ascending: true });
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('timeout')), 5000)
-                );
-                const result = await Promise.race([sbPromise, timeoutPromise]);
-                
-                if (result && !result.error && result.data) {
-                    remoteData = result.data;
-                    console.log('Remote tickets found:', remoteData.length);
-                }
-            } catch (e) {
-                console.log('Supabase fetch skipped:', e.message);
-            }
+            fetchPromises.push(
+                Promise.race([
+                    sb.from('tickets').select('*').eq('project_id', projectIdForQuery).order('service_date', {ascending:true}),
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                ]).then(function(result) {
+                    if (result && !result.error && result.data) remoteData = result.data;
+                }).catch(function(e) { console.log('Supabase fetch skipped:', e.message); })
+            );
         }
         
-        // Always fetch from local IndexedDB (where Excel imports are stored)
-        try {
-            const allLocalTickets = await getAllFromLocal('tickets') || [];
-            localData = allLocalTickets.filter(t => t.project_id === projectIdForQuery);
-            console.log('Local tickets found:', localData.length);
-        } catch (e) {
-            console.log('Local fetch error:', e.message);
-        }
+        fetchPromises.push(
+            (async function() {
+                try {
+                    var allLocal = await getAllFromLocal('tickets') || [];
+                    localData = allLocal.filter(function(t){return t.project_id === projectIdForQuery});
+                } catch(e) { console.log('Local fetch error:', e.message); }
+            })()
+        );
+        
+        await Promise.all(fetchPromises);
         
         // Merge and dedupe by ticket_number (prefer remote if exists in both)
         const ticketMap = new Map();
@@ -4407,7 +4443,6 @@ async function generateReport() {
         // Sort by service_date
         reportData.sort((a, b) => new Date(a.service_date) - new Date(b.service_date));
         
-        console.log('Total merged tickets:', reportData.length);
         hideLoading();
         
         if (reportData.length === 0) {
@@ -6903,52 +6938,80 @@ function exportProjectsCSV() {
 // ========== LEED NEWS FEED ==========
 async function refreshLeedNews() {
     const container = document.getElementById('leedNewsList');
-    container.innerHTML = '<div style="padding:12px 0;color:var(--slate-400)">Loading news...</div>';
+    container.innerHTML = '<div style="padding:12px 0;color:var(--slate-400)">🔄 Fetching latest LEED & C&D industry news...</div>';
     
-    // Curated LEED MRc5 news sources
-    const newsItems = [
-        {
-            title: 'LEED v5 Beta Released',
-            source: 'USGBC',
-            date: '2025',
-            summary: 'New circular economy credits with 200% weighted multipliers for reuse materials.',
-            url: 'https://www.usgbc.org/leed/v5'
-        },
-        {
-            title: 'C&D Waste Diversion Best Practices',
-            source: 'EPA',
-            summary: 'Updated guidelines for construction waste management and recycling.',
-            url: 'https://www.epa.gov/smm/sustainable-management-construction-and-demolition-materials'
-        },
-        {
-            title: 'MRc5 Documentation Requirements',
-            source: 'USGBC',
-            summary: 'Hauler receipts, material breakdowns, and diversion calculations required for LEED.',
-            url: 'https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-healthcare/v4'
-        },
-        {
-            title: 'Texas C&D Recycling Facilities',
-            source: 'TCEQ',
-            summary: 'List of authorized C&D recycling and processing facilities in Texas.',
-            url: 'https://www.tceq.texas.gov/permitting/waste_permits/msw_permits/msw-cd-facilities'
-        },
-        {
-            title: 'Circular Economy in Construction',
-            source: 'World Green Building Council',
-            summary: 'Global trends in sustainable construction waste management.',
-            url: 'https://worldgbc.org/circularity'
+    const apiKey = localStorage.getItem('divertscan_openai');
+    
+    if (apiKey && apiKey.startsWith('sk-ant-')) {
+        // Use Claude API with web search for live news
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 1024,
+                    tools: [{type:'web_search_20250305', name:'web_search'}],
+                    messages: [{
+                        role: 'user',
+                        content: 'Search for the 5 most recent and important news items about: LEED v5 construction waste management, C&D recycling regulations, USGBC MRc5 updates, EPA construction demolition waste rules, green building waste diversion standards. Return ONLY JSON array: [{"title":"string","source":"string","date":"string","summary":"one sentence","url":"string"}]. Focus on 2025-2026 developments.'
+                    }]
+                })
+            });
+            
+            const data = await response.json();
+            if (data.content) {
+                var text = data.content.map(function(b){return b.text||''}).join('');
+                text = text.replace(/```json/gi,'').replace(/```/g,'').trim();
+                var match = text.match(/\[[\s\S]*\]/);
+                if (match) {
+                    var newsItems = JSON.parse(match[0]);
+                    renderNewsItems(container, newsItems);
+                    // Cache with timestamp
+                    localStorage.setItem('divertscan_news_cache', JSON.stringify({items:newsItems, ts:Date.now()}));
+                    return;
+                }
+            }
+        } catch(e) {
+            console.log('Live news fetch failed, using cache/fallback:', e.message);
         }
-    ];
+    }
     
-    container.innerHTML = newsItems.map(item => `
-        <div style="padding:12px 0;border-bottom:1px solid var(--slate-700)">
-            <a href="${item.url}" target="_blank" style="color:var(--emerald-400);font-weight:600;text-decoration:none">
-                ${item.title} ↗
-            </a>
-            <div style="color:var(--slate-400);font-size:11px;margin-top:4px">${item.source}</div>
-            <div style="color:var(--slate-300);margin-top:4px">${item.summary}</div>
-        </div>
-    `).join('');
+    // Try cache first (valid for 24 hours)
+    try {
+        var cached = JSON.parse(localStorage.getItem('divertscan_news_cache') || '{}');
+        if (cached.items && cached.ts && (Date.now() - cached.ts) < 86400000) {
+            renderNewsItems(container, cached.items);
+            container.innerHTML += '<div style="font-size:9px;color:var(--slate-500);padding:4px 0">Cached · Last updated ' + new Date(cached.ts).toLocaleString() + '</div>';
+            return;
+        }
+    } catch(e) {}
+    
+    // Fallback to curated static sources
+    var newsItems = [
+        {title:'LEED v5 — Mandatory After June 30, 2026',source:'USGBC',date:'2025',summary:'All new project registrations must use LEED v5 after June 30, 2026. Key change: 200% salvage multiplier for reused materials.',url:'https://www.usgbc.org/leed/v5'},
+        {title:'EPA C&D Waste Management Guidelines',source:'EPA',date:'2025',summary:'Updated guidelines for sustainable management of construction and demolition materials.',url:'https://www.epa.gov/smm/sustainable-management-construction-and-demolition-materials'},
+        {title:'TCEQ C&D Recycling Facilities (Texas)',source:'TCEQ',date:'2025',summary:'Authorized C&D recycling and processing facilities in Texas — verify your end markets.',url:'https://www.tceq.texas.gov/permitting/waste_permits/msw_permits/msw-cd-facilities'},
+        {title:'MRc5 Documentation Requirements',source:'USGBC',date:'2025',summary:'Scale tickets, material breakdowns, end market verification, and chain-of-custody required.',url:'https://www.usgbc.org/credits/new-construction-core-and-shell-schools-new-construction-retail-new-construction-healthcare/v4'},
+        {title:'Circular Economy in Construction',source:'World GBC',date:'2025',summary:'Global trends driving material reuse and waste reduction in the building sector.',url:'https://worldgbc.org/circularity'}
+    ];
+    renderNewsItems(container, newsItems);
+    container.innerHTML += '<div style="font-size:9px;color:var(--slate-500);padding:4px 0">Static sources · Add API key for live news</div>';
+}
+
+function renderNewsItems(container, items) {
+    container.innerHTML = items.map(function(item) {
+        return '<div style="padding:10px 0;border-bottom:1px solid var(--slate-700)">' +
+            '<a href="' + (item.url||'#') + '" target="_blank" rel="noopener" style="color:var(--emerald-400);font-weight:600;text-decoration:none;font-size:12px">' + item.title + ' ↗</a>' +
+            '<div style="color:var(--slate-400);font-size:10px;margin-top:2px">' + (item.source||'') + (item.date ? ' · ' + item.date : '') + '</div>' +
+            '<div style="color:var(--slate-300);font-size:11px;margin-top:3px">' + (item.summary||'') + '</div>' +
+        '</div>';
+    }).join('');
 }
 
 // ========== AI EXECUTIVE SUMMARY ==========
@@ -9530,37 +9593,67 @@ async function clearDraft() {
 const LEED_RULES = {
     'v4.1': {
         name: 'LEED v4.1',
+        mandatory_until: '2026-06-30',
         mrc5: {
             name: 'MRc5: Construction and Demolition Waste Management',
+            credit_category: 'Materials and Resources',
+            intent: 'Reduce construction and demolition waste disposed of in landfills and incineration facilities by recovering, reusing, and recycling materials.',
             options: {
                 diversion: {
-                    description: 'Diversion',
+                    description: 'Option 1: Diversion',
+                    method: 'weight',
                     thresholds: [
                         { percent: 50, points: 1, label: '50% diversion = 1 point' },
                         { percent: 75, points: 2, label: '75% diversion = 2 points' }
                     ]
+                },
+                reduction: {
+                    description: 'Option 2: Reduction of Total Waste',
+                    thresholds: [
+                        { lbs_per_sqft: 2.5, points: 2, label: '≤2.5 lbs/sf total waste = 2 points' }
+                    ]
                 }
             },
             requirements: [
-                'Track waste by material stream',
-                'Document final destination for each stream',
-                'Obtain recycling facility documentation',
-                'Calculate diversion rate using weight or volume'
+                'Track waste by material stream (at minimum 4 streams)',
+                'Document final destination for each material stream',
+                'Obtain recycling facility documentation/receipts',
+                'Calculate diversion rate using weight (preferred) or volume',
+                'Maintain chain-of-custody documentation',
+                'Separate or commingled collection acceptable if documented',
+                'Alternative daily cover (ADC) does NOT count as diversion',
+                'Waste-to-energy does NOT count as diversion',
+                'Land-clearing debris tracked separately from building waste'
             ],
-            excluded: [
-                'Hazardous waste',
-                'Soil and land clearing debris (may count separately)',
-                'Alternative daily cover (ADC) does NOT count as diversion'
+            excluded_materials: [
+                'Hazardous waste (RCRA regulated)',
+                'Soil and land clearing debris (tracked separately, may earn separate credit)',
+                'Alternative daily cover (ADC) — counted as landfill',
+                'Waste-to-energy incineration output'
+            ],
+            minimum_streams: 4,
+            documentation: [
+                'Scale tickets with weights for each load',
+                'Material breakdown by percentage or weight',
+                'Recycling facility receipts with material types',
+                'Waste Management Plan (WMP)',
+                'Monthly or per-load tracking logs',
+                'Photo documentation (recommended but not required)',
+                'Final summary report showing total diversion calculation'
             ]
         }
     },
     'v5': {
-        name: 'LEED v5 (2024)',
+        name: 'LEED v5 (Mandatory for new registrations after June 30, 2026)',
+        mandatory_after: '2026-06-30',
         mrc5: {
             name: 'MRc5: Construction and Demolition Waste Management',
+            credit_category: 'Materials and Resources',
+            intent: 'Reduce waste and promote circular economy through material reuse, recycling, and waste reduction.',
             options: {
                 diversion: {
-                    description: 'Diversion',
+                    description: 'Option 1: Diversion',
+                    method: 'weight',
                     thresholds: [
                         { percent: 50, points: 1, label: '50% diversion = 1 point' },
                         { percent: 75, points: 2, label: '75% diversion = 2 points' }
@@ -9569,22 +9662,48 @@ const LEED_RULES = {
                 circularity: {
                     description: 'Tier 1 Circularity Credit',
                     multiplier: 2.0,
-                    eligibleMaterials: ['reused materials', 'deconstructed materials'],
-                    label: 'Reused materials count 200%'
+                    eligibleMaterials: ['reused materials', 'deconstructed materials', 'salvaged materials'],
+                    label: 'Salvaged/reused materials count at 200% (2x multiplier)',
+                    note: 'Materials must be documented as reused on-site or salvaged for reuse, not just recycled'
+                },
+                reduction: {
+                    description: 'Option 2: Reduction of Total Waste',
+                    thresholds: [
+                        { lbs_per_sqft: 2.5, points: 2, label: '≤2.5 lbs/sf total waste = 2 points' }
+                    ]
                 }
             },
             requirements: [
-                'Track waste by material stream',
-                'Document final destination for each stream',
-                'Obtain recycling facility certification',
-                'Calculate diversion rate using weight',
-                'NEW: Photo documentation recommended',
-                'NEW: GPS verification for audit trail'
+                'Track waste by material stream (minimum 5 streams for v5)',
+                'Document final destination for each material stream',
+                'Obtain recycling facility certification/receipts',
+                'Calculate diversion rate using weight ONLY (volume not accepted in v5)',
+                'Photo documentation recommended for audit defense',
+                'GPS verification for load tracking recommended',
+                'Circular economy documentation for 200% multiplier claims',
+                'Digital tracking system recommended (paper logs accepted)',
+                'ADC does NOT count as diversion',
+                'Waste-to-energy does NOT count as diversion',
+                'Maintain chain-of-custody for each material stream'
             ],
-            excluded: [
-                'Hazardous waste',
-                'Alternative daily cover (ADC)',
-                'Waste-to-energy incineration'
+            excluded_materials: [
+                'Hazardous waste (RCRA regulated)',
+                'Alternative daily cover (ADC) — counted as landfill',
+                'Waste-to-energy incineration output',
+                'Contaminated soil (tracked under separate prerequisite)'
+            ],
+            minimum_streams: 5,
+            documentation: [
+                'Scale tickets with weights for each load (REQUIRED)',
+                'Material breakdown by weight percentage',
+                'End market verification letters or contracts',
+                'Recycling facility permits/certifications',
+                'Waste Management Plan (WMP) — more detailed than v4.1',
+                'Monthly diversion tracking log',
+                'Photo documentation of loads (strongly recommended)',
+                'Digital chain-of-custody records',
+                'Salvage/reuse documentation for 200% multiplier',
+                'Final LEED MRc5 summary report with calculation methodology'
             ]
         }
     }
@@ -9599,13 +9718,34 @@ function updateLeedRules() {
     const display = document.getElementById('leedRulesDisplay');
     if (display && rules) {
         const mrc5 = rules.mrc5;
-        display.innerHTML = `
-            <strong>${mrc5.name}</strong><br>
-            ${mrc5.options.diversion.thresholds.map(t => `• ${t.label}`).join('<br>')}
-            ${currentLeedVersion === 'v5' ? '<br>• Tier 1 Circularity: Reused materials count 200%' : ''}
-            <br><br><strong>Requirements:</strong><br>
-            ${mrc5.requirements.map(r => `• ${r}`).join('<br>')}
-        `;
+        var html = '<strong>' + mrc5.name + '</strong><br>';
+        html += '<span style="color:var(--emerald-400);font-size:10px">' + mrc5.intent + '</span><br><br>';
+        
+        // Scoring
+        html += '<strong>Scoring:</strong><br>';
+        html += mrc5.options.diversion.thresholds.map(function(t){return '• ' + t.label}).join('<br>');
+        if (mrc5.options.circularity) {
+            html += '<br>• <span style="color:var(--amber-400)">' + mrc5.options.circularity.label + '</span>';
+        }
+        
+        // Requirements
+        html += '<br><br><strong>Requirements (' + currentLeedVersion + '):</strong><br>';
+        html += mrc5.requirements.slice(0,6).map(function(r){return '• ' + r}).join('<br>');
+        
+        // Excluded
+        html += '<br><br><strong>Excluded Materials:</strong><br>';
+        html += mrc5.excluded_materials.slice(0,4).map(function(r){return '• <span style="color:var(--red-400)">' + r + '</span>'}).join('<br>');
+        
+        // Documentation
+        html += '<br><br><strong>Required Documentation:</strong><br>';
+        html += mrc5.documentation.slice(0,5).map(function(r){return '• ' + r}).join('<br>');
+        
+        // v5 transition warning
+        if (currentLeedVersion === 'v4.1') {
+            html += '<br><br><span style="color:var(--amber-400);font-weight:600">⚠️ LEED v5 becomes mandatory for new registrations after June 30, 2026</span>';
+        }
+        
+        display.innerHTML = html;
     }
     
     localStorage.setItem('divertscan_leed_version', currentLeedVersion);
