@@ -622,34 +622,6 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 </div>
 
 <!-- LEED Compliance Predictor -->
-<div class="prediction-card" id="leedPredictor">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-<div class="prediction-title" style="margin:0">🎯 LEED MRc5 Compliance Forecast</div>
-<span style="font-size:10px;color:var(--slate-400)" id="predictorTicketCount"></span>
-</div>
-<div style="display:flex;justify-content:space-between;align-items:center">
-<div>
-<div class="prediction-value" id="predictorStatus">--</div>
-<div class="prediction-label" id="predictorMessage">Analyzing project data...</div>
-</div>
-<div style="text-align:right">
-<div style="font-size:11px;color:var(--text-muted)">Target: 75%</div>
-<div style="font-size:18px;font-weight:600" id="predictorCurrent">0%</div>
-</div>
-</div>
-<div class="prediction-progress">
-<div class="prediction-progress-fill" id="predictorProgressBar" style="width:0%;background:var(--accent-primary)"></div>
-</div>
-<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:var(--slate-400)">
-<span>0%</span>
-<span>50%</span>
-<span>75% (LEED)</span>
-<span>100%</span>
-</div>
-<div id="predictorActions" style="margin-top:12px;display:none">
-<button class="btn btn-primary" onclick="openTicketModal()" ontouchend="event.preventDefault();openTicketModal()" style="width:100%;padding:10px;font-size:12px">➕ Add Ticket to Improve Forecast</button>
-</div>
-</div>
 
 <!-- Material Trend Chart -->
 <div class="chart-container">
@@ -1101,18 +1073,6 @@ Compact mode (more content)
 <!-- STEP 1: Scale Ticket -->
 <div id="ticketStep1">
 <h3 style="text-align:center;margin-bottom:16px">📄 Step 1: Scale Ticket</h3>
-
-<!-- Voice Input Section -->
-<div style="background:var(--slate-700);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center">
-<div style="display:flex;align-items:center;justify-content:center;gap:12px">
-<button class="voice-btn" id="voiceInputBtn" onclick="toggleVoiceInput()">🎤</button>
-<div>
-<div style="font-size:12px;font-weight:600">Voice Input</div>
-<div class="voice-status" id="voiceStatus">Tap to speak ticket info</div>
-</div>
-</div>
-<div id="voiceTranscript" class="hidden" style="margin-top:8px;padding:8px;background:var(--slate-800);border-radius:6px;font-size:12px;color:var(--slate-300)"></div>
-</div>
 
 <div class="form-group">
 <label class="form-label">Project</label>
@@ -8406,101 +8366,12 @@ async function updateCharts() {
 
 // ========== LEED PREDICTOR ==========
 async function updateLeedPredictor() {
-    var countEl = document.getElementById('predictorTicketCount');
-    var actionsEl = document.getElementById('predictorActions');
-    
-    if (!currentProject) {
-        document.getElementById('predictorStatus').textContent = '--';
-        document.getElementById('predictorMessage').textContent = 'Select a project';
-        if (countEl) countEl.textContent = '';
-        if (actionsEl) actionsEl.style.display = 'none';
-        return;
-    }
-    
-    try {
-        // Use local tickets array first (matches what user sees)
-        var data = tickets.filter(function(t) { return t.project_id === currentProject.id; });
-        
-        // Update ticket count
-        if (countEl) countEl.textContent = data.length + ' ticket' + (data.length !== 1 ? 's' : '');
-        
-        if (!data || data.length === 0) {
-            document.getElementById('predictorStatus').textContent = 'NO DATA';
-            document.getElementById('predictorStatus').style.color = 'var(--slate-400)';
-            document.getElementById('predictorMessage').textContent = 'Add your first ticket to start tracking';
-            document.getElementById('predictorCurrent').textContent = '0%';
-            document.getElementById('predictorProgressBar').style.width = '0%';
-            document.getElementById('predictorProgressBar').style.background = 'var(--slate-600)';
-            if (actionsEl) actionsEl.style.display = 'block';
-            return;
-        }
-        
-        // Calculate current stats
-        const totalTons = data.reduce((s, t) => s + (t.net_tons || 0), 0);
-        const landfillTons = data.reduce((s, t) => s + (t.landfill_tons || 0), 0);
-        const divertedTons = totalTons - landfillTons;
-        const currentRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
-        
-        // Calculate trend (moving average of last 5 vs first 5)
-        let trend = 0;
-        if (data.length >= 5) {
-            const recent = data.slice(-5).reduce((s, t) => s + (t.diversion_pct || 0), 0) / 5;
-            const earlier = data.slice(0, Math.min(5, data.length)).reduce((s, t) => s + (t.diversion_pct || 0), 0) / Math.min(5, data.length);
-            trend = recent - earlier;
-        }
-        
-        // Update UI
-        document.getElementById('predictorCurrent').textContent = currentRate + '%';
-        document.getElementById('predictorProgressBar').style.width = Math.min(currentRate, 100) + '%';
-        
-        // Color the progress bar
-        const progressBar = document.getElementById('predictorProgressBar');
-        if (currentRate >= 75) {
-            progressBar.style.background = 'var(--emerald-500)';
-        } else if (currentRate >= 50) {
-            progressBar.style.background = 'var(--amber-500)';
-        } else {
-            progressBar.style.background = 'var(--red-500)';
-        }
-        
-        // Predict status
-        const target = currentProject.leed_target || 75;
-        
-        if (currentRate >= target) {
-            document.getElementById('predictorStatus').textContent = '✅ ON TRACK';
-            document.getElementById('predictorStatus').style.color = 'var(--emerald-400)';
-            document.getElementById('predictorMessage').textContent = 'Exceeding ' + target + '% target by ' + (currentRate - target) + '%';
-            if (actionsEl) actionsEl.style.display = 'none';
-        } else if (currentRate >= target - 10) {
-            document.getElementById('predictorStatus').textContent = '⚠️ CLOSE';
-            document.getElementById('predictorStatus').style.color = 'var(--amber-400)';
-            var needed = target - currentRate;
-            document.getElementById('predictorMessage').textContent = 'Need ' + needed + '% more diversion to reach target';
-            if (actionsEl) actionsEl.style.display = 'block';
-        } else {
-            document.getElementById('predictorStatus').textContent = '❌ AT RISK';
-            document.getElementById('predictorStatus').style.color = 'var(--red-500)';
-            var needed2 = target - currentRate;
-            document.getElementById('predictorMessage').textContent = needed2 + '% below target — increase recycling';
-            if (actionsEl) actionsEl.style.display = 'block';
-        }
-        
-        // Add trend indicator
-        if (trend > 5) {
-            document.getElementById('predictorMessage').textContent += ' 📈 Improving';
-        } else if (trend < -5) {
-            document.getElementById('predictorMessage').textContent += ' 📉 Declining';
-        }
-        
-    } catch (err) {
-        console.error('Predictor error:', err);
-    }
+    // Widget removed — safe no-op
 }
 
 // Load news on page load
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(refreshLeedNews, 2000);
-    initVoiceRecognition();
 });
 
 // ========== LOGIN / AUTH SYSTEM ==========
@@ -10447,17 +10318,6 @@ window.onload = async function() {
 <div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
 <div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
 <div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
-<div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
-</nav>
-
-<nav class="nav hidden" id="customerNav">
-<div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Dashboard</span></div>
-<div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
-</nav>
-
-</body>
-</html>
- onclick="showTab('reports')">📊<span>Reports</span></div>
 <div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
 </nav>
 
