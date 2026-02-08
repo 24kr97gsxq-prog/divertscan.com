@@ -9869,6 +9869,9 @@ function validateTicketData(data) {
     const errors = [];
     const warnings = [];
     
+    // Detect partner/direct-to-end-market ticket
+    const isPartnerTicket = data.directToEndMarket || data.direct_to_end_market || data.partnerFacility || data.partner_facility;
+    
     // Support both camelCase (ticketData) and snake_case (dbRecord) field names
     const projectId = data.projectId || data.project_id;
     const serviceDate = data.serviceDate || data.service_date;
@@ -9909,20 +9912,20 @@ function validateTicketData(data) {
         }
     }
     
-    // Photo validation
-    if (document.getElementById('requirePhotos')?.checked) {
+    // Photo validation — SKIP for partner tickets (they don't have debris photos)
+    if (!isPartnerTicket && document.getElementById('requirePhotos')?.checked) {
         const photoCount = debrisPhotos.filter(p => p).length;
         if (photoCount === 0) errors.push('At least 1 debris photo is required');
     }
     
-    // Verification validation
-    if (document.getElementById('requireVerification')?.checked) {
+    // Verification validation — SKIP for partner tickets (auto-verified)
+    if (!isPartnerTicket && document.getElementById('requireVerification')?.checked) {
         if (!humanVerified) errors.push('Human verification is required');
     }
     
-    // Anomaly detection
+    // Anomaly detection — partner tickets legitimately hit 100% diversion
     if (document.getElementById('flagAnomalies')?.checked) {
-        if (diversionRate > 90) warnings.push('Diversion rate >90% is unusual - please verify');
+        if (!isPartnerTicket && diversionRate > 90) warnings.push('Diversion rate >90% is unusual - please verify');
         if (diversionRate < 30) warnings.push('Diversion rate <30% is below typical range');
     }
     
