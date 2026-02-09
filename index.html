@@ -580,7 +580,7 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
 <div style="font-size:14px;font-weight:600">📋 Ticket Data <span id="ticketCountBadge" style="font-size:11px;background:var(--accent-primary);color:#000;padding:2px 8px;border-radius:10px;margin-left:6px">0</span></div>
 <div style="display:flex;gap:6px">
-<button class="btn btn-primary" onclick="loadAllTicketsForProject()" ontouchend="event.preventDefault();loadAllTicketsForProject()" style="padding:8px 14px;font-size:11px">🔄 Refresh</button>
+<button class="btn btn-primary" onclick="loadAllTicketsForProject()" style="padding:8px 14px;font-size:11px">🔄 Refresh</button>
 </div>
 </div>
 <!-- Bulk Actions Bar -->
@@ -2125,7 +2125,7 @@ async function loadProjects() {
             fetches.push(
                 Promise.race([
                     sb.from('projects').select('*').order('created_at', {ascending:false}),
-                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},8000)})
                 ]).then(function(result) {
                     if (result && !result.error && result.data) remoteProjects = result.data;
                 }).catch(function(e) { console.log('Supabase projects fetch skipped:', e.message); })
@@ -2414,9 +2414,15 @@ async function saveProjectEdit(projectId) {
         if (sb) {
             try {
                 const { error } = await sb.from('projects').update(updates).eq('id', projectId);
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase project update error:', error);
+                    toast('Cloud save error: ' + error.message + ' — saved locally', 'warning');
+                } else {
+                    console.log('Project saved to Supabase OK');
+                }
             } catch (e) {
                 console.log('Supabase project save skipped:', e.message);
+                toast('Cloud save failed — saved locally only', 'warning');
             }
         }
         
@@ -2590,7 +2596,7 @@ async function saveProject() {
             delete sbData.id;
             const result = await Promise.race([
                 sb.from('projects').insert([sbData]).select(),
-                new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 3000))
+                new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
             ]);
             if (result && result.data && result.data[0]) {
                 console.log('Layer 3 OK: Project also saved to Supabase');
@@ -2640,7 +2646,7 @@ async function loadRecentTickets() {
             fetches.push(
                 Promise.race([
                     sb.from('tickets').select('*').eq('project_id', currentProject.id).order('created_at', {ascending:false}).limit(50),
-                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},8000)})
                 ]).then(function(result) {
                     if (result && !result.error && result.data) remoteTickets = result.data;
                 }).catch(function(e) { console.log('Supabase tickets fetch skipped:', e.message); })
@@ -4767,7 +4773,7 @@ async function generateReport() {
             fetchPromises.push(
                 Promise.race([
                     sb.from('tickets').select('*').eq('project_id', projectIdForQuery).order('service_date', {ascending:true}),
-                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},8000)})
                 ]).then(function(result) {
                     if (result && !result.error && result.data) remoteData = result.data;
                 }).catch(function(e) { console.log('Supabase fetch skipped:', e.message); })
@@ -5350,7 +5356,7 @@ async function generateLEEDAuditReport() {
             if (sb) {
                 fetches.push(Promise.race([
                     sb.from('tickets').select('*').eq('project_id', currentProject.id).order('service_date',{ascending:true}),
-                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},8000)})
                 ]).then(function(res){ if(res&&res.data) remoteT=res.data; }).catch(function(){}));
             }
             await Promise.all(fetches);
@@ -6060,9 +6066,16 @@ async function loadAllTicketsForProject() {
             fetches.push(
                 Promise.race([
                     sb.from('tickets').select('*').eq('project_id', currentProject.id).order('created_at', {ascending:false}),
-                    new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'))},3000)})
-                ]).then(function(res){ if(res && !res.error && res.data) remoteT = res.data; })
-                .catch(function(e){ console.log('Fetch skipped:', e.message); })
+                    new Promise(function(_,r){setTimeout(function(){r(new Error('Supabase timeout after 8s'))},8000)})
+                ]).then(function(res){ 
+                    if(res && !res.error && res.data) {
+                        remoteT = res.data;
+                        console.log('Loaded ' + res.data.length + ' tickets from Supabase for ' + currentProject.name);
+                    } else if (res && res.error) {
+                        console.error('Supabase ticket error:', res.error.message);
+                    }
+                })
+                .catch(function(e){ console.warn('Ticket fetch failed:', e.message); })
             );
         }
         
@@ -6070,6 +6083,7 @@ async function loadAllTicketsForProject() {
             try {
                 var all = await getAllFromLocal('tickets') || [];
                 localT = all.filter(function(t){return t.project_id === currentProject.id});
+                if (localT.length > 0) console.log('Loaded ' + localT.length + ' tickets from IndexedDB');
             } catch(e){}
         })());
         
@@ -6081,6 +6095,8 @@ async function loadAllTicketsForProject() {
         remoteT.forEach(function(t){map.set(t.ticket_number||t.id, t)});
         tickets = Array.from(map.values());
         tickets.sort(function(a,b){return new Date(b.created_at||b.service_date)-new Date(a.created_at||a.service_date)});
+        
+        console.log('Total merged tickets for ' + currentProject.name + ': ' + tickets.length);
         
         renderRecentTickets();
         updateTicketCount();
@@ -10277,7 +10293,7 @@ async function createFullBackup() {
             try {
                 const pResult = await Promise.race([
                     sb.from('projects').select('*'),
-                    new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, 3000); })
+                    new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, 8000); })
                 ]);
                 if (pResult && pResult.data) backup.projects = pResult.data;
             } catch (e) { console.log('Supabase projects skipped:', e.message); }
