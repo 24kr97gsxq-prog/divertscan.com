@@ -862,6 +862,16 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <button class="btn btn-primary" onclick="saveSupabaseConfig()" style="width:100%">Save & Connect</button>
 </div>
 
+<!-- Pitch Deck / Marketing -->
+<div class="card" style="border:1px solid var(--emerald-500);background:linear-gradient(135deg,var(--bg-secondary),var(--bg-tertiary))">
+<div style="font-size:14px;font-weight:600;margin-bottom:8px">📊 DivertScan Pitch Deck</div>
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:12px">Share the DivertScan platform overview with prospects, GCs, and hauling companies. Generated as a professional PDF with material flow diagrams, sample reports, and LEED v5 compliance details.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<button class="btn btn-primary" onclick="generateAndSharePitchDeck()" ontouchend="event.preventDefault();generateAndSharePitchDeck()" style="font-size:12px;padding:12px">📤 Share Pitch Deck</button>
+<button class="btn btn-secondary" onclick="downloadPitchDeck()" ontouchend="event.preventDefault();downloadPitchDeck()" style="font-size:12px;padding:12px">📥 Download PDF</button>
+</div>
+</div>
+
 <!-- Key Persistence -->
 <div class="card">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">🔗 Save Keys to Bookmark</div>
@@ -1803,6 +1813,254 @@ function saveSupabaseConfig() {
         toast('Supabase connected!', 'success');
         updateKeyStatusIndicators();
         initializeApp();
+    }
+}
+
+// ========== PITCH DECK PDF ==========
+async function generateAndSharePitchDeck() {
+    var pdfBlob = buildPitchDeckPDF();
+    if (!pdfBlob) return;
+    
+    var file = new File([pdfBlob], 'DivertScan_Pitch_Deck.pdf', { type: 'application/pdf' });
+    
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({ title: 'DivertScan Pitch Deck', text: 'DivertScan - AI-Powered LEED Waste Tracking', files: [file] });
+            toast('Shared!', 'success');
+        } catch(e) {
+            if (e.name !== 'AbortError') downloadPitchDeck();
+        }
+    } else {
+        downloadPitchDeck();
+    }
+}
+
+function downloadPitchDeck() {
+    var pdfBlob = buildPitchDeckPDF();
+    if (!pdfBlob) return;
+    var url = URL.createObjectURL(pdfBlob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'DivertScan_Pitch_Deck.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+    toast('Pitch deck downloaded!', 'success');
+}
+
+function buildPitchDeckPDF() {
+    try {
+        if (typeof window.jspdf === 'undefined' && typeof jspdf === 'undefined') {
+            toast('Loading PDF library...', 'info');
+            return null;
+        }
+        var JsPDF = (window.jspdf && window.jspdf.jsPDF) || jspdf.jsPDF;
+        var doc = new JsPDF({ orientation: 'landscape', unit: 'in', format: [10, 5.625] });
+        
+        var darkBg = [15, 27, 45];
+        var green = [27, 94, 32];
+        var accent = [0, 200, 83];
+        var white = [255, 255, 255];
+        var slate = [96, 125, 139];
+        var lightBg = [245, 247, 244];
+        
+        // PAGE 1: TITLE
+        doc.setFillColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.rect(0, 0, 10, 5.625, 'F');
+        doc.setFillColor(accent[0], accent[1], accent[2]);
+        doc.rect(0, 0, 10, 0.06, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(white[0], white[1], white[2]);
+        doc.text('DivertScan', 0.6, 0.8);
+        doc.setFontSize(32);
+        doc.text('AI-Powered LEED', 0.6, 1.8);
+        doc.text('Waste Tracking Platform', 0.6, 2.4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(slate[0], slate[1], slate[2]);
+        doc.text('Automated material identification, OCR scale ticket processing,', 0.6, 3.2);
+        doc.text('and real-time LEED v4.1/v5 MRc5 compliance reporting', 0.6, 3.5);
+        doc.setFillColor(accent[0], accent[1], accent[2]);
+        doc.rect(0.6, 4.0, 2.0, 0.4, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.text('LEED v5 Ready', 1.15, 4.27);
+        doc.setFontSize(8);
+        doc.setTextColor(slate[0], slate[1], slate[2]);
+        doc.text('Dalmex Recycling LLC  |  2828 Nagle St., Dallas, TX 75220  |  (214) 352-2000', 0.6, 5.3);
+        // Stats
+        var stats = [{ v: '75%+', l: 'LEED Target' }, { v: '200%', l: 'v5 Salvage' }, { v: '<2s', l: 'OCR Speed' }];
+        stats.forEach(function(s, i) {
+            var yy = 1.0 + i * 1.2;
+            doc.setFillColor(26, 42, 64);
+            doc.rect(7.3, yy, 2.2, 0.9, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor(accent[0], accent[1], accent[2]);
+            doc.text(s.v, 8.4, yy + 0.45, { align: 'center' });
+            doc.setFontSize(8);
+            doc.setTextColor(slate[0], slate[1], slate[2]);
+            doc.text(s.l, 8.4, yy + 0.7, { align: 'center' });
+        });
+        
+        // PAGE 2: FEATURES
+        doc.addPage();
+        doc.setFillColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.rect(0, 0, 10, 5.625, 'F');
+        doc.setFillColor(accent[0], accent[1], accent[2]);
+        doc.rect(0, 0, 10, 0.06, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.setTextColor(white[0], white[1], white[2]);
+        doc.text('DivertScan Apex — Key Features', 0.6, 0.65);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(accent[0], accent[1], accent[2]);
+        doc.text('From scale ticket to LEED report in under 60 seconds', 0.6, 1.0);
+        var feats = [
+            { t: 'AI OCR', d: 'Snap any scale ticket. AI reads ticket #, gross, tare, net weight — even bad handwriting.' },
+            { t: 'Material Identification', d: 'CNN-based debris analysis identifies wood, concrete, metal, OCC, plastic, drywall.' },
+            { t: 'LEED MRc5 Reports', d: 'One-tap PDF, Excel, CSV with full documentation and facility attestation.' },
+            { t: 'Chain of Custody', d: 'Scale ticket > material ID > verified end market > LEED credit. Full audit trail.' },
+            { t: 'Partner Network', d: 'Direct-to-end-market loads auto-verified. Pre-configured partners.' },
+            { t: 'Cloud + Offline', d: 'Works on iPad offline. Syncs to cloud when connected. Never lose a ticket.' },
+        ];
+        feats.forEach(function(f, i) {
+            var col = i % 2, row = Math.floor(i / 2);
+            var xx = 0.6 + col * 4.6, yy = 1.4 + row * 1.3;
+            doc.setFillColor(26, 42, 64);
+            doc.rect(xx, yy, 4.2, 1.0, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(white[0], white[1], white[2]);
+            doc.text(f.t, xx + 0.15, yy + 0.3);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(slate[0], slate[1], slate[2]);
+            doc.text(f.d, xx + 0.15, yy + 0.6, { maxWidth: 3.9 });
+        });
+        
+        // PAGE 3: MATERIAL FLOW
+        doc.addPage();
+        doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+        doc.rect(0, 0, 10, 5.625, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.setTextColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.text('Closed-Loop Material Flow', 0.6, 0.65);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(slate[0], slate[1], slate[2]);
+        doc.text('Every material stream tracked from demolition site to verified end market', 0.6, 1.0);
+        // Center circle
+        doc.setFillColor(green[0], green[1], green[2]);
+        doc.circle(5.0, 3.1, 0.9, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(white[0], white[1], white[2]);
+        doc.text('DALMEX', 5.0, 3.0, { align: 'center' });
+        doc.setFontSize(8);
+        doc.text('RECYCLING', 5.0, 3.3, { align: 'center' });
+        // Material boxes
+        var mats = [
+            { t: 'OCC / Fiber', d: 'Georgia Pacific, Smurfit,\nGreenside, Intl Paper', x: 0.3, y: 1.3, c: [255, 224, 130] },
+            { t: 'Wood / Pallets', d: 'Dalmex Pallets\n(In-House Reuse)', x: 7.5, y: 1.3, c: [121, 85, 72] },
+            { t: 'Metal / Scrap', d: 'CMC, Cyclone Metal', x: 7.5, y: 2.7, c: [69, 90, 100] },
+            { t: 'Concrete', d: 'Big City Concrete', x: 7.5, y: 4.0, c: [120, 144, 156] },
+            { t: 'Plastic', d: 'American Recycling AR', x: 0.3, y: 4.0, c: [66, 165, 245] },
+            { t: 'Drywall', d: 'USA Gypsum', x: 0.3, y: 2.7, c: [188, 170, 164] },
+        ];
+        mats.forEach(function(m) {
+            doc.setFillColor(m.c[0], m.c[1], m.c[2]);
+            doc.rect(m.x, m.y, 2.2, 1.0, 'F');
+            var isDark = (m.c[0] + m.c[1] + m.c[2]) / 3 < 150;
+            doc.setTextColor(isDark ? 255 : 30, isDark ? 255 : 30, isDark ? 255 : 30);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.text(m.t, m.x + 0.15, m.y + 0.3);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.text(m.d, m.x + 0.15, m.y + 0.55, { maxWidth: 1.9 });
+        });
+        
+        // PAGE 4: SAMPLE REPORT
+        doc.addPage();
+        doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+        doc.rect(0, 0, 10, 5.625, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.text('Sample LEED MRc5 Report', 0.6, 0.6);
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0.5, 0.9, 9.0, 4.4, 'F');
+        doc.setFillColor(green[0], green[1], green[2]);
+        doc.rect(0.5, 0.9, 9.0, 0.35, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text('C&D Waste Management Report — LEED v4.1/v5 MRc5', 0.7, 1.15);
+        doc.setFontSize(8);
+        doc.setTextColor(darkBg[0], darkBg[1], darkBg[2]);
+        doc.text('Project: DFW Airport Terminal Renovation  |  GC: JE Dunn  |  Hauler: B&B Waste', 0.7, 1.55);
+        // Stats
+        var rStats = [{ v: '73%', l: 'Diversion' }, { v: '9.86T', l: 'Total' }, { v: '7.21T', l: 'Diverted' }, { v: '2.64T', l: 'Landfill' }];
+        rStats.forEach(function(s, i) {
+            var xx = 0.7 + i * 2.15;
+            doc.setFillColor(232, 245, 233);
+            doc.rect(xx, 1.75, 1.9, 0.7, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(i === 3 ? 229 : 0, i === 3 ? 57 : i === 0 ? 200 : 100, i === 3 ? 53 : i === 0 ? 83 : 50);
+            doc.text(s.v, xx + 0.95, 2.15, { align: 'center' });
+            doc.setFontSize(7);
+            doc.setTextColor(slate[0], slate[1], slate[2]);
+            doc.text(s.l, xx + 0.95, 2.35, { align: 'center' });
+        });
+        // Table
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        var cols = ['Date', 'Ticket #', 'Hauler', 'Gross', 'Tare', 'Net(T)', 'Div%', 'Verified'];
+        var colX = [0.7, 1.8, 2.8, 3.6, 4.6, 5.6, 6.5, 7.4];
+        doc.setFillColor(green[0], green[1], green[2]);
+        doc.rect(0.7, 2.6, 7.5, 0.25, 'F');
+        doc.setTextColor(255, 255, 255);
+        cols.forEach(function(c, i) { doc.text(c, colX[i], 2.78); });
+        var rows = [['Feb 4, 2026', '83434', 'B&B', '38,880', '33,140', '2.87', '50%', 'Yes'],['Sep 28, 2025', '885227', 'B&B', '40,720', '34,360', '3.18', '80%', 'Yes'],['Dec 29, 2025', '84731', '7610', '39,940', '32,330', '3.81', '85%', 'Yes']];
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(darkBg[0], darkBg[1], darkBg[2]);
+        rows.forEach(function(r, ri) {
+            var ry = 3.05 + ri * 0.22;
+            r.forEach(function(c, ci) { doc.text(c, colX[ci], ry); });
+        });
+        doc.setFont('helvetica', 'bold');
+        doc.text('TOTALS', 0.7, 3.75);
+        doc.setTextColor(0, 200, 83);
+        doc.text('9.86', 5.6, 3.75);
+        doc.text('73%', 6.5, 3.75);
+        // Attestation
+        doc.setFillColor(232, 245, 233);
+        doc.rect(0.7, 4.0, 8.6, 0.6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(green[0], green[1], green[2]);
+        doc.text('Facility Attestation', 0.85, 4.2);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(slate[0], slate[1], slate[2]);
+        doc.text('Verified scale ticket data with chain-of-custody. Materials routed to documented end markets by Dalmex Recycling LLC.', 0.85, 4.4);
+        doc.text('End Markets: Georgia Pacific | Smurfit | CMC | Cyclone | Big City Concrete | USA Gypsum | Dalmex Pallets | American Recycling AR', 0.85, 4.55);
+        // Footer
+        doc.setFontSize(7);
+        doc.setTextColor(slate[0], slate[1], slate[2]);
+        doc.text('DivertScan Apex v7.7 Enterprise  |  divertscan.com  |  Dalmex Recycling LLC  |  IP & Trademark Pending', 0.6, 5.5);
+        
+        return doc.output('blob');
+    } catch(e) {
+        console.error('Pitch deck PDF error:', e);
+        toast('Error generating PDF — check console', 'error');
+        return null;
     }
 }
 
