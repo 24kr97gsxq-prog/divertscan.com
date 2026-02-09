@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
@@ -1662,24 +1665,21 @@ async function initializeApp() {
     updateKeyStatusIndicators();
     renderAllFacilities();
     
-    if (sb) {
-        await loadProjects();
-        await loadRecentTickets();
-        updateStats();
+    // Always load projects first (from Supabase + IndexedDB)
+    await loadProjects();
+    
+    // Then load tickets for the active project
+    if (currentProject) {
+        await loadAllTicketsForProject();
     } else {
-        // Still functional in offline mode - load from IndexedDB
+        // No project — try loading recent tickets anyway
         try {
-            await initIndexedDB();
-            const localTickets = await getAllFromLocal('tickets');
-            if (localTickets && localTickets.length > 0) {
-                document.getElementById('recentTickets').innerHTML = `<p style="color:var(--slate-400)">📱 Offline mode - ${localTickets.length} tickets stored locally</p>`;
-            } else {
-                document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">No tickets yet. Scan a scale ticket to get started.</p>';
-            }
-        } catch (e) {
-            document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">Ready to scan tickets.</p>';
+            await loadRecentTickets();
+        } catch(e) {
+            document.getElementById('recentTickets').innerHTML = '<p style="color:var(--slate-400)">No tickets yet. Scan a scale ticket to get started.</p>';
         }
     }
+    updateStats();
 }
 
 // ========== TABS ==========
@@ -1692,7 +1692,14 @@ function showTab(tab) {
     if (tab === 'dashboard') {
         document.getElementById('dashboardTab').classList.remove('hidden');
         // Always refresh tickets for current project when returning to Dashboard
-        loadAllTicketsForProject();
+        if (currentProject) {
+            loadAllTicketsForProject();
+        } else {
+            // No active project — try loading projects first, then tickets
+            loadProjects().then(function() {
+                if (currentProject) loadAllTicketsForProject();
+            });
+        }
     } else if (tab === 'projects') {
         document.getElementById('projectsTab').classList.remove('hidden');
         loadProjects(); // Full refresh to update ticket counts and stats
@@ -1825,7 +1832,7 @@ async function generateAndSharePitchDeck() {
     
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-            await navigator.share({ title: 'DivertScan Pitch Deck', text: 'DivertScan - AI-Powered LEED Waste Tracking', files: [file] });
+            await navigator.share({ files: [file] });
             toast('Shared!', 'success');
         } catch(e) {
             if (e.name !== 'AbortError') downloadPitchDeck();
@@ -2159,6 +2166,7 @@ async function loadProjects() {
         
         updateProjectDisplay();
         populateProjectDropdown();
+        renderProjectsList();
         
         // Store for report dropdown access
         window._allProjectsList = projects;
@@ -3761,7 +3769,7 @@ RULES:
         
         if (data.error) {
             console.error('Claude API Error:', data.error);
-            toast('API Error: ' + (data.error.message || JSON.stringify(data.error)), 'error');
+            var _em = data.error.message || JSON.stringify(data.error); toast(_em.indexOf('api-key') > -1 ? 'API key invalid — check Settings' : 'API Error: ' + _em, 'error');
             return;
         }
         
@@ -4048,7 +4056,7 @@ Return ONLY JSON:
         
         if (data.error) {
             console.error('Claude API Error:', data.error);
-            toast('API Error: ' + (data.error.message || JSON.stringify(data.error)), 'error');
+            var _em = data.error.message || JSON.stringify(data.error); toast(_em.indexOf('api-key') > -1 ? 'API key invalid — check Settings' : 'API Error: ' + _em, 'error');
             return;
         }
         
@@ -5414,8 +5422,6 @@ async function shareLEEDPDF() {
         
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             await navigator.share({
-                title: 'LEED Waste Diversion Report — ' + (currentProject.name || ''),
-                text: 'LEED MRc5 Diversion Report by Dalmex Recycling LLC',
                 files: [pdfFile]
             });
             toast('PDF shared!', 'success');
