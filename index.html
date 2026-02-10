@@ -437,7 +437,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <div class="login-logo">
 <h1>🔄 DivertScan™</h1>
 <p>Enterprise Waste Diversion Tracking</p>
-<p style="font-size:10px;color:var(--emerald-400);margin-top:4px">v7.7 Build 020726</p>
+<p style="font-size:10px;color:var(--emerald-400);margin-top:4px">v7.7 Build 021026</p>
 </div>
 
 <div class="login-box">
@@ -450,8 +450,9 @@ main{padding:20px;max-width:800px;margin:0 auto}
 </div>
 
 <div class="login-tabs">
-<div class="login-tab active" onclick="switchLoginTab('admin')">Admin Login</div>
-<div class="login-tab" onclick="switchLoginTab('customer')">Customer Portal</div>
+<div class="login-tab active" onclick="switchLoginTab('admin')">Admin</div>
+<div class="login-tab" onclick="switchLoginTab('operator')">Dalmex Crew</div>
+<div class="login-tab" onclick="switchLoginTab('customer')">Customer</div>
 </div>
 
 <!-- Admin Login -->
@@ -466,6 +467,20 @@ main{padding:20px;max-width:800px;margin:0 auto}
 </div>
 <button class="btn btn-primary btn-lg" onclick="doAdminLogin()">🔐 Login</button>
 <div id="adminLoginError" class="login-error"></div>
+</div>
+
+<!-- Operator Login -->
+<div id="operatorLoginForm" class="hidden">
+<div style="text-align:center;margin-bottom:16px">
+<div style="font-size:32px">🚛</div>
+<div style="font-size:13px;color:var(--slate-300);margin-top:4px">Floor Operator — Quick Scan</div>
+</div>
+<div class="form-group">
+<label class="form-label">Crew Code</label>
+<input type="text" class="form-input" id="operatorCode" placeholder="Enter crew code" style="text-transform:uppercase;text-align:center;font-size:18px;letter-spacing:4px">
+</div>
+<button class="btn btn-primary btn-lg" onclick="doOperatorLogin()" style="background:var(--accent-info)">🚛 Start Scanning</button>
+<div id="operatorLoginError" class="login-error"></div>
 </div>
 
 <!-- Customer Portal -->
@@ -509,6 +524,16 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 <div class="user-badge">
 <span id="portalProjectName">Project</span>
 <span class="user-role customer">VIEW ONLY</span>
+<button class="logout-btn" onclick="doLogout()">Exit</button>
+</div>
+</div>
+
+<!-- Operator Header (hidden by default) -->
+<div class="header hidden" id="operatorHeader">
+<div class="logo">DivertScan™ <span>CREW</span></div>
+<div class="user-badge">
+<span id="operatorName">Operator</span>
+<span class="user-role" style="background:var(--accent-info)">CREW</span>
 <button class="logout-btn" onclick="doLogout()">Exit</button>
 </div>
 </div>
@@ -920,6 +945,76 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 
 </div>
 <!-- ==================== END CUSTOMER UPLOAD TAB ==================== -->
+
+<!-- ==================== OPERATOR SCAN TAB ==================== -->
+<div id="operatorScanTab" class="hidden">
+<div class="card" style="text-align:center;padding:24px">
+<div style="font-size:48px;margin-bottom:8px">📸</div>
+<div style="font-size:18px;font-weight:700;margin-bottom:4px">Quick Scan</div>
+<div style="font-size:12px;color:var(--slate-400);margin-bottom:20px">Snap the scale ticket & debris photos as trucks come in</div>
+
+<!-- Project Picker for Operator -->
+<div class="form-group" style="text-align:left;margin-bottom:20px">
+<label class="form-label">Select Project</label>
+<select id="opProjectPicker" class="form-input" style="font-size:14px;padding:12px" onchange="opSelectProject()">
+<option value="">— Pick a project —</option>
+</select>
+</div>
+
+<div id="opSelectedProject" class="hidden" style="text-align:left">
+<!-- Step 1: Scale Ticket -->
+<div style="background:var(--slate-800);border-radius:10px;padding:16px;margin-bottom:12px">
+<div style="font-size:13px;font-weight:600;margin-bottom:10px">📄 Step 1: Scale Ticket Photo <span style="color:var(--red-400)">*</span></div>
+<div id="opTicketPreview" style="position:relative;margin-bottom:10px;min-height:60px;background:var(--slate-700);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--slate-500);font-size:12px">No photo yet</div>
+<div style="display:flex;gap:8px">
+<button class="btn btn-primary" onclick="opCaptureTicket()" style="flex:1;padding:12px">📷 Camera</button>
+<button class="btn btn-secondary" onclick="opUploadTicket()" style="flex:1;padding:12px">📁 File</button>
+</div>
+</div>
+
+<!-- Step 2: Debris Photos -->
+<div style="background:var(--slate-800);border-radius:10px;padding:16px;margin-bottom:12px">
+<div style="font-size:13px;font-weight:600;margin-bottom:10px">📸 Step 2: Debris Photos (up to 3)</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+<div id="opPhotoSlot0" onclick="opCaptureDebris(0)" style="aspect-ratio:1;background:var(--slate-700);border-radius:8px;border:2px dashed var(--slate-600);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative"><span style="font-size:24px">📷</span></div>
+<div id="opPhotoSlot1" onclick="opCaptureDebris(1)" style="aspect-ratio:1;background:var(--slate-700);border-radius:8px;border:2px dashed var(--slate-600);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative"><span style="font-size:24px">+</span></div>
+<div id="opPhotoSlot2" onclick="opCaptureDebris(2)" style="aspect-ratio:1;background:var(--slate-700);border-radius:8px;border:2px dashed var(--slate-600);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative"><span style="font-size:24px">+</span></div>
+</div>
+</div>
+
+<!-- Notes -->
+<div class="form-group">
+<label class="form-label">Quick Notes (optional)</label>
+<input type="text" id="opNotes" class="form-input" placeholder="e.g., Heavy wood load, driver James">
+</div>
+
+<!-- Submit -->
+<button class="btn btn-primary" onclick="opSubmitScan()" style="width:100%;padding:14px;font-size:16px;font-weight:700;margin-bottom:12px">✅ Submit & Next Truck</button>
+</div>
+</div>
+
+<!-- Operator's Recent Scans -->
+<div class="card">
+<div style="font-size:14px;font-weight:600;margin-bottom:12px">📋 My Recent Scans</div>
+<div id="opRecentScans" style="font-size:12px;color:var(--slate-400)">Loading...</div>
+</div>
+</div>
+<!-- ==================== END OPERATOR SCAN TAB ==================== -->
+
+<!-- ==================== ADMIN PENDING TAB ==================== -->
+<div id="pendingTab" class="hidden">
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+<div>
+<div style="font-size:16px;font-weight:700">⏳ Pending Review</div>
+<div style="font-size:11px;color:var(--slate-400)">Tickets from customers & crew awaiting your review</div>
+</div>
+<button class="btn btn-secondary" onclick="loadPendingReviewTab()" style="padding:6px 12px;font-size:11px">🔄 Refresh</button>
+</div>
+<div id="pendingReviewList" style="font-size:12px;color:var(--slate-400)">Loading...</div>
+</div>
+</div>
+<!-- ==================== END ADMIN PENDING TAB ==================== -->
 
 <div id="settingsTab" class="hidden">
 <div class="card">
@@ -1893,32 +1988,39 @@ async function initializeApp() {
 
 // ========== TABS ==========
 function showTab(tab) {
+    // Hide all tabs
     document.getElementById('dashboardTab').classList.add('hidden');
     document.getElementById('projectsTab').classList.add('hidden');
     document.getElementById('reportsTab').classList.add('hidden');
     document.getElementById('settingsTab').classList.add('hidden');
     var custUploadTab = document.getElementById('customerUploadTab');
     if (custUploadTab) custUploadTab.classList.add('hidden');
+    var opScanTab = document.getElementById('operatorScanTab');
+    if (opScanTab) opScanTab.classList.add('hidden');
+    var pendingTabEl = document.getElementById('pendingTab');
+    if (pendingTabEl) pendingTabEl.classList.add('hidden');
     
     if (tab === 'dashboard') {
         document.getElementById('dashboardTab').classList.remove('hidden');
-        // Always refresh tickets for current project when returning to Dashboard
         if (currentProject) {
             loadAllTicketsForProject();
         } else {
-            // No active project — try loading projects first, then tickets
             loadProjects().then(function() {
                 if (currentProject) loadAllTicketsForProject();
             });
         }
+    } else if (tab === 'pending') {
+        if (pendingTabEl) {
+            pendingTabEl.classList.remove('hidden');
+            loadPendingReviewTab();
+        }
     } else if (tab === 'projects') {
         document.getElementById('projectsTab').classList.remove('hidden');
-        loadProjects(); // Full refresh to update ticket counts and stats
+        loadProjects();
     } else if (tab === 'reports') {
         document.getElementById('reportsTab').classList.remove('hidden');
         populateReportProjectDropdown();
         setTimeout(initReportSignaturePad, 100);
-        // Auto-generate if a project is already selected
         if (currentProject) {
             const sel = document.getElementById('reportProjectSelect');
             if (sel && !sel.value) sel.value = currentProject.id;
@@ -1928,13 +2030,25 @@ function showTab(tab) {
         if (custUploadTab) {
             custUploadTab.classList.remove('hidden');
             loadCustomerUploadHistory();
-            // Default service date to today
             var dateInput = document.getElementById('custServiceDate');
             if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
         }
+    } else if (tab === 'operatorScan') {
+        if (opScanTab) {
+            opScanTab.classList.remove('hidden');
+            populateOpProjectPicker();
+            loadOpRecentScans();
+        }
+    } else if (tab === 'operatorHistory') {
+        // Show scan tab but scroll to history
+        if (opScanTab) {
+            opScanTab.classList.remove('hidden');
+            loadOpRecentScans();
+            var historyEl = document.getElementById('opRecentScans');
+            if (historyEl) historyEl.scrollIntoView({ behavior: 'smooth' });
+        }
     } else if (tab === 'settings') {
         document.getElementById('settingsTab').classList.remove('hidden');
-        // Always re-populate keys from localStorage so they never appear blank
         var ak = localStorage.getItem('divertscan_openai');
         var su = localStorage.getItem('divertscan_sb_url');
         var sk = localStorage.getItem('divertscan_sb_key');
@@ -1946,15 +2060,15 @@ function showTab(tab) {
         renderHaulerManager();
     }
     
-    document.querySelectorAll('.nav-item').forEach((item, i) => {
-        item.classList.remove('active');
-    });
-    // Set active on the right nav item
-    var navId = userRole === 'admin' ? 'adminNav' : 'customerNav';
+    // Update nav active states
+    document.querySelectorAll('.nav-item').forEach(function(item) { item.classList.remove('active'); });
+    var navId = userRole === 'admin' ? 'adminNav' : userRole === 'operator' ? 'operatorNav' : 'customerNav';
     var navItems = document.getElementById(navId).querySelectorAll('.nav-item');
     var tabMap;
     if (userRole === 'admin') {
-        tabMap = { 'dashboard': 0, 'projects': 1, 'reports': 3, 'settings': 4 };
+        tabMap = { 'dashboard': 0, 'pending': 1, 'projects': 2, 'reports': 3, 'settings': 4 };
+    } else if (userRole === 'operator') {
+        tabMap = { 'operatorScan': 0, 'operatorHistory': 1 };
     } else {
         tabMap = { 'dashboard': 0, 'customerUpload': 1, 'reports': 2 };
     }
@@ -9614,11 +9728,15 @@ function switchLoginTab(tab) {
     document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
     event.target.classList.add('active');
     
+    document.getElementById('adminLoginForm').classList.add('hidden');
+    document.getElementById('operatorLoginForm').classList.add('hidden');
+    document.getElementById('customerLoginForm').classList.add('hidden');
+    
     if (tab === 'admin') {
         document.getElementById('adminLoginForm').classList.remove('hidden');
-        document.getElementById('customerLoginForm').classList.add('hidden');
+    } else if (tab === 'operator') {
+        document.getElementById('operatorLoginForm').classList.remove('hidden');
     } else {
-        document.getElementById('adminLoginForm').classList.add('hidden');
         document.getElementById('customerLoginForm').classList.remove('hidden');
     }
 }
@@ -9676,28 +9794,50 @@ async function doCustomerLogin() {
     }
 }
 
+function doOperatorLogin() {
+    var code = (document.getElementById('operatorCode').value || '').trim().toUpperCase();
+    if (!code) {
+        document.getElementById('operatorLoginError').textContent = 'Enter crew code';
+        return;
+    }
+    if (code === 'DALMEX' || code === 'DALMEX2025' || code === 'CREW') {
+        userRole = 'operator';
+        localStorage.setItem('divertscan_session', JSON.stringify({ role: 'operator', time: Date.now() }));
+        showMainApp();
+    } else {
+        document.getElementById('operatorLoginError').textContent = 'Invalid crew code';
+    }
+}
+
 function showMainApp() {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('appContainer').classList.add('active');
     document.body.classList.add('logged-in');
     
+    // Hide all headers and navs first
+    document.getElementById('adminHeader').classList.add('hidden');
+    document.getElementById('customerHeader').classList.add('hidden');
+    document.getElementById('operatorHeader').classList.add('hidden');
+    document.getElementById('portalBanner').classList.add('hidden');
+    document.getElementById('adminNav').classList.add('hidden');
+    document.getElementById('customerNav').classList.add('hidden');
+    document.getElementById('operatorNav').classList.add('hidden');
+    
     if (userRole === 'admin') {
         document.getElementById('adminHeader').classList.remove('hidden');
-        document.getElementById('customerHeader').classList.add('hidden');
-        document.getElementById('portalBanner').classList.add('hidden');
         document.getElementById('adminNav').classList.remove('hidden');
-        document.getElementById('customerNav').classList.add('hidden');
         applyRoleVisibility();
-        
         initializeApp();
+    } else if (userRole === 'operator') {
+        document.getElementById('operatorHeader').classList.remove('hidden');
+        document.getElementById('operatorNav').classList.remove('hidden');
+        applyRoleVisibility();
+        initOperatorMode();
     } else {
-        document.getElementById('adminHeader').classList.add('hidden');
         document.getElementById('customerHeader').classList.remove('hidden');
         document.getElementById('portalBanner').classList.remove('hidden');
-        document.getElementById('adminNav').classList.add('hidden');
         document.getElementById('customerNav').classList.remove('hidden');
         applyRoleVisibility();
-        
         document.getElementById('portalProjectName').textContent = currentProject.name;
         initCustomerPortal();
     }
@@ -9709,6 +9849,308 @@ function applyRoleVisibility() {
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
     } else {
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+}
+
+// ========== OPERATOR MODE ==========
+var opData = {
+    scaleTicketPhoto: null,
+    debrisPhotos: [null, null, null],
+    selectedProjectId: null
+};
+
+async function initOperatorMode() {
+    // Connect to Supabase
+    var url = localStorage.getItem('divertscan_sb_url') || DEFAULT_KEYS.sbUrl;
+    var key = localStorage.getItem('divertscan_sb_key') || DEFAULT_KEYS.sbKey;
+    if (url && key && !sb) {
+        sb = supabase.createClient(url, key);
+    }
+    
+    // Load projects for picker
+    await loadProjects();
+    showTab('operatorScan');
+}
+
+function populateOpProjectPicker() {
+    var picker = document.getElementById('opProjectPicker');
+    if (!picker) return;
+    var allProjects = window._allProjectsList || [];
+    picker.innerHTML = '<option value="">— Pick a project —</option>';
+    allProjects.forEach(function(p) {
+        picker.innerHTML += '<option value="' + p.id + '">' + (p.name || 'Unnamed') + '</option>';
+    });
+}
+
+function opSelectProject() {
+    var picker = document.getElementById('opProjectPicker');
+    opData.selectedProjectId = picker.value || null;
+    var section = document.getElementById('opSelectedProject');
+    if (opData.selectedProjectId) {
+        section.classList.remove('hidden');
+    } else {
+        section.classList.add('hidden');
+    }
+}
+
+function opCaptureTicket() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+    input.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(input);
+    input.onchange = function(e) {
+        var file = e.target.files[0]; if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            openPhotoCrop(ev.target.result, function(cropped) {
+                opData.scaleTicketPhoto = cropped;
+                document.getElementById('opTicketPreview').innerHTML = '<img src="' + cropped + '" style="width:100%;border-radius:8px"><div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.7);color:white;padding:4px 10px;border-radius:6px;font-size:10px">✅ Captured</div>';
+            }, 'ticket');
+        };
+        reader.readAsDataURL(file);
+        setTimeout(function() { document.body.removeChild(input); }, 1000);
+    };
+    setTimeout(function() { input.click(); }, 100);
+}
+
+function opUploadTicket() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(input);
+    input.onchange = function(e) {
+        var file = e.target.files[0]; if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            openPhotoCrop(ev.target.result, function(cropped) {
+                opData.scaleTicketPhoto = cropped;
+                document.getElementById('opTicketPreview').innerHTML = '<img src="' + cropped + '" style="width:100%;border-radius:8px"><div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.7);color:white;padding:4px 10px;border-radius:6px;font-size:10px">✅ Captured</div>';
+            }, 'ticket');
+        };
+        reader.readAsDataURL(file);
+        setTimeout(function() { document.body.removeChild(input); }, 1000);
+    };
+    setTimeout(function() { input.click(); }, 100);
+}
+
+function opCaptureDebris(slot) {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+    input.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(input);
+    input.onchange = function(e) {
+        var file = e.target.files[0]; if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            openPhotoCrop(ev.target.result, function(cropped) {
+                opData.debrisPhotos[slot] = cropped;
+                var slotEl = document.getElementById('opPhotoSlot' + slot);
+                slotEl.innerHTML = '<img src="' + cropped + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px">' +
+                    '<div onclick="event.stopPropagation();opRemovePhoto(' + slot + ')" style="position:absolute;top:4px;right:4px;background:rgba(239,68,68,0.9);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer">×</div>';
+            }, 'debris');
+        };
+        reader.readAsDataURL(file);
+        setTimeout(function() { document.body.removeChild(input); }, 1000);
+    };
+    setTimeout(function() { input.click(); }, 100);
+}
+
+function opRemovePhoto(slot) {
+    opData.debrisPhotos[slot] = null;
+    var slotEl = document.getElementById('opPhotoSlot' + slot);
+    slotEl.innerHTML = '<span style="font-size:24px">' + (slot === 0 ? '📷' : '+') + '</span>';
+}
+
+async function opSubmitScan() {
+    if (!opData.selectedProjectId) { toast('Select a project first', 'error'); return; }
+    if (!opData.scaleTicketPhoto) { toast('Take a scale ticket photo first', 'error'); return; }
+    
+    var notes = (document.getElementById('opNotes').value || '').trim();
+    var photoCount = opData.debrisPhotos.filter(function(p) { return p; }).length;
+    var ticketNum = 'OP-' + Date.now().toString(36).toUpperCase();
+    
+    var record = {
+        project_id: opData.selectedProjectId,
+        ticket_number: ticketNum,
+        service_date: new Date().toISOString().split('T')[0],
+        hauler: 'Dalmex Floor',
+        submitted_by: 'operator',
+        customer_notes: notes,
+        human_verified: false,
+        is_closed: false,
+        import_source: 'Operator Scan',
+        scale_ticket_photo: opData.scaleTicketPhoto,
+        wood_pct: 0, concrete_pct: 0, metal_pct: 0, cardboard_pct: 0,
+        plastic_pct: 0, drywall_pct: 0, landfill_pct: 100,
+        gross_lbs: 0, tare_lbs: 0, net_lbs: 0, net_tons: 0,
+        diversion_pct: 0, diverted_tons: 0,
+        created_at: new Date().toISOString()
+    };
+    
+    if (opData.debrisPhotos[0]) record.debris_photo_1 = opData.debrisPhotos[0];
+    if (opData.debrisPhotos[1]) record.debris_photo_2 = opData.debrisPhotos[1];
+    if (opData.debrisPhotos[2]) record.debris_photo_3 = opData.debrisPhotos[2];
+    
+    showLoading('Submitting scan...');
+    
+    try {
+        if (sb) {
+            var result = await Promise.race([
+                sb.from('tickets').insert([record]).select(),
+                new Promise(function(_, r) { setTimeout(function() { r(new Error('Upload timed out')); }, 15000); })
+            ]);
+            if (result.error) throw new Error(result.error.message);
+        }
+        
+        hideLoading();
+        toast('✅ Scan submitted! Ready for next truck.', 'success');
+        
+        // Reset for next truck
+        opData.scaleTicketPhoto = null;
+        opData.debrisPhotos = [null, null, null];
+        document.getElementById('opTicketPreview').innerHTML = 'No photo yet';
+        document.getElementById('opNotes').value = '';
+        for (var i = 0; i < 3; i++) {
+            document.getElementById('opPhotoSlot' + i).innerHTML = '<span style="font-size:24px">' + (i === 0 ? '📷' : '+') + '</span>';
+        }
+        
+        loadOpRecentScans();
+    } catch(err) {
+        hideLoading();
+        toast('Error: ' + err.message, 'error');
+    }
+}
+
+async function loadOpRecentScans() {
+    var container = document.getElementById('opRecentScans');
+    if (!container) return;
+    
+    if (!sb) {
+        container.innerHTML = '<div style="color:var(--slate-500)">Not connected</div>';
+        return;
+    }
+    
+    try {
+        var { data, error } = await sb.from('tickets')
+            .select('id, ticket_number, service_date, project_id, human_verified, scale_ticket_photo, created_at')
+            .eq('submitted_by', 'operator')
+            .order('created_at', { ascending: false })
+            .limit(20);
+        
+        if (error || !data || data.length === 0) {
+            container.innerHTML = '<div style="color:var(--slate-500);padding:8px">No scans yet today. Start scanning!</div>';
+            return;
+        }
+        
+        var allProjects = window._allProjectsList || [];
+        container.innerHTML = data.map(function(t) {
+            var proj = allProjects.find(function(p) { return p.id === t.project_id; });
+            var projName = proj ? proj.name : 'Unknown';
+            var status = t.human_verified ? '<span style="color:var(--emerald-400)">✅ Verified</span>' : '<span style="color:var(--amber-400)">⏳ Pending</span>';
+            
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--slate-700)">' +
+                (t.scale_ticket_photo ? '<img src="' + t.scale_ticket_photo + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0">' : '<div style="width:40px;height:40px;background:var(--slate-700);border-radius:6px;flex-shrink:0"></div>') +
+                '<div style="flex:1;min-width:0">' +
+                    '<div style="font-size:12px;font-weight:600">' + t.ticket_number + '</div>' +
+                    '<div style="font-size:10px;color:var(--slate-400)">' + projName + ' • ' + formatDate(t.service_date) + '</div>' +
+                '</div>' +
+                '<div>' + status + '</div>' +
+                (!t.human_verified ? '<button onclick="opEditScan(\'' + t.id + '\')" style="background:var(--slate-700);border:1px solid var(--slate-600);color:white;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer">✏️</button>' : '') +
+            '</div>';
+        }).join('');
+    } catch(err) {
+        container.innerHTML = '<div style="color:var(--red-400)">Error: ' + err.message + '</div>';
+    }
+}
+
+function opEditScan(ticketId) {
+    // Load the ticket and open edit modal (reuse customer edit flow)
+    var ticket = tickets.find(function(t) { return t.id === ticketId; });
+    if (ticket) {
+        viewTicketDetails(ticketId);
+    } else {
+        // Ticket not in local array — fetch it
+        if (sb) {
+            sb.from('tickets').select('*').eq('id', ticketId).single().then(function(result) {
+                if (result.data) {
+                    tickets.push(result.data);
+                    viewTicketDetails(ticketId);
+                } else {
+                    toast('Could not load ticket', 'error');
+                }
+            });
+        }
+    }
+}
+
+// ========== ADMIN PENDING REVIEW TAB ==========
+async function loadPendingReviewTab() {
+    var container = document.getElementById('pendingReviewList');
+    if (!container) return;
+    
+    if (!sb) {
+        container.innerHTML = '<div style="color:var(--slate-500)">Not connected to database</div>';
+        return;
+    }
+    
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--slate-400)">Loading pending items...</div>';
+    
+    try {
+        var { data, error } = await sb.from('tickets')
+            .select('*')
+            .eq('human_verified', false)
+            .order('created_at', { ascending: false })
+            .limit(50);
+        
+        if (error) throw new Error(error.message);
+        
+        // Filter to only customer/operator submissions
+        var pending = (data || []).filter(function(t) {
+            return t.submitted_by === 'customer' || t.submitted_by === 'operator';
+        });
+        
+        if (pending.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:30px"><div style="font-size:48px;margin-bottom:8px">✅</div><div style="font-size:14px;font-weight:600;color:var(--emerald-400)">All caught up!</div><div style="font-size:12px;color:var(--slate-400)">No pending reviews right now.</div></div>';
+            return;
+        }
+        
+        // Make sure tickets array has these
+        pending.forEach(function(t) {
+            if (!tickets.find(function(existing) { return existing.id === t.id; })) {
+                tickets.push(t);
+            }
+        });
+        
+        var allProjects = window._allProjectsList || [];
+        
+        container.innerHTML = '<div style="margin-bottom:12px;font-size:13px;color:var(--amber-400);font-weight:600">' + pending.length + ' item' + (pending.length > 1 ? 's' : '') + ' pending review</div>' +
+            pending.map(function(t) {
+                var proj = allProjects.find(function(p) { return p.id === t.project_id; });
+                var projName = proj ? proj.name : 'Unknown Project';
+                var source = t.submitted_by === 'operator' ? '🚛 Crew' : '👤 Customer';
+                var photoCount = [t.debris_photo_1, t.debris_photo_2, t.debris_photo_3].filter(function(p) { return p; }).length;
+                
+                return '<div style="background:var(--slate-800);border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid var(--slate-700)">' +
+                    '<div style="display:flex;gap:10px;align-items:start">' +
+                        (t.scale_ticket_photo ? '<img src="' + t.scale_ticket_photo + '" style="width:60px;height:45px;object-fit:cover;border-radius:6px;flex-shrink:0;border:2px solid var(--accent-info)">' : '') +
+                        '<div style="flex:1;min-width:0">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:start">' +
+                                '<div><div style="font-size:13px;font-weight:600">' + t.ticket_number + '</div>' +
+                                '<div style="font-size:11px;color:var(--slate-400)">' + projName + '</div></div>' +
+                                '<div style="font-size:10px;padding:3px 8px;border-radius:4px;background:' + (t.submitted_by === 'operator' ? 'var(--accent-info)' : 'var(--amber-400)') + ';color:white;font-weight:600">' + source + '</div>' +
+                            '</div>' +
+                            '<div style="font-size:10px;color:var(--slate-400);margin-top:4px">' + formatDate(t.service_date) + ' • ' + (photoCount + 1) + ' photo(s)' + (t.customer_notes ? ' • "' + t.customer_notes.substring(0, 40) + '"' : '') + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:6px;margin-top:10px">' +
+                        '<button onclick="editTicket(\'' + t.id + '\')" class="btn btn-primary" style="flex:1;padding:8px;font-size:12px">🤖 Review & Process</button>' +
+                        '<button onclick="viewTicketDetails(\'' + t.id + '\')" class="btn btn-secondary" style="padding:8px 12px;font-size:12px">👁️</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        
+    } catch(err) {
+        container.innerHTML = '<div style="color:var(--red-400);padding:8px">Error: ' + err.message + '</div>';
     }
 }
 
@@ -10324,6 +10766,10 @@ function checkExistingSession() {
                     });
                     return true;
                 }
+            } else if (s.role === 'operator') {
+                userRole = 'operator';
+                showMainApp();
+                return true;
             }
         }
     }
@@ -12104,10 +12550,15 @@ window.onload = async function() {
 <!-- Navigation bars OUTSIDE app-container for reliable position:fixed on iPad Safari -->
 <nav class="nav" id="adminNav">
 <div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
+<div class="nav-item" onclick="showTab('pending')">⏳<span>Pending</span></div>
 <div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
-<div class="nav-item" onclick="startNewTicket()">➕<span>New Ticket</span></div>
 <div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
 <div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
+</nav>
+
+<nav class="nav hidden" id="operatorNav">
+<div class="nav-item active" onclick="showTab('operatorScan')">📸<span>Scan</span></div>
+<div class="nav-item" onclick="showTab('operatorHistory')">📋<span>My Scans</span></div>
 </nav>
 
 <nav class="nav hidden" id="customerNav">
