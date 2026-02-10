@@ -1189,6 +1189,21 @@ Compact mode (more content)
 <button class="btn btn-primary" onclick="saveCompanyBranding()">Save Branding</button>
 </div>
 
+<!-- Hauler Manager — Tie Projects to Haulers -->
+<div class="card">
+<div style="font-size:14px;font-weight:600;margin-bottom:4px">🚛 Hauler Manager</div>
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:12px">Create haulers and assign projects to them. One hauler can have multiple projects.</p>
+
+<div id="haulerManagerList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+<!-- Rendered dynamically -->
+</div>
+
+<div style="display:flex;gap:8px">
+<input type="text" id="newHaulerName" class="form-input" placeholder="New hauler name (e.g., Jaguar Waste Management)" style="flex:1;margin:0">
+<button class="btn btn-primary" onclick="addHauler()" style="white-space:nowrap;padding:8px 14px">➕ Add</button>
+</div>
+</div>
+
 <!-- Verified Facility Network -->
 <div class="card">
 <div style="font-size:14px;font-weight:600;margin-bottom:12px">🏭 Verified Facility Network</div>
@@ -1858,6 +1873,10 @@ async function initializeApp() {
     // Always load projects first (from Supabase + IndexedDB)
     await loadProjects();
     
+    // Migrate haulers from existing project data if first time
+    migrateHaulersFromProjects();
+    renderHaulerManager();
+    
     // Then load tickets for the active project
     if (currentProject) {
         await loadAllTicketsForProject();
@@ -1924,14 +1943,24 @@ function showTab(tab) {
         if (sk) document.getElementById('supabaseKey').value = sk;
         updateKeyStatusIndicators();
         renderAllFacilities();
+        renderHaulerManager();
     }
     
     document.querySelectorAll('.nav-item').forEach((item, i) => {
         item.classList.remove('active');
-        if ((tab === 'dashboard' && i === 0) || (tab === 'projects' && i === 1) || (tab === 'reports' && i === 2) || (tab === 'settings' && i === 3)) {
-            item.classList.add('active');
-        }
     });
+    // Set active on the right nav item
+    var navId = userRole === 'admin' ? 'adminNav' : 'customerNav';
+    var navItems = document.getElementById(navId).querySelectorAll('.nav-item');
+    var tabMap;
+    if (userRole === 'admin') {
+        tabMap = { 'dashboard': 0, 'projects': 1, 'reports': 3, 'settings': 4 };
+    } else {
+        tabMap = { 'dashboard': 0, 'customerUpload': 1, 'reports': 2 };
+    }
+    if (tabMap[tab] !== undefined && navItems[tabMap[tab]]) {
+        navItems[tabMap[tab]].classList.add('active');
+    }
 }
 
 // ========== API KEY ==========
@@ -3093,8 +3122,22 @@ function viewTicketDetails(ticketId) {
     
     // Diversion status
     const diversionPct = ticket.diversion_pct || 0;
-    const diversionColor = diversionPct >= 75 ? 'var(--accent-primary)' : diversionPct >= 50 ? 'var(--accent-warning)' : 'var(--accent-danger)';
-    const diversionStatus = diversionPct >= 75 ? '✅ LEED Compliant' : diversionPct >= 50 ? '⚠️ Below Target' : '❌ Needs Improvement';
+    var diversionColor, diversionStatus;
+    
+    // Unprocessed customer uploads should NOT show "Needs Improvement"
+    if (ticket.submitted_by === 'customer' && !ticket.human_verified && ticket.net_tons === 0) {
+        diversionColor = 'var(--amber-400)';
+        diversionStatus = '⏳ Awaiting Dalmex Review';
+    } else if (diversionPct >= 75) {
+        diversionColor = 'var(--accent-primary)';
+        diversionStatus = '✅ LEED Compliant';
+    } else if (diversionPct >= 50) {
+        diversionColor = 'var(--accent-warning)';
+        diversionStatus = '⚠️ Below Target';
+    } else {
+        diversionColor = 'var(--accent-danger)';
+        diversionStatus = '❌ Needs Improvement';
+    }
     
     // Create modal
     const modal = document.createElement('div');
@@ -3183,18 +3226,27 @@ function viewTicketDetails(ticketId) {
                     <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">📷 DOCUMENTATION</div>
                     ${photosHtml}
                 </div>
+                
+                ${ticket.customer_notes ? '<div style="margin-top:16px;padding:12px;background:var(--bg-tertiary);border-radius:8px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">📝 CUSTOMER NOTES</div><div style="font-size:12px;color:var(--text-primary)">' + ticket.customer_notes + '</div></div>' : ''}
             </div>
             
             <!-- Footer -->
-            <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px">
+            <div style="padding:16px 20px;border-top:1px solid var(--border-color);display:flex;gap:8px" id="ticketDetailFooter">
                 <button class="btn btn-secondary" onclick="document.getElementById('ticketDetailModal').remove()" style="flex:1">Close</button>
-                <button class="btn btn-secondary" onclick="editTicket('${ticketId}')" style="flex:1">✏️ Edit</button>
-                <button class="btn btn-primary" onclick="printTicketDetail('${ticketId}')" style="flex:1">🖨️ Print</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
+    
+    // Add edit/print buttons based on role
+    var footer = document.getElementById('ticketDetailFooter');
+    if (userRole === 'admin') {
+        footer.insertAdjacentHTML('beforeend', '<button class="btn btn-secondary" onclick="editTicket(\'' + ticketId + '\')" style="flex:1">✏️ Edit</button>');
+        footer.insertAdjacentHTML('beforeend', '<button class="btn btn-primary" onclick="printTicketDetail(\'' + ticketId + '\')" style="flex:1">🖨️ Print</button>');
+    } else if (ticket.submitted_by === 'customer' && !ticket.human_verified) {
+        footer.insertAdjacentHTML('beforeend', '<button class="btn btn-secondary" onclick="customerEditUpload(\'' + ticketId + '\')" style="flex:1">✏️ Edit Upload</button>');
+    }
 }
 
 // Global photo reference for viewer (avoids base64 in onclick attributes)
@@ -9815,10 +9867,24 @@ async function submitCustomerUpload() {
     
     try {
         if (sb) {
-            var result = await Promise.race([
-                sb.from('tickets').insert([record]).select(),
-                new Promise(function(_, r) { setTimeout(function() { r(new Error('Upload timed out')); }, 15000); })
-            ]);
+            var result;
+            var isEdit = custUploadData.editingTicketId;
+            
+            if (isEdit) {
+                // UPDATE existing ticket
+                delete record.created_at; // Don't overwrite creation date
+                record.updated_at = new Date().toISOString();
+                result = await Promise.race([
+                    sb.from('tickets').update(record).eq('id', isEdit).select(),
+                    new Promise(function(_, r) { setTimeout(function() { r(new Error('Upload timed out')); }, 15000); })
+                ]);
+            } else {
+                // INSERT new ticket
+                result = await Promise.race([
+                    sb.from('tickets').insert([record]).select(),
+                    new Promise(function(_, r) { setTimeout(function() { r(new Error('Upload timed out')); }, 15000); })
+                ]);
+            }
             
             if (result.error) throw new Error(result.error.message);
             
@@ -9827,16 +9893,17 @@ async function submitCustomerUpload() {
             // Show success
             var statusBanner = document.getElementById('customerUploadStatus');
             statusBanner.classList.remove('hidden');
-            document.getElementById('uploadStatusText').textContent = '✅ Upload submitted successfully!';
+            document.getElementById('uploadStatusText').textContent = isEdit ? '✅ Upload updated successfully!' : '✅ Upload submitted successfully!';
             document.getElementById('uploadStatusDetail').textContent = 
                 'Ticket ' + record.ticket_number + ' • ' + (photoCount + 1) + ' photo(s) • Dalmex will review and process your materials.';
             
-            toast('✅ Upload sent to Dalmex for review!', 'success');
+            toast(isEdit ? '✅ Upload updated!' : '✅ Upload sent to Dalmex for review!', 'success');
             
             // Reset form
             resetCustomerUploadForm();
             
-            // Refresh history
+            // Refresh data
+            await loadAllTicketsForProject();
             loadCustomerUploadHistory();
             
         } else {
@@ -9852,6 +9919,7 @@ async function submitCustomerUpload() {
 function resetCustomerUploadForm() {
     custUploadData.scaleTicketPhoto = null;
     custUploadData.debrisPhotos = [null, null, null];
+    custUploadData.editingTicketId = null;
     
     var preview = document.getElementById('custTicketPreview');
     preview.innerHTML = '<div id="custTicketPlaceholder" style="text-align:center;padding:20px"><div style="font-size:32px;margin-bottom:8px">📷</div><div style="font-size:12px;color:var(--slate-400)">Tap to photograph or upload scale ticket</div><div style="font-size:10px;color:var(--slate-500);margin-top:4px">Supports any hauler\'s ticket format</div></div>';
@@ -9864,6 +9932,193 @@ function resetCustomerUploadForm() {
     document.getElementById('custTicketNum').value = '';
     document.getElementById('custNotes').value = '';
     document.getElementById('custServiceDate').value = new Date().toISOString().split('T')[0];
+}
+
+// Customer can edit their own pending uploads (before admin verifies)
+function customerEditUpload(ticketId) {
+    var ticket = tickets.find(function(t) { return t.id === ticketId; });
+    if (!ticket) { toast('Ticket not found', 'error'); return; }
+    if (ticket.human_verified) { toast('This ticket has been verified and cannot be edited', 'info'); return; }
+    
+    // Close detail modal
+    var detailModal = document.getElementById('ticketDetailModal');
+    if (detailModal) detailModal.remove();
+    
+    // Pre-populate the upload form with existing data
+    showTab('customerUpload');
+    
+    // Fill in existing data
+    document.getElementById('custHauler').value = ticket.hauler || '';
+    document.getElementById('custServiceDate').value = ticket.service_date || '';
+    document.getElementById('custTicketNum').value = ticket.ticket_number || '';
+    document.getElementById('custNotes').value = ticket.customer_notes || '';
+    
+    // Show existing photos
+    if (ticket.scale_ticket_photo) {
+        custUploadData.scaleTicketPhoto = ticket.scale_ticket_photo;
+        var preview = document.getElementById('custTicketPreview');
+        preview.innerHTML = '<img src="' + ticket.scale_ticket_photo + '" style="width:100%;border-radius:8px"><div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.7);color:white;padding:4px 10px;border-radius:6px;font-size:10px">✅ Scale Ticket</div>';
+    }
+    for (var i = 0; i < 3; i++) {
+        var photoKey = 'debris_photo_' + (i + 1);
+        if (ticket[photoKey]) {
+            custUploadData.debrisPhotos[i] = ticket[photoKey];
+            var slotEl = document.getElementById('custPhotoSlot' + i);
+            slotEl.innerHTML = '<img src="' + ticket[photoKey] + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px"><div onclick="event.stopPropagation();removeCustPhoto(' + i + ')" style="position:absolute;top:4px;right:4px;background:rgba(239,68,68,0.9);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer">×</div>';
+        }
+    }
+    
+    // Store the ticket ID so submit knows to UPDATE instead of INSERT
+    custUploadData.editingTicketId = ticketId;
+    
+    toast('Edit your upload — tap Submit when done', 'info');
+}
+
+// ========== HAULER MANAGER ==========
+// Haulers stored in localStorage and synced to Supabase if table exists
+function getHaulers() {
+    try {
+        return JSON.parse(localStorage.getItem('divertscan_haulers') || '[]');
+    } catch(e) { return []; }
+}
+
+function saveHaulers(haulers) {
+    localStorage.setItem('divertscan_haulers', JSON.stringify(haulers));
+}
+
+function addHauler() {
+    var name = (document.getElementById('newHaulerName').value || '').trim();
+    if (!name) { toast('Enter a hauler name', 'error'); return; }
+    
+    var haulers = getHaulers();
+    if (haulers.find(function(h) { return h.name.toLowerCase() === name.toLowerCase(); })) {
+        toast('Hauler already exists', 'warning');
+        return;
+    }
+    
+    haulers.push({
+        id: 'hauler_' + Date.now(),
+        name: name,
+        projects: [] // Array of project IDs
+    });
+    
+    saveHaulers(haulers);
+    document.getElementById('newHaulerName').value = '';
+    renderHaulerManager();
+    toast('✅ Hauler added: ' + name, 'success');
+}
+
+function removeHauler(haulerId) {
+    if (!confirm('Remove this hauler?')) return;
+    var haulers = getHaulers().filter(function(h) { return h.id !== haulerId; });
+    saveHaulers(haulers);
+    renderHaulerManager();
+    toast('Hauler removed', 'info');
+}
+
+function toggleHaulerProject(haulerId, projectId) {
+    var haulers = getHaulers();
+    var hauler = haulers.find(function(h) { return h.id === haulerId; });
+    if (!hauler) return;
+    
+    var idx = hauler.projects.indexOf(projectId);
+    if (idx >= 0) {
+        hauler.projects.splice(idx, 1);
+    } else {
+        hauler.projects.push(projectId);
+    }
+    
+    saveHaulers(haulers);
+    
+    // Also update the project's waste_hauler field
+    var proj = (window._allProjectsList || []).find(function(p) { return p.id === projectId; });
+    if (proj && idx < 0) {
+        // Assigning this project to this hauler
+        proj.waste_hauler = hauler.name;
+        if (sb) {
+            sb.from('projects').update({ waste_hauler: hauler.name }).eq('id', projectId).then(function() {});
+        }
+    }
+    
+    renderHaulerManager();
+}
+
+function renderHaulerManager() {
+    var container = document.getElementById('haulerManagerList');
+    if (!container) return;
+    
+    var haulers = getHaulers();
+    var allProjects = window._allProjectsList || [];
+    
+    if (haulers.length === 0) {
+        container.innerHTML = '<div style="color:var(--slate-500);font-size:12px;padding:8px">No haulers yet. Add one below.</div>';
+        return;
+    }
+    
+    container.innerHTML = haulers.map(function(h) {
+        var projHtml = allProjects.map(function(p) {
+            var isAssigned = h.projects.indexOf(p.id) >= 0;
+            return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;padding:3px 0;cursor:pointer">' +
+                '<input type="checkbox" ' + (isAssigned ? 'checked' : '') + ' onchange="toggleHaulerProject(\'' + h.id + '\', \'' + p.id + '\')">' +
+                '<span style="color:' + (isAssigned ? 'var(--emerald-400)' : 'var(--slate-400)') + '">' + (p.name || 'Unnamed') + '</span>' +
+            '</label>';
+        }).join('');
+        
+        var assignedCount = h.projects.filter(function(pid) {
+            return allProjects.find(function(p) { return p.id === pid; });
+        }).length;
+        
+        return '<div style="background:var(--slate-800);border-radius:8px;padding:12px;border:1px solid var(--slate-700)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+                '<div><span style="font-weight:600;font-size:13px">🚛 ' + h.name + '</span> <span style="font-size:10px;color:var(--slate-400)">' + assignedCount + ' project' + (assignedCount !== 1 ? 's' : '') + '</span></div>' +
+                '<button onclick="removeHauler(\'' + h.id + '\')" style="background:var(--red-500);border:none;color:white;width:24px;height:24px;border-radius:4px;font-size:10px;cursor:pointer">✕</button>' +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--slate-400);margin-bottom:6px">ASSIGNED PROJECTS:</div>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;max-height:150px;overflow-y:auto">' + projHtml + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+// Populate hauler dropdown when creating/editing projects
+function getHaulerDropdownOptions(selectedValue) {
+    var haulers = getHaulers();
+    var options = '<option value="">— Select Hauler —</option>';
+    haulers.forEach(function(h) {
+        options += '<option value="' + h.name + '"' + (selectedValue === h.name ? ' selected' : '') + '>' + h.name + '</option>';
+    });
+    options += '<option value="__custom__">+ Enter custom...</option>';
+    return options;
+}
+
+// Auto-populate haulers from existing project data (first-time migration)
+function migrateHaulersFromProjects() {
+    var haulers = getHaulers();
+    if (haulers.length > 0) return; // Already have haulers
+    
+    var allProjects = window._allProjectsList || [];
+    var seen = {};
+    
+    allProjects.forEach(function(p) {
+        var name = (p.waste_hauler || '').trim();
+        if (name && !seen[name.toLowerCase()]) {
+            seen[name.toLowerCase()] = true;
+            var h = {
+                id: 'hauler_' + Date.now() + '_' + Math.random().toString(36).substring(7),
+                name: name,
+                projects: [p.id]
+            };
+            haulers.push(h);
+        } else if (name && seen[name.toLowerCase()]) {
+            // Add project to existing hauler
+            var existing = haulers.find(function(hh) { return hh.name.toLowerCase() === name.toLowerCase(); });
+            if (existing) existing.projects.push(p.id);
+        }
+    });
+    
+    if (haulers.length > 0) {
+        saveHaulers(haulers);
+        console.log('Migrated ' + haulers.length + ' haulers from projects');
+    }
 }
 
 async function loadCustomerUploadHistory() {
@@ -11797,6 +12052,7 @@ window.onload = async function() {
 <nav class="nav" id="adminNav">
 <div class="nav-item active" onclick="showTab('dashboard')">🏠<span>Home</span></div>
 <div class="nav-item" onclick="showTab('projects')">📁<span>Projects</span></div>
+<div class="nav-item" onclick="startNewTicket()">➕<span>New Ticket</span></div>
 <div class="nav-item" onclick="showTab('reports')">📊<span>Reports</span></div>
 <div class="nav-item admin-only" onclick="showTab('settings')">⚙️<span>Settings</span></div>
 </nav>
