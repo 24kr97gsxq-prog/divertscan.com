@@ -3571,7 +3571,7 @@ async function runAIonEditTicket(ticketId) {
             });
             content.push({
                 type: 'text',
-                text: 'C&D waste auditor at Dalmex Recycling, Dallas TX. Estimate material composition percentages from these debris photos.\n\nRULES: Only count CLEAN SORTABLE materials as recyclable. Broken/contaminated wood = landfill. Mixed tangled debris = landfill. Landfill usually 25%+. Total must equal 100. Err toward MORE landfill.\n\nReturn ONLY JSON:\n{"wood":0,"concrete":0,"metal":0,"cardboard":0,"plastic":0,"drywall":0,"landfill":0}'
+                text: 'C&D waste auditor at Dalmex Recycling, Dallas TX. Estimate material composition percentages from these debris photos.\n\nRULES: Only count CLEAN SORTABLE materials as recyclable. Broken/contaminated wood = landfill. Mixed tangled debris = landfill. Landfill usually 25%+. Total must equal 100. Err toward MORE landfill.\n\nIMPORTANT: Return ONLY a flat JSON object with these exact keys, nothing else:\n{"wood":0,"concrete":0,"metal":0,"cardboard":0,"plastic":0,"drywall":0,"landfill":0}\n\nDo NOT nest inside another object. Do NOT add extra keys. Just the 7 material numbers that total 100.'
             });
             
             var response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -3591,10 +3591,41 @@ async function runAIonEditTicket(ticketId) {
             
             var data = await response.json();
             var text = data.content && data.content[0] ? data.content[0].text : '';
+            text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
             
-            var jsonMatch = text.match(/\{[^}]+\}/);
-            if (jsonMatch) {
-                var pcts = JSON.parse(jsonMatch[0]);
+            // Parse JSON — handle both flat and nested responses
+            var pcts = null;
+            try {
+                var parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+                // If it has a materials sub-object, use that
+                if (parsed.materials && typeof parsed.materials === 'object') {
+                    pcts = parsed.materials;
+                } else if (parsed.wood !== undefined || parsed.landfill !== undefined) {
+                    pcts = parsed;
+                }
+            } catch(pe) {
+                // Try to extract just the material numbers with individual regex
+                var woodM = text.match(/"wood"\s*:\s*(\d+)/);
+                var concreteM = text.match(/"concrete"\s*:\s*(\d+)/);
+                var metalM = text.match(/"metal"\s*:\s*(\d+)/);
+                var cardboardM = text.match(/"cardboard"\s*:\s*(\d+)/);
+                var plasticM = text.match(/"plastic"\s*:\s*(\d+)/);
+                var drywallM = text.match(/"drywall"\s*:\s*(\d+)/);
+                var landfillM = text.match(/"landfill"\s*:\s*(\d+)/);
+                if (landfillM) {
+                    pcts = {
+                        wood: woodM ? parseInt(woodM[1]) : 0,
+                        concrete: concreteM ? parseInt(concreteM[1]) : 0,
+                        metal: metalM ? parseInt(metalM[1]) : 0,
+                        cardboard: cardboardM ? parseInt(cardboardM[1]) : 0,
+                        plastic: plasticM ? parseInt(plasticM[1]) : 0,
+                        drywall: drywallM ? parseInt(drywallM[1]) : 0,
+                        landfill: parseInt(landfillM[1])
+                    };
+                }
+            }
+            
+            if (pcts) {
                 
                 document.querySelectorAll('.edit-mat-input').forEach(function(inp) {
                     var mat = inp.getAttribute('data-mat');
@@ -3607,7 +3638,7 @@ async function runAIonEditTicket(ticketId) {
                 
                 toast('✅ AI analysis complete — review all fields', 'success');
             } else {
-                resultDiv.innerHTML += '<div style="color:var(--amber-400);margin-top:4px">⚠️ Could not parse debris analysis</div>';
+                resultDiv.innerHTML += '<div style="color:var(--amber-400);margin-top:4px">⚠️ Could not parse debris analysis. Raw: ' + text.substring(0, 150) + '</div>';
             }
         } catch(err) {
             resultDiv.innerHTML += '<div style="color:var(--red-400);margin-top:4px">❌ Debris analysis error: ' + err.message + '</div>';
