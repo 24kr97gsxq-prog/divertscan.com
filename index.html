@@ -2001,7 +2001,7 @@ async function testApiKey(key) {
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20241022',
+                model: 'claude-haiku-4-5-20251001',
                 max_tokens: 10,
                 messages: [{ role: 'user', content: 'hi' }]
             })
@@ -3511,7 +3511,7 @@ async function runAIonEditTicket(ticketId) {
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-haiku-4-5-20241022',
+                    model: 'claude-haiku-4-5-20251001',
                     max_tokens: 768,
                     messages: [{
                         role: 'user',
@@ -3583,15 +3583,29 @@ async function runAIonEditTicket(ticketId) {
                     'anthropic-dangerous-direct-browser-access': 'true'
                 },
                 body: JSON.stringify({
-                    model: 'claude-haiku-4-5-20241022',
+                    model: 'claude-haiku-4-5-20251001',
                     max_tokens: 512,
                     messages: [{ role: 'user', content: content }]
                 })
             });
             
             var data = await response.json();
-            var text = data.content && data.content[0] ? data.content[0].text : '';
+            
+            // Check for API errors first
+            if (data.error) {
+                console.error('Debris API error:', data.error);
+                resultDiv.innerHTML += '<div style="color:var(--red-400);margin-top:4px">❌ API error: ' + (data.error.message || JSON.stringify(data.error)) + '</div>';
+                return;
+            }
+            
+            var text = '';
+            if (data.content && data.content.length > 0) {
+                for (var ci = 0; ci < data.content.length; ci++) {
+                    if (data.content[ci].text) text += data.content[ci].text;
+                }
+            }
             text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+            console.log('Debris AI raw response:', text.substring(0, 300));
             
             // Parse JSON — handle both flat and nested responses
             var pcts = null;
@@ -3655,19 +3669,17 @@ function filterPendingReviews() {
         toast('No pending uploads', 'info');
         return;
     }
-    // Expand each pending ticket
-    pendingTickets.forEach(function(t) {
-        var content = document.getElementById('ticket-expand-' + t.id);
-        var arrow = document.getElementById('ticket-arrow-' + t.id);
-        if (content && content.classList.contains('hidden')) {
-            content.classList.remove('hidden');
-            if (arrow) arrow.textContent = '▼';
-        }
-        // Highlight it
-        var card = document.getElementById('ticket-card-' + t.id);
-        if (card) card.style.borderLeft = '3px solid var(--amber-400)';
-    });
-    toast('Showing ' + pendingTickets.length + ' pending upload(s)', 'info');
+    // Open the first pending ticket directly into review mode
+    quickReviewTicket(pendingTickets[0].id);
+}
+
+// One-tap review: opens edit modal and auto-runs AI
+function quickReviewTicket(ticketId) {
+    editTicket(ticketId);
+    // Auto-trigger AI after a short delay to let the modal render
+    setTimeout(function() {
+        runAIonEditTicket(ticketId);
+    }, 500);
 }
 
 async function saveEditedTicket(ticketId) {
@@ -3839,11 +3851,12 @@ async function updateStats() {
                     if (!badge) {
                         var container = document.getElementById('recentTickets');
                         if (container) {
-                            var alertHtml = '<div id="pendingReviewBadge" style="margin-bottom:12px;padding:12px;border-radius:10px;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(217,119,6,0.1));border:1px solid var(--amber-400);cursor:pointer" onclick="filterPendingReviews()">' +
-                                '<div style="display:flex;align-items:center;gap:8px">' +
-                                '<span style="font-size:20px">⏳</span>' +
-                                '<div><div style="font-weight:600;color:var(--amber-400);font-size:13px">' + pending.length + ' Customer Upload' + (pending.length > 1 ? 's' : '') + ' Pending Review</div>' +
-                                '<div style="font-size:11px;color:var(--slate-400)">Tap to filter — these need AI analysis and verification</div></div>' +
+                            var alertHtml = '<div id="pendingReviewBadge" style="margin-bottom:12px;padding:14px;border-radius:10px;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(217,119,6,0.1));border:1px solid var(--amber-400);cursor:pointer" onclick="filterPendingReviews()">' +
+                                '<div style="display:flex;align-items:center;gap:10px">' +
+                                '<span style="font-size:24px">🤖</span>' +
+                                '<div style="flex:1"><div style="font-weight:600;color:var(--amber-400);font-size:14px">' + pending.length + ' Customer Upload' + (pending.length > 1 ? 's' : '') + ' Ready for Review</div>' +
+                                '<div style="font-size:11px;color:var(--slate-400)">Tap to auto-scan with AI — reads scale ticket + analyzes debris</div></div>' +
+                                '<div style="background:var(--emerald-500);color:white;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap">Review →</div>' +
                                 '</div></div>';
                             container.insertAdjacentHTML('beforebegin', alertHtml);
                         }
@@ -4268,7 +4281,7 @@ async function analyzeScaleTicket(imageData) {
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20241022',
+                model: 'claude-haiku-4-5-20251001',
                 max_tokens: 768,
                 messages: [{
                     role: 'user',
@@ -4896,7 +4909,7 @@ Return ONLY JSON:
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20241022',
+                model: 'claude-haiku-4-5-20251001',
                 max_tokens: 1024,
                 messages: [{
                     role: 'user',
@@ -8389,7 +8402,7 @@ Use professional, formal language. Be specific with numbers. Do not use bullet p
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20241022',
+                model: 'claude-haiku-4-5-20251001',
                 max_tokens: 1024,
                 messages: [{ role: 'user', content: prompt }]
             })
