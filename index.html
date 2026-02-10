@@ -1501,7 +1501,8 @@ Ticket will be saved with today's date and current material percentages.
 <button onclick="cancelCrop()" style="background:none;border:none;color:var(--slate-300);font-size:16px;padding:8px 12px;cursor:pointer">✕ Cancel</button>
 <div style="color:white;font-size:14px;font-weight:600" id="cropTitle">Crop Photo</div>
 <div style="display:flex;gap:8px">
-<button onclick="rotateCropImage()" style="background:var(--slate-700);border:1px solid var(--slate-500);color:white;padding:8px 12px;border-radius:8px;font-size:14px;cursor:pointer">🔄 Rotate</button>
+<button onclick="skipCrop()" style="background:var(--slate-700);border:1px solid var(--slate-500);color:white;padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer">Skip</button>
+<button onclick="rotateCropImage()" style="background:var(--slate-700);border:1px solid var(--slate-500);color:white;padding:8px 12px;border-radius:8px;font-size:14px;cursor:pointer">🔄</button>
 <button onclick="applyCrop()" style="background:var(--emerald-500);border:none;color:white;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">✓ Use</button>
 </div>
 </div>
@@ -1510,20 +1511,27 @@ Ticket will be saved with today's date and current material percentages.
 <canvas id="cropCanvas" style="position:absolute;top:0;left:0"></canvas>
 <div id="cropOverlay" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none">
 <div id="cropBox" style="position:absolute;border:2px solid var(--emerald-400);box-shadow:0 0 0 9999px rgba(0,0,0,0.55);pointer-events:auto;touch-action:none">
-<div style="position:absolute;top:-6px;left:-6px;width:28px;height:28px;border-top:3px solid white;border-left:3px solid white"></div>
-<div style="position:absolute;top:-6px;right:-6px;width:28px;height:28px;border-top:3px solid white;border-right:3px solid white"></div>
-<div style="position:absolute;bottom:-6px;left:-6px;width:28px;height:28px;border-bottom:3px solid white;border-left:3px solid white"></div>
-<div style="position:absolute;bottom:-6px;right:-6px;width:28px;height:28px;border-bottom:3px solid white;border-right:3px solid white"></div>
-<div style="position:absolute;top:33%;left:0;right:0;height:1px;background:rgba(255,255,255,0.25)"></div>
-<div style="position:absolute;top:66%;left:0;right:0;height:1px;background:rgba(255,255,255,0.25)"></div>
-<div style="position:absolute;left:33%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.25)"></div>
-<div style="position:absolute;left:66%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.25)"></div>
+<!-- Corner handles -->
+<div style="position:absolute;top:-8px;left:-8px;width:32px;height:32px;border-top:3px solid white;border-left:3px solid white"></div>
+<div style="position:absolute;top:-8px;right:-8px;width:32px;height:32px;border-top:3px solid white;border-right:3px solid white"></div>
+<div style="position:absolute;bottom:-8px;left:-8px;width:32px;height:32px;border-bottom:3px solid white;border-left:3px solid white"></div>
+<div style="position:absolute;bottom:-8px;right:-8px;width:32px;height:32px;border-bottom:3px solid white;border-right:3px solid white"></div>
+<!-- Edge handles — visible bars for dragging edges -->
+<div style="position:absolute;top:-3px;left:25%;width:50%;height:6px;background:white;border-radius:3px;opacity:0.7"></div>
+<div style="position:absolute;bottom:-3px;left:25%;width:50%;height:6px;background:white;border-radius:3px;opacity:0.7"></div>
+<div style="position:absolute;left:-3px;top:25%;height:50%;width:6px;background:white;border-radius:3px;opacity:0.7"></div>
+<div style="position:absolute;right:-3px;top:25%;height:50%;width:6px;background:white;border-radius:3px;opacity:0.7"></div>
+<!-- Rule of thirds grid -->
+<div style="position:absolute;top:33%;left:0;right:0;height:1px;background:rgba(255,255,255,0.2)"></div>
+<div style="position:absolute;top:66%;left:0;right:0;height:1px;background:rgba(255,255,255,0.2)"></div>
+<div style="position:absolute;left:33%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
+<div style="position:absolute;left:66%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
 </div>
 </div>
 </div>
 
 <div style="padding:12px 16px;background:var(--slate-800);border-top:1px solid var(--slate-600);text-align:center">
-<div style="color:var(--slate-400);font-size:11px">Drag the corners to frame just the load. Tap Rotate if the photo is sideways.</div>
+<div style="color:var(--slate-400);font-size:11px">Drag edges or corners to crop. Tap Skip to use full photo.</div>
 </div>
 </div>
 
@@ -4267,37 +4275,50 @@ function setupCropHandlers() {
 
 function cropPointerDown(e) {
     e.preventDefault();
+    e.stopPropagation();
     var b = cropState.cropBox;
     var px = e.clientX;
     var py = e.clientY;
     
-    // Determine if near a corner (within 40px for fat finger)
-    var cornerSize = 40;
-    var nearLeft = Math.abs(px - b.x) < cornerSize;
-    var nearRight = Math.abs(px - (b.x + b.w)) < cornerSize;
-    var nearTop = Math.abs(py - b.y) < cornerSize;
-    var nearBottom = Math.abs(py - (b.y + b.h)) < cornerSize;
+    // Hit zones — corners (50px) and edges (30px)
+    var cz = 50; // corner zone
+    var ez = 30; // edge zone
+    var nearLeft = Math.abs(px - b.x) < cz;
+    var nearRight = Math.abs(px - (b.x + b.w)) < cz;
+    var nearTop = Math.abs(py - b.y) < cz;
+    var nearBottom = Math.abs(py - (b.y + b.h)) < cz;
     
+    var edgeLeft = Math.abs(px - b.x) < ez && py > b.y + cz && py < b.y + b.h - cz;
+    var edgeRight = Math.abs(px - (b.x + b.w)) < ez && py > b.y + cz && py < b.y + b.h - cz;
+    var edgeTop = Math.abs(py - b.y) < ez && px > b.x + cz && px < b.x + b.w - cz;
+    var edgeBottom = Math.abs(py - (b.y + b.h)) < ez && px > b.x + cz && px < b.x + b.w - cz;
+    
+    // Priority: corners > edges > move
     if (nearTop && nearLeft) cropState.dragMode = 'tl';
     else if (nearTop && nearRight) cropState.dragMode = 'tr';
     else if (nearBottom && nearLeft) cropState.dragMode = 'bl';
     else if (nearBottom && nearRight) cropState.dragMode = 'br';
+    else if (edgeLeft) cropState.dragMode = 'left';
+    else if (edgeRight) cropState.dragMode = 'right';
+    else if (edgeTop) cropState.dragMode = 'top';
+    else if (edgeBottom) cropState.dragMode = 'bottom';
     else cropState.dragMode = 'move';
     
     cropState.startX = px;
     cropState.startY = py;
-    cropState.startBox = { ...b };
+    cropState.startBox = { x: b.x, y: b.y, w: b.w, h: b.h };
 }
 
 function cropPointerMove(e) {
     if (!cropState.dragMode) return;
     e.preventDefault();
+    e.stopPropagation();
     
     var dx = e.clientX - cropState.startX;
     var dy = e.clientY - cropState.startY;
     var sb = cropState.startBox;
     var b = cropState.cropBox;
-    var minSize = 60;
+    var minSize = 50;
     
     // Bounds
     var maxX = cropState.offsetX + cropState.displayW;
@@ -4316,19 +4337,29 @@ function cropPointerMove(e) {
         b.x = newX;
         b.y = newY;
     } else if (cropState.dragMode === 'tr') {
-        var newW = Math.max(minSize, Math.min(maxX - sb.x, sb.w + dx));
+        b.w = Math.max(minSize, Math.min(maxX - sb.x, sb.w + dx));
         var newY = Math.max(minY, Math.min(sb.y + sb.h - minSize, sb.y + dy));
-        b.w = newW;
         b.h = sb.h + (sb.y - newY);
         b.y = newY;
     } else if (cropState.dragMode === 'bl') {
         var newX = Math.max(minX, Math.min(sb.x + sb.w - minSize, sb.x + dx));
-        var newH = Math.max(minSize, Math.min(maxY - sb.y, sb.h + dy));
         b.w = sb.w + (sb.x - newX);
         b.x = newX;
-        b.h = newH;
+        b.h = Math.max(minSize, Math.min(maxY - sb.y, sb.h + dy));
     } else if (cropState.dragMode === 'br') {
         b.w = Math.max(minSize, Math.min(maxX - sb.x, sb.w + dx));
+        b.h = Math.max(minSize, Math.min(maxY - sb.y, sb.h + dy));
+    } else if (cropState.dragMode === 'left') {
+        var newX = Math.max(minX, Math.min(sb.x + sb.w - minSize, sb.x + dx));
+        b.w = sb.w + (sb.x - newX);
+        b.x = newX;
+    } else if (cropState.dragMode === 'right') {
+        b.w = Math.max(minSize, Math.min(maxX - sb.x, sb.w + dx));
+    } else if (cropState.dragMode === 'top') {
+        var newY = Math.max(minY, Math.min(sb.y + sb.h - minSize, sb.y + dy));
+        b.h = sb.h + (sb.y - newY);
+        b.y = newY;
+    } else if (cropState.dragMode === 'bottom') {
         b.h = Math.max(minSize, Math.min(maxY - sb.y, sb.h + dy));
     }
     
@@ -4400,6 +4431,31 @@ function applyCrop() {
 
 function cancelCrop() {
     closeCropModal();
+}
+
+function skipCrop() {
+    // Use the original image without any cropping
+    var img = cropState.img;
+    var canvas = document.createElement('canvas');
+    
+    // Handle rotation even when skipping crop
+    var isRotated = (cropState.rotation % 180 !== 0);
+    canvas.width = isRotated ? img.height : img.width;
+    canvas.height = isRotated ? img.width : img.height;
+    var ctx = canvas.getContext('2d');
+    
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(cropState.rotation * Math.PI / 180);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    ctx.restore();
+    
+    var result = canvas.toDataURL('image/jpeg', 0.85);
+    closeCropModal();
+    
+    if (cropState.callback) {
+        cropState.callback(result);
+    }
 }
 
 function closeCropModal() {
