@@ -3275,6 +3275,44 @@ function editTicket(ticketId) {
     const detailModal = document.getElementById('ticketDetailModal');
     if (detailModal) detailModal.remove();
     
+    // Build photo section
+    var photoHtml = '';
+    if (ticket.scale_ticket_photo || ticket.debris_photo_1 || ticket.debris_photo_2 || ticket.debris_photo_3) {
+        photoHtml = '<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">UPLOADED PHOTOS</div><div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;overflow-x:auto">';
+        if (ticket.scale_ticket_photo) {
+            _photoViewerData['edit_st_' + ticketId] = ticket.scale_ticket_photo;
+            photoHtml += '<div style="text-align:center;flex-shrink:0"><img src="' + ticket.scale_ticket_photo + '" style="width:100px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--accent-info)" onclick="openPhotoViewer(\'' + (ticket.ticket_number || '') + '\', \'Scale Ticket\', \'edit_st_' + ticketId + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Scale Ticket</div></div>';
+        }
+        if (ticket.debris_photo_1) {
+            _photoViewerData['edit_dp1_' + ticketId] = ticket.debris_photo_1;
+            photoHtml += '<div style="text-align:center;flex-shrink:0"><img src="' + ticket.debris_photo_1 + '" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (ticket.ticket_number || '') + '\', \'Debris 1\', \'edit_dp1_' + ticketId + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 1</div></div>';
+        }
+        if (ticket.debris_photo_2) {
+            _photoViewerData['edit_dp2_' + ticketId] = ticket.debris_photo_2;
+            photoHtml += '<div style="text-align:center;flex-shrink:0"><img src="' + ticket.debris_photo_2 + '" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (ticket.ticket_number || '') + '\', \'Debris 2\', \'edit_dp2_' + ticketId + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 2</div></div>';
+        }
+        if (ticket.debris_photo_3) {
+            _photoViewerData['edit_dp3_' + ticketId] = ticket.debris_photo_3;
+            photoHtml += '<div style="text-align:center;flex-shrink:0"><img src="' + ticket.debris_photo_3 + '" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid var(--accent-primary)" onclick="openPhotoViewer(\'' + (ticket.ticket_number || '') + '\', \'Debris 3\', \'edit_dp3_' + ticketId + '\')"><div style="font-size:9px;color:var(--text-muted);margin-top:2px">Debris 3</div></div>';
+        }
+        photoHtml += '</div>';
+    }
+    
+    // Customer upload banner
+    var customerBanner = '';
+    if (ticket.submitted_by === 'customer') {
+        customerBanner = '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(217,119,6,0.1));border:1px solid var(--amber-400);border-radius:8px;padding:10px;margin-bottom:16px">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--amber-400)">⏳ Customer Upload — Pending Review</div>' +
+            (ticket.customer_notes ? '<div style="font-size:11px;color:var(--slate-300);margin-top:6px;padding:6px;background:var(--slate-800);border-radius:4px">📝 Customer notes: ' + ticket.customer_notes + '</div>' : '') +
+            '</div>';
+    }
+    
+    // AI button — show if there are any photos to analyze
+    var aiButtonHtml = '';
+    if (ticket.scale_ticket_photo || ticket.debris_photo_1 || ticket.debris_photo_2 || ticket.debris_photo_3) {
+        aiButtonHtml = '<button class="btn btn-primary" onclick="runAIonEditTicket(\'' + ticketId + '\')" style="width:100%;margin-bottom:16px;padding:12px;background:linear-gradient(135deg,#7c3aed,#5b21b6)">🤖 Run AI — OCR Scale Ticket + Analyze Debris</button>';
+    }
+    
     const modal = document.createElement('div');
     modal.id = 'editTicketModal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -3284,13 +3322,18 @@ function editTicket(ticketId) {
         <div style="background:var(--bg-secondary);border-radius:16px;max-width:550px;width:100%;max-height:90vh;overflow-y:auto">
             <div style="background:linear-gradient(135deg, var(--accent-warning), #b45309);padding:16px 20px;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">
                 <div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.7)">EDIT TICKET</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.7)">${ticket.submitted_by === 'customer' ? 'CUSTOMER UPLOAD — REVIEW' : 'EDIT TICKET'}</div>
                     <div style="font-size:20px;font-weight:700;color:white">#${ticket.ticket_number}</div>
                 </div>
                 <button onclick="document.getElementById('editTicketModal').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
             </div>
             
             <div style="padding:20px">
+                ${customerBanner}
+                ${photoHtml}
+                ${aiButtonHtml}
+                <div id="editAIResult" class="hidden" style="margin-bottom:16px;padding:12px;background:var(--slate-800);border-radius:8px;border:1px solid var(--emerald-500)"></div>
+                
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
                     <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Ticket #</label>
@@ -3385,6 +3428,165 @@ function updateEditTotal() {
     }
 }
 
+// Run AI analysis on photos from within the edit ticket modal
+async function runAIonEditTicket(ticketId) {
+    var ticket = tickets.find(function(t) { return t.id === ticketId; });
+    if (!ticket) { toast('Ticket not found', 'error'); return; }
+    
+    var apiKey = localStorage.getItem('divertscan_openai');
+    if (!apiKey || apiKey.length < 10) {
+        toast('Add Anthropic API key in Settings first', 'error');
+        return;
+    }
+    
+    var resultDiv = document.getElementById('editAIResult');
+    resultDiv.classList.remove('hidden');
+    
+    // Step 1: OCR the scale ticket if available
+    if (ticket.scale_ticket_photo) {
+        resultDiv.innerHTML = '<div style="text-align:center;color:var(--slate-400)">📄 Reading scale ticket with Claude AI...</div>';
+        
+        try {
+            var stMediaType = ticket.scale_ticket_photo.split(';')[0].split(':')[1] || 'image/jpeg';
+            var stBase64 = ticket.scale_ticket_photo.split(',')[1];
+            
+            var ocrResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 768,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: stMediaType, data: stBase64 } },
+                            { type: 'text', text: 'You are reading a construction/demolition scale ticket. Read EVERY field carefully.\n\nReturn ONLY JSON:\n{"ticket_number":"string","date":"MM/DD/YYYY","gross_lbs":number,"tare_lbs":number,"net_lbs":number,"hauler":"string","vehicle_id":"string or null"}\n\nRULES:\n- Read actual numbers — do NOT estimate or round\n- Net = Gross minus Tare. If not printed, calculate it\n- Use null for truly unreadable fields' }
+                        ]
+                    }]
+                })
+            });
+            
+            var ocrData = await ocrResponse.json();
+            if (ocrData.content && ocrData.content[0]) {
+                var ocrText = ocrData.content[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                var ocrMatch = ocrText.match(/\{[\s\S]*\}/);
+                if (ocrMatch) {
+                    var ocrResult = JSON.parse(ocrMatch[0]);
+                    
+                    // Auto-fill the edit form with OCR data
+                    if (ocrResult.ticket_number) document.getElementById('editTicketNum').value = ocrResult.ticket_number;
+                    if (ocrResult.hauler) document.getElementById('editHauler').value = ocrResult.hauler;
+                    if (ocrResult.gross_lbs) document.getElementById('editGrossLbs').value = ocrResult.gross_lbs;
+                    if (ocrResult.tare_lbs) document.getElementById('editTareLbs').value = ocrResult.tare_lbs;
+                    if (ocrResult.date) {
+                        var d = new Date(ocrResult.date);
+                        if (!isNaN(d)) document.getElementById('editServiceDate').value = d.toISOString().split('T')[0];
+                    }
+                    
+                    resultDiv.innerHTML = '<div style="color:var(--emerald-400);font-weight:600;margin-bottom:4px">📄 Scale Ticket OCR Complete</div>' +
+                        '<div style="font-size:11px;color:var(--slate-300)">Ticket #' + (ocrResult.ticket_number || '?') + ' • Gross: ' + (ocrResult.gross_lbs || 0).toLocaleString() + ' lbs • Tare: ' + (ocrResult.tare_lbs || 0).toLocaleString() + ' lbs • Net: ' + (ocrResult.net_lbs || 0).toLocaleString() + ' lbs</div>';
+                    
+                    toast('✅ Scale ticket read — weights auto-filled', 'success');
+                }
+            }
+        } catch(err) {
+            console.error('OCR error:', err);
+            resultDiv.innerHTML = '<div style="color:var(--amber-400)">⚠️ Could not read scale ticket: ' + err.message + '</div>';
+        }
+    }
+    
+    // Step 2: Analyze debris photos for material percentages
+    var photos = [];
+    if (ticket.debris_photo_1) photos.push(ticket.debris_photo_1);
+    if (ticket.debris_photo_2) photos.push(ticket.debris_photo_2);
+    if (ticket.debris_photo_3) photos.push(ticket.debris_photo_3);
+    
+    if (photos.length > 0) {
+        var prevHtml = resultDiv.innerHTML;
+        resultDiv.innerHTML = prevHtml + '<div style="text-align:center;color:var(--slate-400);margin-top:8px">🤖 Analyzing ' + photos.length + ' debris photo(s)...</div>';
+        
+        try {
+            var content = [];
+            photos.forEach(function(photo) {
+                var mediaType = photo.split(';')[0].split(':')[1] || 'image/jpeg';
+                var base64 = photo.split(',')[1];
+                content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } });
+            });
+            content.push({
+                type: 'text',
+                text: 'C&D waste auditor at Dalmex Recycling, Dallas TX. Estimate material composition percentages from these debris photos.\n\nRULES: Only count CLEAN SORTABLE materials as recyclable. Broken/contaminated wood = landfill. Mixed tangled debris = landfill. Landfill usually 25%+. Total must equal 100. Err toward MORE landfill.\n\nReturn ONLY JSON:\n{"wood":0,"concrete":0,"metal":0,"cardboard":0,"plastic":0,"drywall":0,"landfill":0}'
+            });
+            
+            var response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 512,
+                    messages: [{ role: 'user', content: content }]
+                })
+            });
+            
+            var data = await response.json();
+            var text = data.content && data.content[0] ? data.content[0].text : '';
+            
+            var jsonMatch = text.match(/\{[^}]+\}/);
+            if (jsonMatch) {
+                var pcts = JSON.parse(jsonMatch[0]);
+                
+                document.querySelectorAll('.edit-mat-input').forEach(function(inp) {
+                    var mat = inp.getAttribute('data-mat');
+                    if (pcts[mat] !== undefined) inp.value = pcts[mat];
+                });
+                updateEditTotal();
+                
+                resultDiv.innerHTML = '<div style="color:var(--emerald-400);font-weight:600;margin-bottom:4px">🤖 Full AI Analysis Complete</div>' +
+                    '<div style="font-size:11px;color:var(--slate-300)">Scale ticket OCR + debris material percentages auto-filled. Review and adjust, then Save.</div>';
+                
+                toast('✅ AI analysis complete — review all fields', 'success');
+            } else {
+                resultDiv.innerHTML += '<div style="color:var(--amber-400);margin-top:4px">⚠️ Could not parse debris analysis</div>';
+            }
+        } catch(err) {
+            resultDiv.innerHTML += '<div style="color:var(--red-400);margin-top:4px">❌ Debris analysis error: ' + err.message + '</div>';
+        }
+    } else if (!ticket.scale_ticket_photo) {
+        resultDiv.innerHTML = '<div style="color:var(--red-400)">No photos available to analyze</div>';
+    }
+}
+
+// Filter ticket list to show only pending customer uploads
+function filterPendingReviews() {
+    var pendingTickets = tickets.filter(function(t) { return t.submitted_by === 'customer' && !t.human_verified; });
+    if (pendingTickets.length === 0) {
+        toast('No pending uploads', 'info');
+        return;
+    }
+    // Expand each pending ticket
+    pendingTickets.forEach(function(t) {
+        var content = document.getElementById('ticket-expand-' + t.id);
+        var arrow = document.getElementById('ticket-arrow-' + t.id);
+        if (content && content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            if (arrow) arrow.textContent = '▼';
+        }
+        // Highlight it
+        var card = document.getElementById('ticket-card-' + t.id);
+        if (card) card.style.borderLeft = '3px solid var(--amber-400)';
+    });
+    toast('Showing ' + pendingTickets.length + ' pending upload(s)', 'info');
+}
+
 async function saveEditedTicket(ticketId) {
     // Validate materials total
     const inputs = document.querySelectorAll('.edit-mat-input');
@@ -3436,6 +3638,8 @@ async function saveEditedTicket(ticketId) {
         landfill_tons: ((mats.landfill || 0) / 100) * netTons,
         diversion_pct: 100 - (mats.landfill || 0),
         diverted_tons: netTons * ((100 - (mats.landfill || 0)) / 100),
+        human_verified: true,
+        is_closed: true,
         updated_at: new Date().toISOString()
     };
     
