@@ -507,8 +507,9 @@ DivertScan™ v7.7 Enterprise • Powered by Claude AI
 <div class="header hidden" id="customerHeader">
 <div class="logo">DivertScan™ <span>PORTAL</span></div>
 <div class="user-badge">
-<span id="portalProjectName">Project</span>
-<span class="user-role customer">VIEW ONLY</span>
+<span id="portalProjectName" onclick="showCustomerProjectSwitcher()" style="cursor:pointer">Project</span>
+<span class="user-role customer" id="portalProjectSwitchHint" style="display:none;cursor:pointer" onclick="showCustomerProjectSwitcher()">▼</span>
+<span class="user-role customer" id="portalViewBadge">VIEW ONLY</span>
 <button class="logout-btn" onclick="doLogout()">Exit</button>
 </div>
 </div>
@@ -889,31 +890,18 @@ Date, Ticket No, GWT (lbs), Tare (lbs), Net (lbs), Tons, Wood %, Metal %, OCC %,
 <button class="btn btn-primary" onclick="customerUploadMultiDebris()" style="flex:1;padding:10px;font-size:12px">📁 Upload Photos</button>
 </div>
 
-<!-- Basic Info -->
-<div style="border-top:1px solid var(--slate-700);padding-top:16px">
-<div style="font-size:14px;font-weight:600;margin-bottom:12px">📋 Ticket Details</div>
-
-<div class="form-group">
-<label class="form-label">Hauler / Trucking Company</label>
-<input type="text" id="custHauler" class="form-input" placeholder="e.g., Jaguar Waste, Republic Services...">
+<!-- Quick Note (optional) -->
+<div style="border-top:1px solid var(--slate-700);padding-top:12px">
+<div class="form-group" style="margin-bottom:0">
+<label class="form-label">Quick Note <span style="font-size:10px;color:var(--slate-500)">(Optional)</span></label>
+<input type="text" id="custNotes" class="form-input" placeholder="e.g., Building 3 demo, heavy wood load...">
 </div>
-
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-<div class="form-group">
-<label class="form-label">Service Date</label>
-<input type="date" id="custServiceDate" class="form-input">
+<div style="font-size:10px;color:var(--slate-500);margin-top:4px">Dalmex reads the ticket details from the photo — no need to type them in.</div>
 </div>
-<div class="form-group">
-<label class="form-label">Ticket # (if visible)</label>
-<input type="text" id="custTicketNum" class="form-input" placeholder="e.g., 83401">
-</div>
-</div>
-
-<div class="form-group">
-<label class="form-label">Notes for Dalmex <span style="font-size:10px;color:var(--slate-500)">(Optional)</span></label>
-<textarea id="custNotes" class="form-input" rows="2" placeholder="e.g., Mixed load from building 3, mostly drywall and wood..." style="resize:vertical"></textarea>
-</div>
-</div>
+<!-- Hidden fields for backward compatibility -->
+<input type="hidden" id="custHauler" value="">
+<input type="hidden" id="custServiceDate" value="">
+<input type="hidden" id="custTicketNum" value="">
 </div>
 
 <!-- Submit Button -->
@@ -1300,6 +1288,22 @@ Compact mode (more content)
 <input type="text" id="newHaulerName" class="form-input" placeholder="New hauler name (e.g., Jaguar Waste Management)" style="flex:1;margin:0">
 <button class="btn btn-primary" onclick="addHauler()" style="white-space:nowrap;padding:8px 14px">➕ Add</button>
 </div>
+</div>
+
+<!-- Customer Account Manager — Assign Projects to Customer Codes -->
+<div class="card">
+<div style="font-size:14px;font-weight:600;margin-bottom:4px">👤 Customer Accounts</div>
+<p style="font-size:11px;color:var(--slate-400);margin-bottom:12px">Create customer login codes and assign projects they can access. Customers log in via the Portal tab.</p>
+
+<div id="customerAccountList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
+<!-- Rendered dynamically by renderCustomerAccounts() -->
+</div>
+
+<div style="display:flex;gap:8px">
+<input type="text" id="newCustomerCode" class="form-input" placeholder="New access code (e.g., JAGUAR)" style="flex:1;margin:0;text-transform:uppercase;font-family:monospace;letter-spacing:2px">
+<button class="btn btn-primary" onclick="addCustomerAccount()" style="white-space:nowrap;padding:8px 14px">➕ Add</button>
+</div>
+<div style="font-size:10px;color:var(--slate-500);margin-top:6px">Code must be unique. Customer will type this code in the Portal login.</div>
 </div>
 
 <!-- Verified Facility Network -->
@@ -1970,6 +1974,7 @@ async function initializeApp() {
     // Migrate haulers from existing project data if first time
     migrateHaulersFromProjects();
     renderHaulerManager();
+    renderCustomerAccounts();
     
     // Then load tickets for the active project
     if (currentProject) {
@@ -2029,8 +2034,6 @@ function showTab(tab) {
         if (custUploadTab) {
             custUploadTab.classList.remove('hidden');
             loadCustomerUploadHistory();
-            var dateInput = document.getElementById('custServiceDate');
-            if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
         }
     } else if (tab === 'operatorScan') {
         if (opScanTab) {
@@ -2057,6 +2060,7 @@ function showTab(tab) {
         updateKeyStatusIndicators();
         renderAllFacilities();
         renderHaulerManager();
+        renderCustomerAccounts();
     }
     
     // Update nav active states
@@ -9912,14 +9916,32 @@ async function doPortalLogin() {
     }
     
     try {
-        var result = await sb.from('projects').select('*').eq('access_code', code).single();
-        if (result.error || !result.data) {
+        // First try exact access_code match
+        var result = await sb.from('projects').select('*').eq('access_code', code);
+        
+        if (result.error || !result.data || result.data.length === 0) {
             document.getElementById('portalLoginError').textContent = 'Invalid access code';
             return;
         }
+        
         userRole = 'customer';
-        currentProject = result.data;
-        localStorage.setItem('divertscan_session', JSON.stringify({ role: 'customer', projectId: result.data.id, time: Date.now() }));
+        
+        if (result.data.length === 1) {
+            // Single project — direct login
+            currentProject = result.data[0];
+            window._customerProjects = result.data;
+        } else {
+            // Multiple projects share this code — store all, default to first
+            window._customerProjects = result.data;
+            currentProject = result.data[0];
+        }
+        
+        localStorage.setItem('divertscan_session', JSON.stringify({ 
+            role: 'customer', 
+            accessCode: code,
+            projectId: currentProject.id, 
+            time: Date.now() 
+        }));
         showMainApp();
     } catch(err) {
         document.getElementById('portalLoginError').textContent = 'Error: ' + err.message;
@@ -9940,6 +9962,68 @@ function doAdminLogin() {
 }
 
 // Legacy login functions removed — unified into doPortalLogin()
+
+function showCustomerProjectSwitcher() {
+    var custProjects = window._customerProjects || [];
+    if (custProjects.length <= 1) return;
+    
+    var existing = document.getElementById('custProjectSwitchModal');
+    if (existing) existing.remove();
+    
+    var modal = document.createElement('div');
+    modal.id = 'custProjectSwitchModal';
+    modal.className = 'modal active';
+    modal.innerHTML = '<div class="modal-content" style="max-width:400px">' +
+        '<div class="modal-header">' +
+            '<div class="modal-title">📁 Switch Project</div>' +
+            '<button class="modal-close" onclick="document.getElementById(\'custProjectSwitchModal\').remove()">×</button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+            '<div style="font-size:12px;color:var(--slate-400);margin-bottom:12px">Select a project to view:</div>' +
+            custProjects.map(function(p) {
+                var isActive = currentProject && currentProject.id === p.id;
+                return '<div onclick="switchCustomerProject(\'' + p.id + '\')" style="padding:14px 16px;background:' + (isActive ? 'var(--emerald-500)' : 'var(--slate-800)') + ';border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px solid ' + (isActive ? 'var(--emerald-400)' : 'var(--slate-700)') + '">' +
+                    '<div style="font-size:14px;font-weight:600;color:' + (isActive ? 'white' : 'var(--slate-200)') + '">' + (p.name || 'Unnamed') + '</div>' +
+                    '<div style="font-size:11px;color:' + (isActive ? 'rgba(255,255,255,0.8)' : 'var(--slate-400)') + ';margin-top:2px">' + (p.address || '') + '</div>' +
+                    (isActive ? '<div style="font-size:10px;color:rgba(255,255,255,0.9);margin-top:4px">✅ Currently viewing</div>' : '') +
+                '</div>';
+            }).join('') +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(modal);
+}
+
+async function switchCustomerProject(projectId) {
+    var custProjects = window._customerProjects || [];
+    var proj = custProjects.find(function(p) { return p.id === projectId; });
+    if (!proj) return;
+    
+    currentProject = proj;
+    document.getElementById('portalProjectName').textContent = proj.name;
+    
+    // Update session
+    var session = JSON.parse(localStorage.getItem('divertscan_session') || '{}');
+    session.projectId = proj.id;
+    localStorage.setItem('divertscan_session', JSON.stringify(session));
+    
+    // Close modal
+    var modal = document.getElementById('custProjectSwitchModal');
+    if (modal) modal.remove();
+    
+    // Reload data for new project
+    await loadAllTicketsForProject();
+    await updateStats();
+    loadCustomerUploadHistory();
+    
+    // Re-generate report if on reports tab
+    var reportSel = document.getElementById('reportProjectSelect');
+    if (reportSel) {
+        reportSel.value = proj.id;
+        generateReport();
+    }
+    
+    toast('Switched to ' + proj.name, 'success');
+}
 
 function showMainApp() {
     document.getElementById('loginScreen').classList.add('hidden');
@@ -10790,6 +10874,197 @@ function migrateHaulersFromProjects() {
     }
 }
 
+// ========== CUSTOMER ACCOUNT MANAGER ==========
+// Uses the project.access_code field — assigns same code to multiple projects
+
+function renderCustomerAccounts() {
+    var container = document.getElementById('customerAccountList');
+    if (!container) return;
+    
+    var allProjects = window._allProjectsList || [];
+    if (allProjects.length === 0) {
+        container.innerHTML = '<div style="color:var(--slate-500);font-size:12px">No projects yet. Create projects first.</div>';
+        return;
+    }
+    
+    // Group projects by access_code
+    var codeMap = {};
+    allProjects.forEach(function(p) {
+        var code = (p.access_code || '').trim().toUpperCase();
+        if (code) {
+            if (!codeMap[code]) codeMap[code] = [];
+            codeMap[code].push(p);
+        }
+    });
+    
+    // Also find unassigned projects
+    var unassigned = allProjects.filter(function(p) { return !p.access_code || !p.access_code.trim(); });
+    
+    var codes = Object.keys(codeMap).sort();
+    
+    if (codes.length === 0) {
+        container.innerHTML = '<div style="color:var(--slate-500);font-size:12px;padding:8px 0">No customer accounts yet. Add a code below to get started.</div>';
+        return;
+    }
+    
+    container.innerHTML = codes.map(function(code) {
+        var projects = codeMap[code];
+        var projectNames = projects.map(function(p) { return p.name || 'Unnamed'; }).join(', ');
+        
+        return '<div style="background:var(--slate-800);border-radius:10px;padding:14px;border:1px solid var(--slate-700)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+                '<div>' +
+                    '<div style="font-weight:700;font-size:14px;font-family:monospace;letter-spacing:2px;color:var(--emerald-400)">' + code + '</div>' +
+                    '<div style="font-size:10px;color:var(--slate-400);margin-top:2px">' + projects.length + ' project' + (projects.length > 1 ? 's' : '') + ' assigned</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px">' +
+                    '<button onclick="editCustomerAccount(\'' + code + '\')" class="btn btn-secondary" style="padding:4px 10px;font-size:10px">✏️ Manage</button>' +
+                    '<button onclick="removeCustomerAccount(\'' + code + '\')" class="btn" style="background:var(--red-500);color:white;padding:4px 10px;font-size:10px">🗑️</button>' +
+                '</div>' +
+            '</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+                projects.map(function(p) {
+                    return '<span style="background:var(--slate-700);color:var(--slate-300);padding:3px 8px;border-radius:6px;font-size:10px">📁 ' + (p.name || 'Unnamed') + '</span>';
+                }).join('') +
+            '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function addCustomerAccount() {
+    var input = document.getElementById('newCustomerCode');
+    var code = (input.value || '').trim().toUpperCase();
+    if (!code) { toast('Enter an access code', 'error'); return; }
+    if (code === 'DALMEX' || code === 'DALMEX2025' || code === 'CREW') {
+        toast('That code is reserved for Dalmex crew', 'error'); return;
+    }
+    
+    // Check if code already exists
+    var allProjects = window._allProjectsList || [];
+    var existing = allProjects.some(function(p) { return (p.access_code || '').toUpperCase() === code; });
+    if (existing) {
+        toast('Code "' + code + '" already exists — tap Manage to edit', 'info');
+        input.value = '';
+        return;
+    }
+    
+    input.value = '';
+    // Open the assignment modal for this new code
+    editCustomerAccount(code);
+}
+
+function editCustomerAccount(code) {
+    var allProjects = window._allProjectsList || [];
+    
+    var existing = document.getElementById('custAccountModal');
+    if (existing) existing.remove();
+    
+    var modal = document.createElement('div');
+    modal.id = 'custAccountModal';
+    modal.className = 'modal active';
+    
+    var projectCheckboxes = allProjects.map(function(p) {
+        var isAssigned = (p.access_code || '').toUpperCase() === code;
+        return '<label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--slate-800);border-radius:8px;cursor:pointer;border:1px solid ' + (isAssigned ? 'var(--emerald-500)' : 'var(--slate-700)') + '" onclick="this.style.borderColor=this.querySelector(\'input\').checked?\'var(--emerald-500)\':\'var(--slate-700)\'">' +
+            '<input type="checkbox" id="custAcct_' + p.id + '" ' + (isAssigned ? 'checked' : '') + ' onchange="this.parentElement.style.borderColor=this.checked?\'var(--emerald-500)\':\'var(--slate-700)\'" style="width:20px;height:20px;accent-color:var(--emerald-500);flex-shrink:0">' +
+            '<div style="flex:1">' +
+                '<div style="font-size:13px;font-weight:600">' + (p.name || 'Unnamed') + '</div>' +
+                '<div style="font-size:10px;color:var(--slate-400)">' + (p.address || 'No address') + '</div>' +
+                (p.access_code && p.access_code.toUpperCase() !== code ? '<div style="font-size:10px;color:var(--amber-400);margin-top:2px">⚠️ Currently assigned to: ' + p.access_code + '</div>' : '') +
+            '</div>' +
+        '</label>';
+    }).join('');
+    
+    modal.innerHTML = '<div class="modal-content" style="max-width:450px">' +
+        '<div class="modal-header">' +
+            '<div class="modal-title">👤 Customer: ' + code + '</div>' +
+            '<button class="modal-close" onclick="document.getElementById(\'custAccountModal\').remove()">×</button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+            '<div style="font-size:12px;color:var(--slate-400);margin-bottom:12px">Check the projects this customer can access when they log in with code <strong style="color:var(--emerald-400);font-family:monospace">' + code + '</strong>:</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto">' +
+                projectCheckboxes +
+            '</div>' +
+        '</div>' +
+        '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="document.getElementById(\'custAccountModal\').remove()" style="flex:1">Cancel</button>' +
+            '<button class="btn btn-primary" onclick="saveCustomerAccount(\'' + code + '\')" style="flex:1">💾 Save</button>' +
+        '</div>' +
+    '</div>';
+    
+    document.body.appendChild(modal);
+}
+
+async function saveCustomerAccount(code) {
+    var allProjects = window._allProjectsList || [];
+    var updates = [];
+    
+    allProjects.forEach(function(p) {
+        var checkbox = document.getElementById('custAcct_' + p.id);
+        if (!checkbox) return;
+        
+        var currentCode = (p.access_code || '').toUpperCase();
+        var shouldAssign = checkbox.checked;
+        
+        if (shouldAssign && currentCode !== code) {
+            // Assign this project to the code
+            updates.push({ id: p.id, access_code: code });
+            p.access_code = code;
+        } else if (!shouldAssign && currentCode === code) {
+            // Remove this project from the code
+            updates.push({ id: p.id, access_code: '' });
+            p.access_code = '';
+        }
+    });
+    
+    if (updates.length === 0) {
+        document.getElementById('custAccountModal').remove();
+        toast('No changes made', 'info');
+        return;
+    }
+    
+    // Save to Supabase
+    if (sb) {
+        showLoading('Saving assignments...');
+        var errors = 0;
+        for (var i = 0; i < updates.length; i++) {
+            var u = updates[i];
+            var result = await sb.from('projects').update({ access_code: u.access_code }).eq('id', u.id);
+            if (result.error) {
+                console.error('Update error:', result.error);
+                errors++;
+            }
+        }
+        hideLoading();
+        if (errors > 0) {
+            toast(errors + ' update(s) failed — check console', 'error');
+        }
+    }
+    
+    document.getElementById('custAccountModal').remove();
+    renderCustomerAccounts();
+    toast('Customer "' + code + '" updated — ' + updates.length + ' project(s) changed', 'success');
+}
+
+async function removeCustomerAccount(code) {
+    if (!confirm('Remove customer code "' + code + '"?\n\nThis will unassign all projects from this code. Projects will NOT be deleted.')) return;
+    
+    var allProjects = window._allProjectsList || [];
+    var toUpdate = allProjects.filter(function(p) { return (p.access_code || '').toUpperCase() === code; });
+    
+    if (sb) {
+        showLoading('Removing customer code...');
+        for (var i = 0; i < toUpdate.length; i++) {
+            await sb.from('projects').update({ access_code: '' }).eq('id', toUpdate[i].id);
+            toUpdate[i].access_code = '';
+        }
+        hideLoading();
+    }
+    
+    renderCustomerAccounts();
+    toast('Customer code "' + code + '" removed', 'success');
+}
+
 async function loadCustomerUploadHistory() {
     var container = document.getElementById('customerUploadHistory');
     if (!container || !sb || !currentProject) {
@@ -10868,6 +11143,13 @@ async function initCustomerPortal() {
         sb = supabase.createClient(url, key);
     }
     
+    // Show project switcher hint if multiple projects
+    var custProjects = window._customerProjects || [];
+    if (custProjects.length > 1) {
+        var hint = document.getElementById('portalProjectSwitchHint');
+        if (hint) hint.style.display = '';
+    }
+    
     if (sb && currentProject) {
         updateProjectDisplay();
         // Load tickets for the customer's project
@@ -10939,16 +11221,29 @@ function checkExistingSession() {
                 return true;
             } else if (s.role === 'customer' && s.projectId) {
                 userRole = 'customer';
-                const url = localStorage.getItem('divertscan_sb_url');
-                const key = localStorage.getItem('divertscan_sb_key');
+                const url = localStorage.getItem('divertscan_sb_url') || DEFAULT_KEYS.sbUrl;
+                const key = localStorage.getItem('divertscan_sb_key') || DEFAULT_KEYS.sbKey;
                 if (url && key) {
                     sb = supabase.createClient(url, key);
-                    sb.from('projects').select('*').eq('id', s.projectId).single().then(({ data }) => {
-                        if (data) {
-                            currentProject = data;
-                            showMainApp();
-                        }
-                    });
+                    
+                    // If we have an access code, load all projects with that code
+                    if (s.accessCode) {
+                        sb.from('projects').select('*').eq('access_code', s.accessCode).then(function(res) {
+                            if (res.data && res.data.length > 0) {
+                                window._customerProjects = res.data;
+                                currentProject = res.data.find(function(p) { return p.id === s.projectId; }) || res.data[0];
+                                showMainApp();
+                            }
+                        });
+                    } else {
+                        sb.from('projects').select('*').eq('id', s.projectId).single().then(function(res) {
+                            if (res.data) {
+                                currentProject = res.data;
+                                window._customerProjects = [res.data];
+                                showMainApp();
+                            }
+                        });
+                    }
                     return true;
                 }
             } else if (s.role === 'operator') {
