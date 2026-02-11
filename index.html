@@ -11067,15 +11067,24 @@ async function removeCustomerAccount(code) {
 
 async function loadCustomerUploadHistory() {
     var container = document.getElementById('customerUploadHistory');
-    if (!container || !sb || !currentProject) {
+    if (!container || !sb) {
         if (container) container.innerHTML = '<div style="color:var(--slate-500)">No uploads yet</div>';
+        return;
+    }
+    
+    // Get all project IDs this customer can access
+    var custProjects = window._customerProjects || [];
+    var projectIds = custProjects.map(function(p) { return p.id; });
+    if (projectIds.length === 0 && currentProject) projectIds = [currentProject.id];
+    if (projectIds.length === 0) {
+        container.innerHTML = '<div style="color:var(--slate-500)">No uploads yet</div>';
         return;
     }
     
     try {
         var result = await sb.from('tickets')
             .select('id,ticket_number,service_date,hauler,human_verified,submitted_by,created_at,scale_ticket_photo,debris_photo_1,debris_photo_2,debris_photo_3,customer_notes,diversion_pct,net_tons,net_lbs,gross_lbs,tare_lbs,is_closed,wood_pct,metal_pct,cardboard_pct,plastic_pct,concrete_pct,drywall_pct,landfill_pct,import_source,project_id')
-            .eq('project_id', currentProject.id)
+            .in('project_id', projectIds)
             .eq('submitted_by', 'customer')
             .order('created_at', { ascending: false })
             .limit(20);
@@ -11091,6 +11100,11 @@ async function loadCustomerUploadHistory() {
                 tickets.push(t);
             }
         });
+        
+        // Build project name lookup
+        var projNameMap = {};
+        custProjects.forEach(function(p) { projNameMap[p.id] = p.name || 'Project'; });
+        var showProjectName = custProjects.length > 1;
         
         container.innerHTML = result.data.map(function(t) {
             var statusColor, statusText, statusIcon;
@@ -11119,6 +11133,7 @@ async function loadCustomerUploadHistory() {
                 '<div style="flex:1;min-width:0">' +
                     '<div style="font-weight:600;font-size:12px">#' + (t.ticket_number || '—') + '</div>' +
                     '<div style="font-size:10px;color:var(--slate-400)">' + formatDate(t.service_date) + ' • ' + (t.hauler || '—') + ' • ' + photoCount + ' photo(s)</div>' +
+                    (showProjectName ? '<div style="font-size:9px;color:var(--blue-400);margin-top:1px">📁 ' + (projNameMap[t.project_id] || 'Unknown') + '</div>' : '') +
                     (t.customer_notes ? '<div style="font-size:10px;color:var(--slate-500);margin-top:2px">📝 ' + t.customer_notes.substring(0, 50) + '</div>' : '') +
                 '</div>' +
                 '<div style="text-align:right;flex-shrink:0">' +
