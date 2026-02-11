@@ -8100,61 +8100,56 @@ async function importAllSheets() {
 
 async function processExcelSheet(workbook, sheetName, filename, silent = false) {
     const sheet = workbook.Sheets[sheetName];
-    const importLog = []; // On-screen debug log
+    const importLog = [];
     const logMsg = (msg) => { importLog.push(msg); console.log(msg); };
     
-    // Convert to array of arrays - use raw:true to get actual values, not formatted strings
+    // Convert to array of arrays
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
     
-    logMsg(`📋 Processing sheet "${sheetName}" with ${rows.length} rows`);
+    logMsg(`📋 Sheet "${sheetName}": ${rows.length} rows`);
     
-    // Find header row (contains "Ticket" or "Date")
+    // Log first 20 rows for debug
+    for (let i = 0; i < Math.min(20, rows.length); i++) {
+        const r = rows[i];
+        if (r && r.some(c => c !== null)) {
+            const preview = r.slice(0, 10).map((c,j) => c !== null ? `[${j}]=${String(c).substring(0,15)}` : '').filter(Boolean).join(' ');
+            logMsg(`  Row ${i}: ${preview}`);
+        }
+    }
+    
+    // Find header row — search first 30 rows for row with 3+ columns containing known header words
     let headerRowIndex = -1;
     let headers = [];
+    const headerKeywords = ['date', 'ticket', 'gwt', 'gross', 'tare', 'net', 'tons', 'wood', 'metal', 'plastic', 'occ', 'gypsum', 'concrete', 'diverted'];
     
-    for (let i = 0; i < Math.min(20, rows.length); i++) {
+    for (let i = 0; i < Math.min(30, rows.length); i++) {
         const row = rows[i];
-        if (row && row.some(cell => {
-            const str = String(cell || '').toLowerCase();
-            return str.includes('ticket') || (str.includes('date') && !str.includes('divert'));
-        })) {
+        if (!row || row.length < 3) continue;
+        
+        const cellStrings = row.map(c => String(c || '').toLowerCase().trim());
+        const matchCount = cellStrings.filter(s => headerKeywords.some(kw => s.includes(kw))).length;
+        
+        if (matchCount >= 3) {
             headerRowIndex = i;
-            headers = row.map(h => String(h || '').toLowerCase().trim());
+            headers = cellStrings;
+            logMsg(`✅ Header row found at index ${i} (${matchCount} keyword matches)`);
             break;
         }
     }
     
     if (headerRowIndex === -1) {
-        logMsg(`❌ No header row found in "${sheetName}" - looked at first 20 rows`);
-        logMsg('Row samples:');
-        for (let i = 0; i < Math.min(5, rows.length); i++) {
-            logMsg(`  Row ${i}: ${JSON.stringify((rows[i] || []).slice(0, 8))}`);
-        }
+        logMsg(`❌ No header row found — need 3+ matches from: ${headerKeywords.join(', ')}`);
         showImportDebugLog(importLog, sheetName);
-        if (!silent) {
-            hideLoading();
-            toast(`No header row found in tab "${sheetName}"`, 'error');
-        }
+        if (!silent) { hideLoading(); toast(`No header row found in "${sheetName}"`, 'error'); }
         return { imported: 0, failed: 0 };
     }
     
-    logMsg(`✅ Headers found at row ${headerRowIndex}: [${headers.join(', ')}]`);
+    logMsg(`📑 Headers: [${headers.filter(Boolean).join(', ')}]`);
     
-    // Debug: Log the first data row to verify parsing
-    if (rows[headerRowIndex + 1]) {
-        logMsg(`📊 First data row: ${JSON.stringify(rows[headerRowIndex + 1].slice(0, 12))}`);
-    }
-    
-    // Map column indices - more robust matching
+    // Map columns with multiple pattern attempts
     const findCol = (patterns) => {
         for (const pattern of patterns) {
-            const idx = headers.findIndex(h => {
-                if (typeof pattern === 'string') {
-                    return h.includes(pattern);
-                } else {
-                    return pattern.test(h);
-                }
-            });
+            const idx = headers.findIndex(h => typeof pattern === 'string' ? h.includes(pattern) : pattern.test(h));
             if (idx >= 0) return idx;
         }
         return -1;
@@ -8163,33 +8158,29 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
     const colMap = {
         date: findCol(['date']),
         ticket: findCol(['ticket']),
-        gross: findCol([/gwt.*lbs/, /gross.*lbs/, 'gwt (lbs)']),
-        tare: findCol([/tare.*lbs/, 'tare (lbs)']),
+        gross: findCol([/gwt.*lbs/, /gross.*lbs/, 'gwt (lbs)', 'gwt']),
+        grossTons: findCol([/gwt.*nt/, 'gwt (nt)']),
+        tare: findCol([/tare.*lbs/, 'tare (lbs)', 'tare']),
+        tareTons: findCol([/tare.*nt/, 'tare (nt)']),
         netLbs: findCol([/net.*lbs/, 'net (lbs)']),
-        tons: findCol([/^tons$/, /net.*nt/]),
+        tons: findCol([/^tons$/, 'tons']),
         woodPct: findCol(['wood %']),
-        gypsumPct: findCol(['gypsum %']),
+        gypsumPct: findCol(['gypsum %', 'drywall %']),
         plasticPct: findCol(['plastic %']),
-        occPct: findCol(['occ %']),
+        occPct: findCol(['occ %', 'cardboard %']),
         metalPct: findCol(['metal %']),
         concretePct: findCol(['concrete %']),
         blockPct: findCol(['block %']),
         divertedPct: findCol(['diverted %'])
     };
     
-    // Log which columns matched vs fell back
-    const matchedCols = Object.entries(colMap).filter(([k,v]) => v >= 0).map(([k,v]) => `${k}=${v}`);
-    const missedCols = Object.entries(colMap).filter(([k,v]) => v < 0).map(([k]) => k);
-    logMsg(`✅ Matched columns: ${matchedCols.join(', ')}`);
-    if (missedCols.length > 0) {
-        logMsg(`⚠️ Unmatched columns (using fallback positions): ${missedCols.join(', ')}`);
-    }
-    
-    // Fallback to position-based if header matching fails (legacy format)
-    if (colMap.date === -1 && headers[0] === 'date') colMap.date = 0;
-    if (colMap.ticket === -1 && headers[1]?.includes('ticket')) colMap.ticket = 1;
+    // Fallback for Dalmex template format: position-based (A=Date,B=Ticket,C=GWT lbs, etc.)
+    if (colMap.date === -1) colMap.date = 0;
+    if (colMap.ticket === -1) colMap.ticket = 1;
     if (colMap.gross === -1) colMap.gross = 2;
+    if (colMap.grossTons === -1) colMap.grossTons = 3;
     if (colMap.tare === -1) colMap.tare = 4;
+    if (colMap.tareTons === -1) colMap.tareTons = 5;
     if (colMap.netLbs === -1) colMap.netLbs = 6;
     if (colMap.tons === -1) colMap.tons = 7;
     if (colMap.woodPct === -1) colMap.woodPct = 8;
@@ -8201,91 +8192,64 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
     if (colMap.blockPct === -1) colMap.blockPct = 20;
     if (colMap.divertedPct === -1) colMap.divertedPct = 23;
     
-    logMsg(`🗺️ Final column map: ${JSON.stringify(colMap)}`);
+    logMsg(`🗺️ Column map: ${Object.entries(colMap).map(([k,v])=>k+'='+v).join(', ')}`);
     
-    // Detect percentage format from first data row
-    // Check if percentages are stored as decimals (0.0-1.0) or whole numbers (0-100)
-    let pctFormat = 'unknown';
-    const firstDataRow = rows[headerRowIndex + 1];
-    if (firstDataRow) {
-        const pctCols = [colMap.woodPct, colMap.gypsumPct, colMap.plasticPct, colMap.occPct, 
-                         colMap.metalPct, colMap.concretePct, colMap.blockPct];
-        const pctValues = pctCols.map(c => c >= 0 ? parseFloat(firstDataRow[c]) : NaN).filter(v => !isNaN(v) && v > 0);
-        
-        if (pctValues.length > 0) {
-            const maxPct = Math.max(...pctValues);
-            const allSmall = pctValues.every(v => v <= 1.0);
-            
-            if (allSmall && maxPct <= 1.0) {
-                pctFormat = 'decimal'; // Values like 0.85 = 85%
-            } else {
-                pctFormat = 'whole'; // Values like 85 = 85%
-            }
-            logMsg(`📐 Percentage format detected: ${pctFormat} (sample values: ${pctValues.map(v => v.toFixed(4)).join(', ')})`);
-        } else {
-            pctFormat = 'whole'; // Default assumption
-            logMsg(`📐 No percentage values found in first row, assuming whole numbers`);
+    // Detect percentage format from first few data rows
+    let pctFormat = 'decimal';
+    for (let di = 1; di <= 3; di++) {
+        const dataRow = rows[headerRowIndex + di];
+        if (!dataRow) continue;
+        const pctCols = [colMap.woodPct, colMap.gypsumPct, colMap.plasticPct, colMap.occPct, colMap.metalPct, colMap.concretePct, colMap.blockPct];
+        const pctVals = pctCols.map(c => c >= 0 ? parseFloat(dataRow[c]) : NaN).filter(v => !isNaN(v) && v > 0);
+        if (pctVals.length > 0) {
+            if (pctVals.some(v => v > 1.0)) { pctFormat = 'whole'; }
+            logMsg(`📐 Pct format: ${pctFormat} (row ${headerRowIndex+di} samples: ${pctVals.map(v=>v.toFixed(4)).join(', ')})`);
+            break;
         }
     }
     
-    // Smart percentage parser based on detected format
-    const parsePercent = (val) => {
+    const parsePct = (val) => {
         if (val === null || val === undefined || val === '') return 0;
-        const num = parseFloat(val);
-        if (isNaN(num)) return 0;
-        
-        if (pctFormat === 'decimal') {
-            // All values in this sheet are decimals (0.0 to 1.0)
-            return Math.round(num * 100);
-        } else {
-            // Values are whole numbers (0 to 100)
-            return Math.round(num);
-        }
+        const n = parseFloat(val);
+        if (isNaN(n)) return 0;
+        return pctFormat === 'decimal' ? Math.round(n * 100) : Math.round(n);
     };
     
     // Parse data rows
-    const tickets = [];
-    let skippedRows = 0;
+    const parsedTickets = [];
+    let skipped = 0;
     
     for (let i = headerRowIndex + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
         
-        // Skip totals/summary rows
-        const firstCell = String(row[0] || '').toLowerCase();
-        if (firstCell.includes('total') || firstCell.includes('diverted') || firstCell.includes('recycled') || firstCell.includes('summary')) {
-            skippedRows++;
+        // Skip summary/totals rows
+        const first = String(row[0] || '').toLowerCase().trim();
+        if (first.includes('total') || first.includes('diverted') || first.includes('recycled') || first.includes('summary') || first.includes('report') || first.includes('company') || first.includes('contact')) {
+            skipped++;
             continue;
         }
         
-        // Get values
         const dateVal = colMap.date >= 0 ? row[colMap.date] : null;
         const ticketNum = colMap.ticket >= 0 ? row[colMap.ticket] : null;
         
-        // Skip if no date or ticket
-        if (!dateVal && !ticketNum) {
-            skippedRows++;
-            continue;
-        }
+        // Must have date or ticket number to be a valid row
+        if (!dateVal && !ticketNum) { skipped++; continue; }
         
-        // Parse date - handle Excel serial numbers, Date objects, and strings
+        // Parse date
         let serviceDate = '';
         if (dateVal) {
             if (dateVal instanceof Date) {
                 serviceDate = dateVal.toISOString().split('T')[0];
-            } else if (typeof dateVal === 'number') {
-                // Excel serial date (days since 1900-01-01, with Excel's leap year bug)
-                const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
-                let dayOffset = dateVal;
-                // Excel incorrectly treats 1900 as a leap year - adjust for dates after Feb 28, 1900
-                if (dateVal > 59) dayOffset -= 1;
+            } else if (typeof dateVal === 'number' && dateVal > 40000 && dateVal < 60000) {
+                // Excel serial date
+                const excelEpoch = new Date(1899, 11, 30);
+                let dayOffset = dateVal > 59 ? dateVal - 1 : dateVal;
                 const jsDate = new Date(excelEpoch.getTime() + dayOffset * 86400000);
                 serviceDate = jsDate.toISOString().split('T')[0];
-            } else {
+            } else if (typeof dateVal === 'string') {
                 const parsed = new Date(dateVal);
-                if (!isNaN(parsed)) {
-                    serviceDate = parsed.toISOString().split('T')[0];
-                }
+                if (!isNaN(parsed)) serviceDate = parsed.toISOString().split('T')[0];
             }
         }
         
@@ -8295,29 +8259,27 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
         const netLbs = parseFloat(row[colMap.netLbs]) || (grossLbs - tareLbs);
         const netTons = parseFloat(row[colMap.tons]) || (netLbs / 2000);
         
-        // Parse percentages using detected format
-        const woodPct = parsePercent(row[colMap.woodPct]);
-        const gypsumPct = parsePercent(row[colMap.gypsumPct]); // Map to drywall
-        const plasticPct = parsePercent(row[colMap.plasticPct]);
-        const occPct = parsePercent(row[colMap.occPct]); // Map to cardboard
-        const metalPct = parsePercent(row[colMap.metalPct]);
-        const concretePct = parsePercent(row[colMap.concretePct]);
-        const blockPct = parsePercent(row[colMap.blockPct]); // Add to concrete
+        if (netTons <= 0 && grossLbs <= 0) { skipped++; continue; }
         
-        // Calculate landfill (remainder)
+        // Parse material percentages
+        const woodPct = parsePct(row[colMap.woodPct]);
+        const gypsumPct = parsePct(row[colMap.gypsumPct]);
+        const plasticPct = parsePct(row[colMap.plasticPct]);
+        const occPct = parsePct(row[colMap.occPct]);
+        const metalPct = parsePct(row[colMap.metalPct]);
+        const concretePct = parsePct(row[colMap.concretePct]);
+        const blockPct = parsePct(row[colMap.blockPct]);
+        
         const totalRecycled = woodPct + gypsumPct + plasticPct + occPct + metalPct + concretePct + blockPct;
         const landfillPct = Math.max(0, 100 - totalRecycled);
         const diversionPct = Math.min(100, totalRecycled);
         
-        // Log first ticket for verification
-        if (tickets.length === 0) {
-            logMsg(`🎫 First ticket parsed: #${ticketNum}, Date: ${serviceDate}, Net: ${netTons.toFixed(2)}T`);
-            logMsg(`   Materials: Wood ${woodPct}%, Gypsum ${gypsumPct}%, Plastic ${plasticPct}%, OCC ${occPct}%, Metal ${metalPct}%, Concrete ${concretePct}%, Block ${blockPct}%`);
+        if (parsedTickets.length === 0) {
+            logMsg(`🎫 First ticket: #${ticketNum}, ${serviceDate}, ${netTons.toFixed(2)}T, Wood:${woodPct}% Gypsum:${gypsumPct}% Plastic:${plasticPct}% OCC:${occPct}% Metal:${metalPct}% Concrete:${concretePct}% Block:${blockPct}%`);
             logMsg(`   Diversion: ${diversionPct}%, Landfill: ${landfillPct}%`);
         }
         
-        // Create ticket record
-        const ticket = {
+        parsedTickets.push({
             project_id: currentProject.id,
             ticket_number: String(ticketNum || ''),
             service_date: serviceDate || new Date().toISOString().split('T')[0],
@@ -8327,11 +8289,11 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
             net_lbs: netLbs,
             net_tons: netTons,
             wood_pct: woodPct,
-            concrete_pct: concretePct + blockPct, // Combine concrete + block
+            concrete_pct: concretePct + blockPct,
             metal_pct: metalPct,
-            cardboard_pct: occPct, // OCC = cardboard
+            cardboard_pct: occPct,
             plastic_pct: plasticPct,
-            drywall_pct: gypsumPct, // Gypsum = drywall
+            drywall_pct: gypsumPct,
             landfill_pct: landfillPct,
             wood_tons: (woodPct / 100) * netTons,
             concrete_tons: ((concretePct + blockPct) / 100) * netTons,
@@ -8342,121 +8304,77 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
             landfill_tons: (landfillPct / 100) * netTons,
             diversion_pct: diversionPct,
             diverted_tons: (diversionPct / 100) * netTons,
-            human_verified: false,
+            human_verified: true,
             imported: true,
             import_source: filename + ' [' + sheetName + ']',
             created_at: new Date().toISOString()
-        };
-        
-        tickets.push(ticket);
+        });
     }
     
-    logMsg(`✅ Parsed ${tickets.length} tickets from "${sheetName}" (${skippedRows} rows skipped)`);
+    logMsg(`✅ Parsed ${parsedTickets.length} tickets (${skipped} rows skipped)`);
     
-    if (tickets.length === 0) {
-        logMsg(`❌ No ticket data found in tab "${sheetName}"`);
+    if (parsedTickets.length === 0) {
+        logMsg(`❌ No ticket data found`);
         showImportDebugLog(importLog, sheetName);
-        if (!silent) {
-            hideLoading();
-            toast(`No ticket data found in tab "${sheetName}"`, 'warning');
-        }
+        if (!silent) { hideLoading(); toast(`No tickets found in "${sheetName}"`, 'warning'); }
         return { imported: 0, failed: 0 };
     }
     
-    // Confirm import (only if not silent/batch mode)
+    // Confirm (non-batch mode)
     if (!silent) {
         hideLoading();
-        
-        if (!confirm(`Found ${tickets.length} tickets in "${sheetName}".\n\nProject: ${currentProject.name}\n\nProceed with import?`)) {
+        if (!confirm(`Found ${parsedTickets.length} tickets in "${sheetName}".\n\nFirst: #${parsedTickets[0].ticket_number} ${parsedTickets[0].service_date}\nLast: #${parsedTickets[parsedTickets.length-1].ticket_number} ${parsedTickets[parsedTickets.length-1].service_date}\n\nProject: ${currentProject.name}\n\nImport?`)) {
             return { imported: 0, failed: 0 };
         }
-        
-        showLoading(`Importing ${tickets.length} tickets...`);
+        showLoading(`Importing ${parsedTickets.length} tickets...`);
     }
     
-    // Save to database
+    // Save to Supabase
     let imported = 0;
     let failed = 0;
     
-    // Try batch Supabase insert first (much faster than one-by-one)
     if (sb) {
         try {
-            logMsg(`☁️ Batch inserting ${tickets.length} tickets to Supabase...`);
-            const { data: insertedData, error } = await sb.from('tickets').insert(tickets).select('id');
+            logMsg(`☁️ Batch inserting ${parsedTickets.length} tickets...`);
+            const { data: insertedData, error } = await sb.from('tickets').insert(parsedTickets).select('id');
             
             if (error) {
-                logMsg(`❌ Batch insert error: ${error.message}`);
-                logMsg(`⚠️ Trying one-by-one fallback...`);
+                logMsg(`❌ Batch error: ${error.message} (code: ${error.code}, details: ${error.details})`);
+                logMsg(`⚠️ Trying one-by-one...`);
                 
-                // Fallback: insert one by one
-                for (const ticket of tickets) {
+                for (const ticket of parsedTickets) {
                     try {
-                        const { error: singleErr } = await sb.from('tickets').insert([ticket]);
-                        if (singleErr) {
-                            logMsg(`❌ Ticket #${ticket.ticket_number}: ${singleErr.message}`);
-                            failed++;
-                        } else {
-                            imported++;
-                        }
-                    } catch (e) {
-                        logMsg(`❌ Ticket #${ticket.ticket_number}: ${e.message}`);
-                        failed++;
-                    }
+                        const { error: e2 } = await sb.from('tickets').insert([ticket]);
+                        if (e2) { logMsg(`❌ #${ticket.ticket_number}: ${e2.message}`); failed++; }
+                        else { imported++; }
+                    } catch (e3) { logMsg(`❌ #${ticket.ticket_number}: ${e3.message}`); failed++; }
                 }
             } else {
-                imported = tickets.length;
-                logMsg(`✅ Batch insert successful: ${imported} tickets`);
+                imported = parsedTickets.length;
+                logMsg(`✅ Batch insert OK: ${imported} tickets`);
             }
         } catch (sbErr) {
-            logMsg(`❌ Supabase error: ${sbErr.message}`);
-            // Fall back to IndexedDB only
-            for (const ticket of tickets) {
-                try {
-                    const ticketWithId = { 
-                        ...ticket, 
-                        id: 'imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                        synced: false 
-                    };
-                    await saveToLocal('tickets', ticketWithId);
-                    imported++;
-                } catch (err) {
-                    failed++;
-                }
-            }
+            logMsg(`❌ Supabase fatal: ${sbErr.message}`);
+            failed = parsedTickets.length;
         }
     } else {
-        // No Supabase — save locally only
-        for (const ticket of tickets) {
+        // Offline — IndexedDB only
+        for (const ticket of parsedTickets) {
             try {
-                const ticketWithId = { 
-                    ...ticket, 
-                    id: 'imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                    synced: false 
-                };
-                await saveToLocal('tickets', ticketWithId);
+                const tid = { ...ticket, id: 'imp_' + Date.now() + '_' + Math.random().toString(36).substr(2,6), synced: false };
+                await saveToLocal('tickets', tid);
                 imported++;
-            } catch (err) {
-                logMsg(`❌ Local save failed: ${err.message}`);
-                failed++;
-            }
+            } catch (err) { failed++; }
         }
     }
     
-    logMsg(`💾 Saved: ${imported} imported, ${failed} failed`);
-    
-    // Always show the debug log
+    logMsg(`💾 Result: ${imported} imported, ${failed} failed`);
     showImportDebugLog(importLog, sheetName);
     
     if (!silent) {
         hideLoading();
-        
-        if (failed > 0) {
-            toast(`Imported ${imported} tickets, ${failed} failed`, 'warning');
-        } else {
-            toast(`Successfully imported ${imported} tickets from "${sheetName}"!`, 'success');
-        }
-        
-        // Refresh data
+        if (failed > 0) toast(`Imported ${imported}, ${failed} failed`, 'warning');
+        else toast(`✅ Imported ${imported} tickets from "${sheetName}"!`, 'success');
         loadRecentTickets();
         updateStats();
     }
