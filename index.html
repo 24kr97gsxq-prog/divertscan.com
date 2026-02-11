@@ -451,8 +451,7 @@ main{padding:20px;max-width:800px;margin:0 auto}
 
 <div class="login-tabs">
 <div class="login-tab active" onclick="switchLoginTab('admin')">Admin</div>
-<div class="login-tab" onclick="switchLoginTab('operator')">Dalmex Crew</div>
-<div class="login-tab" onclick="switchLoginTab('customer')">Customer</div>
+<div class="login-tab" onclick="switchLoginTab('portal')">Portal</div>
 </div>
 
 <!-- Admin Login -->
@@ -469,31 +468,17 @@ main{padding:20px;max-width:800px;margin:0 auto}
 <div id="adminLoginError" class="login-error"></div>
 </div>
 
-<!-- Operator Login -->
-<div id="operatorLoginForm" class="hidden">
-<div style="text-align:center;margin-bottom:16px">
-<div style="font-size:32px">🚛</div>
-<div style="font-size:13px;color:var(--slate-300);margin-top:4px">Floor Operator — Quick Scan</div>
-</div>
+<!-- Portal Login (handles both customer + operator via smart code routing) -->
+<div id="portalLoginForm" class="hidden">
 <div class="form-group">
-<label class="form-label">Crew Code</label>
-<input type="text" class="form-input" id="operatorCode" placeholder="Enter crew code" style="text-transform:uppercase;text-align:center;font-size:18px;letter-spacing:4px">
-</div>
-<button class="btn btn-primary btn-lg" onclick="doOperatorLogin()" style="background:var(--accent-info)">🚛 Start Scanning</button>
-<div id="operatorLoginError" class="login-error"></div>
-</div>
-
-<!-- Customer Portal -->
-<div id="customerLoginForm" class="hidden">
-<div class="form-group">
-<label class="form-label">Project Access Code</label>
-<input type="text" class="form-input" id="customerCode" placeholder="Enter code (e.g., ABC123)" style="text-transform:uppercase">
+<label class="form-label">Access Code</label>
+<input type="text" class="form-input" id="portalCode" placeholder="Enter your access code" style="text-transform:uppercase;text-align:center;font-size:16px;letter-spacing:2px">
 </div>
 <p style="font-size:10px;color:var(--slate-400);margin-bottom:16px">
-Access codes are provided by DalMex Recycling for viewing your project reports.
+Access codes are provided by DalMex Recycling.
 </p>
-<button class="btn btn-primary btn-lg" onclick="doCustomerLogin()">👁️ View Reports</button>
-<div id="customerLoginError" class="login-error"></div>
+<button class="btn btn-primary btn-lg" onclick="doPortalLogin()">🔓 Access Portal</button>
+<div id="portalLoginError" class="login-error"></div>
 </div>
 </div>
 
@@ -3358,7 +3343,7 @@ function viewTicketDetails(ticketId) {
     if (userRole === 'admin') {
         footer.insertAdjacentHTML('beforeend', '<button class="btn btn-secondary" onclick="editTicket(\'' + ticketId + '\')" style="flex:1">✏️ Edit</button>');
         footer.insertAdjacentHTML('beforeend', '<button class="btn btn-primary" onclick="printTicketDetail(\'' + ticketId + '\')" style="flex:1">🖨️ Print</button>');
-    } else if (ticket.submitted_by === 'customer' && !ticket.human_verified) {
+    } else if (!ticket.human_verified && (ticket.submitted_by === 'customer' || ticket.submitted_by === 'operator')) {
         footer.insertAdjacentHTML('beforeend', '<button class="btn btn-secondary" onclick="customerEditUpload(\'' + ticketId + '\')" style="flex:1">✏️ Edit Upload</button>');
     }
 }
@@ -7266,7 +7251,6 @@ async function exportAuditPackage() {
 }
 
 function downloadReportExcel() {
-    // Use reportData if available, fall back to global tickets for current project
     if ((!reportData || reportData.length === 0) && tickets.length > 0 && currentProject) {
         reportData = tickets.filter(function(t){return t.project_id === currentProject.id});
     }
@@ -7280,134 +7264,210 @@ function downloadReportExcel() {
     }
     
     try {
-        // Calculate totals
-        var totalTons = reportData.reduce(function(s, t) { return s + (t.net_tons || 0); }, 0);
-        var landfillTons = reportData.reduce(function(s, t) { return s + (t.landfill_tons || 0); }, 0);
-        var divertedTons = totalTons - landfillTons;
-        var diversionRate = totalTons > 0 ? Math.round((divertedTons / totalTons) * 100) : 0;
-        var occTons = reportData.reduce(function(s, t) { return s + (t.cardboard_tons || 0); }, 0);
-        var woodTons = reportData.reduce(function(s, t) { return s + (t.wood_tons || 0); }, 0);
-        var metalTons = reportData.reduce(function(s, t) { return s + (t.metal_tons || 0); }, 0);
-        var plasticTons = reportData.reduce(function(s, t) { return s + (t.plastic_tons || 0); }, 0);
-        
         var wb = XLSX.utils.book_new();
-        var rows = [];
         
-        // === HEADER ===
-        rows.push(['DivertScan™ LEED MRc5 WASTE DIVERSION REPORT']);
-        rows.push(['All Materials Processed by Dalmex Recycling LLC, Dallas TX']);
-        rows.push([]);
-        
-        // === PROJECT INFO ===
-        rows.push(['PROJECT INFORMATION']);
-        rows.push(['Project', currentProject.name || '', '', 'Report Date', new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})]);
-        rows.push(['Address', currentProject.address || '', '', 'Waste Hauler', currentProject.waste_hauler || '']);
-        rows.push(['General Contractor', currentProject.general_contractor || '', '', 'LEED Target', (currentProject.leed_target || 75) + '%']);
-        rows.push(['Processing Facility', 'Dalmex Recycling LLC', '', 'Diversion Rate', diversionRate + '%']);
-        rows.push([]);
-        
-        // === DIVERSION SUMMARY ===
-        rows.push(['DIVERSION SUMMARY']);
-        rows.push(['Total Loads', 'Total Tons', 'Diverted Tons', 'Landfill Tons', 'Diversion Rate', 'LEED Status']);
-        rows.push([
-            reportData.length,
-            totalTons,
-            divertedTons,
-            landfillTons,
-            diversionRate / 100,
-            diversionRate >= (currentProject.leed_target || 75) ? 'COMPLIANT' : 'BELOW TARGET'
-        ]);
-        rows.push([]);
-        
-        // === MATERIAL BREAKDOWN ===
-        rows.push(['MATERIAL BREAKDOWN & END MARKETS']);
-        rows.push(['Material Stream', 'Tons', '% of Total', 'End Market Destination', 'Status']);
-        rows.push(['OCC / Paper / Fiber', occTons, totalTons > 0 ? occTons/totalTons : 0, 'Georgia Pacific · Smurfit Westrock · Greenside · Intl Paper · American Fiber', 'Verified']);
-        rows.push(['Wood / Pallets', woodTons, totalTons > 0 ? woodTons/totalTons : 0, 'Dalmex Pallets (In-House Reuse)', 'Verified']);
-        rows.push(['Metal / Scrap', metalTons, totalTons > 0 ? metalTons/totalTons : 0, 'CMC · Cyclone Metal Recycling', 'Verified']);
-        rows.push(['Plastic', plasticTons, totalTons > 0 ? plasticTons/totalTons : 0, 'Recycle USA', 'Verified']);
-        rows.push(['Landfill', landfillTons, totalTons > 0 ? landfillTons/totalTons : 0, 'Municipal Landfill', 'N/A']);
-        rows.push(['TOTAL', totalTons, 1, diversionRate + '% Diverted', '']);
-        rows.push([]);
-        
-        // === LOAD DETAILS ===
-        rows.push(['LOAD DETAILS']);
-        rows.push(['Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net Tons', 'OCC %', 'Wood %', 'Metal %', 'Plastic %', 'Diversion %', 'Verified']);
-        
+        // Group tickets by month
+        var monthGroups = {};
         reportData.forEach(function(t) {
-            rows.push([
-                t.service_date || '',
-                t.ticket_number || '',
-                t.hauler || '',
-                t.gross_lbs || 0,
-                t.tare_lbs || 0,
-                t.net_lbs || 0,
-                t.net_tons || 0,
-                (t.cardboard_pct || 0) / 100,
-                (t.wood_pct || 0) / 100,
-                (t.metal_pct || 0) / 100,
-                (t.plastic_pct || 0) / 100,
-                (t.diversion_pct || 0) / 100,
-                t.human_verified ? 'Yes' : 'No'
-            ]);
+            if (!t.service_date) return;
+            var d = new Date(t.service_date);
+            var key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            if (!monthGroups[key]) monthGroups[key] = [];
+            monthGroups[key].push(t);
         });
         
-        // Totals row
-        var tGross = reportData.reduce(function(s,t){return s+(t.gross_lbs||0)},0);
-        var tTare = reportData.reduce(function(s,t){return s+(t.tare_lbs||0)},0);
-        var tNet = reportData.reduce(function(s,t){return s+(t.net_lbs||0)},0);
-        rows.push(['TOTALS', reportData.length + ' loads', '', tGross, tTare, tNet, totalTons, '', '', '', '', diversionRate / 100, '']);
-        rows.push([]);
-        rows.push(['Report generated by DivertScan™ v7.7 Enterprise | Dalmex Recycling LLC | ' + new Date().toLocaleString()]);
+        // Sort month keys chronologically
+        var monthKeys = Object.keys(monthGroups).sort(function(a, b) {
+            return new Date('1 ' + a) - new Date('1 ' + b);
+        });
         
-        // Build worksheet
-        var ws = XLSX.utils.aoa_to_sheet(rows);
+        // If no groupable months, use all data as one sheet
+        if (monthKeys.length === 0) monthKeys = ['Report'];
+        if (monthKeys.length === 0 || (monthKeys.length === 1 && monthKeys[0] === 'Report')) {
+            monthGroups['Report'] = reportData;
+        }
         
-        // Column widths
-        ws['!cols'] = [
-            {wch:22},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}
-        ];
-        
-        // Apply number formats to data rows
-        var dataStartRow = rows.indexOf(rows.find(function(r) { return r[0] === 'Date' && r[1] === 'Ticket #'; })) + 1;
-        if (dataStartRow > 0) {
-            for (var R = dataStartRow; R < dataStartRow + reportData.length + 1; R++) {
-                for (var C = 0; C <= 12; C++) {
+        monthKeys.forEach(function(monthName) {
+            var mTickets = monthGroups[monthName];
+            if (!mTickets || mTickets.length === 0) return;
+            
+            // Sort by date
+            mTickets.sort(function(a, b) { return new Date(a.service_date) - new Date(b.service_date); });
+            
+            var rows = [];
+            
+            // Rows 1-6: Empty (logo area)
+            rows.push([]);rows.push([]);rows.push([]);rows.push([]);rows.push([]);rows.push([]);
+            
+            // Row 7: Title
+            rows.push(['Waste Diversion Report for ' + monthName]);
+            
+            // Rows 8-13: Company info
+            rows.push(['Company: ' + (currentProject.waste_hauler || 'N/A')]);
+            rows.push(['Location: ' + (currentProject.address || 'N/A')]);
+            rows.push(['Project: ' + (currentProject.name || 'N/A')]);
+            rows.push(['Report by: Dalmex Recycling']);
+            rows.push(['Contact: Robert Vandling']);
+            rows.push(['Email: robert@dalmexrecycling.com']);
+            
+            // Row 14: Empty
+            rows.push([]);
+            
+            // Row 15: Column headers (24 columns A-X)
+            rows.push([
+                'Date', 'Ticket No', 'GWT (lbs)', 'GWT (NT)', 'Tare (lbs)', 'Tare (NT)',
+                'Net (lbs)', 'Tons', 'Wood %', 'Wood', 'Gypsum %', 'Gypsum',
+                'Plastic %', 'Plastic', 'OCC %', 'OCC', 'Metal %', 'Metal',
+                'Concrete %', 'Concrete', 'Block %', 'Block', 'Total Diverted', 'Diverted %'
+            ]);
+            
+            // Data rows (row 16+)
+            var dataStartRow = 15; // 0-indexed
+            mTickets.forEach(function(t) {
+                var netTons = (t.net_tons || 0);
+                var grossTons = (t.gross_lbs || 0) / 2000;
+                var tareTons = (t.tare_lbs || 0) / 2000;
+                var woodPct = (t.wood_pct || 0) / 100;
+                var gypsumPct = (t.drywall_pct || 0) / 100;
+                var plasticPct = (t.plastic_pct || 0) / 100;
+                var occPct = (t.cardboard_pct || 0) / 100;
+                var metalPct = (t.metal_pct || 0) / 100;
+                var concretePct = (t.concrete_pct || 0) / 100;
+                var blockPct = 0; // Block not tracked separately
+                var woodTons = netTons * woodPct;
+                var gypsumTons = netTons * gypsumPct;
+                var plasticTons = netTons * plasticPct;
+                var occTons = netTons * occPct;
+                var metalTons = netTons * metalPct;
+                var concreteTons = netTons * concretePct;
+                var blockTons = 0;
+                var totalDiverted = woodTons + gypsumTons + plasticTons + occTons + metalTons + concreteTons + blockTons;
+                var divertedPct = netTons > 0 ? totalDiverted / netTons : 0;
+                
+                var dateVal = t.service_date ? new Date(t.service_date) : '';
+                
+                rows.push([
+                    dateVal, t.ticket_number || '', t.gross_lbs || 0, grossTons,
+                    t.tare_lbs || 0, tareTons, t.net_lbs || 0, netTons,
+                    woodPct, woodTons, gypsumPct, gypsumTons,
+                    plasticPct, plasticTons, occPct, occTons,
+                    metalPct, metalTons, concretePct, concreteTons,
+                    blockPct, blockTons, totalDiverted, divertedPct
+                ]);
+            });
+            
+            // Empty rows before totals
+            rows.push([]);rows.push([]);
+            
+            // Totals row
+            var totalsRowIdx = rows.length;
+            var tGross = mTickets.reduce(function(s,t){return s+(t.gross_lbs||0)},0);
+            var tGrossTons = tGross / 2000;
+            var tTare = mTickets.reduce(function(s,t){return s+(t.tare_lbs||0)},0);
+            var tTareTons = tTare / 2000;
+            var tNet = mTickets.reduce(function(s,t){return s+(t.net_lbs||0)},0);
+            var tNetTons = mTickets.reduce(function(s,t){return s+(t.net_tons||0)},0);
+            var tWood = 0, tGypsum = 0, tPlastic = 0, tOCC = 0, tMetal = 0, tConcrete = 0;
+            mTickets.forEach(function(t) {
+                var nt = t.net_tons || 0;
+                tWood += nt * (t.wood_pct||0)/100;
+                tGypsum += nt * (t.drywall_pct||0)/100;
+                tPlastic += nt * (t.plastic_pct||0)/100;
+                tOCC += nt * (t.cardboard_pct||0)/100;
+                tMetal += nt * (t.metal_pct||0)/100;
+                tConcrete += nt * (t.concrete_pct||0)/100;
+            });
+            var tDiverted = tWood + tGypsum + tPlastic + tOCC + tMetal + tConcrete;
+            var tDivPct = tNetTons > 0 ? tDiverted / tNetTons : 0;
+            
+            rows.push([
+                'Totals', '', tGross, tGrossTons, tTare, tTareTons, tNet, tNetTons,
+                tNetTons > 0 ? tWood/tNetTons : 0, tWood,
+                tNetTons > 0 ? tGypsum/tNetTons : 0, tGypsum,
+                tNetTons > 0 ? tPlastic/tNetTons : 0, tPlastic,
+                tNetTons > 0 ? tOCC/tNetTons : 0, tOCC,
+                tNetTons > 0 ? tMetal/tNetTons : 0, tMetal,
+                tNetTons > 0 ? tConcrete/tNetTons : 0, tConcrete,
+                0, 0, tDiverted, tDivPct
+            ]);
+            
+            // Empty row
+            rows.push([]);
+            
+            // Summary rows
+            rows.push(['Total  Tonnage', tNetTons]);
+            rows.push(['Diverted from landfill', tDiverted]);
+            rows.push(['Recycled Material %', tDivPct]);
+            
+            // Build worksheet
+            var ws = XLSX.utils.aoa_to_sheet(rows);
+            
+            // Merge title cell A7:H7
+            if (!ws['!merges']) ws['!merges'] = [];
+            ws['!merges'].push({ s: {r:6,c:0}, e: {r:6,c:7} });
+            
+            // Column widths matching template
+            ws['!cols'] = [
+                {wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
+                {wch:13},{wch:13},{wch:10},{wch:13},{wch:13},{wch:13},{wch:8},{wch:13},
+                {wch:13},{wch:13},{wch:12},{wch:10},{wch:8},{wch:13},{wch:14},{wch:12}
+            ];
+            
+            // Apply number formats
+            var range = XLSX.utils.decode_range(ws['!ref']);
+            for (var R = dataStartRow; R <= range.e.r; R++) {
+                for (var C = 0; C <= 23; C++) {
                     var addr = XLSX.utils.encode_cell({r: R, c: C});
                     if (!ws[addr]) continue;
-                    if (C === 3 || C === 4 || C === 5) ws[addr].z = '#,##0';
-                    else if (C === 6) ws[addr].z = '0.00';
-                    else if (C >= 7 && C <= 11) ws[addr].z = '0%';
+                    
+                    // Date column
+                    if (C === 0 && ws[addr].v instanceof Date) {
+                        ws[addr].t = 'd';
+                        ws[addr].z = 'm/d/yyyy';
+                    }
+                    // GWT lbs, Tare lbs, Net lbs
+                    else if (C === 2 || C === 4 || C === 6) ws[addr].z = '#,##0';
+                    // Tons columns (GWT NT, Tare NT, Tons, material tons, Total Diverted)
+                    else if (C === 3 || C === 5 || C === 7 || C === 9 || C === 11 || C === 13 || C === 15 || C === 17 || C === 19 || C === 21 || C === 22) ws[addr].z = '0.00';
+                    // Percentage columns
+                    else if (C === 8 || C === 10 || C === 12 || C === 14 || C === 16 || C === 18 || C === 20 || C === 23) ws[addr].z = '0%';
                 }
             }
-        }
-        
-        // Format material % column
-        for (var mr = 0; mr < rows.length; mr++) {
-            var c2addr = XLSX.utils.encode_cell({r: mr, c: 2});
-            if (ws[c2addr] && typeof ws[c2addr].v === 'number' && ws[c2addr].v > 0 && ws[c2addr].v <= 1) {
-                ws[c2addr].z = '0%';
+            
+            // Totals row percentage format
+            for (var C2 = 8; C2 <= 23; C2++) {
+                var tAddr = XLSX.utils.encode_cell({r: totalsRowIdx, c: C2});
+                if (ws[tAddr] && typeof ws[tAddr].v === 'number') {
+                    if (C2 === 8 || C2 === 10 || C2 === 12 || C2 === 14 || C2 === 16 || C2 === 18 || C2 === 20 || C2 === 23) ws[tAddr].z = '0.00%';
+                    else ws[tAddr].z = '0.00';
+                }
             }
-            // Diversion rate cell
-            var c4addr = XLSX.utils.encode_cell({r: mr, c: 4});
-            if (ws[c4addr] && typeof ws[c4addr].v === 'number' && ws[c4addr].v > 0 && ws[c4addr].v <= 1) {
-                ws[c4addr].z = '0%';
+            // Totals lbs columns
+            for (var cl = 2; cl <= 7; cl++) {
+                var tlAddr = XLSX.utils.encode_cell({r: totalsRowIdx, c: cl});
+                if (ws[tlAddr] && typeof ws[tlAddr].v === 'number') {
+                    ws[tlAddr].z = cl === 2 || cl === 4 || cl === 6 ? '#,##0' : '0.00';
+                }
             }
-        }
+            
+            // Summary rows formatting
+            var summaryStart = totalsRowIdx + 2;
+            var bTons = XLSX.utils.encode_cell({r: summaryStart, c: 1});
+            if (ws[bTons]) ws[bTons].z = '0.0';
+            var bDiv = XLSX.utils.encode_cell({r: summaryStart+1, c: 1});
+            if (ws[bDiv]) ws[bDiv].z = '0.00';
+            var bPct = XLSX.utils.encode_cell({r: summaryStart+2, c: 1});
+            if (ws[bPct]) ws[bPct].z = '0%';
+            
+            // Truncate sheet name to 31 chars (Excel limit)
+            var sheetName = monthName.length > 31 ? monthName.substring(0,31) : monthName;
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        });
         
-        // Summary diversion rate
-        var sumRow = rows.indexOf(rows.find(function(r) { return r[0] === reportData.length; }));
-        if (sumRow >= 0) {
-            var drAddr = XLSX.utils.encode_cell({r: sumRow, c: 4});
-            if (ws[drAddr]) ws[drAddr].z = '0%';
-        }
-        
-        XLSX.utils.book_append_sheet(wb, ws, 'LEED Diversion Report');
-        
-        var filename = 'LEED_Report_' + (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+        var filename = (currentProject.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().getFullYear() + '.xlsx';
         XLSX.writeFile(wb, filename);
         
-        toast('Excel report downloaded!', 'success');
+        toast('Excel report downloaded! (' + monthKeys.length + ' month sheet' + (monthKeys.length > 1 ? 's' : '') + ')', 'success');
         
     } catch (err) {
         console.error('Excel export error:', err);
@@ -9729,15 +9789,55 @@ function switchLoginTab(tab) {
     event.target.classList.add('active');
     
     document.getElementById('adminLoginForm').classList.add('hidden');
-    document.getElementById('operatorLoginForm').classList.add('hidden');
-    document.getElementById('customerLoginForm').classList.add('hidden');
+    document.getElementById('portalLoginForm').classList.add('hidden');
     
     if (tab === 'admin') {
         document.getElementById('adminLoginForm').classList.remove('hidden');
-    } else if (tab === 'operator') {
-        document.getElementById('operatorLoginForm').classList.remove('hidden');
     } else {
-        document.getElementById('customerLoginForm').classList.remove('hidden');
+        document.getElementById('portalLoginForm').classList.remove('hidden');
+    }
+}
+
+// Unified portal login — smart routing: crew codes → operator, project codes → customer
+async function doPortalLogin() {
+    var code = (document.getElementById('portalCode').value || '').trim().toUpperCase();
+    if (!code) {
+        document.getElementById('portalLoginError').textContent = 'Please enter an access code';
+        return;
+    }
+    
+    // Check if it's a crew/operator code
+    if (code === 'DALMEX' || code === 'DALMEX2025' || code === 'CREW') {
+        userRole = 'operator';
+        localStorage.setItem('divertscan_session', JSON.stringify({ role: 'operator', time: Date.now() }));
+        showMainApp();
+        return;
+    }
+    
+    // Otherwise try customer project code
+    if (!sb) {
+        var url = localStorage.getItem('divertscan_sb_url') || DEFAULT_KEYS.sbUrl;
+        var key = localStorage.getItem('divertscan_sb_key') || DEFAULT_KEYS.sbKey;
+        if (url && key) {
+            sb = supabase.createClient(url, key);
+        } else {
+            document.getElementById('portalLoginError').textContent = 'System not configured. Contact DalMex at (214) 352-2000.';
+            return;
+        }
+    }
+    
+    try {
+        var result = await sb.from('projects').select('*').eq('access_code', code).single();
+        if (result.error || !result.data) {
+            document.getElementById('portalLoginError').textContent = 'Invalid access code';
+            return;
+        }
+        userRole = 'customer';
+        currentProject = result.data;
+        localStorage.setItem('divertscan_session', JSON.stringify({ role: 'customer', projectId: result.data.id, time: Date.now() }));
+        showMainApp();
+    } catch(err) {
+        document.getElementById('portalLoginError').textContent = 'Error: ' + err.message;
     }
 }
 
@@ -9754,60 +9854,7 @@ function doAdminLogin() {
     }
 }
 
-async function doCustomerLogin() {
-    const code = document.getElementById('customerCode').value.trim().toUpperCase();
-    
-    if (!code) {
-        document.getElementById('customerLoginError').textContent = 'Please enter an access code';
-        return;
-    }
-    
-    if (!sb) {
-        const url = localStorage.getItem('divertscan_sb_url') || DEFAULT_KEYS.sbUrl;
-        const key = localStorage.getItem('divertscan_sb_key') || DEFAULT_KEYS.sbKey;
-        if (url && key) {
-            sb = supabase.createClient(url, key);
-        } else {
-            document.getElementById('customerLoginError').textContent = 'System not configured. Contact DalMex at (214) 352-2000.';
-            return;
-        }
-    }
-    
-    try {
-        const { data, error } = await sb.from('projects').select('*').eq('access_code', code).single();
-        
-        if (error || !data) {
-            document.getElementById('customerLoginError').textContent = 'Invalid access code';
-            return;
-        }
-        
-        userRole = 'customer';
-        currentProject = data;
-        localStorage.setItem('divertscan_session', JSON.stringify({ 
-            role: 'customer', 
-            projectId: data.id, 
-            time: Date.now() 
-        }));
-        showMainApp();
-    } catch (err) {
-        document.getElementById('customerLoginError').textContent = 'Error: ' + err.message;
-    }
-}
-
-function doOperatorLogin() {
-    var code = (document.getElementById('operatorCode').value || '').trim().toUpperCase();
-    if (!code) {
-        document.getElementById('operatorLoginError').textContent = 'Enter crew code';
-        return;
-    }
-    if (code === 'DALMEX' || code === 'DALMEX2025' || code === 'CREW') {
-        userRole = 'operator';
-        localStorage.setItem('divertscan_session', JSON.stringify({ role: 'operator', time: Date.now() }));
-        showMainApp();
-    } else {
-        document.getElementById('operatorLoginError').textContent = 'Invalid crew code';
-    }
-}
+// Legacy login functions removed — unified into doPortalLogin()
 
 function showMainApp() {
     document.getElementById('loginScreen').classList.add('hidden');
