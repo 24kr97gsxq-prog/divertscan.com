@@ -8030,9 +8030,15 @@ async function importSelectedSheet(index) {
     closeSheetSelector();
     showLoading('Importing selected tab...');
     
-    const sheetName = pendingExcelWorkbook.SheetNames[index];
-    await processExcelSheet(pendingExcelWorkbook, sheetName, pendingExcelFile?.name || 'excel');
+    try {
+        const sheetName = pendingExcelWorkbook.SheetNames[index];
+        await processExcelSheet(pendingExcelWorkbook, sheetName, pendingExcelFile?.name || 'excel');
+    } catch(err) {
+        console.error('Import error:', err);
+        toast('Import failed: ' + err.message, 'error');
+    }
     
+    hideLoading();
     pendingExcelWorkbook = null;
     pendingExcelFile = null;
 }
@@ -8047,18 +8053,23 @@ async function importAllSheets() {
     let totalImported = 0;
     let totalFailed = 0;
     
-    for (let i = 0; i < workbook.SheetNames.length; i++) {
-        showLoading(`Importing tab ${i + 1} of ${workbook.SheetNames.length}...`);
-        const result = await processExcelSheet(workbook, workbook.SheetNames[i], filename, true);
-        totalImported += result.imported;
-        totalFailed += result.failed;
+    try {
+        for (let i = 0; i < workbook.SheetNames.length; i++) {
+            showLoading(`Importing tab ${i + 1} of ${workbook.SheetNames.length}...`);
+            const result = await processExcelSheet(workbook, workbook.SheetNames[i], filename, true);
+            totalImported += result.imported;
+            totalFailed += result.failed;
+        }
+    } catch(err) {
+        console.error('Import all error:', err);
+        toast('Import failed: ' + err.message, 'error');
     }
     
     hideLoading();
     
     if (totalFailed > 0) {
         toast(`Imported ${totalImported} tickets total, ${totalFailed} failed`, 'warning');
-    } else {
+    } else if (totalImported > 0) {
         toast(`Successfully imported ${totalImported} tickets from all tabs!`, 'success');
     }
     
@@ -8349,36 +8360,67 @@ async function processExcelSheet(workbook, sheetName, filename, silent = false) 
     let imported = 0;
     let failed = 0;
     
-    for (const ticket of tickets) {
+    // Try batch Supabase insert first (much faster than one-by-one)
+    if (sb) {
         try {
-            // Generate unique ID for local storage
-            const ticketWithId = { 
-                ...ticket, 
-                id: 'imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                synced: false 
-            };
+            logMsg(`☁️ Batch inserting ${tickets.length} tickets to Supabase...`);
+            const { data: insertedData, error } = await sb.from('tickets').insert(tickets).select('id');
             
-            // Always save locally first (IndexedDB)
-            await saveToLocal('tickets', ticketWithId);
-            
-            // Try Supabase if configured (don't fail if it errors)
-            if (sb) {
-                try {
-                    const { error } = await sb.from('tickets').insert([ticket]);
-                    if (!error) {
-                        ticketWithId.synced = true;
-                        await saveToLocal('tickets', ticketWithId);
+            if (error) {
+                logMsg(`❌ Batch insert error: ${error.message}`);
+                logMsg(`⚠️ Trying one-by-one fallback...`);
+                
+                // Fallback: insert one by one
+                for (const ticket of tickets) {
+                    try {
+                        const { error: singleErr } = await sb.from('tickets').insert([ticket]);
+                        if (singleErr) {
+                            logMsg(`❌ Ticket #${ticket.ticket_number}: ${singleErr.message}`);
+                            failed++;
+                        } else {
+                            imported++;
+                        }
+                    } catch (e) {
+                        logMsg(`❌ Ticket #${ticket.ticket_number}: ${e.message}`);
+                        failed++;
                     }
-                } catch (sbErr) {
-                    console.log('Supabase sync skipped:', sbErr.message);
+                }
+            } else {
+                imported = tickets.length;
+                logMsg(`✅ Batch insert successful: ${imported} tickets`);
+            }
+        } catch (sbErr) {
+            logMsg(`❌ Supabase error: ${sbErr.message}`);
+            // Fall back to IndexedDB only
+            for (const ticket of tickets) {
+                try {
+                    const ticketWithId = { 
+                        ...ticket, 
+                        id: 'imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                        synced: false 
+                    };
+                    await saveToLocal('tickets', ticketWithId);
+                    imported++;
+                } catch (err) {
+                    failed++;
                 }
             }
-            
-            imported++;
-        } catch (err) {
-            console.error('Import error for ticket:', ticket.ticket_number, err);
-            logMsg(`❌ Failed to save ticket #${ticket.ticket_number}: ${err.message}`);
-            failed++;
+        }
+    } else {
+        // No Supabase — save locally only
+        for (const ticket of tickets) {
+            try {
+                const ticketWithId = { 
+                    ...ticket, 
+                    id: 'imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    synced: false 
+                };
+                await saveToLocal('tickets', ticketWithId);
+                imported++;
+            } catch (err) {
+                logMsg(`❌ Local save failed: ${err.message}`);
+                failed++;
+            }
         }
     }
     
