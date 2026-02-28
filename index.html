@@ -13042,6 +13042,101 @@ window.onload = async function() {
   </nav>
 
   <script src="divertscan_quickbooks_export.js"></script>
+<script>
+// ── DIVERTSCAN PHOTO PATCH v1.0 ──────────────────────────────────────
+// Fetches scale_photo_url from Supabase and injects photos into report
+const _DS_SB = 'https://cyvvlngtojagfoaitoog.supabase.co';
+const _DS_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+const _DS_PROJ = 'fd12486c-5187-4ecc-b99a-91341dd37b73';
 
+window._dsPhotoMap = {};
+
+async function dsLoadPhotos() {
+  try {
+    const r = await fetch(
+      `${_DS_SB}/rest/v1/tickets?project_id=eq.${_DS_PROJ}&select=ticket_number,ticket_date,diversion_rate,scale_photo_url,debris_photo_url&limit=200`,
+      { headers: { 'apikey': _DS_KEY, 'Authorization': 'Bearer ' + _DS_KEY } }
+    );
+    const rows = await r.json();
+    rows.forEach(row => {
+      window._dsPhotoMap[String(row.ticket_number)] = {
+        scale: row.scale_photo_url,
+        debris: row.debris_photo_url,
+        div: row.diversion_rate,
+        date: row.ticket_date
+      };
+    });
+    console.log('[DS Photo Patch] Loaded ' + rows.length + ' photo records from Supabase');
+    dsInjectPhotos();
+  } catch(e) {
+    console.warn('[DS Photo Patch] Failed to load photos:', e);
+  }
+}
+
+function dsInjectPhotos() {
+  // Find all rows in the report table and inject photo thumbnails
+  const table = document.getElementById('reportContent');
+  if (!table) return;
+  const rows = table.querySelectorAll('tr');
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    // Find the PHOTOS cell (contains "—" or is empty)
+    cells.forEach(td => {
+      if (td.textContent.trim() === '—' || td.getAttribute('data-col') === 'photos') {
+        // Find ticket number from this row
+        const ticketCell = cells[1] || cells[0];
+        if (!ticketCell) return;
+        const ticketNum = ticketCell.textContent.trim().replace('#','');
+        const p = window._dsPhotoMap[ticketNum];
+        if (p && p.scale) {
+          td.innerHTML = `
+            <a href="${p.scale}" target="_blank" title="Scale Ticket #${ticketNum}">
+              <img src="${p.scale}" style="width:40px;height:40px;object-fit:cover;border-radius:5px;border:2px solid #10b981;display:block">
+            </a>
+            ${p.debris ? `<a href="${p.debris}" target="_blank" title="Debris Photo">
+              <img src="${p.debris}" style="width:40px;height:40px;object-fit:cover;border-radius:5px;border:2px solid #3b82f6;margin-top:3px;display:block">
+            </a>` : ''}`;
+          td.style.padding = '4px';
+        }
+      }
+    });
+    // Also fix diversion rate if showing 0%
+    cells.forEach((td, i) => {
+      const ticketCell = cells[1] || cells[0];
+      if (!ticketCell) return;
+      const ticketNum = ticketCell.textContent.trim().replace('#','');
+      const p = window._dsPhotoMap[ticketNum];
+      if (p && p.div && td.textContent.trim() === '0%') {
+        td.textContent = p.div + '%';
+        td.style.color = p.div >= 75 ? '#10b981' : p.div >= 50 ? '#f59e0b' : '#ef4444';
+      }
+    });
+  });
+}
+
+// Auto-inject when report tab is opened or report is regenerated
+const _origGenerateReport = window.generateReport;
+window.generateReport = async function(...args) {
+  if (_origGenerateReport) await _origGenerateReport.apply(this, args);
+  setTimeout(dsInjectPhotos, 800);
+};
+
+// Watch for report content changes (MutationObserver)
+const _dsObserver = new MutationObserver(() => {
+  if (Object.keys(window._dsPhotoMap).length > 0) dsInjectPhotos();
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const rc = document.getElementById('reportContent');
+  if (rc) _dsObserver.observe(rc, { childList: true, subtree: true });
+  dsLoadPhotos();
+});
+
+// Also expose for manual trigger
+window.dsRefreshPhotos = async function() {
+  window._dsPhotoMap = {};
+  await dsLoadPhotos();
+  console.log('[DS] Photos refreshed');
+};
+</script>
 </body>
 </html>
