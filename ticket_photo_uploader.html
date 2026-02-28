@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>DivertScan™ — Scale Ticket Photo Uploader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e13;
+    --surface: #111820;
+    --surface2: #182030;
+    --border: #1e2d3d;
+    --accent: #00e5a0;
+    --accent2: #0096ff;
+    --warn: #ff6b35;
+    --text: #e8f0f8;
+    --muted: #5a7a9a;
+    --success: #00c97a;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+  }
+  .header-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .header-subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+  .header-badge {
+    background: rgba(0,229,160,0.1);
+    border: 1px solid rgba(0,229,160,0.3);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── PROJECT BANNER ── */
+  .project-banner {
+    background: linear-gradient(135deg, rgba(0,150,255,0.08), rgba(0,229,160,0.05));
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .project-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .project-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .project-stat {
+    margin-left: auto;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .stat-item {
+    text-align: right;
+  }
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── MAIN ── */
+  .main { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+  /* ── INSTRUCTIONS ── */
+  .instructions {
+    background: rgba(0,150,255,0.06);
+    border: 1px solid rgba(0,150,255,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #8ab8d8;
+    line-height: 1.6;
+  }
+  .instructions strong { color: var(--accent2); }
+
+  /* ── FILTER BAR ── */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,160,0.07);
+  }
+
+  /* ── PROGRESS ── */
+  .progress-bar-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .progress-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+  .progress-pct {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* ── TICKET GRID ── */
+  .ticket-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ── TICKET CARD ── */
+  .ticket-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .ticket-card.has-scale { border-left: 3px solid var(--accent2); }
+  .ticket-card.has-both { border-left: 3px solid var(--accent); }
+  .ticket-card.uploading { border-color: rgba(0,229,160,0.4); }
+
+  .ticket-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .ticket-header:active { background: rgba(255,255,255,0.02); }
+
+  .ticket-num {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 80px;
+  }
+  .ticket-date {
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 88px;
+  }
+  .ticket-weight {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .ticket-diverted {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    margin-left: auto;
+    margin-right: 8px;
+  }
+  .ticket-status-icons {
+    display: flex;
+    gap: 4px;
+  }
+  .icon-badge {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .icon-badge.filled-scale { background: rgba(0,150,255,0.15); border-color: rgba(0,150,255,0.4); }
+  .icon-badge.filled-debris { background: rgba(0,229,160,0.15); border-color: rgba(0,229,160,0.4); }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    display: none;
+    padding: 12px 14px 14px;
+    border-top: 1px solid var(--border);
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .ticket-card.open .upload-zone { display: flex; }
+
+  .upload-slot {
+    flex: 1;
+    min-width: 140px;
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    background: var(--bg);
+  }
+  .upload-slot:hover, .upload-slot.dragover {
+    border-color: var(--accent);
+    background: rgba(0,229,160,0.04);
+  }
+  .upload-slot.has-photo {
+    border-style: solid;
+    border-color: var(--accent);
+    background: rgba(0,229,160,0.06);
+  }
+  .upload-slot input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+    width: 100%; height: 100%;
+  }
+  .slot-icon { font-size: 22px; margin-bottom: 6px; }
+  .slot-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+  .slot-hint { font-size: 10px; color: var(--muted); }
+  .slot-filename {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 5px;
+    word-break: break-all;
+  }
+  .slot-preview {
+    width: 100%; height: 70px;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-top: 6px;
+    display: none;
+  }
+  .slot-preview.visible { display: block; }
+
+  /* ── UPLOAD BUTTON ── */
+  .upload-btn {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #000;
+    border: none;
+    border-radius: 7px;
+    padding: 10px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: opacity 0.2s;
+    align-self: flex-end;
+    white-space: nowrap;
+  }
+  .upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .upload-btn:not(:disabled):hover { opacity: 0.85; }
+
+  .upload-status {
+    font-size: 11px;
+    align-self: flex-end;
+    padding-bottom: 12px;
+    min-height: 16px;
+  }
+  .upload-status.ok { color: var(--success); }
+  .upload-status.err { color: var(--warn); }
+
+  /* ── BULK UPLOAD ── */
+  .bulk-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .bulk-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .bulk-drop {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .bulk-drop:hover, .bulk-drop.dragover {
+    border-color: var(--accent2);
+    background: rgba(0,150,255,0.04);
+  }
+  .bulk-drop input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .bulk-drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .bulk-drop-text { font-size: 13px; color: var(--muted); }
+  .bulk-drop-text strong { color: var(--accent2); }
+  .bulk-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .bulk-matches {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bulk-match-row {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .bulk-match-row.matched { border-color: rgba(0,229,160,0.3); }
+  .bulk-match-row.unmatched { border-color: rgba(255,107,53,0.3); }
+  .match-file { font-family: var(--mono); font-size: 11px; color: var(--text); flex: 1; }
+  .match-ticket { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .match-type { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .match-status-ok { color: var(--success); font-size: 14px; }
+  .match-status-err { color: var(--warn); font-size: 14px; }
+
+  .bulk-apply-btn {
+    margin-top: 12px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 7px;
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    display: none;
+  }
+  .bulk-apply-btn.visible { display: block; }
+
+  /* ── MONTH SEPARATOR ── */
+  .month-sep {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 12px 4px 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .month-count {
+    background: var(--surface2);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+
+  /* ── SUPABASE SQL PANEL ── */
+  .sql-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 24px;
+  }
+  .sql-panel-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--warn);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .sql-block {
+    background: #060a0e;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #7ec8e3;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .sql-copy-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sql-copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    transform: translateY(60px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    max-width: 280px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-brand">
+    <div class="header-logo">DS</div>
+    <div>
+      <div class="header-title">DIVERTSCAN™ APEX</div>
+      <div class="header-subtitle">Scale Ticket Photo Manager</div>
+    </div>
+  </div>
+  <div class="header-badge">v7.7 LEED</div>
+</div>
+
+<!-- PROJECT BANNER -->
+<div class="project-banner">
+  <div>
+    <div class="project-tag">Active Project</div>
+    <div class="project-name">Children's Hospital — Dallas, TX</div>
+  </div>
+  <div class="project-stat">
+    <div class="stat-item">
+      <div class="stat-val" id="statTickets">65</div>
+      <div class="stat-label">Total Tickets</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val" id="statPhotos">0</div>
+      <div class="stat-label">Photos Linked</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val" id="statComplete">0%</div>
+      <div class="stat-label">Complete</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- INSTRUCTIONS -->
+  <div class="instructions">
+    <strong>How to upload photos:</strong> Each scale ticket has two photo slots — 
+    <strong>Scale Ticket</strong> (photo of the printed weigh ticket) and 
+    <strong>Debris Load</strong> (photo of the load contents). 
+    Use <strong>Bulk Upload</strong> to drop all photos at once — name your files with the ticket number 
+    (e.g. <code>83435_scale.jpg</code> or <code>83435_debris.jpg</code>) and they will auto-match. 
+    Or tap any ticket row to upload individually.
+  </div>
+
+  <!-- BULK UPLOAD -->
+  <div class="bulk-section">
+    <div class="bulk-title">⚡ Bulk Photo Import — Drop All at Once</div>
+    <div class="bulk-drop" id="bulkDrop">
+      <input type="file" id="bulkInput" multiple accept="image/*">
+      <div class="bulk-drop-icon">📁</div>
+      <div class="bulk-drop-text">
+        <strong>Tap or drag photos here</strong><br>
+        Name files: <code>83435_scale.jpg</code> · <code>83435_debris.jpg</code>
+      </div>
+      <div class="bulk-hint">Supports JPG, PNG, HEIC — tap any ticket below to upload individually</div>
+    </div>
+    <div class="bulk-matches" id="bulkMatches"></div>
+    <button class="bulk-apply-btn" id="bulkApplyBtn" onclick="applyBulkMatches()">
+      Apply All Matched Photos →
+    </button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-bar-wrap">
+    <span class="progress-label">Photo Coverage</span>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span class="progress-pct" id="progressPct">0%</span>
+  </div>
+
+  <!-- FILTER -->
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterTickets('all', this)">All (65)</button>
+    <button class="filter-btn" onclick="filterTickets('missing', this)">Missing Photos</button>
+    <button class="filter-btn" onclick="filterTickets('partial', this)">Partial</button>
+    <button class="filter-btn" onclick="filterTickets('complete', this)">Complete ✓</button>
+    <button class="filter-btn" onclick="filterTickets('sep25', this)">Sep 2025</button>
+    <button class="filter-btn" onclick="filterTickets('oct25', this)">Oct 2025</button>
+    <button class="filter-btn" onclick="filterTickets('nov25', this)">Nov 2025</button>
+    <button class="filter-btn" onclick="filterTickets('jan26', this)">Jan 2026</button>
+    <button class="filter-btn" onclick="filterTickets('feb26', this)">Feb 2026</button>
+  </div>
+
+  <!-- TICKET GRID -->
+  <div class="ticket-grid" id="ticketGrid"></div>
+
+  <!-- SUPABASE SQL PANEL -->
+  <div class="sql-panel">
+    <div class="sql-panel-title">📋 Supabase Storage — Photo URL Update SQL</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">
+      After uploading photos to Supabase Storage, run this SQL to link them to your tickets. 
+      Update the bucket path to match your Supabase storage bucket name.
+    </div>
+    <div class="sql-block" id="sqlBlock">-- Photo URLs will appear here after you link photos above.
+-- Format: UPDATE tickets SET scale_photo_url = '...', debris_photo_url = '...' WHERE ticket_number = XXXXX;
+
+-- Example:
+-- UPDATE tickets 
+--   SET scale_photo_url = 'https://[project].supabase.co/storage/v1/object/public/ticket-photos/83435_scale.jpg',
+--       debris_photo_url = 'https://[project].supabase.co/storage/v1/object/public/ticket-photos/83435_debris.jpg'
+-- WHERE project_id = 'fd12486c-5187-4ecc-b99a-91341dd37b73' 
+--   AND ticket_number = 83435;</div>
+    <button class="sql-copy-btn" onclick="copySql()">Copy SQL</button>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── TICKET DATA (all 65 tickets) ──────────────────────────────────────
+const TICKETS = [
+  // Sep 2025
+  {num:85060, date:'2025-09-08', gwt:41100, tare:33800, net:3.65, div:95.0, month:'sep25'},
+  {num:85231, date:'2025-09-29', gwt:41780, tare:34260, net:3.76, div:80.0, month:'sep25'},
+  {num:85234, date:'2025-09-29', gwt:33600, tare:24760, net:4.42, div:65.0, month:'sep25'},
+  // Oct 2025
+  {num:83779, date:'2025-10-03', gwt:40900, tare:34230, net:3.34, div:75.0, month:'oct25'},
+  {num:83808, date:'2025-10-07', gwt:43540, tare:32720, net:5.41, div:80.0, month:'oct25'},
+  {num:83805, date:'2025-10-07', gwt:42160, tare:33280, net:4.44, div:75.0, month:'oct25'},
+  {num:83860, date:'2025-10-14', gwt:40100, tare:32980, net:3.56, div:60.0, month:'oct25'},
+  {num:83863, date:'2025-10-14', gwt:41730, tare:33140, net:4.30, div:45.0, month:'oct25'},
+  {num:83889, date:'2025-10-16', gwt:40970, tare:31243, net:4.86, div:60.0, month:'oct25'},
+  {num:83891, date:'2025-10-16', gwt:40900, tare:33780, net:3.56, div:50.0, month:'oct25'},
+  {num:83899, date:'2025-10-17', gwt:37200, tare:34120, net:1.54, div:65.0, month:'oct25'},
+  {num:83906, date:'2025-10-17', gwt:38960, tare:33580, net:2.69, div:60.0, month:'oct25'},
+  {num:83989, date:'2025-10-20', gwt:39640, tare:32220, net:3.71, div:60.0, month:'oct25'},
+  {num:83967, date:'2025-10-23', gwt:41170, tare:33680, net:3.75, div:65.0, month:'oct25'},
+  {num:83968, date:'2025-10-23', gwt:40740, tare:33770, net:3.49, div:70.0, month:'oct25'},
+  {num:83953, date:'2025-10-23', gwt:40920, tare:32310, net:4.31, div:60.0, month:'oct25'},
+  {num:83964, date:'2025-10-25', gwt:40320, tare:32890, net:3.72, div:65.0, month:'oct25'},
+  // Nov 2025
+  {num:82872, date:'2025-11-07', gwt:38080, tare:32060, net:3.01, div:73.0, month:'nov25'},
+  {num:82883, date:'2025-11-10', gwt:40200, tare:32100, net:4.05, div:68.0, month:'nov25'},
+  {num:82885, date:'2025-11-11', gwt:42340, tare:32700, net:4.82, div:65.0, month:'nov25'},
+  {num:82985, date:'2025-11-11', gwt:41330, tare:32700, net:4.32, div:65.0, month:'nov25'},
+  {num:82986, date:'2025-11-12', gwt:39710, tare:32060, net:3.83, div:72.0, month:'nov25'},
+  {num:83000, date:'2025-11-14', gwt:40240, tare:33220, net:3.51, div:74.0, month:'nov25'},
+  {num:82999, date:'2025-11-16', gwt:41430, tare:32620, net:4.41, div:70.0, month:'nov25'},
+  {num:84504, date:'2025-11-17', gwt:39950, tare:32720, net:3.62, div:70.0, month:'nov25'},
+  {num:84505, date:'2025-11-18', gwt:42640, tare:32300, net:5.17, div:77.0, month:'nov25'},
+  {num:84509, date:'2025-11-25', gwt:40770, tare:32670, net:4.05, div:65.0, month:'nov25'},
+  {num:84537, date:'2025-11-28', gwt:42680, tare:33940, net:4.37, div:73.0, month:'nov25'},
+  {num:84540, date:'2025-11-28', gwt:40590, tare:32350, net:4.12, div:77.0, month:'nov25'},
+  {num:84541, date:'2025-11-28', gwt:36910, tare:32670, net:2.12, div:40.0, month:'nov25'},
+  // Jan 2026
+  {num:83285, date:'2026-01-12', gwt:43710, tare:32660, net:5.53, div:65.0, month:'jan26'},
+  {num:83286, date:'2026-01-12', gwt:39380, tare:33020, net:3.18, div:70.0, month:'jan26'},
+  {num:83287, date:'2026-01-13', gwt:41730, tare:32900, net:4.42, div:60.0, month:'jan26'},
+  {num:83288, date:'2026-01-13', gwt:40100, tare:33740, net:3.18, div:65.0, month:'jan26'},
+  {num:83289, date:'2026-01-15', gwt:39080, tare:33820, net:2.63, div:65.0, month:'jan26'},
+  {num:83290, date:'2026-01-15', gwt:38640, tare:32120, net:3.26, div:65.0, month:'jan26'},
+  {num:83291, date:'2026-01-16', gwt:37930, tare:32400, net:2.77, div:45.0, month:'jan26'},
+  {num:83292, date:'2026-01-16', gwt:36870, tare:32010, net:2.43, div:45.0, month:'jan26'},
+  {num:83462, date:'2026-01-20', gwt:40200, tare:32580, net:3.81, div:75.0, month:'jan26'},
+  {num:83458, date:'2026-01-20', gwt:43640, tare:32820, net:5.41, div:75.0, month:'jan26'},
+  {num:83358, date:'2026-01-20', gwt:39440, tare:31220, net:4.11, div:60.0, month:'jan26'},
+  {num:83461, date:'2026-01-22', gwt:41360, tare:33530, net:3.92, div:66.0, month:'jan26'},
+  {num:83398, date:'2026-01-22', gwt:44910, tare:32500, net:6.21, div:62.0, month:'jan26'},
+  {num:83399, date:'2026-01-23', gwt:39660, tare:33550, net:3.06, div:70.0, month:'jan26'},
+  {num:83400, date:'2026-01-23', gwt:37080, tare:32610, net:2.24, div:71.0, month:'jan26'},
+  {num:83418, date:'2026-01-24', gwt:39320, tare:33020, net:3.15, div:65.0, month:'jan26'},
+  {num:83419, date:'2026-01-24', gwt:41360, tare:33240, net:4.06, div:66.0, month:'jan26'},
+  {num:83406, date:'2026-01-29', gwt:38960, tare:32470, net:3.25, div:63.0, month:'jan26'},
+  {num:83407, date:'2026-01-29', gwt:41030, tare:32460, net:4.29, div:67.0, month:'jan26'},
+  {num:83425, date:'2026-01-30', gwt:38460, tare:33020, net:2.72, div:61.0, month:'jan26'},
+  {num:83426, date:'2026-01-30', gwt:40020, tare:33080, net:3.47, div:68.0, month:'jan26'},
+  {num:83444, date:'2026-01-31', gwt:38840, tare:32920, net:2.96, div:62.0, month:'jan26'},
+  {num:83445, date:'2026-01-31', gwt:39030, tare:33440, net:2.80, div:74.0, month:'jan26'},
+  // Feb 2026
+  {num:83435, date:'2026-02-03', gwt:46520, tare:32120, net:7.20, div:60.0, month:'feb26'},
+  {num:83436, date:'2026-02-05', gwt:43680, tare:33500, net:5.09, div:69.0, month:'feb26'},
+  {num:83440, date:'2026-02-07', gwt:40320, tare:33400, net:3.46, div:67.0, month:'feb26'},
+  {num:83441, date:'2026-02-07', gwt:41460, tare:32840, net:4.31, div:65.0, month:'feb26'},
+  {num:83442, date:'2026-02-07', gwt:39490, tare:33440, net:3.03, div:70.0, month:'feb26'},
+  {num:83109, date:'2026-02-10', gwt:39340, tare:32910, net:3.22, div:63.0, month:'feb26'},
+  {num:83113, date:'2026-02-11', gwt:40020, tare:33560, net:3.23, div:52.0, month:'feb26'},
+  {num:83097, date:'2026-02-12', gwt:38090, tare:33130, net:2.48, div:53.0, month:'feb26'},
+  {num:83098, date:'2026-02-13', gwt:39010, tare:33200, net:2.91, div:81.0, month:'feb26'},
+  {num:83099, date:'2026-02-14', gwt:39840, tare:33060, net:3.39, div:75.0, month:'feb26'},
+  {num:83064, date:'2026-02-16', gwt:40600, tare:32120, net:4.24, div:61.0, month:'feb26'},
+  {num:83133, date:'2026-02-23', gwt:38300, tare:33200, net:2.55, div:73.0, month:'feb26'},
+];
+
+// State
+const photoState = {}; // {ticketNum: {scale: File|null, debris: File|null}}
+TICKETS.forEach(t => { photoState[t.num] = {scale: null, debris: null}; });
+
+const MONTH_LABELS = {
+  sep25: 'September 2025', oct25: 'October 2025',
+  nov25: 'November 2025', jan26: 'January 2026', feb26: 'February 2026'
+};
+
+let currentFilter = 'all';
+
+// ── RENDER ─────────────────────────────────────────────────────────────
+function render() {
+  const grid = document.getElementById('ticketGrid');
+  grid.innerHTML = '';
+
+  const filtered = filterList();
+  let lastMonth = null;
+
+  filtered.forEach(t => {
+    if (t.month !== lastMonth) {
+      const sep = document.createElement('div');
+      sep.className = 'month-sep';
+      const count = TICKETS.filter(x => x.month === t.month).length;
+      sep.innerHTML = `${MONTH_LABELS[t.month]} <span class="month-count">${count} tickets</span>`;
+      grid.appendChild(sep);
+      lastMonth = t.month;
+    }
+    grid.appendChild(makeCard(t));
+  });
+
+  updateStats();
+}
+
+function filterList() {
+  return TICKETS.filter(t => {
+    const s = photoState[t.num];
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'missing') return !s.scale && !s.debris;
+    if (currentFilter === 'partial') return (s.scale || s.debris) && !(s.scale && s.debris);
+    if (currentFilter === 'complete') return s.scale && s.debris;
+    return t.month === currentFilter;
+  });
+}
+
+function makeCard(t) {
+  const s = photoState[t.num];
+  const card = document.createElement('div');
+  card.className = 'ticket-card';
+  card.id = `card-${t.num}`;
+  if (s.scale && s.debris) card.classList.add('has-both');
+  else if (s.scale) card.classList.add('has-scale');
+
+  const scaleIcon = s.scale ? 'filled-scale' : '';
+  const debrisIcon = s.debris ? 'filled-debris' : '';
+
+  card.innerHTML = `
+    <div class="ticket-header" onclick="toggleCard(${t.num})">
+      <div class="ticket-num">#${t.num}</div>
+      <div class="ticket-date">${formatDate(t.date)}</div>
+      <div class="ticket-weight">${t.net.toFixed(2)}T net</div>
+      <div class="ticket-diverted">${t.div}% div</div>
+      <div class="ticket-status-icons">
+        <div class="icon-badge ${scaleIcon}" title="Scale ticket photo">🧾</div>
+        <div class="icon-badge ${debrisIcon}" title="Debris load photo">📸</div>
+      </div>
+    </div>
+    <div class="upload-zone" id="zone-${t.num}">
+      <div class="upload-slot ${s.scale ? 'has-photo' : ''}" id="slot-scale-${t.num}">
+        <input type="file" accept="image/*" onchange="handleFile(${t.num}, 'scale', this)">
+        <div class="slot-icon">🧾</div>
+        <div class="slot-label">Scale Ticket</div>
+        <div class="slot-hint">Photo of weigh ticket</div>
+        <div class="slot-filename" id="fn-scale-${t.num}">${s.scale ? s.scale.name : ''}</div>
+        <img class="slot-preview ${s.scale ? 'visible' : ''}" id="prev-scale-${t.num}">
+      </div>
+      <div class="upload-slot ${s.debris ? 'has-photo' : ''}" id="slot-debris-${t.num}">
+        <input type="file" accept="image/*" onchange="handleFile(${t.num}, 'debris', this)">
+        <div class="slot-icon">📸</div>
+        <div class="slot-label">Debris Load</div>
+        <div class="slot-hint">Photo of load contents</div>
+        <div class="slot-filename" id="fn-debris-${t.num}">${s.debris ? s.debris.name : ''}</div>
+        <img class="slot-preview ${s.debris ? 'visible' : ''}" id="prev-debris-${t.num}">
+      </div>
+      <button class="upload-btn" onclick="uploadTicket(${t.num})" 
+        ${(!s.scale && !s.debris) ? 'disabled' : ''}>
+        Save to Log
+      </button>
+      <div class="upload-status" id="status-${t.num}"></div>
+    </div>
+  `;
+  return card;
+}
+
+function toggleCard(num) {
+  const zone = document.getElementById(`zone-${num}`);
+  const card = document.getElementById(`card-${num}`);
+  card.classList.toggle('open');
+}
+
+function formatDate(d) {
+  const [y,m,day] = d.split('-');
+  const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m)]} ${parseInt(day)}, ${y}`;
+}
+
+// ── FILE HANDLING ────────────────────────────────────────────────────
+function handleFile(num, type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  photoState[num][type] = file;
+
+  const slot = document.getElementById(`slot-${type}-${num}`);
+  slot.classList.add('has-photo');
+  document.getElementById(`fn-${type}-${num}`).textContent = file.name;
+
+  const prev = document.getElementById(`prev-${type}-${num}`);
+  prev.src = URL.createObjectURL(file);
+  prev.classList.add('visible');
+
+  const btn = document.querySelector(`#card-${num} .upload-btn`);
+  if (btn) btn.removeAttribute('disabled');
+
+  updateCardClass(num);
+  updateStats();
+  updateSqlBlock();
+}
+
+function updateCardClass(num) {
+  const card = document.getElementById(`card-${num}`);
+  const s = photoState[num];
+  card.classList.remove('has-scale', 'has-both');
+  if (s.scale && s.debris) card.classList.add('has-both');
+  else if (s.scale) card.classList.add('has-scale');
+}
+
+// ── UPLOAD (simulated — replace with real Supabase Storage upload) ───
+async function uploadTicket(num) {
+  const s = photoState[num];
+  const statusEl = document.getElementById(`status-${num}`);
+  statusEl.textContent = 'Saving...';
+  statusEl.className = 'upload-status';
+
+  // Simulate upload delay — replace with actual Supabase Storage upload
+  await new Promise(r => setTimeout(r, 800));
+
+  // In production, use:
+  // const { data, error } = await supabase.storage.from('ticket-photos').upload(`${num}_scale.jpg`, s.scale);
+  
+  statusEl.textContent = s.scale && s.debris ? '✓ Both photos saved' : '✓ Photo saved';
+  statusEl.className = 'upload-status ok';
+  showToast(`Ticket #${num} photos saved`);
+  updateSqlBlock();
+}
+
+// ── BULK UPLOAD ──────────────────────────────────────────────────────
+const bulkMatches = [];
+
+document.getElementById('bulkInput').addEventListener('change', function() {
+  processBulkFiles(Array.from(this.files));
+});
+
+const bulkDrop = document.getElementById('bulkDrop');
+bulkDrop.addEventListener('dragover', e => { e.preventDefault(); bulkDrop.classList.add('dragover'); });
+bulkDrop.addEventListener('dragleave', () => bulkDrop.classList.remove('dragover'));
+bulkDrop.addEventListener('drop', e => {
+  e.preventDefault();
+  bulkDrop.classList.remove('dragover');
+  processBulkFiles(Array.from(e.dataTransfer.files));
+});
+
+function processBulkFiles(files) {
+  bulkMatches.length = 0;
+  const container = document.getElementById('bulkMatches');
+  container.innerHTML = '';
+
+  const ticketNums = new Set(TICKETS.map(t => t.num));
+
+  files.forEach(file => {
+    const name = file.name.toLowerCase();
+    // Try to extract ticket number: 83435_scale.jpg, 83435-debris.png, scale_83435.jpg, 83435.jpg
+    const numMatch = name.match(/(\d{5,6})/);
+    const isScale = /scale|ticket|wt|weigh/.test(name);
+    const isDebris = /debris|load|dump|waste|material/.test(name);
+    const type = isDebris ? 'debris' : 'scale'; // default to scale if ambiguous
+
+    if (numMatch) {
+      const num = parseInt(numMatch[1]);
+      if (ticketNums.has(num)) {
+        bulkMatches.push({file, num, type, matched: true});
+        container.innerHTML += `
+          <div class="bulk-match-row matched">
+            <span class="match-status-ok">✓</span>
+            <span class="match-file">${file.name}</span>
+            <span class="match-ticket">#${num}</span>
+            <span class="match-type">${type}</span>
+          </div>`;
+      } else {
+        bulkMatches.push({file, num, type, matched: false});
+        container.innerHTML += `
+          <div class="bulk-match-row unmatched">
+            <span class="match-status-err">✗</span>
+            <span class="match-file">${file.name}</span>
+            <span style="color:var(--warn);font-family:var(--mono);font-size:11px;">#${num} not found</span>
+          </div>`;
+      }
+    } else {
+      container.innerHTML += `
+        <div class="bulk-match-row unmatched">
+          <span class="match-status-err">?</span>
+          <span class="match-file">${file.name}</span>
+          <span style="color:var(--warn);font-size:11px;">No ticket # in filename</span>
+        </div>`;
+    }
+  });
+
+  const goodCount = bulkMatches.filter(m => m.matched).length;
+  const btn = document.getElementById('bulkApplyBtn');
+  if (goodCount > 0) {
+    btn.textContent = `Apply ${goodCount} Matched Photos →`;
+    btn.classList.add('visible');
+  }
+}
+
+function applyBulkMatches() {
+  bulkMatches.filter(m => m.matched).forEach(m => {
+    photoState[m.num][m.type] = m.file;
+    updateCardClass(m.num);
+  });
+  render();
+  updateSqlBlock();
+  showToast(`${bulkMatches.filter(m=>m.matched).length} photos applied`);
+  document.getElementById('bulkApplyBtn').classList.remove('visible');
+  document.getElementById('bulkMatches').innerHTML = '';
+}
+
+// ── STATS & PROGRESS ─────────────────────────────────────────────────
+function updateStats() {
+  let photos = 0;
+  TICKETS.forEach(t => {
+    const s = photoState[t.num];
+    if (s.scale) photos++;
+    if (s.debris) photos++;
+  });
+  const total = TICKETS.length * 2;
+  const pct = Math.round(photos / total * 100);
+
+  document.getElementById('statPhotos').textContent = photos;
+  document.getElementById('statComplete').textContent = pct + '%';
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+}
+
+// ── FILTER ───────────────────────────────────────────────────────────
+function filterTickets(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+// ── SQL BLOCK ────────────────────────────────────────────────────────
+function updateSqlBlock() {
+  const PROJECT_ID = 'fd12486c-5187-4ecc-b99a-91341dd37b73';
+  const BUCKET = 'ticket-photos';
+  const SUPABASE_URL = 'https://[your-project].supabase.co';
+
+  const lines = ['-- Run in Supabase SQL Editor after uploading photos to Storage bucket\n'];
+
+  TICKETS.forEach(t => {
+    const s = photoState[t.num];
+    if (!s.scale && !s.debris) return;
+    const scaleUrl = s.scale ? `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${t.num}_scale.jpg` : 'NULL';
+    const debrisUrl = s.debris ? `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${t.num}_debris.jpg` : 'NULL';
+    lines.push(
+      `UPDATE tickets SET\n` +
+      `  scale_photo_url = '${scaleUrl}',\n` +
+      `  debris_photo_url = '${debrisUrl}'\n` +
+      `WHERE project_id = '${PROJECT_ID}' AND ticket_number = ${t.num};\n`
+    );
+  });
+
+  if (lines.length === 1) {
+    lines.push('-- Link photos above to generate UPDATE statements.');
+  }
+
+  document.getElementById('sqlBlock').textContent = lines.join('\n');
+}
+
+function copySql() {
+  const text = document.getElementById('sqlBlock').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('SQL copied to clipboard'));
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
