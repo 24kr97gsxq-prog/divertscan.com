@@ -1238,7 +1238,120 @@
             <div class="modal-handle"></div>
             <div class="modal-title" id="ticketDetailTitle">Ticket Details</div>
             <div id="ticketDetailContent"></div>
-            <button class="btn btn-outline mt-12" onclick="DS.closeModal('ticketDetailModal')">Close</button>
+            <div class="btn-row mt-12">
+                <button class="btn btn-outline" onclick="DS.closeModal('ticketDetailModal')">Close</button>
+                <button class="btn btn-primary" id="editTicketBtn" onclick="DS.editCurrentTicket()">✏️ Edit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Project Modal -->
+    <div class="modal-overlay" id="editProjectModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">Edit Project</div>
+            <input type="hidden" id="editProjId">
+            <div class="form-group">
+                <label class="form-label">Project Name *</label>
+                <input type="text" class="form-input" id="editProjName">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Client</label>
+                <input type="text" class="form-input" id="editProjClient">
+            </div>
+            <div class="form-group">
+                <label class="form-label">General Contractor</label>
+                <input type="text" class="form-input" id="editProjGC">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Location / Address</label>
+                <input type="text" class="form-input" id="editProjLocation">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Waste Hauler</label>
+                    <input type="text" class="form-input" id="editProjHauler">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">LEED Target %</label>
+                    <input type="number" class="form-input" id="editProjTarget">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Access Code</label>
+                <input type="text" class="form-input" id="editProjAccess" readonly style="color:var(--text-muted);">
+            </div>
+            <button class="btn btn-success mt-8" onclick="DS.saveProjectEdit()">💾 Save Changes</button>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('editProjectModal')">Cancel</button>
+            <div class="divider"></div>
+            <button class="btn btn-danger btn-sm" onclick="DS.deleteProject()">🗑️ Delete Project</button>
+        </div>
+    </div>
+
+    <!-- Edit Ticket Modal -->
+    <div class="modal-overlay" id="editTicketModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title" id="editTicketTitle">Edit Ticket</div>
+            <input type="hidden" id="editTktId">
+            <div class="form-group">
+                <label class="form-label">Ticket Number</label>
+                <input type="text" class="form-input" id="editTktNum">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ticket Date</label>
+                <input type="date" class="form-input" id="editTktDate">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Gross (lbs)</label>
+                    <input type="number" class="form-input" id="editTktGross" oninput="DS.calcEditNet()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tare (lbs)</label>
+                    <input type="number" class="form-input" id="editTktTare" oninput="DS.calcEditNet()">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Net (lbs)</label>
+                    <input type="number" class="form-input" id="editTktNet" readonly style="color:var(--primary); font-weight:700;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Net (tons)</label>
+                    <input type="number" class="form-input" id="editTktTons" readonly style="color:var(--primary); font-weight:700;">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Hauler</label>
+                    <input type="text" class="form-input" id="editTktHauler">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Container (yd³)</label>
+                    <input type="number" class="form-input" id="editTktContainer">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="editTktNotes"></textarea>
+            </div>
+            <div class="divider"></div>
+            <div class="card-title"><span class="icon">📊</span> Material Breakdown</div>
+            <div id="editMaterialSliders"></div>
+            <div class="pct-total invalid" id="editPctTotal">Total: 0%</div>
+            <div class="divider"></div>
+
+            <!-- Photo Uploads -->
+            <div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div>
+            <div id="editScalePhotoArea"></div>
+            <div class="card-title mt-12"><span class="icon">📸</span> Debris Photos</div>
+            <div id="editDebrisPhotoArea"></div>
+
+            <button class="btn btn-success mt-12" onclick="DS.saveTicketEdit()">💾 Save Changes</button>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('editTicketModal')">Cancel</button>
+            <div class="divider"></div>
+            <button class="btn btn-danger btn-sm" onclick="DS.deleteTicket()">🗑️ Delete Ticket</button>
         </div>
     </div>
 
@@ -1513,13 +1626,14 @@
                 return;
             }
             el.innerHTML = this.state.projects.map(p => `
-                <div class="ticket-item" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-                    <div class="ticket-icon" style="background:var(--primary-glow);">🏗️</div>
-                    <div class="ticket-info">
+                <div class="ticket-item" style="position:relative;">
+                    <div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">🏗️</div>
+                    <div class="ticket-info" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">
                         <div class="ticket-title">${this.esc(p.name)}</div>
                         <div class="ticket-meta">${[p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ')}</div>
                         <div class="ticket-meta">Target: ${p.leed_target}% | Code: ${p.access_code || 'N/A'}</div>
                     </div>
+                    <button class="btn btn-sm btn-outline" style="width:auto; padding:6px 10px; flex-shrink:0;" onclick="event.stopPropagation(); DS.showEditProject('${p.id}')">✏️</button>
                 </div>
             `).join('');
         },
@@ -1645,8 +1759,288 @@
             }
 
             this.hideLoading();
-            // Refresh the detail view
-            this.showTicketDetail(ticketId);
+            // Refresh whichever view is open
+            if (document.getElementById('editTicketModal').classList.contains('show')) {
+                this.showEditTicket(ticketId);
+            } else {
+                this.showTicketDetail(ticketId);
+            }
+        },
+
+        // ============================================================
+        // EDIT PROJECT
+        // ============================================================
+        showEditProject(projectId) {
+            const p = this.state.projects.find(x => x.id === projectId);
+            if (!p) return;
+            document.getElementById('editProjId').value = p.id;
+            document.getElementById('editProjName').value = p.name || '';
+            document.getElementById('editProjClient').value = p.client || '';
+            document.getElementById('editProjGC').value = p.general_contractor || '';
+            document.getElementById('editProjLocation').value = p.location || '';
+            document.getElementById('editProjHauler').value = p.waste_hauler || '';
+            document.getElementById('editProjTarget').value = p.leed_target || 75;
+            document.getElementById('editProjAccess').value = p.access_code || '';
+            this.openModal('editProjectModal');
+        },
+
+        async saveProjectEdit() {
+            const id = document.getElementById('editProjId').value;
+            const name = document.getElementById('editProjName').value.trim();
+            if (!name) { this.showToast('Project name required'); return; }
+
+            const updates = {
+                name,
+                client: document.getElementById('editProjClient').value.trim() || null,
+                general_contractor: document.getElementById('editProjGC').value.trim() || null,
+                location: document.getElementById('editProjLocation').value.trim() || null,
+                waste_hauler: document.getElementById('editProjHauler').value.trim() || null,
+                leed_target: parseInt(document.getElementById('editProjTarget').value) || 75,
+                updated_at: new Date().toISOString()
+            };
+
+            this.showLoading('Saving...');
+            const result = await this.supabase(`projects?id=eq.${id}`, 'PATCH', updates);
+            this.hideLoading();
+
+            if (result !== null) {
+                // Update local state
+                const idx = this.state.projects.findIndex(p => p.id === id);
+                if (idx >= 0) Object.assign(this.state.projects[idx], updates);
+                if (this.state.currentProject?.id === id) Object.assign(this.state.currentProject, updates);
+
+                this.renderProjectList();
+                this.closeModal('editProjectModal');
+                this.showToast(`"${name}" updated ✓`);
+                this.addAuditEntry('PROJECT_EDIT', `Updated: ${name}`);
+
+                // Refresh header displays
+                if (this.state.currentProject?.id === id) this.selectProject(this.state.currentProject);
+            } else {
+                this.showToast('Save failed');
+            }
+        },
+
+        async deleteProject() {
+            const id = document.getElementById('editProjId').value;
+            const p = this.state.projects.find(x => x.id === id);
+            if (!p) return;
+
+            if (!confirm(`Delete "${p.name}" and all its tickets? This cannot be undone.`)) return;
+
+            this.showLoading('Deleting...');
+            // Delete tickets first (FK constraint)
+            await this.supabase(`tickets?project_id=eq.${id}`, 'DELETE');
+            await this.supabase(`projects?id=eq.${id}`, 'DELETE');
+            this.hideLoading();
+
+            this.state.projects = this.state.projects.filter(x => x.id !== id);
+            if (this.state.currentProject?.id === id) {
+                this.state.currentProject = null;
+                this.state.tickets = [];
+                document.getElementById('currentProjectName').textContent = 'No Project';
+                document.getElementById('scanProjectName').textContent = 'Select a Project';
+                document.getElementById('scanProjectMeta').textContent = '';
+            }
+
+            this.renderProjectList();
+            this.closeModal('editProjectModal');
+            this.showToast(`"${p.name}" deleted`);
+            this.addAuditEntry('PROJECT_DELETE', `Deleted: ${p.name}`);
+        },
+
+        // ============================================================
+        // EDIT TICKET
+        // ============================================================
+        editCurrentTicket() {
+            const titleEl = document.getElementById('ticketDetailTitle');
+            const ticketNum = titleEl.textContent.replace('Ticket ', '');
+            const t = this.state.tickets.find(x => x.ticket_number === ticketNum) ||
+                      this.state.tickets.find(x => titleEl.textContent.includes(x.ticket_number));
+            if (!t) { this.showToast('Ticket not found'); return; }
+            this.showEditTicket(t.id);
+        },
+
+        showEditTicket(ticketId) {
+            const t = this.state.tickets.find(x => x.id === ticketId);
+            if (!t) return;
+            this.closeModal('ticketDetailModal');
+
+            document.getElementById('editTktId').value = t.id;
+            document.getElementById('editTicketTitle').textContent = `Edit Ticket ${t.ticket_number}`;
+            document.getElementById('editTktNum').value = t.ticket_number || '';
+            document.getElementById('editTktDate').value = t.ticket_date || '';
+            document.getElementById('editTktGross').value = t.gross_lbs || 0;
+            document.getElementById('editTktTare').value = t.tare_lbs || 0;
+            document.getElementById('editTktNet').value = t.net_lbs || 0;
+            document.getElementById('editTktTons').value = t.net_tons || 0;
+            document.getElementById('editTktHauler').value = t.hauler || '';
+            document.getElementById('editTktContainer').value = t.container_size || 30;
+            document.getElementById('editTktNotes').value = t.notes || '';
+
+            // Build material sliders for edit
+            const el = document.getElementById('editMaterialSliders');
+            el.innerHTML = Object.keys(this.MATERIALS).map(k => {
+                const m = this.MATERIALS[k];
+                const val = t[k + '_pct'] || 0;
+                return `<div class="material-row">
+                    <span class="material-label">${m.icon} ${m.name.split('/')[0]}</span>
+                    <input type="range" class="material-range" id="editSlider_${k}" min="0" max="100" value="${val}"
+                           oninput="DS.updateEditSlider('${k}')">
+                    <span class="material-pct" id="editPct_${k}">${val}%</span>
+                    <span class="material-tons" id="editTons_${k}">${((t.net_tons || 0) * val / 100).toFixed(2)} T</span>
+                </div>`;
+            }).join('');
+            this.updateEditPctTotal();
+
+            // Scale ticket photo area
+            const scaleArea = document.getElementById('editScalePhotoArea');
+            if (t.scale_ticket_image) {
+                scaleArea.innerHTML = `
+                    <img src="${t.scale_ticket_image}" style="width:100%; border-radius:8px; margin-bottom:8px;">
+                    <div class="btn-row">
+                        <div class="photo-upload" style="padding:10px; flex:1;"><div class="upload-text" style="font-size:0.75rem;">Replace photo</div>
+                            <input type="file" accept="image/*" capture="environment" onchange="DS.uploadTicketPhoto('${t.id}', 'scale', this)">
+                        </div>
+                    </div>`;
+            } else {
+                scaleArea.innerHTML = `
+                    <div class="photo-upload" style="padding:16px;">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">Add scale ticket photo</div>
+                        <input type="file" accept="image/*" capture="environment" onchange="DS.uploadTicketPhoto('${t.id}', 'scale', this)">
+                    </div>`;
+            }
+
+            // Debris photos area
+            const debrisArea = document.getElementById('editDebrisPhotoArea');
+            const existing = Array.isArray(t.debris_images) ? t.debris_images : [];
+            debrisArea.innerHTML = `
+                ${existing.length > 0 ? `<div class="photo-grid mb-12">${existing.map(u => `<div class="photo-thumb"><img src="${u}"></div>`).join('')}</div>` : ''}
+                <div class="photo-upload" style="padding:12px;">
+                    <div class="upload-icon">📸</div>
+                    <div class="upload-text">${existing.length > 0 ? 'Add more debris photos' : 'Add debris photos'}</div>
+                    <input type="file" accept="image/*" multiple capture="environment" onchange="DS.uploadTicketPhoto('${t.id}', 'debris', this)">
+                </div>`;
+
+            this.openModal('editTicketModal');
+        },
+
+        calcEditNet() {
+            const gross = parseInt(document.getElementById('editTktGross').value) || 0;
+            const tare = parseInt(document.getElementById('editTktTare').value) || 0;
+            const net = gross - tare;
+            document.getElementById('editTktNet').value = net;
+            document.getElementById('editTktTons').value = (net / 2000).toFixed(2);
+            Object.keys(this.MATERIALS).forEach(k => this.updateEditSlider(k));
+        },
+
+        updateEditSlider(key) {
+            const slider = document.getElementById(`editSlider_${key}`);
+            const pct = parseInt(slider.value);
+            document.getElementById(`editPct_${key}`).textContent = pct + '%';
+            const netTons = parseFloat(document.getElementById('editTktTons')?.value) || 0;
+            document.getElementById(`editTons_${key}`).textContent = (netTons * pct / 100).toFixed(2) + ' T';
+            this.updateEditPctTotal();
+        },
+
+        updateEditPctTotal() {
+            let total = 0;
+            Object.keys(this.MATERIALS).forEach(k => {
+                total += parseInt(document.getElementById(`editSlider_${k}`)?.value || 0);
+            });
+            const el = document.getElementById('editPctTotal');
+            el.textContent = `Total: ${total}%`;
+            el.className = 'pct-total ' + (total === 100 ? 'valid' : 'invalid');
+        },
+
+        async saveTicketEdit() {
+            const id = document.getElementById('editTktId').value;
+            const ticketNum = document.getElementById('editTktNum').value.trim();
+            if (!ticketNum) { this.showToast('Ticket number required'); return; }
+
+            const gross = parseInt(document.getElementById('editTktGross').value) || 0;
+            const tare = parseInt(document.getElementById('editTktTare').value) || 0;
+            const net = gross - tare;
+            const netTons = +(net / 2000).toFixed(4);
+
+            // Material percentages
+            const mats = {};
+            let totalPct = 0;
+            Object.keys(this.MATERIALS).forEach(k => {
+                const pct = parseInt(document.getElementById(`editSlider_${k}`).value) || 0;
+                mats[k + '_pct'] = pct;
+                mats[k + '_tons'] = +(netTons * pct / 100).toFixed(4);
+                totalPct += pct;
+            });
+
+            if (totalPct !== 100 && net > 0) {
+                this.showToast('Material percentages must total 100%');
+                return;
+            }
+
+            const landfillPct = mats.landfill_pct || 0;
+            const diversionPct = 100 - landfillPct;
+            const divertedTons = +(netTons * diversionPct / 100).toFixed(4);
+
+            let co2e = 0;
+            Object.keys(this.MATERIALS).forEach(k => {
+                if (k !== 'landfill') co2e += (mats[k + '_tons'] || 0) * this.MATERIALS[k].gwp;
+            });
+            co2e = +co2e.toFixed(4);
+
+            const updates = {
+                ticket_number: ticketNum,
+                ticket_date: document.getElementById('editTktDate').value || null,
+                gross_lbs: gross,
+                tare_lbs: tare,
+                net_lbs: net,
+                net_tons: netTons,
+                hauler: document.getElementById('editTktHauler').value.trim() || null,
+                container_size: parseInt(document.getElementById('editTktContainer').value) || 30,
+                notes: document.getElementById('editTktNotes').value.trim() || null,
+                diversion_pct: diversionPct,
+                diverted_tons: divertedTons,
+                co2e_avoided: co2e,
+                last_modified: new Date().toISOString(),
+                ...mats
+            };
+
+            this.showLoading('Saving...');
+            const result = await this.supabase(`tickets?id=eq.${id}`, 'PATCH', updates);
+            this.hideLoading();
+
+            if (result !== null) {
+                const idx = this.state.tickets.findIndex(t => t.id === id);
+                if (idx >= 0) Object.assign(this.state.tickets[idx], updates);
+
+                this.renderTickets();
+                this.renderReports();
+                this.closeModal('editTicketModal');
+                this.showToast(`Ticket ${ticketNum} updated ✓`);
+                this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div`);
+            } else {
+                this.showToast('Save failed');
+            }
+        },
+
+        async deleteTicket() {
+            const id = document.getElementById('editTktId').value;
+            const t = this.state.tickets.find(x => x.id === id);
+            if (!t) return;
+
+            if (!confirm(`Delete ticket ${t.ticket_number}? This cannot be undone.`)) return;
+
+            this.showLoading('Deleting...');
+            await this.supabase(`tickets?id=eq.${id}`, 'DELETE');
+            this.hideLoading();
+
+            this.state.tickets = this.state.tickets.filter(x => x.id !== id);
+            this.renderTickets();
+            this.renderReports();
+            this.closeModal('editTicketModal');
+            this.showToast(`Ticket ${t.ticket_number} deleted`);
+            this.addAuditEntry('TICKET_DELETE', `Deleted: ${t.ticket_number}`);
         },
 
         // ============================================================
