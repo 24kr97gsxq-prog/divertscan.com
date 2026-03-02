@@ -1042,47 +1042,55 @@
 
             <!-- ========== REPORTS TAB ========== -->
             <div id="reportsTab" class="tab-content">
+                <!-- Project Header & View Toggle -->
                 <div class="card">
                     <div class="card-title"><span class="icon">📊</span> Project Dashboard</div>
                     <div id="reportProjectName" style="font-size:1.1rem; font-weight:700; margin-bottom:4px;">Select a project</div>
-                    <div id="reportProjectMeta" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:16px;"></div>
-
-                    <!-- Gauge -->
-                    <div class="gauge-container" id="gaugeContainer">
-                        <svg class="gauge-svg" viewBox="0 0 180 100">
-                            <path d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12" stroke-linecap="round"/>
-                            <path id="gaugeArc" d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="var(--primary)" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 251.2"/>
-                        </svg>
-                        <div class="gauge-label text-primary" id="gaugeValue">0%</div>
-                        <div class="gauge-sublabel">Diversion Rate</div>
-                    </div>
-
-                    <!-- Stats -->
-                    <div class="stats-grid" id="reportStats">
-                        <div class="stat-card highlight">
-                            <div class="stat-value" id="statTotalTons">0</div>
-                            <div class="stat-label">Total Tons</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value text-success" id="statDivertedTons">0</div>
-                            <div class="stat-label">Diverted Tons</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value text-danger" id="statLandfillTons">0</div>
-                            <div class="stat-label">Landfill Tons</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value text-warning" id="statCO2e">0</div>
-                            <div class="stat-label">CO₂e Avoided (mt)</div>
-                        </div>
+                    <div id="reportProjectMeta" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-sm btn-primary" id="viewAllBtn" onclick="DS.setReportView('all')">📊 All Time</button>
+                        <button class="btn btn-sm btn-outline" id="viewMonthlyBtn" onclick="DS.setReportView('monthly')">📅 By Month</button>
                     </div>
                 </div>
 
-                <!-- Material Breakdown Report -->
-                <div class="card">
-                    <div class="card-title"><span class="icon">🧱</span> Material Breakdown</div>
-                    <div id="reportMaterials"></div>
+                <!-- Project-Level Totals (All Time) -->
+                <div id="reportAllTime">
+                    <div class="card">
+                        <div class="gauge-container" id="gaugeContainer">
+                            <svg class="gauge-svg" viewBox="0 0 180 100">
+                                <path d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12" stroke-linecap="round"/>
+                                <path id="gaugeArc" d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="var(--primary)" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 251.2"/>
+                            </svg>
+                            <div class="gauge-label text-primary" id="gaugeValue">0%</div>
+                            <div class="gauge-sublabel">Overall Diversion Rate</div>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card highlight">
+                                <div class="stat-value" id="statTotalTons">0</div>
+                                <div class="stat-label">Total Tons</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-success" id="statDivertedTons">0</div>
+                                <div class="stat-label">Diverted Tons</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-danger" id="statLandfillTons">0</div>
+                                <div class="stat-label">Landfill Tons</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-warning" id="statCO2e">0</div>
+                                <div class="stat-label">CO₂e Avoided (mt)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span class="icon">🧱</span> Material Breakdown — All Time</div>
+                        <div id="reportMaterials"></div>
+                    </div>
                 </div>
+
+                <!-- Monthly Breakdown -->
+                <div id="reportMonthly" class="hidden"></div>
 
                 <!-- Export -->
                 <div class="card">
@@ -1286,12 +1294,17 @@
         async init() {
             console.log(`DivertScan™ v${this.VERSION} initializing...`);
 
-            // Load saved config
-            this.state.apiKey = localStorage.getItem('ds_openai_key');
-            this.state.supabaseUrl = localStorage.getItem('ds_supabase_url');
-            this.state.supabaseKey = localStorage.getItem('ds_supabase_key');
+            // Load saved config — check multiple key patterns from older versions
+            this.state.apiKey = localStorage.getItem('ds_openai_key') || localStorage.getItem('openai_api_key') || localStorage.getItem('divertscan_openai_key');
+            this.state.supabaseUrl = localStorage.getItem('ds_supabase_url') || localStorage.getItem('supabase_url') || localStorage.getItem('divertscan_supabase_url');
+            this.state.supabaseKey = localStorage.getItem('ds_supabase_key') || localStorage.getItem('supabase_key') || localStorage.getItem('divertscan_supabase_key');
 
-            // Populate settings fields
+            // Re-save under current keys if found from old keys
+            if (this.state.apiKey) localStorage.setItem('ds_openai_key', this.state.apiKey);
+            if (this.state.supabaseUrl) localStorage.setItem('ds_supabase_url', this.state.supabaseUrl);
+            if (this.state.supabaseKey) localStorage.setItem('ds_supabase_key', this.state.supabaseKey);
+
+            // Populate settings fields — show actual URL, mask secrets
             if (this.state.apiKey) document.getElementById('apiKeyInput').value = '••••••••';
             if (this.state.supabaseUrl) document.getElementById('supabaseUrl').value = this.state.supabaseUrl;
             if (this.state.supabaseKey) document.getElementById('supabaseKey').value = '••••••••';
@@ -1582,12 +1595,58 @@
                     <div class="stat-card"><div class="stat-value text-success">${this.fmt(t.diverted_tons)}</div><div class="stat-label">Diverted</div></div>
                     <div class="stat-card"><div class="stat-value text-warning">${this.fmt(t.co2e_avoided)}</div><div class="stat-label">CO₂e Avoided</div></div>
                 </div>
-                ${t.scale_ticket_image ? `<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div><img src="${t.scale_ticket_image}" style="width:100%;border-radius:8px;"></div>` : ''}
+                ${t.scale_ticket_image ? `<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div><img src="${t.scale_ticket_image}" style="width:100%;border-radius:8px;"></div>` : `<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div><div class="photo-upload" style="padding:16px;"><div class="upload-icon">📄</div><div class="upload-text">Add scale ticket photo</div><input type="file" accept="image/*" capture="environment" onchange="DS.uploadTicketPhoto('${t.id}', 'scale', this)"></div></div>`}
+                ${t.debris_images && t.debris_images.length > 0 ? `<div class="mt-12"><div class="card-title"><span class="icon">📸</span> Debris Photos</div><div class="photo-grid">${(Array.isArray(t.debris_images) ? t.debris_images : []).map(u => `<div class="photo-thumb"><img src="${u}"></div>`).join('')}</div></div>` : `<div class="mt-12"><div class="card-title"><span class="icon">📸</span> Debris Photos</div><div class="photo-upload" style="padding:16px;"><div class="upload-icon">📸</div><div class="upload-text">Add debris photos</div><input type="file" accept="image/*" multiple capture="environment" onchange="DS.uploadTicketPhoto('${t.id}', 'debris', this)"></div></div>`}
                 ${t.signature ? `<div class="mt-12"><div class="card-title"><span class="icon">✍️</span> Signature</div><img src="${t.signature}" style="max-width:200px;background:#fff;border-radius:8px;padding:8px;"></div>` : ''}
                 ${t.notes ? `<div class="mt-12" style="font-size:0.8rem; color:var(--text-muted);">📝 ${this.esc(t.notes)}</div>` : ''}
                 ${t.audit_id ? `<div class="mt-12" style="font-family:var(--mono); font-size:0.6rem; color:var(--warning); word-break:break-all;">🔐 ${t.audit_id}</div>` : ''}
             `;
             this.openModal('ticketDetailModal');
+        },
+
+        // ============================================================
+        // UPLOAD PHOTOS TO EXISTING TICKETS
+        // ============================================================
+        async uploadTicketPhoto(ticketId, type, input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) return;
+
+            const ticket = this.state.tickets.find(t => t.id === ticketId);
+            if (!ticket) { this.showToast('Ticket not found'); return; }
+
+            this.showLoading(`Uploading ${type} photo${files.length > 1 ? 's' : ''}...`);
+
+            if (type === 'scale') {
+                const file = files[0];
+                const path = `${ticket.project_id}/${ticket.ticket_number}_scale_${Date.now()}.jpg`;
+                const url = await this.supabaseUpload('ticket-photos', path, file);
+                if (url) {
+                    // Update ticket in Supabase
+                    await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { scale_ticket_image: url });
+                    ticket.scale_ticket_image = url;
+                    this.showToast('Scale ticket photo uploaded ✓');
+                    this.addAuditEntry('PHOTO_UPLOAD', `Scale ticket photo for ${ticket.ticket_number}`);
+                } else {
+                    this.showToast('Upload failed');
+                }
+            } else if (type === 'debris') {
+                const urls = Array.isArray(ticket.debris_images) ? [...ticket.debris_images] : [];
+                for (const file of files) {
+                    const path = `${ticket.project_id}/${ticket.ticket_number}_debris_${Date.now()}_${Math.random().toString(36).substr(2,4)}.jpg`;
+                    const url = await this.supabaseUpload('ticket-photos', path, file);
+                    if (url) urls.push(url);
+                }
+                if (urls.length > 0) {
+                    await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { debris_images: urls });
+                    ticket.debris_images = urls;
+                    this.showToast(`${files.length} debris photo${files.length > 1 ? 's' : ''} uploaded ✓`);
+                    this.addAuditEntry('PHOTO_UPLOAD', `${files.length} debris photo(s) for ${ticket.ticket_number}`);
+                }
+            }
+
+            this.hideLoading();
+            // Refresh the detail view
+            this.showTicketDetail(ticketId);
         },
 
         // ============================================================
@@ -2060,6 +2119,23 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
         // ============================================================
         // REPORTS & DASHBOARD
         // ============================================================
+        // ============================================================
+        // REPORT VIEW TOGGLE
+        // ============================================================
+        reportView: 'all',
+
+        setReportView(view) {
+            this.reportView = view;
+            document.getElementById('viewAllBtn').className = 'btn btn-sm ' + (view === 'all' ? 'btn-primary' : 'btn-outline');
+            document.getElementById('viewMonthlyBtn').className = 'btn btn-sm ' + (view === 'monthly' ? 'btn-primary' : 'btn-outline');
+            document.getElementById('reportAllTime').classList.toggle('hidden', view !== 'all');
+            document.getElementById('reportMonthly').classList.toggle('hidden', view !== 'monthly');
+            if (view === 'monthly') this.renderMonthlyReport();
+        },
+
+        // ============================================================
+        // REPORTS & DASHBOARD
+        // ============================================================
         renderReports() {
             const proj = this.state.currentProject;
             const tickets = this.state.tickets;
@@ -2075,6 +2151,33 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
                 [proj.client, proj.general_contractor, proj.location].filter(Boolean).join(' • ');
 
             // Calculate totals
+            const totals = this.calcTicketTotals(tickets);
+
+            // Update stats
+            document.getElementById('statTotalTons').textContent = this.fmt(totals.totalTons);
+            document.getElementById('statDivertedTons').textContent = this.fmt(totals.divertedTons);
+            document.getElementById('statLandfillTons').textContent = this.fmt(totals.landfillTons);
+            document.getElementById('statCO2e').textContent = this.fmt(totals.co2e);
+
+            // Update gauge
+            document.getElementById('gaugeValue').textContent = totals.divRate + '%';
+            const maxArc = 251.2;
+            const arcLen = (totals.divRate / 100) * maxArc;
+            document.getElementById('gaugeArc').setAttribute('stroke-dasharray', `${arcLen} ${maxArc}`);
+
+            const gaugeColor = totals.divRate >= (proj.leed_target || 75) ? 'var(--success)' :
+                               totals.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
+            document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
+            document.getElementById('gaugeValue').style.color = gaugeColor;
+
+            // Material breakdown — All Time
+            document.getElementById('reportMaterials').innerHTML = this.renderMaterialBars(totals.matTotals, totals.totalTons);
+
+            // Render monthly if that view is active
+            if (this.reportView === 'monthly') this.renderMonthlyReport();
+        },
+
+        calcTicketTotals(tickets) {
             let totalTons = 0, divertedTons = 0, landfillTons = 0, co2e = 0;
             const matTotals = {};
             Object.keys(this.MATERIALS).forEach(k => matTotals[k] = 0);
@@ -2090,43 +2193,113 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
             });
 
             const divRate = totalTons > 0 ? Math.round(divertedTons / totalTons * 100) : 0;
+            return { totalTons, divertedTons, landfillTons, co2e, divRate, matTotals, ticketCount: tickets.length };
+        },
 
-            // Update stats
-            document.getElementById('statTotalTons').textContent = this.fmt(totalTons);
-            document.getElementById('statDivertedTons').textContent = this.fmt(divertedTons);
-            document.getElementById('statLandfillTons').textContent = this.fmt(landfillTons);
-            document.getElementById('statCO2e').textContent = this.fmt(co2e);
-
-            // Update gauge
-            document.getElementById('gaugeValue').textContent = divRate + '%';
-            const maxArc = 251.2;
-            const arcLen = (divRate / 100) * maxArc;
-            document.getElementById('gaugeArc').setAttribute('stroke-dasharray', `${arcLen} ${maxArc}`);
-
-            // Color gauge based on target
-            const gaugeColor = divRate >= (proj.leed_target || 75) ? 'var(--success)' :
-                               divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
-            document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
-            document.getElementById('gaugeValue').style.color = gaugeColor;
-
-            // Material breakdown
-            const matEl = document.getElementById('reportMaterials');
+        renderMaterialBars(matTotals, totalTons) {
             const sorted = Object.keys(this.MATERIALS)
                 .filter(k => matTotals[k] > 0)
                 .sort((a, b) => matTotals[b] - matTotals[a]);
 
             if (sorted.length === 0) {
-                matEl.innerHTML = '<div class="empty-state"><div class="empty-text">No material data yet</div></div>';
-            } else {
-                matEl.innerHTML = sorted.map(k => {
-                    const pct = totalTons > 0 ? Math.round(matTotals[k] / totalTons * 100) : 0;
-                    return `<div class="stream-bar">
-                        <span class="stream-name">${this.MATERIALS[k].icon} ${this.MATERIALS[k].name.split('/')[0]}</span>
-                        <div class="stream-track"><div class="stream-fill" style="width:${pct}%; background:${this.MATERIALS[k].color};"></div></div>
-                        <span class="stream-pct">${this.fmt(matTotals[k])}T</span>
-                    </div>`;
-                }).join('');
+                return '<div class="empty-state"><div class="empty-text">No material data yet</div></div>';
             }
+
+            return sorted.map(k => {
+                const pct = totalTons > 0 ? Math.round(matTotals[k] / totalTons * 100) : 0;
+                return `<div class="stream-bar">
+                    <span class="stream-name">${this.MATERIALS[k].icon} ${this.MATERIALS[k].name.split('/')[0]}</span>
+                    <div class="stream-track"><div class="stream-fill" style="width:${pct}%; background:${this.MATERIALS[k].color};"></div></div>
+                    <span class="stream-pct">${this.fmt(matTotals[k])}T</span>
+                </div>`;
+            }).join('');
+        },
+
+        renderMonthlyReport() {
+            const proj = this.state.currentProject;
+            const tickets = this.state.tickets;
+            const container = document.getElementById('reportMonthly');
+
+            if (!proj || tickets.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">No ticket data</div></div>';
+                return;
+            }
+
+            // Group tickets by month (YYYY-MM)
+            const months = {};
+            tickets.forEach(t => {
+                const d = t.ticket_date || t.service_date || '';
+                const key = d.substring(0, 7); // YYYY-MM
+                if (!key || key.length < 7) return;
+                if (!months[key]) months[key] = [];
+                months[key].push(t);
+            });
+
+            // Sort months newest first
+            const sortedMonths = Object.keys(months).sort().reverse();
+
+            const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+
+            let html = '';
+
+            // Running cumulative totals for project-to-date tracking
+            let cumTons = 0, cumDiverted = 0;
+
+            // Process oldest to newest for cumulative, but we'll display newest first
+            const monthDataMap = {};
+            sortedMonths.slice().reverse().forEach(key => {
+                const mTickets = months[key];
+                const totals = this.calcTicketTotals(mTickets);
+                cumTons += totals.totalTons;
+                cumDiverted += totals.divertedTons;
+                const cumRate = cumTons > 0 ? Math.round(cumDiverted / cumTons * 100) : 0;
+                monthDataMap[key] = { ...totals, cumTons, cumDiverted, cumRate };
+            });
+
+            sortedMonths.forEach(key => {
+                const [year, month] = key.split('-');
+                const monthName = monthNames[parseInt(month)] || month;
+                const data = monthDataMap[key];
+                const target = proj.leed_target || 75;
+                const statusColor = data.divRate >= target ? 'var(--success)' :
+                                    data.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
+                const statusIcon = data.divRate >= target ? '✅' : data.divRate >= 50 ? '⚠️' : '❌';
+
+                html += `
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📅</span> ${monthName} ${year}
+                        <span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" style="font-size:1.1rem;">${data.ticketCount}</div>
+                            <div class="stat-label">Tickets</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" style="font-size:1.1rem;">${this.fmt(data.totalTons)}</div>
+                            <div class="stat-label">Total Tons</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value text-success" style="font-size:1.1rem;">${this.fmt(data.divertedTons)}</div>
+                            <div class="stat-label">Diverted</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value text-warning" style="font-size:1.1rem;">${this.fmt(data.co2e)}</div>
+                            <div class="stat-label">CO₂e (mt)</div>
+                        </div>
+                    </div>
+                    ${this.renderMaterialBars(data.matTotals, data.totalTons)}
+                    <div class="divider"></div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
+                        <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
+                        <span>Cumulative: <strong style="color:${data.cumRate >= target ? 'var(--success)' : 'var(--warning)'};">${data.cumRate}%</strong> diverted</span>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
         },
 
         // ============================================================
