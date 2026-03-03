@@ -2852,6 +2852,7 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
             this._batchType = type;
             this._batchFiles = [];
             this._batchMatches = [];
+            this._batchBase64 = [];
 
             const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
             document.getElementById('batchUploadTitle').textContent = title;
@@ -2869,27 +2870,33 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
 
             this._batchFiles = files;
             this._batchMatches = new Array(files.length).fill(null);
+            this._batchBase64 = new Array(files.length).fill(null);
 
             // Build ticket options dropdown
             const tickets = this.state.tickets.sort((a,b) => (a.ticket_number || '').localeCompare(b.ticket_number || ''));
             const optionsHtml = `<option value="">— Select ticket —</option>` +
                 tickets.map(t => `<option value="${t.id}">${t.ticket_number} (${(t.ticket_date||'').substring(5)} • ${this.fmt(t.net_tons)}T)</option>`).join('');
 
-            let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px; font-weight:600;">${files.length} photo${files.length > 1 ? 's' : ''} selected — match each to a ticket:</div>`;
+            let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">${files.length} photo${files.length > 1 ? 's' : ''} selected</div>`;
+
+            if (this._batchType === 'scale') {
+                html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" onclick="DS.aiBatchOCR()">🤖 AI Read All Ticket Numbers</button>`;
+            }
 
             files.forEach((file, idx) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
+                    this._batchBase64[idx] = e.target.result;
                     const el = document.getElementById(`batchThumb_${idx}`);
                     if (el) el.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
 
-                html += `<div style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+                html += `<div id="batchRow_${idx}" style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
                     <img id="batchThumb_${idx}" src="" style="width:60px; height:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
                     <div style="flex:1; min-width:0;">
-                        <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.esc(file.name)}</div>
-                        <select class="form-select" style="font-size:0.8rem; padding:6px 8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
+                        <div id="batchStatus_${idx}" style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.esc(file.name)}</div>
+                        <select class="form-select" id="batchSelect_${idx}" style="font-size:0.8rem; padding:6px 8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
                             ${optionsHtml}
                         </select>
                     </div>
@@ -2898,6 +2905,150 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
 
             document.getElementById('batchPhotoList').innerHTML = html;
             document.getElementById('batchActions').classList.remove('hidden');
+
+            // Auto-trigger AI OCR for scale tickets after thumbnails load
+            if (this._batchType === 'scale') {
+                setTimeout(() => this.aiBatchOCR(), 500);
+            }
+        },
+
+        // ============================================================
+        // AI BATCH OCR — Read ticket numbers from photos
+        // ============================================================
+        async aiBatchOCR() {
+            if (!this.state.apiKey) {
+                this.showToast('Set OpenAI API key in Audit > Settings');
+                return;
+            }
+
+            const btn = document.getElementById('batchAiBtn');
+            if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
+
+            let matched = 0, flagged = 0;
+            const tickets = this.state.tickets;
+
+            for (let idx = 0; idx < this._batchFiles.length; idx++) {
+                const statusEl = document.getElementById(`batchStatus_${idx}`);
+                const selectEl = document.getElementById(`batchSelect_${idx}`);
+                const rowEl = document.getElementById(`batchRow_${idx}`);
+
+                if (!this._batchBase64[idx]) {
+                    await new Promise(r => setTimeout(r, 200));
+                    if (!this._batchBase64[idx]) continue;
+                }
+
+                if (statusEl) {
+                    statusEl.textContent = '🔍 Reading...';
+                    statusEl.style.color = 'var(--primary)';
+                }
+
+                try {
+                    const b64 = this._batchBase64[idx];
+
+                    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.state.apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            max_tokens: 150,
+                            messages: [{
+                                role: 'user',
+                                content: [
+                                    { type: 'image_url', image_url: { url: b64, detail: 'low' } },
+                                    { type: 'text', text: 'This is a photo of a scale ticket from a recycling facility. Read the RED PRINTED ticket number (usually 5 digits in the top right corner). Also read the date, gross weight, tare weight, and net weight. Reply ONLY in this exact JSON format, no other text: {"ticket_number":"XXXXX","date":"MM-DD-YY","gross":XXXXX,"tare":XXXXX,"net":XXXXX}' }
+                                ]
+                            }]
+                        })
+                    });
+
+                    const data = await res.json();
+                    const text = data.choices?.[0]?.message?.content || '';
+
+                    let parsed = null;
+                    try {
+                        const jsonStr = text.match(/\{[^}]+\}/)?.[0];
+                        if (jsonStr) parsed = JSON.parse(jsonStr);
+                    } catch(e) {}
+
+                    if (parsed && parsed.ticket_number) {
+                        const ticketNum = parsed.ticket_number.trim();
+                        const matchedTicket = tickets.find(t =>
+                            t.ticket_number === ticketNum ||
+                            t.ticket_number === ticketNum.replace(/^0+/, '')
+                        );
+
+                        if (matchedTicket) {
+                            // Cross-check weights from photo against database
+                            const discrepancies = [];
+                            const photoGross = parseInt(parsed.gross) || 0;
+                            const photoTare = parseInt(parsed.tare) || 0;
+                            const photoNet = parseInt(parsed.net) || 0;
+                            const dbGross = parseInt(matchedTicket.gross_lbs) || 0;
+                            const dbTare = parseInt(matchedTicket.tare_lbs) || 0;
+                            const dbNet = parseInt(matchedTicket.net_lbs) || 0;
+
+                            if (photoGross > 0 && Math.abs(photoGross - dbGross) > 50) {
+                                discrepancies.push(`Gross: photo=${photoGross.toLocaleString()} vs db=${dbGross.toLocaleString()}`);
+                            }
+                            if (photoTare > 0 && Math.abs(photoTare - dbTare) > 50) {
+                                discrepancies.push(`Tare: photo=${photoTare.toLocaleString()} vs db=${dbTare.toLocaleString()}`);
+                            }
+                            if (photoNet > 0 && Math.abs(photoNet - dbNet) > 50) {
+                                discrepancies.push(`Net: photo=${photoNet.toLocaleString()} vs db=${dbNet.toLocaleString()}`);
+                            }
+
+                            // Auto-select in dropdown
+                            if (selectEl) { selectEl.value = matchedTicket.id; }
+                            this._batchMatches[idx] = matchedTicket.id;
+                            matched++;
+
+                            if (discrepancies.length > 0) {
+                                flagged++;
+                                if (statusEl) {
+                                    statusEl.innerHTML = `⚠️ <strong>#${ticketNum}</strong> matched — <span style="color:var(--danger);font-weight:700;">DISCREPANCY:</span><br><span style="font-size:0.65rem;">${discrepancies.join(' | ')}</span>`;
+                                    statusEl.style.color = 'var(--warning)';
+                                }
+                                if (rowEl) rowEl.style.background = 'var(--warning-light)';
+                                if (rowEl) rowEl.style.borderLeft = '3px solid var(--warning)';
+                                this.addAuditEntry('VERIFY_FLAG', `#${ticketNum}: ${discrepancies.join(', ')}`);
+                            } else {
+                                if (statusEl) {
+                                    statusEl.innerHTML = `✅ <strong>#${ticketNum}</strong> verified ✓ (${photoGross.toLocaleString()}/${photoTare.toLocaleString()}/${photoNet.toLocaleString()} lbs)`;
+                                    statusEl.style.color = 'var(--success)';
+                                }
+                                if (rowEl) rowEl.style.background = 'var(--success-light)';
+                            }
+                        } else {
+                            if (statusEl) {
+                                statusEl.innerHTML = `⚠️ Read <strong>#${ticketNum}</strong> — not found in project`;
+                                statusEl.style.color = 'var(--warning)';
+                            }
+                            if (rowEl) rowEl.style.background = 'var(--warning-light)';
+                        }
+                    } else {
+                        if (statusEl) {
+                            statusEl.textContent = '❌ Could not read ticket number';
+                            statusEl.style.color = 'var(--danger)';
+                        }
+                    }
+                } catch (e) {
+                    console.error('AI OCR error:', e);
+                    if (statusEl) {
+                        statusEl.textContent = '❌ AI error: ' + e.message;
+                        statusEl.style.color = 'var(--danger)';
+                    }
+                }
+            }
+
+            if (btn) {
+                btn.disabled = false;
+                const summary = flagged > 0 ? `${matched} matched, ${flagged} flagged ⚠️` : `${matched}/${this._batchFiles.length} verified ✓`;
+                btn.textContent = `🤖 Done — ${summary}`;
+            }
+            this.addAuditEntry('AI_BATCH_OCR', `Read ${this._batchFiles.length} photos, ${matched} matched, ${flagged} flagged`);
         },
 
         setBatchMatch(idx, ticketId) {
