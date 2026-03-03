@@ -2871,6 +2871,7 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
             this._batchFiles = files;
             this._batchMatches = new Array(files.length).fill(null);
             this._batchBase64 = new Array(files.length).fill(null);
+            this._batchLoaded = 0;
 
             // Build ticket options dropdown
             const tickets = this.state.tickets.sort((a,b) => (a.ticket_number || '').localeCompare(b.ticket_number || ''));
@@ -2880,23 +2881,38 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
             let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">${files.length} photo${files.length > 1 ? 's' : ''} selected</div>`;
 
             if (this._batchType === 'scale') {
-                html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" onclick="DS.aiBatchOCR()">🤖 AI Read All Ticket Numbers</button>`;
+                html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" disabled onclick="DS.aiBatchOCR()">🤖 Loading photos...</button>`;
             }
 
             files.forEach((file, idx) => {
+                // Read file to base64
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     this._batchBase64[idx] = e.target.result;
                     const el = document.getElementById(`batchThumb_${idx}`);
                     if (el) el.src = e.target.result;
+                    this._batchLoaded++;
+
+                    // When all files loaded, enable AI button and auto-run
+                    if (this._batchLoaded === this._batchFiles.length) {
+                        const btn = document.getElementById('batchAiBtn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = '🤖 AI Read All Ticket Numbers';
+                        }
+                        // Auto-trigger for scale tickets
+                        if (this._batchType === 'scale' && this.state.apiKey) {
+                            this.aiBatchOCR();
+                        }
+                    }
                 };
                 reader.readAsDataURL(file);
 
-                html += `<div id="batchRow_${idx}" style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
-                    <img id="batchThumb_${idx}" src="" style="width:60px; height:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
+                html += `<div id="batchRow_${idx}" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border);">
+                    <img id="batchThumb_${idx}" src="" onclick="DS.previewBatchPhoto(${idx})" style="width:100px; height:100px; object-fit:cover; border-radius:10px; border:2px solid var(--border); background:var(--bg-input); cursor:pointer; flex-shrink:0;">
                     <div style="flex:1; min-width:0;">
-                        <div id="batchStatus_${idx}" style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.esc(file.name)}</div>
-                        <select class="form-select" id="batchSelect_${idx}" style="font-size:0.8rem; padding:6px 8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
+                        <div id="batchStatus_${idx}" style="font-size:0.7rem; color:var(--text-muted); margin-bottom:6px;">${this.esc(file.name)}</div>
+                        <select class="form-select" id="batchSelect_${idx}" style="font-size:0.8rem; padding:8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
                             ${optionsHtml}
                         </select>
                     </div>
@@ -2905,11 +2921,14 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
 
             document.getElementById('batchPhotoList').innerHTML = html;
             document.getElementById('batchActions').classList.remove('hidden');
+        },
 
-            // Auto-trigger AI OCR for scale tickets after thumbnails load
-            if (this._batchType === 'scale') {
-                setTimeout(() => this.aiBatchOCR(), 500);
-            }
+        previewBatchPhoto(idx) {
+            const b64 = this._batchBase64[idx];
+            if (!b64) return;
+            document.getElementById('photoViewerTitle').textContent = `Photo ${idx + 1} of ${this._batchFiles.length}`;
+            document.getElementById('photoViewerContent').innerHTML = `<img src="${b64}" style="width:100%; border-radius:12px; border:1px solid var(--border);">`;
+            this.openModal('photoViewerModal');
         },
 
         // ============================================================
@@ -2932,13 +2951,22 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
                 const selectEl = document.getElementById(`batchSelect_${idx}`);
                 const rowEl = document.getElementById(`batchRow_${idx}`);
 
+                // Wait for base64 to be ready (up to 10 seconds per photo)
+                let waited = 0;
+                while (!this._batchBase64[idx] && waited < 10000) {
+                    await new Promise(r => setTimeout(r, 300));
+                    waited += 300;
+                }
                 if (!this._batchBase64[idx]) {
-                    await new Promise(r => setTimeout(r, 200));
-                    if (!this._batchBase64[idx]) continue;
+                    if (statusEl) {
+                        statusEl.textContent = '❌ Photo failed to load';
+                        statusEl.style.color = 'var(--danger)';
+                    }
+                    continue;
                 }
 
                 if (statusEl) {
-                    statusEl.textContent = '🔍 Reading...';
+                    statusEl.innerHTML = `🔍 Reading photo ${idx + 1}/${this._batchFiles.length}...`;
                     statusEl.style.color = 'var(--primary)';
                 }
 
@@ -2953,16 +2981,21 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
                         },
                         body: JSON.stringify({
                             model: 'gpt-4o',
-                            max_tokens: 150,
+                            max_tokens: 200,
                             messages: [{
                                 role: 'user',
                                 content: [
-                                    { type: 'image_url', image_url: { url: b64, detail: 'low' } },
-                                    { type: 'text', text: 'This is a photo of a scale ticket from a recycling facility. Read the RED PRINTED ticket number (usually 5 digits in the top right corner). Also read the date, gross weight, tare weight, and net weight. Reply ONLY in this exact JSON format, no other text: {"ticket_number":"XXXXX","date":"MM-DD-YY","gross":XXXXX,"tare":XXXXX,"net":XXXXX}' }
+                                    { type: 'image_url', image_url: { url: b64, detail: 'high' } },
+                                    { type: 'text', text: 'This is a scale ticket from DALMEX RECYCLING INC. Read the RED PRINTED ticket number (5 digits, top right or bottom right corner, printed in red ink — NOT handwritten). Also read the handwritten weights. Reply ONLY in this exact JSON format: {"ticket_number":"XXXXX","date":"YYYY-MM-DD","gross":XXXXX,"tare":XXXXX,"net":XXXXX}' }
                                 ]
                             }]
                         })
                     });
+
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(`API ${res.status}: ${errText.substring(0, 100)}`);
+                    }
 
                     const data = await res.json();
                     const text = data.choices?.[0]?.message?.content || '';
