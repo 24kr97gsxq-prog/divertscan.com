@@ -1073,6 +1073,14 @@
                         <button class="btn btn-sm btn-outline" onclick="DS.exportAuditJSON()">📋 GBCI JSON</button>
                     </div>
                 </div>
+                <div class="card">
+                    <div class="card-title"><span class="icon">📸</span> Batch Photo Upload</div>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Upload multiple scale ticket or debris photos at once and match them to tickets.</p>
+                    <div class="btn-row">
+                        <button class="btn btn-sm btn-primary" onclick="DS.openBatchUpload('scale')">📄 Scale Tickets</button>
+                        <button class="btn btn-sm btn-success" onclick="DS.openBatchUpload('debris')">📸 Debris Photos</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1290,6 +1298,26 @@
             <button class="btn btn-outline mt-8" onclick="DS.closeModal('editTicketModal')">Cancel</button>
             <div class="divider"></div>
             <button class="btn btn-danger btn-sm" onclick="DS.deleteTicket()">🗑️ Delete Ticket</button>
+        </div>
+    </div>
+
+    <!-- Batch Photo Upload Modal -->
+    <div class="modal-overlay" id="batchUploadModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title" id="batchUploadTitle">Batch Photo Upload</div>
+            <div class="photo-upload" style="padding:20px; margin-bottom:12px;">
+                <div class="upload-icon" id="batchUploadIcon">📄</div>
+                <div class="upload-text">Select photos from camera roll or files</div>
+                <div class="upload-hint">You can select multiple photos at once</div>
+                <input type="file" accept="image/*" multiple id="batchFileInput" onchange="DS.handleBatchFiles(this)">
+            </div>
+            <div id="batchPhotoList"></div>
+            <div id="batchActions" class="hidden">
+                <div class="divider"></div>
+                <button class="btn btn-success" onclick="DS.executeBatchUpload()">⬆️ Upload All Matched Photos</button>
+            </div>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('batchUploadModal')">Cancel</button>
         </div>
     </div>
 
@@ -2808,6 +2836,129 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
 
             document.getElementById('photoViewerContent').innerHTML = html;
             this.openModal('photoViewerModal');
+        },
+
+        // ============================================================
+        // BATCH PHOTO UPLOAD
+        // ============================================================
+        _batchType: 'scale',
+        _batchFiles: [],
+        _batchMatches: [],
+
+        openBatchUpload(type) {
+            if (!this.state.currentProject) { this.showToast('Select a project first'); return; }
+            if (this.state.tickets.length === 0) { this.showToast('No tickets loaded'); return; }
+
+            this._batchType = type;
+            this._batchFiles = [];
+            this._batchMatches = [];
+
+            const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
+            document.getElementById('batchUploadTitle').textContent = title;
+            document.getElementById('batchUploadIcon').textContent = type === 'scale' ? '📄' : '📸';
+            document.getElementById('batchPhotoList').innerHTML = '';
+            document.getElementById('batchActions').classList.add('hidden');
+            document.getElementById('batchFileInput').value = '';
+
+            this.openModal('batchUploadModal');
+        },
+
+        handleBatchFiles(input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) return;
+
+            this._batchFiles = files;
+            this._batchMatches = new Array(files.length).fill(null);
+
+            // Build ticket options dropdown
+            const tickets = this.state.tickets.sort((a,b) => (a.ticket_number || '').localeCompare(b.ticket_number || ''));
+            const optionsHtml = `<option value="">— Select ticket —</option>` +
+                tickets.map(t => `<option value="${t.id}">${t.ticket_number} (${(t.ticket_date||'').substring(5)} • ${this.fmt(t.net_tons)}T)</option>`).join('');
+
+            let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px; font-weight:600;">${files.length} photo${files.length > 1 ? 's' : ''} selected — match each to a ticket:</div>`;
+
+            files.forEach((file, idx) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const el = document.getElementById(`batchThumb_${idx}`);
+                    if (el) el.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+
+                html += `<div style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+                    <img id="batchThumb_${idx}" src="" style="width:60px; height:60px; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.esc(file.name)}</div>
+                        <select class="form-select" style="font-size:0.8rem; padding:6px 8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                </div>`;
+            });
+
+            document.getElementById('batchPhotoList').innerHTML = html;
+            document.getElementById('batchActions').classList.remove('hidden');
+        },
+
+        setBatchMatch(idx, ticketId) {
+            this._batchMatches[idx] = ticketId || null;
+        },
+
+        async executeBatchUpload() {
+            const matched = this._batchMatches.filter(Boolean);
+            if (matched.length === 0) { this.showToast('Match at least one photo to a ticket'); return; }
+
+            if (!this.state.supabaseUrl || !this.state.supabaseKey) {
+                this.showToast('Configure Supabase in Settings first');
+                return;
+            }
+
+            let uploaded = 0, failed = 0;
+            this.showLoading(`Uploading ${matched.length} photos...`);
+
+            for (let idx = 0; idx < this._batchFiles.length; idx++) {
+                const ticketId = this._batchMatches[idx];
+                if (!ticketId) continue;
+
+                const file = this._batchFiles[idx];
+                const ticket = this.state.tickets.find(t => t.id === ticketId);
+                if (!ticket) continue;
+
+                const ext = file.name.split('.').pop() || 'jpg';
+
+                if (this._batchType === 'scale') {
+                    const path = `${ticket.project_id}/${ticket.ticket_number}_scale_${Date.now()}.${ext}`;
+                    const url = await this.supabaseUpload('ticket-photos', path, file);
+                    if (url) {
+                        await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { scale_ticket_image: url });
+                        ticket.scale_ticket_image = url;
+                        uploaded++;
+                        this.addAuditEntry('BATCH_PHOTO', `Scale photo → ${ticket.ticket_number}`);
+                    } else { failed++; }
+                } else {
+                    const urls = Array.isArray(ticket.debris_images) ? [...ticket.debris_images] : [];
+                    const path = `${ticket.project_id}/${ticket.ticket_number}_debris_${Date.now()}_${Math.random().toString(36).substr(2,4)}.${ext}`;
+                    const url = await this.supabaseUpload('ticket-photos', path, file);
+                    if (url) {
+                        urls.push(url);
+                        await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { debris_images: urls });
+                        ticket.debris_images = urls;
+                        uploaded++;
+                        this.addAuditEntry('BATCH_PHOTO', `Debris photo → ${ticket.ticket_number}`);
+                    } else { failed++; }
+                }
+            }
+
+            this.hideLoading();
+            this.closeModal('batchUploadModal');
+
+            if (failed > 0) {
+                this.showToast(`${uploaded} uploaded, ${failed} failed`);
+            } else {
+                this.showToast(`${uploaded} photo${uploaded > 1 ? 's' : ''} uploaded ✓`);
+            }
+
+            this.renderTickets();
         },
 
         // ============================================================
