@@ -1495,6 +1495,61 @@
             }
         },
 
+        // ============================================================
+        // OPENAI API HELPER — handles CORS proxy for browser requests
+        // ============================================================
+        async callOpenAI(body) {
+            if (!this.state.apiKey) throw new Error('No API key');
+
+            // OpenAI API does not support CORS from browsers.
+            // Route through Supabase Edge Function if available, else use CORS proxy.
+            const directUrl = 'https://api.openai.com/v1/chat/completions';
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(directUrl);
+
+            // Try direct first (works if not blocked by CORS), then proxy
+            const urls = [directUrl, proxyUrl];
+            let lastError = null;
+
+            for (const url of urls) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + this.state.apiKey
+                        },
+                        body: JSON.stringify(body)
+                    });
+
+                    if (!res.ok) {
+                        const errBody = await res.text();
+                        let errMsg = 'API error ' + res.status;
+                        try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
+
+                        if (res.status === 401) throw new Error('Invalid API key — re-enter in Audit > Settings');
+                        if (res.status === 429) throw new Error('Rate limit or quota exceeded — check OpenAI billing');
+                        if (res.status === 404) throw new Error('Model not available on your API plan');
+                        throw new Error(errMsg);
+                    }
+
+                    return await res.json();
+                } catch (e) {
+                    lastError = e;
+                    // If it's an auth/billing error, don't retry through proxy
+                    if (e.message.includes('API key') || e.message.includes('Rate limit') || e.message.includes('not available')) {
+                        throw e;
+                    }
+                    // TypeError = network/CORS failure, try next URL
+                    if (e instanceof TypeError) {
+                        console.log('CORS blocked on ' + url.substring(0, 40) + '... trying proxy');
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+            throw lastError || new Error('Cannot reach OpenAI API');
+        },
+
         async supabaseUpload(bucket, path, file) {
             if (!this.state.supabaseUrl || !this.state.supabaseKey) return null;
             const url = `${this.state.supabaseUrl}/storage/v1/object/${bucket}/${path}`;
@@ -2377,39 +2432,17 @@
                 'Percentages MUST total exactly 100. Be accurate based on visible materials.';
 
             try {
-                const res = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + this.state.apiKey
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [{
-                            role: 'user',
-                            content: [{ type: 'text', text: prompt }, ...compressedImages]
-                        }],
-                        max_tokens: 500,
-                        temperature: 0.1
-                    })
+                const data = await this.callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{
+                        role: 'user',
+                        content: [{ type: 'text', text: prompt }, ...compressedImages]
+                    }],
+                    max_tokens: 500,
+                    temperature: 0.1
                 });
 
                 this.hideLoading();
-
-                if (!res.ok) {
-                    const errBody = await res.text();
-                    let errMsg = 'API error ' + res.status;
-                    try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
-                    console.error('Debris AI error:', res.status, errBody);
-
-                    if (res.status === 401) this.showToast('Invalid API key — re-enter in Audit > Settings');
-                    else if (res.status === 429) this.showToast('Rate limit or quota exceeded — check OpenAI billing');
-                    else if (res.status === 404) this.showToast('Model gpt-4o not available on your API plan');
-                    else this.showToast('AI error: ' + errMsg);
-                    return;
-                }
-
-                const data = await res.json();
 
                 if (data.choices && data.choices[0]) {
                     let text = data.choices[0].message.content.trim();
@@ -2428,8 +2461,8 @@
                 }
             } catch (e) {
                 this.hideLoading();
-                console.error('Debris AI network error:', e);
-                this.showToast('Network error: ' + e.message);
+                console.error('Debris AI error:', e);
+                this.showToast(e.message || 'AI analysis failed');
             }
         },
 
@@ -2494,47 +2527,20 @@
                 'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
 
             try {
-                const res = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + this.state.apiKey
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [{
-                            role: 'user',
-                            content: [
-                                { type: 'text', text: prompt },
-                                { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
-                            ]
-                        }],
-                        max_tokens: 300,
-                        temperature: 0.1
-                    })
+                const data = await this.callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                        ]
+                    }],
+                    max_tokens: 300,
+                    temperature: 0.1
                 });
 
                 this.hideLoading();
-
-                if (!res.ok) {
-                    const errBody = await res.text();
-                    let errMsg = 'API error ' + res.status;
-                    try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
-                    console.error('OCR API error:', res.status, errBody);
-
-                    if (res.status === 401) {
-                        this.showToast('Invalid API key — re-enter in Audit > Settings');
-                    } else if (res.status === 429) {
-                        this.showToast('Rate limit or quota exceeded — check your OpenAI billing');
-                    } else if (res.status === 404) {
-                        this.showToast('Model gpt-4o not available on your API key');
-                    } else {
-                        this.showToast('OCR error: ' + errMsg);
-                    }
-                    return;
-                }
-
-                const data = await res.json();
 
                 if (data.choices && data.choices[0]) {
                     let text = data.choices[0].message.content.trim();
@@ -2555,8 +2561,8 @@
                 }
             } catch (e) {
                 this.hideLoading();
-                console.error('OCR network error:', e);
-                this.showToast('Network error — check WiFi connection');
+                console.error('OCR error:', e);
+                this.showToast(e.message || 'OCR failed');
             }
         },
 
@@ -3023,34 +3029,19 @@
                         'Return ONLY valid JSON, no other text:\n' +
                         '{"ticket_number":"XXXXX","date":"YYYY-MM-DD","gross_lbs":XXXXX,"tare_lbs":XXXXX,"net_lbs":XXXXX}';
 
-                    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + this.state.apiKey
-                        },
-                        body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: [{
-                                role: 'user',
-                                content: [
-                                    { type: 'text', text: prompt },
-                                    { type: 'image_url', image_url: { url: compressedB64, detail: 'high' } }
-                                ]
-                            }],
-                            max_tokens: 300,
-                            temperature: 0.1
-                        })
+                    const data = await this.callOpenAI({
+                        model: 'gpt-4o',
+                        messages: [{
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: prompt },
+                                { type: 'image_url', image_url: { url: compressedB64, detail: 'high' } }
+                            ]
+                        }],
+                        max_tokens: 300,
+                        temperature: 0.1
                     });
 
-                    if (!res.ok) {
-                        const errBody = await res.text();
-                        let errMsg = 'API error ' + res.status;
-                        try { errMsg = JSON.parse(errBody).error?.message || errMsg; } catch(e) {}
-                        throw new Error(errMsg);
-                    }
-
-                    const data = await res.json();
                     let text = (data.choices && data.choices[0] && data.choices[0].message.content) || '';
                     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
@@ -3410,41 +3401,20 @@
             document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--primary);">🔍 Testing...</span>';
 
             try {
-                const res = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + this.state.apiKey
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [{ role: 'user', content: 'Reply with only the word OK' }],
-                        max_tokens: 5
-                    })
+                const data = await this.callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{ role: 'user', content: 'Reply with only the word OK' }],
+                    max_tokens: 5
                 });
 
-                if (res.ok) {
-                    const data = await res.json();
+                if (data.choices) {
                     document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--success);">✅ API key valid — GPT-4o access confirmed</span>';
                 } else {
-                    const errBody = await res.text();
-                    let errMsg = '';
-                    try { errMsg = JSON.parse(errBody).error.message; } catch(e) { errMsg = errBody.substring(0, 150); }
-                    console.error('API test error:', res.status, errBody);
-
-                    if (res.status === 401) {
-                        document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ Invalid or expired API key</span>';
-                    } else if (res.status === 429) {
-                        document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ Rate limited or no credits — check <a href="https://platform.openai.com/account/billing" target="_blank">OpenAI billing</a></span>';
-                    } else if (res.status === 404) {
-                        document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ GPT-4o not available — your plan may not include this model</span>';
-                    } else {
-                        document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ Error ' + res.status + ': ' + errMsg + '</span>';
-                    }
+                    document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ Unexpected response</span>';
                 }
             } catch (e) {
-                console.error('API test network error:', e);
-                document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ Network error — cannot reach api.openai.com</span>';
+                console.error('API test error:', e);
+                document.getElementById('apiKeyStatus').innerHTML = '<span style="color:var(--danger);">❌ ' + e.message + '</span>';
             }
         },
 
