@@ -2462,28 +2462,24 @@ Percentages MUST total exactly 100. Be accurate based on visible materials.`;
                 return;
             }
 
-            this.showLoading('Reading scale ticket...');
+            this.showLoading('Compressing photo...');
 
-            const prompt = `You are an OCR system for reading C&D waste scale tickets.
-Extract the following from this scale ticket image and return ONLY valid JSON:
-{
-  "ticket_number": "<string>",
-  "date": "<YYYY-MM-DD>",
-  "gross_lbs": <number>,
-  "tare_lbs": <number>,
-  "net_lbs": <number>,
-  "hauler": "<string or null>",
-  "facility": "<string or null>",
-  "confidence": <0-100>
-}
-If a field is unreadable, use null for strings and 0 for numbers.`;
+            // Compress image before sending to API
+            const compressed = await this.compressImage(base64, 1200);
+
+            this.showLoading('AI reading scale ticket...');
+
+            const prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
+                'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
+                '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","facility":"<string or null>","confidence":<0-100>}\n' +
+                'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
 
             try {
                 const res = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.state.apiKey}`
+                        'Authorization': 'Bearer ' + this.state.apiKey
                     },
                     body: JSON.stringify({
                         model: 'gpt-4o',
@@ -2491,7 +2487,7 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
                             role: 'user',
                             content: [
                                 { type: 'text', text: prompt },
-                                { type: 'image_url', image_url: { url: base64, detail: 'high' } }
+                                { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
                             ]
                         }],
                         max_tokens: 300,
@@ -2499,21 +2495,49 @@ If a field is unreadable, use null for strings and 0 for numbers.`;
                     })
                 });
 
-                const data = await res.json();
                 this.hideLoading();
+
+                if (!res.ok) {
+                    const errBody = await res.text();
+                    let errMsg = 'API error ' + res.status;
+                    try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
+                    console.error('OCR API error:', res.status, errBody);
+
+                    if (res.status === 401) {
+                        this.showToast('Invalid API key — re-enter in Audit > Settings');
+                    } else if (res.status === 429) {
+                        this.showToast('Rate limit or quota exceeded — check your OpenAI billing');
+                    } else if (res.status === 404) {
+                        this.showToast('Model gpt-4o not available on your API key');
+                    } else {
+                        this.showToast('OCR error: ' + errMsg);
+                    }
+                    return;
+                }
+
+                const data = await res.json();
 
                 if (data.choices && data.choices[0]) {
                     let text = data.choices[0].message.content.trim();
                     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                    const ocr = JSON.parse(text);
-                    this.applyOCRResults(ocr);
+                    try {
+                        const ocr = JSON.parse(text);
+                        this.applyOCRResults(ocr);
+                        this.showToast('Scale ticket read ✓ — #' + (ocr.ticket_number || '?'));
+                    } catch(pe) {
+                        console.error('OCR parse error:', text);
+                        this.showToast('AI returned invalid data — try again');
+                    }
+                } else if (data.error) {
+                    console.error('OCR error response:', data.error);
+                    this.showToast('OCR error: ' + (data.error.message || 'Unknown'));
                 } else {
-                    this.showToast('OCR failed');
+                    this.showToast('OCR returned empty response');
                 }
             } catch (e) {
                 this.hideLoading();
-                console.error('OCR error:', e);
-                this.showToast('OCR error — check API key');
+                console.error('OCR network error:', e);
+                this.showToast('Network error — check WiFi connection');
             }
         },
 
