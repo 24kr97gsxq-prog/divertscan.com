@@ -813,9 +813,9 @@
             <div class="header-row">
                 <div>
                     <h1>Divert<span>Scan</span>™</h1>
-                    <div class="header-sub">LEED v5 MRp2 • Carbon Compliance Engine</div>
+                    <div class="header-sub">LEED MRc2 • Carbon Compliance Engine</div>
                 </div>
-                <span class="leed-badge">🌿 LEED v5</span>
+                <span class="leed-badge" id="leedBadge">🌿 LEED v4</span>
             </div>
             <div class="status-row">
                 <span class="status-pill online" id="connectionStatus">
@@ -1151,8 +1151,15 @@
                     <input type="text" class="form-input" id="newProjHauler" placeholder="e.g. Jaguar Waste">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">LEED Target %</label>
-                    <input type="number" class="form-input" id="newProjTarget" value="75">
+                    <label class="form-label">LEED Version</label>
+                    <select class="form-input" id="newProjLeedVersion" onchange="DS.updateNewProjTarget()">
+                        <option value="v4" selected>LEED v4 / v4.1</option>
+                        <option value="v5">LEED v5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Diversion Target %</label>
+                    <input type="number" class="form-input" id="newProjTarget" value="50">
                 </div>
             </div>
             <button class="btn btn-success mt-8" onclick="DS.createProject()">Create Project</button>
@@ -1222,7 +1229,14 @@
                     <input type="text" class="form-input" id="editProjHauler">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">LEED Target %</label>
+                    <label class="form-label">LEED Version</label>
+                    <select class="form-input" id="editProjLeedVersion" onchange="DS.updateEditProjTarget()">
+                        <option value="v4">LEED v4 / v4.1</option>
+                        <option value="v5">LEED v5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Diversion Target %</label>
                     <input type="number" class="form-input" id="editProjTarget">
                 </div>
             </div>
@@ -1636,9 +1650,34 @@
             document.getElementById('scanProjectMeta').textContent =
                 [proj.client, proj.waste_hauler, proj.location].filter(Boolean).join(' • ');
 
+            // Update LEED badge
+            var ver = proj.leed_version || 'v4';
+            var badge = document.getElementById('leedBadge');
+            if (badge) badge.textContent = ver === 'v5' ? '🌿 LEED v5' : '🌿 LEED v4';
+
             // Load project tickets
             this.loadTickets(proj.id);
-            this.addAuditEntry('PROJECT', `Selected: ${proj.name}`);
+            this.addAuditEntry('PROJECT', 'Selected: ' + proj.name);
+        },
+
+        // LEED version helpers
+        updateNewProjTarget() {
+            var ver = document.getElementById('newProjLeedVersion').value;
+            document.getElementById('newProjTarget').value = ver === 'v5' ? 75 : 50;
+        },
+        updateEditProjTarget() {
+            var ver = document.getElementById('editProjLeedVersion').value;
+            document.getElementById('editProjTarget').value = ver === 'v5' ? 75 : 50;
+        },
+        getLeedInfo(proj) {
+            var ver = (proj && proj.leed_version) || 'v4';
+            var target = (proj && proj.leed_target) || (ver === 'v5' ? 75 : 50);
+            if (ver === 'v5') {
+                return { version: 'v5', target: target, credit: 'MRp2', isPrereq: true,
+                    tiers: [{pct:75,label:'Prerequisite'},{pct:90,label:'1 point'},{pct:95,label:'2 points'}] };
+            }
+            return { version: 'v4', target: target, credit: 'MRc2', isPrereq: false,
+                tiers: [{pct:50,label:'1 point'},{pct:75,label:'2 points'}] };
         },
 
         showProjectSelector() {
@@ -1674,7 +1713,8 @@
                 general_contractor: document.getElementById('newProjGC').value.trim() || null,
                 location: document.getElementById('newProjLocation').value.trim() || null,
                 waste_hauler: document.getElementById('newProjHauler').value.trim() || null,
-                leed_target: parseInt(document.getElementById('newProjTarget').value) || 75,
+                leed_version: document.getElementById('newProjLeedVersion').value || 'v4',
+                leed_target: parseInt(document.getElementById('newProjTarget').value) || 50,
                 access_code: this.generateAccessCode()
             };
 
@@ -1708,7 +1748,7 @@
                     <div class="ticket-info" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">
                         <div class="ticket-title">${this.esc(p.name)}</div>
                         <div class="ticket-meta">${[p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ')}</div>
-                        <div class="ticket-meta">Target: ${p.leed_target}% | Code: ${p.access_code || 'N/A'}</div>
+                        <div class="ticket-meta">LEED ${p.leed_version || 'v4'} • Target: ${p.leed_target || 50}% | Code: ${p.access_code || 'N/A'}</div>
                     </div>
                     <button class="btn btn-sm btn-outline" style="width:auto; padding:6px 10px; flex-shrink:0;" onclick="event.stopPropagation(); DS.showEditProject('${p.id}')">✏️</button>
                 </div>
@@ -1915,7 +1955,8 @@
             document.getElementById('editProjGC').value = p.general_contractor || '';
             document.getElementById('editProjLocation').value = p.location || '';
             document.getElementById('editProjHauler').value = p.waste_hauler || '';
-            document.getElementById('editProjTarget').value = p.leed_target || 75;
+            document.getElementById('editProjLeedVersion').value = p.leed_version || 'v4';
+            document.getElementById('editProjTarget').value = p.leed_target || 50;
             document.getElementById('editProjAccess').value = p.access_code || '';
             this.openModal('editProjectModal');
         },
@@ -1931,7 +1972,8 @@
                 general_contractor: document.getElementById('editProjGC').value.trim() || null,
                 location: document.getElementById('editProjLocation').value.trim() || null,
                 waste_hauler: document.getElementById('editProjHauler').value.trim() || null,
-                leed_target: parseInt(document.getElementById('editProjTarget').value) || 75,
+                leed_version: document.getElementById('editProjLeedVersion').value || 'v4',
+                leed_target: parseInt(document.getElementById('editProjTarget').value) || 50,
                 updated_at: new Date().toISOString()
             };
 
@@ -2805,14 +2847,26 @@
             this._monthGroups = months;
 
             let html = '';
+            const leedInfo = this.getLeedInfo(proj);
+
             sortedMonths.forEach(key => {
                 const [year, month] = key.split('-');
                 const monthName = monthNames[parseInt(month)] || month;
                 const data = monthDataMap[key];
-                const target = proj.leed_target || 75;
+                const target = proj.leed_target || leedInfo.target;
                 const statusColor = data.divRate >= target ? 'var(--success)' :
-                                    data.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
-                const statusIcon = data.divRate >= target ? '✅' : data.divRate >= 50 ? '⚠️' : '❌';
+                                    data.divRate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
+                const statusIcon = data.divRate >= target ? '✅' : data.divRate >= (target * 0.67) ? '⚠️' : '❌';
+
+                // LEED credit scoring
+                var creditLabel = '';
+                for (var ti = leedInfo.tiers.length - 1; ti >= 0; ti--) {
+                    if (data.divRate >= leedInfo.tiers[ti].pct) { creditLabel = leedInfo.tiers[ti].label; break; }
+                }
+                var scoreLine = 'LEED ' + leedInfo.version + ' ' + leedInfo.credit + ' • Target: ' + target + '%';
+                if (creditLabel) scoreLine += ' • ' + creditLabel + ' ✓';
+                else if (leedInfo.isPrereq) scoreLine += ' • PREREQUISITE NOT MET';
+                else scoreLine += ' • ' + (target - data.divRate) + '% below target';
 
                 html += `
                 <div class="card">
@@ -2826,7 +2880,7 @@
                         <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 16px 0; overflow:hidden;">
                             <div style="height:100%; border-radius:3px; width:${data.divRate}%; background:${statusColor};"></div>
                         </div>
-                        <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">Target: ${target}% • ${data.divRate >= target ? 'PASSING ✓' : (target - data.divRate) + '% below target'}</div>
+                        <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">${scoreLine}</div>
                     </div>
                     <div class="stats-grid">
                         <div class="stat-card">
