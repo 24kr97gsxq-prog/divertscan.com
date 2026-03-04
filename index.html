@@ -1119,18 +1119,22 @@
             <div class="modal-handle"></div>
             <div class="modal-title">New Client Account</div>
             <div class="form-group">
-                <label class="form-label">Company Name</label>
-                <input type="text" class="form-input" id="newClientName" placeholder="e.g. Jaguar Waste Management">
+                <label class="form-label">Contact Name</label>
+                <input type="text" class="form-input" id="newClientContact" placeholder="e.g. Ross Holford">
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Contact Name</label>
-                    <input type="text" class="form-input" id="newClientContact" placeholder="e.g. Ross Holford">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Contact Email</label>
+                    <label class="form-label">Email (login)</label>
                     <input type="email" class="form-input" id="newClientEmail" placeholder="e.g. ross@jaguarwaste.com">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="text" class="form-input" id="newClientPassword" placeholder="Set a password">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Company</label>
+                <input type="text" class="form-input" id="newClientCompany" placeholder="e.g. Jaguar Waste Management">
             </div>
             <div class="form-group">
                 <label class="form-label">Assign Projects</label>
@@ -1148,22 +1152,22 @@
             <div class="modal-title">Edit Client</div>
             <input type="hidden" id="editClientId">
             <div class="form-group">
-                <label class="form-label">Company Name</label>
-                <input type="text" class="form-input" id="editClientName">
+                <label class="form-label">Contact Name</label>
+                <input type="text" class="form-input" id="editClientContact">
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Contact Name</label>
-                    <input type="text" class="form-input" id="editClientContact">
+                    <label class="form-label">Email (login)</label>
+                    <input type="email" class="form-input" id="editClientEmail">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Contact Email</label>
-                    <input type="email" class="form-input" id="editClientEmail">
+                    <label class="form-label">Company</label>
+                    <input type="text" class="form-input" id="editClientCompany">
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">Portal Code</label>
-                <input type="text" class="form-input" id="editClientCode" readonly style="color:var(--text-muted); font-weight:700; letter-spacing:0.05em;">
+                <label class="form-label">New Password (leave blank to keep)</label>
+                <input type="text" class="form-input" id="editClientPassword" placeholder="Leave blank to keep current">
             </div>
             <div class="form-group">
                 <label class="form-label">Portal Link</label>
@@ -3978,17 +3982,17 @@
             var el = document.getElementById('clientList');
             el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
 
-            var clients = await this.supabase('client_accounts?order=company_name.asc');
-            if (!clients) { el.innerHTML = '<div style="color:var(--danger)">Failed to load</div>'; return; }
+            var clients = await this.supabase('client_accounts?order=name.asc');
+            if (!clients) { el.innerHTML = '<div style="color:var(--danger)">Failed to load. Run create_client_portal.sql first.</div>'; return; }
             this._clients = clients;
 
-            // Get project assignments
-            var links = await this.supabase('client_projects?select=client_id,project_id');
+            var links = await this.supabase('client_project_access?select=client_id,project_id');
             var clientProjects = {};
             if (links) links.forEach(function(l) {
                 if (!clientProjects[l.client_id]) clientProjects[l.client_id] = [];
                 clientProjects[l.client_id].push(l.project_id);
             });
+            this._clientProjectMap = clientProjects;
 
             if (clients.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);">No clients yet. Create one to give GCs portal access.</div>';
@@ -4001,33 +4005,25 @@
                     var p = DS.state.projects.find(function(x) { return x.id === pid; });
                     return p ? p.name : '';
                 }).filter(Boolean);
-
                 return '<div class="ticket-item" style="position:relative;">' +
-                    '<div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.showEditClient(\'' + c.id + '\')">🏢</div>' +
-                    '<div class="ticket-info" onclick="DS.showEditClient(\'' + c.id + '\')">' +
-                        '<div class="ticket-title">' + DS.esc(c.company_name) + '</div>' +
-                        '<div class="ticket-meta">' + (c.contact_name || '') + (c.contact_email ? ' • ' + c.contact_email : '') + '</div>' +
-                        '<div class="ticket-meta" style="color:var(--primary);">Code: ' + c.portal_code + ' • ' + projNames.length + ' project' + (projNames.length !== 1 ? 's' : '') +
-                        (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : '') + '</div>' +
+                    '<div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.showEditClient(\'' + c.id + '\')">\u{1F3E2}</div>' +
+                    '<div class="ticket-info" onclick="DS.showEditClient(\'' + c.id + '\')">'+
+                        '<div class="ticket-title">' + DS.esc(c.name) + '</div>' +
+                        '<div class="ticket-meta">' + (c.company || '') + (c.email ? ' \u2022 ' + c.email : '') + '</div>' +
+                        '<div class="ticket-meta" style="color:var(--primary);">' + projNames.length + ' project' + (projNames.length !== 1 ? 's' : '') +
+                        (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : '') +
+                        (c.last_login ? ' \u2022 Last: ' + DS.fmtDate(c.last_login.split('T')[0]) : '') + '</div>' +
                     '</div>' +
-                    '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.65rem;flex-shrink:0" onclick="event.stopPropagation();DS.showEditClient(\'' + c.id + '\')">✏️</button>' +
+                    '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.65rem;flex-shrink:0" onclick="event.stopPropagation();DS.showEditClient(\'' + c.id + '\')">\u270F\uFE0F</button>' +
                 '</div>';
             }).join('');
         },
 
-        generatePortalCode() {
-            var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-            var code = '';
-            for (var i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-            return code;
-        },
-
         showNewClientModal() {
-            document.getElementById('newClientName').value = '';
             document.getElementById('newClientContact').value = '';
             document.getElementById('newClientEmail').value = '';
-
-            // Render project checkboxes
+            document.getElementById('newClientPassword').value = '';
+            document.getElementById('newClientCompany').value = '';
             var html = '';
             this.state.projects.forEach(function(p) {
                 html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
@@ -4040,132 +4036,106 @@
         },
 
         async createClient() {
-            var name = document.getElementById('newClientName').value.trim();
-            if (!name) { this.showToast('Company name required'); return; }
+            var name = document.getElementById('newClientContact').value.trim();
+            var email = document.getElementById('newClientEmail').value.trim().toLowerCase();
+            var password = document.getElementById('newClientPassword').value;
+            var company = document.getElementById('newClientCompany').value.trim();
+            if (!name) { this.showToast('Contact name required'); return; }
+            if (!email) { this.showToast('Email required'); return; }
+            if (!password || password.length < 4) { this.showToast('Password must be at least 4 characters'); return; }
 
-            var client = {
-                company_name: name,
-                contact_name: document.getElementById('newClientContact').value.trim() || null,
-                contact_email: document.getElementById('newClientEmail').value.trim() || null,
-                portal_code: this.generatePortalCode()
-            };
+            this.showLoading('Creating client...');
+            var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
+            if (!hashRes) { this.hideLoading(); this.showToast('Failed to hash password'); return; }
+            var hash = typeof hashRes === 'string' ? hashRes : String(hashRes);
 
-            this.showLoading('Creating...');
-            var result = await this.supabase('client_accounts', 'POST', client);
-            if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed'); return; }
-
+            var result = await this.supabase('client_accounts', 'POST', { name: name, email: email, company: company || null, password_hash: hash, is_active: true });
+            if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed - email may already exist'); return; }
             var clientId = result[0].id;
-
-            // Link selected projects
             var checks = document.querySelectorAll('.newClientProjCb:checked');
             for (var i = 0; i < checks.length; i++) {
-                await this.supabase('client_projects', 'POST', {
-                    client_id: clientId,
-                    project_id: checks[i].value
-                });
+                await this.supabase('client_project_access', 'POST', { client_id: clientId, project_id: checks[i].value });
             }
-
             this.hideLoading();
             this.closeModal('newClientModal');
-            this.showToast('Client "' + name + '" created! Portal code: ' + client.portal_code);
-            this.addAuditEntry('CLIENT_CREATE', name + ' — Code: ' + client.portal_code + ' — ' + checks.length + ' projects');
+            this.showToast('Client "' + name + '" created! Login: ' + email);
+            this.addAuditEntry('CLIENT_CREATE', name + ' <' + email + '> - ' + checks.length + ' projects');
             this.loadClients();
         },
 
         async showEditClient(clientId) {
             var c = this._clients.find(function(x) { return x.id === clientId; });
             if (!c) return;
-
             document.getElementById('editClientId').value = c.id;
-            document.getElementById('editClientName').value = c.company_name || '';
-            document.getElementById('editClientContact').value = c.contact_name || '';
-            document.getElementById('editClientEmail').value = c.contact_email || '';
-            document.getElementById('editClientCode').value = c.portal_code || '';
-            document.getElementById('editClientPortalLink').textContent = 'https://divertscan.com/portal.html?code=' + c.portal_code;
-
-            // Get current assignments
-            var links = await this.supabase('client_projects?client_id=eq.' + clientId);
-            var assignedIds = (links || []).map(function(l) { return l.project_id; });
-
+            document.getElementById('editClientContact').value = c.name || '';
+            document.getElementById('editClientEmail').value = c.email || '';
+            document.getElementById('editClientCompany').value = c.company || '';
+            document.getElementById('editClientPassword').value = '';
+            document.getElementById('editClientPortalLink').textContent = 'https://divertscan.com/client.html';
+            var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
             var html = '';
             this.state.projects.forEach(function(p) {
                 var checked = assignedIds.indexOf(p.id) >= 0 ? 'checked' : '';
                 html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
                     '<input type="checkbox" value="' + p.id + '" class="editClientProjCb" ' + checked + ' style="width:18px;height:18px;">' +
-                    '<div><div style="font-weight:700;font-size:.85rem;">' + DS.esc(p.name) + '</div>' +
-                    '<div style="font-size:.7rem;color:var(--text-muted);">' + [p.location].filter(Boolean).join('') + '</div></div></label>';
+                    '<div><div style="font-weight:700;font-size:.85rem;">' + DS.esc(p.name) + '</div></div></label>';
             });
             document.getElementById('editClientProjects').innerHTML = html;
             this.openModal('editClientModal');
         },
 
         async saveClientEdit() {
-            var clientId = document.getElementById('editClientId').value;
-            var name = document.getElementById('editClientName').value.trim();
-            if (!name) { this.showToast('Company name required'); return; }
-
+            var id = document.getElementById('editClientId').value;
+            var name = document.getElementById('editClientContact').value.trim();
+            var email = document.getElementById('editClientEmail').value.trim().toLowerCase();
+            var company = document.getElementById('editClientCompany').value.trim();
+            var password = document.getElementById('editClientPassword').value;
+            if (!name || !email) { this.showToast('Name and email required'); return; }
             this.showLoading('Saving...');
-
-            // Update client info
-            await this.supabase('client_accounts?id=eq.' + clientId, 'PATCH', {
-                company_name: name,
-                contact_name: document.getElementById('editClientContact').value.trim() || null,
-                contact_email: document.getElementById('editClientEmail').value.trim() || null,
-                updated_at: new Date().toISOString()
-            });
-
-            // Rebuild project links: delete all, re-insert checked
-            await this.supabase('client_projects?client_id=eq.' + clientId, 'DELETE');
+            var updates = { name: name, email: email, company: company || null, updated_at: new Date().toISOString() };
+            if (password && password.length >= 4) {
+                var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
+                if (hashRes) updates.password_hash = typeof hashRes === 'string' ? hashRes : String(hashRes);
+            }
+            await this.supabase('client_accounts?id=eq.' + id, 'PATCH', updates);
+            await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
             var checks = document.querySelectorAll('.editClientProjCb:checked');
             for (var i = 0; i < checks.length; i++) {
-                await this.supabase('client_projects', 'POST', {
-                    client_id: clientId,
-                    project_id: checks[i].value
-                });
+                await this.supabase('client_project_access', 'POST', { client_id: id, project_id: checks[i].value });
             }
-
             this.hideLoading();
             this.closeModal('editClientModal');
-            this.showToast('Client updated — ' + checks.length + ' projects assigned');
-            this.addAuditEntry('CLIENT_UPDATE', name + ' — ' + checks.length + ' projects');
+            this.showToast('Client updated');
+            this.addAuditEntry('CLIENT_UPDATE', name + ' - ' + checks.length + ' projects');
             this.loadClients();
         },
 
         async deleteClient() {
-            var clientId = document.getElementById('editClientId').value;
-            var c = this._clients.find(function(x) { return x.id === clientId; });
+            var id = document.getElementById('editClientId').value;
+            var c = this._clients.find(function(x) { return x.id === id; });
             if (!c) return;
-            if (!confirm('Delete client "' + c.company_name + '"? This removes portal access but does NOT delete any project data.')) return;
-
+            if (!confirm('Delete client "' + c.name + '"? They will lose portal access.')) return;
             this.showLoading('Deleting...');
-            await this.supabase('client_projects?client_id=eq.' + clientId, 'DELETE');
-            await this.supabase('client_accounts?id=eq.' + clientId, 'DELETE');
+            await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
+            await this.supabase('client_accounts?id=eq.' + id, 'DELETE');
             this.hideLoading();
-
             this.closeModal('editClientModal');
-            this.showToast('"' + c.company_name + '" removed');
-            this.addAuditEntry('CLIENT_DELETE', c.company_name);
+            this.showToast('"' + c.name + '" removed');
+            this.addAuditEntry('CLIENT_DELETE', c.name);
             this.loadClients();
         },
 
         copyClientPortalLink() {
-            var code = document.getElementById('editClientCode').value;
-            var url = 'https://divertscan.com/portal.html?code=' + code;
-            navigator.clipboard.writeText(url).then(function() {
-                DS.showToast('Portal link copied!');
-            }).catch(function() { prompt('Copy this link:', url); });
+            var url = 'https://divertscan.com/client.html';
+            navigator.clipboard.writeText(url).then(function() { DS.showToast('Portal link copied!'); }).catch(function() { prompt('Copy:', url); });
         },
 
         shareClientPortal() {
-            var name = document.getElementById('editClientName').value;
-            var code = document.getElementById('editClientCode').value;
-            var url = 'https://divertscan.com/portal.html?code=' + code;
+            var name = document.getElementById('editClientContact').value;
+            var email = document.getElementById('editClientEmail').value;
+            var url = 'https://divertscan.com/client.html';
             if (navigator.share) {
-                navigator.share({
-                    title: 'DivertScan Portal — ' + name,
-                    text: 'Access your waste diversion reports and scale tickets for your projects',
-                    url: url
-                }).catch(function() {});
+                navigator.share({ title: 'DivertScan Client Portal', text: 'Log in at ' + url + ' with your email (' + email + ') to view your waste diversion reports.', url: url }).catch(function() {});
             } else { this.copyClientPortalLink(); }
         },
 
