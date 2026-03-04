@@ -4046,8 +4046,8 @@
 
             this.showLoading('Creating client...');
             var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
-            if (!hashRes) { this.hideLoading(); this.showToast('Failed to hash password'); return; }
-            var hash = typeof hashRes === 'string' ? hashRes : String(hashRes);
+            if (!hashRes) { this.hideLoading(); this.showToast('Failed to hash password. Run create_client_portal.sql first.'); return; }
+            var hash = String(hashRes).replace(/^"|"$/g, '').trim();
 
             var result = await this.supabase('client_accounts', 'POST', { name: name, email: email, company: company || null, password_hash: hash, is_active: true });
             if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed - email may already exist'); return; }
@@ -4095,7 +4095,7 @@
             var updates = { name: name, email: email, company: company || null, updated_at: new Date().toISOString() };
             if (password && password.length >= 4) {
                 var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
-                if (hashRes) updates.password_hash = typeof hashRes === 'string' ? hashRes : String(hashRes);
+                if (hashRes) updates.password_hash = String(hashRes).replace(/^"|"$/g, '').trim();
             }
             await this.supabase('client_accounts?id=eq.' + id, 'PATCH', updates);
             await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
