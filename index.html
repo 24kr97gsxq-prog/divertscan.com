@@ -1293,9 +1293,9 @@
             <div class="modal-title" id="ticketDetailTitle">Ticket Details</div>
             <div id="ticketDetailContent"></div>
             <div class="btn-row mt-12">
-                <button class="btn btn-outline" onclick="DS.closeModal('ticketDetailModal')">Close</button>
-                <button class="btn btn-primary" id="editTicketBtn" onclick="DS.editCurrentTicket()">✏️ Edit</button>
+                <button class="btn btn-primary" id="editTicketBtn" onclick="DS.editCurrentTicket()">✏️ Edit Ticket</button>
             </div>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('ticketDetailModal')" style="width:100%;">✓ Done</button>
         </div>
     </div>
 
@@ -1960,37 +1960,38 @@
             }).filter(Boolean).join('');
 
             // Scale ticket photo section — always show upload option
-            let scaleHtml = `<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div>`;
+            let scaleHtml = '<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div>';
             if (t.scale_ticket_image) {
-                scaleHtml += `<img src="${t.scale_ticket_image}" style="width:100%;border-radius:12px;margin-bottom:8px;border:1px solid var(--border);">
-                    <div class="photo-upload" style="padding:10px;">
-                        <div class="upload-text" style="font-size:0.75rem;">📷 Replace scale ticket photo</div>
-                        <input type="file" accept="image/*" onchange="DS.uploadTicketPhoto('${t.id}', 'scale', this)">
-                    </div>`;
+                scaleHtml += '<img src="' + t.scale_ticket_image + '" style="width:100%;border-radius:12px;margin-bottom:8px;border:1px solid var(--border);">' +
+                    '<div style="position:relative; display:inline-block; width:100%;">' +
+                        '<button class="btn btn-sm btn-outline" style="width:100%; position:relative; overflow:hidden;">📷 Replace Photo' +
+                            '<input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px;" onchange="DS.uploadTicketPhoto(\'' + t.id + '\', \'scale\', this)">' +
+                        '</button>' +
+                    '</div>';
             } else {
-                scaleHtml += `<div class="photo-upload" style="padding:20px;">
-                        <div class="upload-icon">📄</div>
-                        <div class="upload-text">Tap to add scale ticket photo</div>
-                        <div class="upload-hint">Take a photo or choose from library</div>
-                        <input type="file" accept="image/*" onchange="DS.uploadTicketPhoto('${t.id}', 'scale', this)">
-                    </div>`;
+                scaleHtml += '<div class="photo-upload" style="padding:20px;">' +
+                        '<div class="upload-icon">📄</div>' +
+                        '<div class="upload-text">Tap to add scale ticket photo</div>' +
+                        '<div class="upload-hint">Take a photo or choose from library</div>' +
+                        '<input type="file" accept="image/*" onchange="DS.uploadTicketPhoto(\'' + t.id + '\', \'scale\', this)">' +
+                    '</div>';
             }
-            scaleHtml += `</div>`;
+            scaleHtml += '</div>';
 
             // Debris photos section — always show add-more option
-            let debrisHtml = `<div class="mt-12"><div class="card-title"><span class="icon">📸</span> Debris Photos</div>`;
+            let debrisHtml = '<div class="mt-12"><div class="card-title"><span class="icon">📸</span> Debris Photos</div>';
             const debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
             if (debrisArr.length > 0) {
-                debrisHtml += `<div class="photo-grid mb-12">${debrisArr.map(u =>
-                    `<div class="photo-thumb"><img src="${u}"></div>`
-                ).join('')}</div>`;
+                debrisHtml += '<div class="photo-grid mb-12">' + debrisArr.map(function(u) {
+                    return '<div class="photo-thumb"><img src="' + u + '"></div>';
+                }).join('') + '</div>';
             }
-            debrisHtml += `<div class="photo-upload" style="padding:${debrisArr.length > 0 ? '10' : '20'}px;">
-                    <div class="upload-icon">${debrisArr.length > 0 ? '' : '📸'}</div>
-                    <div class="upload-text">${debrisArr.length > 0 ? '📷 Add more debris photos' : 'Tap to add debris photos'}</div>
-                    ${debrisArr.length === 0 ? '<div class="upload-hint">Take photos or choose from library</div>' : ''}
-                    <input type="file" accept="image/*" multiple onchange="DS.uploadTicketPhoto('${t.id}', 'debris', this)">
-                </div></div>`;
+            debrisHtml += '<div style="position:relative; display:inline-block; width:100%;">' +
+                '<button class="btn btn-sm ' + (debrisArr.length > 0 ? 'btn-outline' : 'btn-success') + '" style="width:100%; position:relative; overflow:hidden;">' +
+                    (debrisArr.length > 0 ? '📷 Add More Debris Photos' : '📷 Add Debris Photos') +
+                    '<input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px;" onchange="DS.uploadTicketPhoto(\'' + t.id + '\', \'debris\', this)">' +
+                '</button>' +
+            '</div></div>';
 
             document.getElementById('ticketDetailContent').innerHTML = `
                 <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">
@@ -2079,11 +2080,23 @@
             }
 
             this.hideLoading();
-            // Refresh whichever view is open
+            // Refresh whichever view is open and show saved confirmation
             if (document.getElementById('editTicketModal').classList.contains('show')) {
                 this.showEditTicket(ticketId);
             } else {
                 this.showTicketDetail(ticketId);
+                // Flash a saved banner at top of detail
+                setTimeout(function() {
+                    var content = document.getElementById('ticketDetailContent');
+                    if (content) {
+                        var banner = document.createElement('div');
+                        banner.style.cssText = 'background:var(--success-light); color:var(--success); padding:12px 16px; border-radius:12px; font-size:0.85rem; font-weight:700; text-align:center; margin-bottom:12px; animation:slideUp 0.3s ease;';
+                        banner.textContent = '✅ Photo saved to ticket!';
+                        content.insertBefore(banner, content.firstChild);
+                        setTimeout(function() { banner.style.opacity = '0'; banner.style.transition = 'opacity 0.5s'; }, 2500);
+                        setTimeout(function() { if (banner.parentNode) banner.remove(); }, 3000);
+                    }
+                }, 100);
             }
         },
 
