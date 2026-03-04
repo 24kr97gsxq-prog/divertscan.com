@@ -3,776 +3,494 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DivertScan™ — Scale Ticket Photo Manager</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>DivertScan Upload</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
-  :root {
-    --bg:#0a0e13;--surface:#111820;--surface2:#182030;--border:#1e2d3d;
-    --accent:#00e5a0;--accent2:#0096ff;--warn:#ff6b35;--text:#e8f0f8;
-    --muted:#5a7a9a;--success:#00c97a;
-    --mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+    --bg: #f8fafc; --card: #ffffff; --primary: #2563eb; --primary-glow: rgba(37,99,235,0.08);
+    --success: #16a34a; --success-bg: #f0fdf4; --danger: #dc2626; --warning: #f59e0b;
+    --text: #1e293b; --text-muted: #64748b; --text-dim: #94a3b8;
+    --border: #e2e8f0; --radius: 16px; --font: 'Plus Jakarta Sans', -apple-system, sans-serif;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; }
 
-  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
-  .header-brand{display:flex;align-items:center;gap:10px;}
-  .header-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:700;color:#000;}
-  .header-title{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.05em;}
-  .header-subtitle{font-size:11px;color:var(--muted);margin-top:1px;}
-  .header-badge{background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);color:var(--accent);font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:.08em;}
+.container { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
 
-  .project-banner{background:linear-gradient(135deg,rgba(0,150,255,.08),rgba(0,229,160,.05));border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-  .project-tag{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
-  .project-name{font-size:15px;font-weight:600;color:var(--text);}
-  .project-stat{margin-left:auto;display:flex;gap:20px;flex-wrap:wrap;}
-  .stat-item{text-align:right;}
-  .stat-val{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);}
-  .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.logo { text-align: center; padding: 24px 0 8px; }
+.logo-text { font-size: 1.4rem; font-weight: 800; color: var(--text); letter-spacing: -0.03em; }
+.logo-sub { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
 
-  .conn-status{display:flex;align-items:center;gap:6px;font-size:11px;padding:8px 20px;border-bottom:1px solid var(--border);}
-  .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
-  .conn-dot.ok{background:var(--success);}
-  .conn-dot.err{background:var(--warn);}
-  .conn-text{color:var(--muted);font-family:var(--mono);font-size:11px;}
+.card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03); }
 
-  .main{padding:16px;max-width:900px;margin:0 auto;}
+.card-title { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 12px; }
 
-  .tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;}
-  .tab{flex:1;padding:10px 8px;border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;font-weight:500;border-radius:7px;cursor:pointer;transition:all .15s;text-align:center;}
-  .tab.active{background:var(--surface2);color:var(--text);}
-  .tab-panel{display:none;}
-  .tab-panel.active{display:block;}
+.form-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+.form-input { width: 100%; padding: 14px 16px; border: 2px solid var(--border); border-radius: 12px;
+    font-family: var(--font); font-size: 1rem; color: var(--text); background: var(--bg);
+    transition: border-color 0.2s; -webkit-appearance: none; }
+.form-input:focus { outline: none; border-color: var(--primary); }
+.form-group { margin-bottom: 16px; }
 
-  .instructions{background:rgba(0,150,255,.06);border:1px solid rgba(0,150,255,.2);border-radius:10px;padding:13px 15px;margin-bottom:16px;font-size:12px;color:#8ab8d8;line-height:1.6;}
-  .instructions strong{color:var(--accent2);}
-  code{font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px;}
+.btn { display: block; width: 100%; padding: 16px; border: none; border-radius: 12px; font-family: var(--font);
+    font-size: 1rem; font-weight: 700; cursor: pointer; text-align: center; transition: all 0.2s; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-success { background: var(--success); color: white; }
+.btn-outline { background: transparent; color: var(--text); border: 2px solid var(--border); }
 
-  /* FORM */
-  .new-ticket-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;}
-  .form-title{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;}
-  .form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
-  .form-group{display:flex;flex-direction:column;gap:5px;flex:1;min-width:110px;}
-  .form-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-  .form-input{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:14px;padding:10px 12px;border-radius:7px;width:100%;outline:none;-webkit-appearance:none;}
-  .form-input:focus{border-color:var(--accent2);}
-  .form-input.large{font-size:18px;font-weight:700;}
-  .form-input[readonly]{color:var(--accent);}
+/* Upload area */
+.upload-zone { border: 3px dashed var(--border); border-radius: var(--radius); padding: 32px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s; position: relative; background: var(--bg); }
+.upload-zone.active { border-color: var(--primary); background: var(--primary-glow); }
+.upload-zone.has-photos { border-color: var(--success); border-style: solid; background: var(--success-bg); }
+.upload-icon { font-size: 3rem; margin-bottom: 8px; }
+.upload-text { font-size: 1rem; font-weight: 700; color: var(--text); }
+.upload-hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+.upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 200px; }
 
-  /* CAPTURE */
-  .capture-area{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;}
-  .capture-title{padding:12px 16px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.08em;}
-  .capture-slots{display:flex;}
-  .capture-slot{flex:1;padding:14px;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:10px;}
-  .capture-slot:last-child{border-right:none;}
-  .capture-slot-label{font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.06em;}
-  .capture-slot-hint{font-size:11px;color:var(--muted);text-align:center;}
-  .capture-btns{display:flex;gap:8px;width:100%;}
-  .capture-btn{flex:1;padding:12px 8px;border-radius:8px;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .15s;position:relative;overflow:hidden;}
-  .capture-btn input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-  .capture-btn.camera{background:linear-gradient(135deg,#1a3a5c,#0d2035);border:1px solid rgba(0,150,255,.3);color:var(--accent2);}
-  .capture-btn.gallery{background:var(--surface2);border:1px solid var(--border);color:var(--muted);}
-  .capture-btn-icon{font-size:22px;}
-  .capture-btn-label{font-size:11px;font-weight:600;}
-  .capture-preview{width:100%;border-radius:8px;overflow:hidden;background:var(--bg);min-height:70px;display:flex;align-items:center;justify-content:center;position:relative;}
-  .capture-preview img{width:100%;max-height:160px;object-fit:cover;border-radius:8px;display:none;}
-  .capture-preview img.visible{display:block;}
-  .preview-placeholder{font-size:30px;opacity:.2;}
-  .capture-filename{font-family:var(--mono);font-size:10px;color:var(--accent);word-break:break-all;text-align:center;min-height:14px;}
-  .photo-check{position:absolute;top:6px;right:6px;background:var(--success);color:#000;border-radius:50%;width:20px;height:20px;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
-  .photo-check.visible{display:flex;}
+/* Photo grid */
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.photo-thumb { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-remove { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: white; border: none; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; }
 
-  /* SAVE BTN */
-  .save-ticket-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#000;border:none;border-radius:9px;font-family:var(--mono);font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:opacity .2s;position:relative;}
-  .save-ticket-btn:disabled{opacity:.3;cursor:not-allowed;}
-  .save-ticket-btn.loading{opacity:.7;cursor:wait;}
+/* Status */
+.status-bar { padding: 12px 16px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; text-align: center; margin-bottom: 16px; }
+.status-connected { background: var(--success-bg); color: var(--success); }
+.status-error { background: #fef2f2; color: var(--danger); }
+.status-uploading { background: #eff6ff; color: var(--primary); }
 
-  /* SPINNER */
-  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
-  @keyframes spin{to{transform:rotate(360deg)}}
+.project-name { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+.project-meta { font-size: 0.75rem; color: var(--text-muted); }
 
-  /* QUEUE */
-  .queue-section{margin-top:16px;}
-  .queue-title{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
-  .queue-count{background:var(--accent);color:#000;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;}
-  .queue-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-  .queue-card.saving{border-left-color:var(--accent2);opacity:.7;}
-  .queue-card.saved{border-left-color:var(--success);}
-  .queue-card.error{border-left-color:var(--warn);}
-  .queue-num{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);}
-  .queue-date{font-size:12px;color:var(--muted);}
-  .queue-weight{font-family:var(--mono);font-size:12px;color:var(--text);}
-  .queue-photos{display:flex;gap:6px;margin-left:auto;}
-  .queue-thumb{width:40px;height:40px;border-radius:5px;object-fit:cover;border:1px solid var(--border);}
-  .queue-thumb-empty{width:40px;height:40px;border-radius:5px;background:var(--bg);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;opacity:.4;}
-  .queue-status{font-family:var(--mono);font-size:11px;color:var(--muted);}
-  .queue-status.ok{color:var(--success);}
-  .queue-status.err{color:var(--warn);}
+.counter { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px;
+    border-radius: 12px; background: var(--primary); color: white; font-size: 0.75rem; font-weight: 700; padding: 0 8px; }
 
-  .save-all-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#000;border:none;border-radius:9px;font-family:var(--mono);font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.05em;margin-top:8px;display:none;}
-  .save-all-btn.visible{display:block;}
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text);
+    color: white; padding: 14px 24px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;
+    z-index: 9999; animation: slideUp 0.3s ease; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+@keyframes slideUp { from { transform: translateX(-50%) translateY(20px); opacity:0; } to { transform: translateX(-50%) translateY(0); opacity:1; } }
 
-  /* EXISTING */
-  .progress-bar-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;}
-  .progress-label{font-size:12px;color:var(--muted);white-space:nowrap;}
-  .progress-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
-  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px;transition:width .4s;width:0%;}
-  .progress-pct{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);min-width:36px;text-align:right;}
+.progress-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--primary); transition: width 0.3s ease; }
 
-  .filter-bar{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
-  .filter-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:all .15s;}
-  .filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.07);}
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
 
-  .ticket-grid{display:flex;flex-direction:column;gap:6px;}
-  .ticket-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-  .ticket-card.has-scale{border-left:3px solid var(--accent2);}
-  .ticket-card.has-both{border-left:3px solid var(--accent);}
-  .ticket-header{display:flex;align-items:center;padding:12px 14px;gap:10px;cursor:pointer;user-select:none;}
-  .ticket-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);min-width:76px;}
-  .ticket-date{font-size:11px;color:var(--muted);min-width:84px;}
-  .ticket-weight{font-family:var(--mono);font-size:11px;color:var(--text);}
-  .ticket-diverted{font-family:var(--mono);font-size:11px;color:var(--accent);margin-left:auto;margin-right:6px;}
-  .ticket-status-icons{display:flex;gap:4px;}
-  .icon-badge{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--surface2);border:1px solid var(--border);}
-  .icon-badge.filled-scale{background:rgba(0,150,255,.15);border-color:rgba(0,150,255,.4);}
-  .icon-badge.filled-debris{background:rgba(0,229,160,.15);border-color:rgba(0,229,160,.4);}
+/* Section toggle */
+.section-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 4px 0; }
+.section-header .toggle { font-size: 0.7rem; color: var(--primary); font-weight: 600; }
 
-  .upload-zone{display:none;padding:12px 14px 14px;border-top:1px solid var(--border);flex-direction:column;gap:10px;}
-  .ticket-card.open .upload-zone{display:flex;}
-  .upload-slots-row{display:flex;gap:10px;}
-  .upload-slot{flex:1;border:1.5px dashed var(--border);border-radius:8px;padding:10px;text-align:center;background:var(--bg);}
-  .upload-slot.has-photo{border-style:solid;border-color:var(--accent);background:rgba(0,229,160,.04);}
-  .slot-label{font-size:11px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
-  .slot-btns{display:flex;gap:6px;}
-  .slot-btn{flex:1;padding:9px 6px;border-radius:7px;border:none;font-size:11px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;overflow:hidden;}
-  .slot-btn input[type="file"]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;}
-  .slot-btn.cam{background:rgba(0,150,255,.12);border:1px solid rgba(0,150,255,.25);color:var(--accent2);}
-  .slot-btn.gal{background:var(--surface2);border:1px solid var(--border);color:var(--muted);}
-  .slot-btn-icon{font-size:18px;}
-  .slot-btn-txt{font-size:10px;}
-  .slot-preview{width:100%;max-height:100px;object-fit:cover;border-radius:5px;margin-top:8px;display:none;}
-  .slot-preview.visible{display:block;}
-  .slot-filename{font-family:var(--mono);font-size:10px;color:var(--accent);margin-top:4px;word-break:break-all;min-height:14px;}
+.hidden { display: none !important; }
 
-  .upload-actions{display:flex;gap:8px;align-items:center;}
-  .upload-btn{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#000;border:none;border-radius:7px;padding:10px 16px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
-  .upload-btn:disabled{opacity:.3;cursor:not-allowed;}
-  .upload-status{font-size:11px;min-height:16px;}
-  .upload-status.ok{color:var(--success);}
-  .upload-status.err{color:var(--warn);}
-
-  .month-sep{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:10px 4px 5px;border-bottom:1px solid var(--border);margin-bottom:4px;display:flex;align-items:center;gap:8px;}
-  .month-count{background:var(--surface2);border-radius:4px;padding:1px 6px;font-size:10px;}
-
-  .toast{position:fixed;bottom:20px;right:16px;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:12px;padding:10px 16px;border-radius:8px;transform:translateY(60px);opacity:0;transition:all .3s;z-index:999;max-width:280px;}
-  .toast.show{transform:translateY(0);opacity:1;}
-  .toast.error{border-color:var(--warn);color:var(--warn);}
+@media (prefers-color-scheme: dark) {
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --text-muted: #94a3b8; --text-dim: #475569;
+        --border: #334155; --primary-glow: rgba(37,99,235,0.15); --success-bg: rgba(22,163,74,0.1); }
+    .form-input { background: #0f172a; }
+    .upload-zone { background: #0f172a; }
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-brand">
-    <div class="header-logo">DS</div>
-    <div>
-      <div class="header-title">DIVERTSCAN™ APEX</div>
-      <div class="header-subtitle">Scale Ticket Photo Manager</div>
-    </div>
-  </div>
-  <div class="header-badge">LIVE · SUPABASE</div>
-</div>
+<div class="container" id="app">
 
-<div class="project-banner">
-  <div>
-    <div class="project-tag">Active Project</div>
-    <div class="project-name">Children's Hospital — Dallas, TX</div>
-  </div>
-  <div class="project-stat">
-    <div class="stat-item"><div class="stat-val" id="statNew">0</div><div class="stat-label">Queued</div></div>
-    <div class="stat-item"><div class="stat-val" id="statSaved">0</div><div class="stat-label">Saved to DB</div></div>
-    <div class="stat-item"><div class="stat-val" id="statPhotos">0</div><div class="stat-label">Photos</div></div>
-  </div>
-</div>
+    <!-- STEP 1: Enter Access Code -->
+    <div id="codeScreen">
+        <div class="logo">
+            <div class="logo-text">DivertScan™</div>
+            <div class="logo-sub">Field Photo Upload</div>
+        </div>
 
-<!-- CONNECTION STATUS -->
-<div class="conn-status">
-  <div class="conn-dot" id="connDot"></div>
-  <span class="conn-text" id="connText">Connecting to Supabase...</span>
-</div>
-
-<div class="main">
-
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('new',this)">📷 Add New Tickets</button>
-    <button class="tab" onclick="switchTab('existing',this)">🗂 Existing (65)</button>
-  </div>
-
-  <!-- TAB: ADD NEW -->
-  <div class="tab-panel active" id="tab-new">
-    <div class="instructions">
-      <strong>Your 12 new scale tickets:</strong> Enter ticket number, date, and weights — net tons calculates automatically.
-      Tap <strong>📷 Camera</strong> to photograph with your iPad camera, or <strong>🖼 Gallery</strong> to select from Photos.
-      Tap <strong>Add to Queue</strong> after each ticket, then <strong>Save All to Supabase</strong> — photos upload to Storage and records write to your database permanently.
+        <div class="card">
+            <div class="card-title">📷 Upload Scale Tickets & Debris Photos</div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">
+                Enter the project access code to start uploading photos. Your photos will be sent to the project manager for review.
+            </p>
+            <div class="form-group">
+                <label class="form-label">Access Code</label>
+                <input type="text" class="form-input" id="accessCode" placeholder="e.g. DS-A7X2K9"
+                    autocapitalize="characters" autocomplete="off" style="text-transform:uppercase; font-weight:700; letter-spacing:0.1em; text-align:center; font-size:1.2rem;">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Your Name (optional)</label>
+                <input type="text" class="form-input" id="uploaderName" placeholder="e.g. Raul">
+            </div>
+            <button class="btn btn-primary" onclick="app.connect()">Connect to Project</button>
+        </div>
     </div>
 
-    <div class="new-ticket-form">
-      <div class="form-title">➕ New Scale Ticket Entry</div>
-      <div class="form-row">
-        <div class="form-group">
-          <div class="form-label">Ticket Number</div>
-          <input class="form-input large" type="number" id="newTicketNum" placeholder="83500" inputmode="numeric">
+    <!-- STEP 2: Upload Photos -->
+    <div id="uploadScreen" class="hidden">
+        <div class="logo">
+            <div class="logo-text">DivertScan™</div>
+            <div class="logo-sub" id="uploaderLabel"></div>
         </div>
-        <div class="form-group">
-          <div class="form-label">Date</div>
-          <input class="form-input" type="date" id="newTicketDate">
+
+        <div id="statusBar" class="status-bar status-connected"></div>
+
+        <div class="card">
+            <div class="project-name" id="projectName"></div>
+            <div class="project-meta" id="projectMeta"></div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <div class="form-label">Gross Weight (lbs)</div>
-          <input class="form-input" type="number" id="newGrossLbs" placeholder="40000" inputmode="numeric">
+
+        <!-- Scale Ticket Photos -->
+        <div class="card">
+            <div class="section-header" onclick="app.toggleSection('scale')">
+                <div class="card-title" style="margin:0;">📄 Scale Ticket Photos</div>
+                <span class="counter" id="scaleCount">0</span>
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin:8px 0;">Photograph each scale ticket clearly. Include the ticket number and weights.</p>
+            <div class="upload-zone" id="scaleZone">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">Tap to add scale ticket photos</div>
+                <div class="upload-hint">Camera or photo library</div>
+                <input type="file" accept="image/*" multiple capture="environment" onchange="app.addPhotos('scale', this)">
+            </div>
+            <div class="photo-grid" id="scaleGrid"></div>
         </div>
-        <div class="form-group">
-          <div class="form-label">Tare Weight (lbs)</div>
-          <input class="form-input" type="number" id="newTareLbs" placeholder="33000" inputmode="numeric">
+
+        <!-- Debris Photos -->
+        <div class="card">
+            <div class="section-header" onclick="app.toggleSection('debris')">
+                <div class="card-title" style="margin:0;">📸 Debris Photos</div>
+                <span class="counter" id="debrisCount">0</span>
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin:8px 0;">Photograph the debris in the container or on the ground. Multiple angles help.</p>
+            <div class="upload-zone" id="debrisZone">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">Tap to add debris photos</div>
+                <div class="upload-hint">Camera or photo library</div>
+                <input type="file" accept="image/*" multiple capture="environment" onchange="app.addPhotos('debris', this)">
+            </div>
+            <div class="photo-grid" id="debrisGrid"></div>
         </div>
-        <div class="form-group">
-          <div class="form-label">Net Tons (auto)</div>
-          <input class="form-input" type="text" id="newNetTons" placeholder="—" readonly>
+
+        <!-- Optional ticket number -->
+        <div class="card">
+            <div class="card-title">📝 Details (optional)</div>
+            <div class="form-group">
+                <label class="form-label">Ticket Number</label>
+                <input type="text" class="form-input" id="ticketNum" placeholder="e.g. 83435">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-input" id="uploadNotes" placeholder="e.g. Container #3, mostly wood">
+            </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <div class="form-label">Diversion % (0–100)</div>
-          <input class="form-input" type="number" id="newDivRate" placeholder="65" inputmode="numeric" min="0" max="100">
-        </div>
-        <div class="form-group">
-          <div class="form-label">Hauler</div>
-          <input class="form-input" type="text" id="newHauler" value="Jaguar Waste Management">
-        </div>
-      </div>
+
+        <!-- Submit -->
+        <button class="btn btn-success" id="submitBtn" onclick="app.submit()" disabled>
+            📤 Submit Photos for Review
+        </button>
+        <div class="progress-bar hidden" id="progressBar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+        <div style="height:16px;"></div>
+        <button class="btn btn-outline" onclick="app.reset()" style="font-size:0.85rem;">↩ Change Project</button>
     </div>
 
-    <div class="capture-area">
-      <div class="capture-title">📸 Photo Capture</div>
-      <div class="capture-slots">
-        <div class="capture-slot">
-          <div class="capture-slot-label">🧾 Scale Ticket</div>
-          <div class="capture-slot-hint">Photo of the printed weigh ticket</div>
-          <div class="capture-btns">
-            <button class="capture-btn camera">
-              <input type="file" accept="image/*" capture="environment" onchange="capturePhoto('scale',this)">
-              <span class="capture-btn-icon">📷</span>
-              <span class="capture-btn-label">Camera</span>
-            </button>
-            <button class="capture-btn gallery">
-              <input type="file" accept="image/*" onchange="capturePhoto('scale',this)">
-              <span class="capture-btn-icon">🖼</span>
-              <span class="capture-btn-label">Gallery</span>
-            </button>
-          </div>
-          <div class="capture-preview" id="prev-new-scale">
-            <span class="preview-placeholder">🧾</span>
-            <img id="img-new-scale">
-            <div class="photo-check" id="check-new-scale">✓</div>
-          </div>
-          <div class="capture-filename" id="fn-new-scale"></div>
+    <!-- STEP 3: Success -->
+    <div id="successScreen" class="hidden">
+        <div class="logo">
+            <div class="logo-text">DivertScan™</div>
+            <div class="logo-sub">Upload Complete</div>
         </div>
-        <div class="capture-slot">
-          <div class="capture-slot-label">📸 Debris Load</div>
-          <div class="capture-slot-hint">Photo of load contents at facility</div>
-          <div class="capture-btns">
-            <button class="capture-btn camera">
-              <input type="file" accept="image/*" capture="environment" onchange="capturePhoto('debris',this)">
-              <span class="capture-btn-icon">📷</span>
-              <span class="capture-btn-label">Camera</span>
-            </button>
-            <button class="capture-btn gallery">
-              <input type="file" accept="image/*" onchange="capturePhoto('debris',this)">
-              <span class="capture-btn-icon">🖼</span>
-              <span class="capture-btn-label">Gallery</span>
-            </button>
-          </div>
-          <div class="capture-preview" id="prev-new-debris">
-            <span class="preview-placeholder">📸</span>
-            <img id="img-new-debris">
-            <div class="photo-check" id="check-new-debris">✓</div>
-          </div>
-          <div class="capture-filename" id="fn-new-debris"></div>
+        <div class="card" style="text-align:center; padding:32px;">
+            <div style="font-size:3rem; margin-bottom:12px;">✅</div>
+            <div style="font-size:1.2rem; font-weight:800; margin-bottom:8px;">Photos Submitted!</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); line-height:1.5;" id="successMsg"></div>
         </div>
-      </div>
+        <button class="btn btn-primary" onclick="app.uploadMore()">📷 Upload More Photos</button>
+        <div style="height:12px;"></div>
+        <button class="btn btn-outline" onclick="app.reset()">↩ Change Project</button>
     </div>
-
-    <button class="save-ticket-btn" onclick="addToQueue()">✓ Add to Queue</button>
-
-    <div class="queue-section">
-      <div class="queue-title">
-        Queued Tickets — Ready to Save
-        <span class="queue-count" id="queueCount">0</span>
-      </div>
-      <div id="queueList"></div>
-      <button class="save-all-btn" id="saveAllBtn" onclick="saveAllToSupabase()">
-        ⬆ Save All to Supabase →
-      </button>
-    </div>
-  </div>
-
-  <!-- TAB: EXISTING -->
-  <div class="tab-panel" id="tab-existing">
-    <div class="instructions">
-      Tap any ticket row to expand. Use <strong>📷 Camera</strong> to photograph directly or <strong>🖼 Gallery</strong> from Photos app. 
-      Tap <strong>Save to Log</strong> — photo uploads to Supabase Storage and URL saves to your database instantly.
-    </div>
-    <div class="progress-bar-wrap">
-      <span class="progress-label">Photo Coverage</span>
-      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-      <span class="progress-pct" id="progressPct">0%</span>
-    </div>
-    <div class="filter-bar">
-      <button class="filter-btn active" onclick="filterTickets('all',this)">All</button>
-      <button class="filter-btn" onclick="filterTickets('missing',this)">Missing</button>
-      <button class="filter-btn" onclick="filterTickets('complete',this)">Complete ✓</button>
-      <button class="filter-btn" onclick="filterTickets('sep25',this)">Sep 25</button>
-      <button class="filter-btn" onclick="filterTickets('oct25',this)">Oct 25</button>
-      <button class="filter-btn" onclick="filterTickets('nov25',this)">Nov 25</button>
-      <button class="filter-btn" onclick="filterTickets('jan26',this)">Jan 26</button>
-      <button class="filter-btn" onclick="filterTickets('feb26',this)">Feb 26</button>
-    </div>
-    <div class="ticket-grid" id="ticketGrid"></div>
-  </div>
 
 </div>
-
-<div class="toast" id="toast"></div>
 
 <script>
-// ── SUPABASE CONFIG ───────────────────────────────────────────────────
-const SB_URL  = 'https://cyvvlngtojagfoaitoog.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
-const BUCKET  = 'ticket-photos';
-const PROJECT_ID = 'fd12486c-5187-4ecc-b99a-91341dd37b73';
-const USER_ID    = '39351e24-3f3d-4d77-9084-912bb65d822a';
+var SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA1MTgwNjYsImV4cCI6MjA1NjA5NDA2Nn0.yVOqRrcaD7cYN5B7FkxUqBb75VPuCmGkTxMlxGLse0g';
 
-const HEADERS = {
-  'apikey': SB_KEY,
-  'Authorization': 'Bearer ' + SB_KEY,
-  'Content-Type': 'application/json'
+var app = {
+    project: null,
+    accessCode: '',
+    uploaderName: '',
+    scalePhotos: [],
+    debrisPhotos: [],
+
+    async connect() {
+        var code = document.getElementById('accessCode').value.trim().toUpperCase();
+        if (!code) { this.toast('Enter an access code'); return; }
+
+        this.uploaderName = document.getElementById('uploaderName').value.trim();
+
+        // Look up project by access code
+        try {
+            var res = await fetch(SUPABASE_URL + '/rest/v1/projects?access_code=eq.' + encodeURIComponent(code) + '&select=id,name,client,location,general_contractor,waste_hauler,access_code', {
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+            });
+            var data = await res.json();
+            if (!data || data.length === 0) {
+                this.toast('Invalid access code. Check with your project manager.');
+                return;
+            }
+            this.project = data[0];
+            this.accessCode = code;
+        } catch (e) {
+            this.toast('Connection error. Check your internet.');
+            return;
+        }
+
+        // Save for next time
+        try { localStorage.setItem('ds_upload_code', code); localStorage.setItem('ds_upload_name', this.uploaderName); } catch(e) {}
+
+        // Show upload screen
+        document.getElementById('codeScreen').classList.add('hidden');
+        document.getElementById('uploadScreen').classList.remove('hidden');
+        document.getElementById('projectName').textContent = this.project.name;
+        document.getElementById('projectMeta').textContent = [this.project.client, this.project.location].filter(Boolean).join(' • ');
+        document.getElementById('statusBar').textContent = '✓ Connected to ' + this.project.name;
+        document.getElementById('statusBar').className = 'status-bar status-connected';
+        document.getElementById('uploaderLabel').textContent = this.uploaderName ? 'Uploading as ' + this.uploaderName : 'Field Photo Upload';
+    },
+
+    addPhotos(type, input) {
+        var files = Array.from(input.files);
+        if (files.length === 0) return;
+
+        var arr = type === 'scale' ? this.scalePhotos : this.debrisPhotos;
+
+        files.forEach(function(file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                arr.push({ file: file, preview: e.target.result, type: type });
+                app.renderPhotos(type);
+                app.updateSubmitBtn();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Reset input so same file can be added again
+        input.value = '';
+    },
+
+    renderPhotos(type) {
+        var arr = type === 'scale' ? this.scalePhotos : this.debrisPhotos;
+        var grid = document.getElementById(type + 'Grid');
+        var zone = document.getElementById(type + 'Zone');
+        var counter = document.getElementById(type + 'Count');
+
+        counter.textContent = arr.length;
+        zone.classList.toggle('has-photos', arr.length > 0);
+
+        if (arr.length > 0) {
+            zone.querySelector('.upload-text').textContent = 'Tap to add more';
+            zone.querySelector('.upload-icon').textContent = '+';
+        }
+
+        grid.innerHTML = arr.map(function(p, i) {
+            return '<div class="photo-thumb">' +
+                '<img src="' + p.preview + '">' +
+                '<button class="photo-remove" onclick="app.removePhoto(\'' + type + '\',' + i + ')">×</button>' +
+            '</div>';
+        }).join('');
+    },
+
+    removePhoto(type, index) {
+        var arr = type === 'scale' ? this.scalePhotos : this.debrisPhotos;
+        arr.splice(index, 1);
+        this.renderPhotos(type);
+        this.updateSubmitBtn();
+    },
+
+    updateSubmitBtn() {
+        var total = this.scalePhotos.length + this.debrisPhotos.length;
+        var btn = document.getElementById('submitBtn');
+        btn.disabled = total === 0;
+        btn.textContent = total > 0 ? '📤 Submit ' + total + ' Photo' + (total > 1 ? 's' : '') + ' for Review' : '📤 Submit Photos for Review';
+    },
+
+    async compressImage(file, maxDim) {
+        return new Promise(function(resolve) {
+            var img = new Image();
+            img.onload = function() {
+                var w = img.width, h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                    else { w = Math.round(w * maxDim / h); h = maxDim; }
+                }
+                var c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                c.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', 0.85);
+            };
+            img.src = URL.createObjectURL(file);
+        });
+    },
+
+    async uploadPhoto(photo, index, total) {
+        // Compress
+        var maxDim = photo.type === 'scale' ? 1200 : 800;
+        var blob = await this.compressImage(photo.file, maxDim);
+
+        // Upload to storage
+        var ts = Date.now();
+        var path = 'queue/' + this.project.id + '/' + photo.type + '_' + ts + '_' + index + '.jpg';
+        var uploadUrl = SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path;
+
+        var res = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'image/jpeg',
+                'x-upsert': 'true'
+            },
+            body: blob
+        });
+
+        if (!res.ok) throw new Error('Upload failed: ' + res.status);
+
+        var publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
+
+        // Insert into queue
+        var queueRes = await fetch(SUPABASE_URL + '/rest/v1/photo_queue', {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                project_id: this.project.id,
+                access_code: this.accessCode,
+                submitted_by: this.uploaderName || 'Field Worker',
+                photo_type: photo.type === 'scale' ? 'scale_ticket' : 'debris',
+                photo_url: publicUrl,
+                ticket_number: document.getElementById('ticketNum').value.trim() || null,
+                notes: document.getElementById('uploadNotes').value.trim() || null,
+                status: 'pending'
+            })
+        });
+
+        if (!queueRes.ok) throw new Error('Queue insert failed: ' + queueRes.status);
+        return publicUrl;
+    },
+
+    async submit() {
+        var allPhotos = this.scalePhotos.concat(this.debrisPhotos);
+        if (allPhotos.length === 0) return;
+
+        var btn = document.getElementById('submitBtn');
+        var bar = document.getElementById('progressBar');
+        var fill = document.getElementById('progressFill');
+
+        btn.disabled = true;
+        btn.textContent = '📤 Uploading...';
+        bar.classList.remove('hidden');
+
+        var uploaded = 0;
+        var errors = 0;
+
+        for (var i = 0; i < allPhotos.length; i++) {
+            try {
+                fill.style.width = Math.round((i / allPhotos.length) * 100) + '%';
+                btn.textContent = '📤 Uploading ' + (i + 1) + ' of ' + allPhotos.length + '...';
+                await this.uploadPhoto(allPhotos[i], i, allPhotos.length);
+                uploaded++;
+            } catch (e) {
+                console.error('Upload error:', e);
+                errors++;
+            }
+        }
+
+        fill.style.width = '100%';
+
+        // Show success
+        document.getElementById('uploadScreen').classList.add('hidden');
+        document.getElementById('successScreen').classList.remove('hidden');
+
+        var msg = uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' submitted to ' + this.project.name + '.';
+        if (errors > 0) msg += ' ' + errors + ' failed — try uploading those again.';
+        msg += ' Your project manager will review and approve them.';
+        document.getElementById('successMsg').textContent = msg;
+
+        // Clear photos
+        this.scalePhotos = [];
+        this.debrisPhotos = [];
+    },
+
+    uploadMore() {
+        document.getElementById('successScreen').classList.add('hidden');
+        document.getElementById('uploadScreen').classList.remove('hidden');
+        document.getElementById('ticketNum').value = '';
+        document.getElementById('uploadNotes').value = '';
+        this.renderPhotos('scale');
+        this.renderPhotos('debris');
+        this.updateSubmitBtn();
+        document.getElementById('progressBar').classList.add('hidden');
+
+        // Reset upload zones
+        ['scale','debris'].forEach(function(type) {
+            var zone = document.getElementById(type + 'Zone');
+            zone.classList.remove('has-photos');
+            zone.querySelector('.upload-text').textContent = 'Tap to add ' + (type === 'scale' ? 'scale ticket' : 'debris') + ' photos';
+            zone.querySelector('.upload-icon').textContent = type === 'scale' ? '📄' : '📸';
+        });
+    },
+
+    reset() {
+        this.project = null;
+        this.scalePhotos = [];
+        this.debrisPhotos = [];
+        document.getElementById('uploadScreen').classList.add('hidden');
+        document.getElementById('successScreen').classList.add('hidden');
+        document.getElementById('codeScreen').classList.remove('hidden');
+    },
+
+    toggleSection(type) {
+        var grid = document.getElementById(type + 'Grid');
+        grid.classList.toggle('hidden');
+    },
+
+    toast(msg) {
+        var el = document.createElement('div');
+        el.className = 'toast';
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(function() { el.remove(); }, 3000);
+    },
+
+    init() {
+        // Restore saved code/name
+        try {
+            var saved = localStorage.getItem('ds_upload_code');
+            var name = localStorage.getItem('ds_upload_name');
+            if (saved) document.getElementById('accessCode').value = saved;
+            if (name) document.getElementById('uploaderName').value = name;
+        } catch(e) {}
+
+        // Check URL params for auto-connect
+        var params = new URLSearchParams(window.location.search);
+        var code = params.get('code');
+        if (code) {
+            document.getElementById('accessCode').value = code.toUpperCase();
+            this.connect();
+        }
+    }
 };
 
-// ── SUPABASE HELPERS ──────────────────────────────────────────────────
-async function sbUploadPhoto(file, ticketNum, type) {
-  const ext   = file.name.split('.').pop() || 'jpg';
-  const path  = `${PROJECT_ID}/${ticketNum}_${type}.${ext}`;
-  const res   = await fetch(`${SB_URL}/storage/v1/object/${BUCKET}/${path}`, {
-    method: 'POST',
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
-                'Content-Type': file.type, 'x-upsert': 'true' },
-    body: file
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error('Upload failed: ' + e); }
-  return `${SB_URL}/storage/v1/object/public/${BUCKET}/${path}`;
-}
-
-async function sbInsertTicket(data) {
-  const res = await fetch(`${SB_URL}/rest/v1/tickets`, {
-    method: 'POST',
-    headers: { ...HEADERS, 'Prefer': 'return=representation' },
-    body: JSON.stringify(data)
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error('Insert failed: ' + e); }
-  return await res.json();
-}
-
-async function sbUpdateTicketPhotos(ticketNum, scaleUrl, debrisUrl) {
-  const body = {};
-  if (scaleUrl)  body.scale_photo_url  = scaleUrl;
-  if (debrisUrl) body.debris_photo_url = debrisUrl;
-  const res = await fetch(
-    `${SB_URL}/rest/v1/tickets?project_id=eq.${PROJECT_ID}&ticket_number=eq.${ticketNum}`,
-    { method: 'PATCH', headers: HEADERS, body: JSON.stringify(body) }
-  );
-  if (!res.ok) { const e = await res.text(); throw new Error('Update failed: ' + e); }
-}
-
-async function sbCheckConnection() {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1/tickets?project_id=eq.${PROJECT_ID}&select=id&limit=1`, {
-      headers: HEADERS
-    });
-    if (res.ok) {
-      document.getElementById('connDot').className = 'conn-dot ok';
-      document.getElementById('connText').textContent = 'Connected to Supabase — writes are live';
-    } else throw new Error();
-  } catch {
-    document.getElementById('connDot').className = 'conn-dot err';
-    document.getElementById('connText').textContent = 'Cannot reach Supabase — check connection';
-  }
-}
-
-// ── TICKET DATA ───────────────────────────────────────────────────────
-const TICKETS = [
-  {num:85060,date:'2025-09-08',gwt:41100,tare:33800,net:3.65,div:95,month:'sep25'},
-  {num:85231,date:'2025-09-29',gwt:41780,tare:34260,net:3.76,div:80,month:'sep25'},
-  {num:85234,date:'2025-09-29',gwt:33600,tare:24760,net:4.42,div:65,month:'sep25'},
-  {num:83779,date:'2025-10-03',gwt:40900,tare:34230,net:3.34,div:75,month:'oct25'},
-  {num:83808,date:'2025-10-07',gwt:43540,tare:32720,net:5.41,div:80,month:'oct25'},
-  {num:83805,date:'2025-10-07',gwt:42160,tare:33280,net:4.44,div:75,month:'oct25'},
-  {num:83860,date:'2025-10-14',gwt:40100,tare:32980,net:3.56,div:60,month:'oct25'},
-  {num:83863,date:'2025-10-14',gwt:41730,tare:33140,net:4.30,div:45,month:'oct25'},
-  {num:83889,date:'2025-10-16',gwt:40970,tare:31243,net:4.86,div:60,month:'oct25'},
-  {num:83891,date:'2025-10-16',gwt:40900,tare:33780,net:3.56,div:50,month:'oct25'},
-  {num:83899,date:'2025-10-17',gwt:37200,tare:34120,net:1.54,div:65,month:'oct25'},
-  {num:83906,date:'2025-10-17',gwt:38960,tare:33580,net:2.69,div:60,month:'oct25'},
-  {num:83989,date:'2025-10-20',gwt:39640,tare:32220,net:3.71,div:60,month:'oct25'},
-  {num:83967,date:'2025-10-23',gwt:41170,tare:33680,net:3.75,div:65,month:'oct25'},
-  {num:83968,date:'2025-10-23',gwt:40740,tare:33770,net:3.49,div:70,month:'oct25'},
-  {num:83953,date:'2025-10-23',gwt:40920,tare:32310,net:4.31,div:60,month:'oct25'},
-  {num:83964,date:'2025-10-25',gwt:40320,tare:32890,net:3.72,div:65,month:'oct25'},
-  {num:82872,date:'2025-11-07',gwt:38080,tare:32060,net:3.01,div:73,month:'nov25'},
-  {num:82883,date:'2025-11-10',gwt:40200,tare:32100,net:4.05,div:68,month:'nov25'},
-  {num:82885,date:'2025-11-11',gwt:42340,tare:32700,net:4.82,div:65,month:'nov25'},
-  {num:82985,date:'2025-11-11',gwt:41330,tare:32700,net:4.32,div:65,month:'nov25'},
-  {num:82986,date:'2025-11-12',gwt:39710,tare:32060,net:3.83,div:72,month:'nov25'},
-  {num:83000,date:'2025-11-14',gwt:40240,tare:33220,net:3.51,div:74,month:'nov25'},
-  {num:82999,date:'2025-11-16',gwt:41430,tare:32620,net:4.41,div:70,month:'nov25'},
-  {num:84504,date:'2025-11-17',gwt:39950,tare:32720,net:3.62,div:70,month:'nov25'},
-  {num:84505,date:'2025-11-18',gwt:42640,tare:32300,net:5.17,div:77,month:'nov25'},
-  {num:84509,date:'2025-11-25',gwt:40770,tare:32670,net:4.05,div:65,month:'nov25'},
-  {num:84537,date:'2025-11-28',gwt:42680,tare:33940,net:4.37,div:73,month:'nov25'},
-  {num:84540,date:'2025-11-28',gwt:40590,tare:32350,net:4.12,div:77,month:'nov25'},
-  {num:84541,date:'2025-11-28',gwt:36910,tare:32670,net:2.12,div:40,month:'nov25'},
-  {num:83285,date:'2026-01-12',gwt:43710,tare:32660,net:5.53,div:65,month:'jan26'},
-  {num:83286,date:'2026-01-12',gwt:39380,tare:33020,net:3.18,div:70,month:'jan26'},
-  {num:83287,date:'2026-01-13',gwt:41730,tare:32900,net:4.42,div:60,month:'jan26'},
-  {num:83288,date:'2026-01-13',gwt:40100,tare:33740,net:3.18,div:65,month:'jan26'},
-  {num:83289,date:'2026-01-15',gwt:39080,tare:33820,net:2.63,div:65,month:'jan26'},
-  {num:83290,date:'2026-01-15',gwt:38640,tare:32120,net:3.26,div:65,month:'jan26'},
-  {num:83291,date:'2026-01-16',gwt:37930,tare:32400,net:2.77,div:45,month:'jan26'},
-  {num:83292,date:'2026-01-16',gwt:36870,tare:32010,net:2.43,div:45,month:'jan26'},
-  {num:83462,date:'2026-01-20',gwt:40200,tare:32580,net:3.81,div:75,month:'jan26'},
-  {num:83458,date:'2026-01-20',gwt:43640,tare:32820,net:5.41,div:75,month:'jan26'},
-  {num:83358,date:'2026-01-20',gwt:39440,tare:31220,net:4.11,div:60,month:'jan26'},
-  {num:83461,date:'2026-01-22',gwt:41360,tare:33530,net:3.92,div:66,month:'jan26'},
-  {num:83398,date:'2026-01-22',gwt:44910,tare:32500,net:6.21,div:62,month:'jan26'},
-  {num:83399,date:'2026-01-23',gwt:39660,tare:33550,net:3.06,div:70,month:'jan26'},
-  {num:83400,date:'2026-01-23',gwt:37080,tare:32610,net:2.24,div:71,month:'jan26'},
-  {num:83418,date:'2026-01-24',gwt:39320,tare:33020,net:3.15,div:65,month:'jan26'},
-  {num:83419,date:'2026-01-24',gwt:41360,tare:33240,net:4.06,div:66,month:'jan26'},
-  {num:83406,date:'2026-01-29',gwt:38960,tare:32470,net:3.25,div:63,month:'jan26'},
-  {num:83407,date:'2026-01-29',gwt:41030,tare:32460,net:4.29,div:67,month:'jan26'},
-  {num:83425,date:'2026-01-30',gwt:38460,tare:33020,net:2.72,div:61,month:'jan26'},
-  {num:83426,date:'2026-01-30',gwt:40020,tare:33080,net:3.47,div:68,month:'jan26'},
-  {num:83444,date:'2026-01-31',gwt:38840,tare:32920,net:2.96,div:62,month:'jan26'},
-  {num:83445,date:'2026-01-31',gwt:39030,tare:33440,net:2.80,div:74,month:'jan26'},
-  {num:83435,date:'2026-02-03',gwt:46520,tare:32120,net:7.20,div:60,month:'feb26'},
-  {num:83436,date:'2026-02-05',gwt:43680,tare:33500,net:5.09,div:69,month:'feb26'},
-  {num:83440,date:'2026-02-07',gwt:40320,tare:33400,net:3.46,div:67,month:'feb26'},
-  {num:83441,date:'2026-02-07',gwt:41460,tare:32840,net:4.31,div:65,month:'feb26'},
-  {num:83442,date:'2026-02-07',gwt:39490,tare:33440,net:3.03,div:70,month:'feb26'},
-  {num:83109,date:'2026-02-10',gwt:39340,tare:32910,net:3.22,div:63,month:'feb26'},
-  {num:83113,date:'2026-02-11',gwt:40020,tare:33560,net:3.23,div:52,month:'feb26'},
-  {num:83097,date:'2026-02-12',gwt:38090,tare:33130,net:2.48,div:53,month:'feb26'},
-  {num:83098,date:'2026-02-13',gwt:39010,tare:33200,net:2.91,div:81,month:'feb26'},
-  {num:83099,date:'2026-02-14',gwt:39840,tare:33060,net:3.39,div:75,month:'feb26'},
-  {num:83064,date:'2026-02-16',gwt:40600,tare:32120,net:4.24,div:61,month:'feb26'},
-  {num:83133,date:'2026-02-23',gwt:38300,tare:33200,net:2.55,div:73,month:'feb26'},
-];
-
-const MONTH_LABELS={sep25:'September 2025',oct25:'October 2025',nov25:'November 2025',jan26:'January 2026',feb26:'February 2026'};
-const photoState={};
-TICKETS.forEach(t=>{photoState[t.num]={scale:null,debris:null,scaleUrl:null,debrisUrl:null};});
-
-let newPhotos={scale:null,debris:null};
-let newQueue=[];
-let savedCount=0;
-let currentFilter='all';
-
-// ── AUTO NET TONS ─────────────────────────────────────────────────────
-['newGrossLbs','newTareLbs'].forEach(id=>{
-  document.getElementById(id).addEventListener('input',()=>{
-    const g=parseFloat(document.getElementById('newGrossLbs').value)||0;
-    const t=parseFloat(document.getElementById('newTareLbs').value)||0;
-    document.getElementById('newNetTons').value=g>t?((g-t)/2000).toFixed(3):'—';
-  });
-});
-
-// ── TABS ──────────────────────────────────────────────────────────────
-function switchTab(name,btn){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
-  if(name==='existing') render();
-}
-
-// ── CAPTURE PHOTOS ────────────────────────────────────────────────────
-function capturePhoto(type,input){
-  const file=input.files[0]; if(!file) return;
-  newPhotos[type]=file;
-  const img=document.getElementById('img-new-'+type);
-  img.src=URL.createObjectURL(file); img.classList.add('visible');
-  document.getElementById('prev-new-'+type).querySelector('.preview-placeholder').style.display='none';
-  document.getElementById('check-new-'+type).classList.add('visible');
-  document.getElementById('fn-new-'+type).textContent=file.name;
-  showToast((type==='scale'?'Scale ticket':'Debris')+' photo ready ✓');
-}
-
-// ── ADD TO QUEUE ──────────────────────────────────────────────────────
-function addToQueue(){
-  const num=document.getElementById('newTicketNum').value.trim();
-  const date=document.getElementById('newTicketDate').value;
-  const gwt=parseInt(document.getElementById('newGrossLbs').value)||0;
-  const tare=parseInt(document.getElementById('newTareLbs').value)||0;
-  const div=parseInt(document.getElementById('newDivRate').value)||0;
-  const hauler=document.getElementById('newHauler').value.trim();
-  if(!num||!date||!gwt||!tare){showToast('Fill in ticket #, date, gross & tare','err');return;}
-  const net=parseFloat(((gwt-tare)/2000).toFixed(3));
-  newQueue.push({num,date,gwt,tare,net,div,hauler,
-    scaleFile:newPhotos.scale, debrisFile:newPhotos.debris,
-    status:'queued', id:crypto.randomUUID()
-  });
-  renderQueue();
-  resetNewForm();
-  document.getElementById('statNew').textContent=newQueue.length;
-  showToast('Ticket #'+num+' queued');
-}
-
-function resetNewForm(){
-  ['newTicketNum','newGrossLbs','newTareLbs','newDivRate','newNetTons'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('newTicketDate').value=new Date().toISOString().split('T')[0];
-  newPhotos={scale:null,debris:null};
-  ['scale','debris'].forEach(type=>{
-    const img=document.getElementById('img-new-'+type);
-    img.classList.remove('visible'); img.src='';
-    document.getElementById('fn-new-'+type).textContent='';
-    document.getElementById('check-new-'+type).classList.remove('visible');
-    document.getElementById('prev-new-'+type).querySelector('.preview-placeholder').style.display='';
-  });
-}
-
-function renderQueue(){
-  const list=document.getElementById('queueList'); list.innerHTML='';
-  document.getElementById('queueCount').textContent=newQueue.length;
-  newQueue.forEach((e,i)=>{
-    const card=document.createElement('div');
-    card.className='queue-card'+(e.status==='saved'?' saved':e.status==='saving'?' saving':e.status==='error'?' error':'');
-    card.id='qcard-'+e.id;
-    const ss=e.scaleFile?URL.createObjectURL(e.scaleFile):null;
-    const ds=e.debrisFile?URL.createObjectURL(e.debrisFile):null;
-    const statusTxt=e.status==='saved'?'✓ Saved':e.status==='saving'?'Uploading...':e.status==='error'?'✗ Error':'Ready';
-    card.innerHTML=`
-      <div class="queue-num">#${e.num}</div>
-      <div class="queue-date">${formatDate(e.date)}</div>
-      <div class="queue-weight">${e.net}T · ${e.div}%</div>
-      <div class="queue-photos">
-        ${ss?`<img class="queue-thumb" src="${ss}">`:`<div class="queue-thumb-empty">🧾</div>`}
-        ${ds?`<img class="queue-thumb" src="${ds}">`:`<div class="queue-thumb-empty">📸</div>`}
-      </div>
-      <div class="queue-status ${e.status==='saved'?'ok':e.status==='error'?'err':''}">${statusTxt}</div>
-    `;
-    list.appendChild(card);
-  });
-  const btn=document.getElementById('saveAllBtn');
-  btn.className='save-all-btn'+(newQueue.filter(e=>e.status==='queued').length>0?' visible':'');
-}
-
-// ── SAVE ALL TO SUPABASE ──────────────────────────────────────────────
-async function saveAllToSupabase(){
-  const btn=document.getElementById('saveAllBtn');
-  btn.textContent='⏳ Uploading...'; btn.disabled=true;
-
-  for(let i=0;i<newQueue.length;i++){
-    const e=newQueue[i];
-    if(e.status!=='queued') continue;
-    e.status='saving'; renderQueue();
-
-    try {
-      // Upload photos
-      let scaleUrl=null, debrisUrl=null;
-      if(e.scaleFile)  scaleUrl  = await sbUploadPhoto(e.scaleFile, e.num, 'scale');
-      if(e.debrisFile) debrisUrl = await sbUploadPhoto(e.debrisFile, e.num, 'debris');
-
-      // Insert ticket record
-      await sbInsertTicket({
-        id: e.id,
-        project_id: PROJECT_ID,
-        user_id: USER_ID,
-        ticket_number: String(e.num),
-        ticket_date: e.date,
-        gross_lbs: e.gwt,
-        tare_lbs: e.tare,
-        net_lbs: e.gwt - e.tare,
-        net_tons: e.net,
-        diversion_rate: e.div,
-        hauler: e.hauler,
-        scan_type: 'scale_ticket',
-        scale_photo_url: scaleUrl,
-        debris_photo_url: debrisUrl
-      });
-
-      e.status='saved'; savedCount++;
-      document.getElementById('statSaved').textContent=savedCount;
-    } catch(err) {
-      e.status='error';
-      showToast('Error on #'+e.num+': '+err.message,'err');
-    }
-    renderQueue();
-  }
-
-  btn.textContent='⬆ Save All to Supabase →'; btn.disabled=false;
-  const allSaved=newQueue.every(e=>e.status==='saved');
-  if(allSaved) showToast('All '+newQueue.length+' tickets saved to Supabase ✓');
-}
-
-// ── EXISTING TICKETS ──────────────────────────────────────────────────
-function render(){
-  const grid=document.getElementById('ticketGrid'); grid.innerHTML='';
-  const filtered=TICKETS.filter(t=>{
-    const s=photoState[t.num];
-    if(currentFilter==='all') return true;
-    if(currentFilter==='missing') return !s.scaleUrl&&!s.debrisUrl;
-    if(currentFilter==='complete') return s.scaleUrl&&s.debrisUrl;
-    return t.month===currentFilter;
-  });
-  let lastMonth=null;
-  filtered.forEach(t=>{
-    if(t.month!==lastMonth){
-      const sep=document.createElement('div'); sep.className='month-sep';
-      sep.innerHTML=MONTH_LABELS[t.month]+` <span class="month-count">${TICKETS.filter(x=>x.month===t.month).length}</span>`;
-      grid.appendChild(sep); lastMonth=t.month;
-    }
-    grid.appendChild(makeCard(t));
-  });
-  updateStats();
-}
-
-function makeCard(t){
-  const s=photoState[t.num];
-  const card=document.createElement('div');
-  card.className='ticket-card'+(s.scaleUrl&&s.debrisUrl?' has-both':s.scaleUrl?' has-scale':'');
-  card.id='card-'+t.num;
-  card.innerHTML=`
-    <div class="ticket-header" onclick="toggleCard(${t.num})">
-      <div class="ticket-num">#${t.num}</div>
-      <div class="ticket-date">${formatDate(t.date)}</div>
-      <div class="ticket-weight">${t.net}T</div>
-      <div class="ticket-diverted">${t.div}%</div>
-      <div class="ticket-status-icons">
-        <div class="icon-badge ${s.scaleUrl?'filled-scale':''}">🧾</div>
-        <div class="icon-badge ${s.debrisUrl?'filled-debris':''}">📸</div>
-      </div>
-    </div>
-    <div class="upload-zone" id="zone-${t.num}">
-      <div class="upload-slots-row">
-        ${makeSlot(t.num,'scale','🧾','Scale Ticket')}
-        ${makeSlot(t.num,'debris','📸','Debris Load')}
-      </div>
-      <div class="upload-actions">
-        <button class="upload-btn" onclick="saveExistingPhotos(${t.num})"
-          ${!s.scale&&!s.debris?'disabled':''} id="ubtn-${t.num}">Save to Log</button>
-        <div class="upload-status" id="status-${t.num}"></div>
-      </div>
-    </div>`;
-  return card;
-}
-
-function makeSlot(num,type,icon,label){
-  const s=photoState[num]; const has=!!s[type];
-  return `<div class="upload-slot ${has?'has-photo':''}" id="slot-${type}-${num}">
-    <div class="slot-label">${icon} ${label}</div>
-    <div class="slot-btns">
-      <button class="slot-btn cam">
-        <input type="file" accept="image/*" capture="environment" onchange="handleExistingFile(${num},'${type}',this)">
-        <span class="slot-btn-icon">📷</span><span class="slot-btn-txt">Camera</span>
-      </button>
-      <button class="slot-btn gal">
-        <input type="file" accept="image/*" onchange="handleExistingFile(${num},'${type}',this)">
-        <span class="slot-btn-icon">🖼</span><span class="slot-btn-txt">Gallery</span>
-      </button>
-    </div>
-    <img class="slot-preview ${has?'visible':''}" id="prev-${type}-${num}"
-      ${s[type+'Url']?`src="${s[type+'Url']}"`:''}>
-    <div class="slot-filename" id="fn-${type}-${num}">${s[type]?s[type].name:s[type+'Url']?'✓ Uploaded':''}</div>
-  </div>`;
-}
-
-function toggleCard(num){document.getElementById('card-'+num).classList.toggle('open');}
-
-function handleExistingFile(num,type,input){
-  const file=input.files[0]; if(!file) return;
-  photoState[num][type]=file;
-  document.getElementById('slot-'+type+'-'+num).classList.add('has-photo');
-  document.getElementById('fn-'+type+'-'+num).textContent=file.name;
-  const prev=document.getElementById('prev-'+type+'-'+num);
-  prev.src=URL.createObjectURL(file); prev.classList.add('visible');
-  document.getElementById('ubtn-'+num).removeAttribute('disabled');
-  showToast('Photo ready for #'+num);
-}
-
-async function saveExistingPhotos(num){
-  const s=photoState[num];
-  const statusEl=document.getElementById('status-'+num);
-  const btn=document.getElementById('ubtn-'+num);
-  statusEl.textContent='Uploading...'; statusEl.className='upload-status';
-  btn.disabled=true;
-
-  try {
-    let scaleUrl=s.scaleUrl, debrisUrl=s.debrisUrl;
-    if(s.scale)  scaleUrl  = await sbUploadPhoto(s.scale,  num, 'scale');
-    if(s.debris) debrisUrl = await sbUploadPhoto(s.debris, num, 'debris');
-    await sbUpdateTicketPhotos(num, scaleUrl, debrisUrl);
-
-    s.scaleUrl=scaleUrl; s.debrisUrl=debrisUrl;
-    statusEl.textContent='✓ Saved to Supabase'; statusEl.className='upload-status ok';
-
-    const card=document.getElementById('card-'+num);
-    card.classList.remove('has-scale','has-both');
-    if(scaleUrl&&debrisUrl) card.classList.add('has-both');
-    else if(scaleUrl) card.classList.add('has-scale');
-
-    document.getElementById('statPhotos').textContent=
-      parseInt(document.getElementById('statPhotos').textContent||0)+
-      (s.scale?1:0)+(s.debris?1:0);
-
-    updateStats();
-    showToast('#'+num+' photos saved to Supabase ✓');
-  } catch(err){
-    statusEl.textContent='✗ '+err.message; statusEl.className='upload-status err';
-    showToast('Upload failed: '+err.message,'err');
-    btn.disabled=false;
-  }
-}
-
-function filterTickets(f,btn){
-  currentFilter=f;
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); render();
-}
-
-function updateStats(){
-  let p=0;
-  TICKETS.forEach(t=>{if(photoState[t.num].scaleUrl)p++;if(photoState[t.num].debrisUrl)p++;});
-  const pct=Math.round(p/(TICKETS.length*2)*100);
-  document.getElementById('progressFill').style.width=pct+'%';
-  document.getElementById('progressPct').textContent=pct+'%';
-}
-
-// ── UTILS ─────────────────────────────────────────────────────────────
-function formatDate(d){
-  const[y,m,day]=d.split('-');
-  const mo=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${mo[parseInt(m)]} ${parseInt(day)}, ${y}`;
-}
-
-function showToast(msg,type='ok'){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.className='toast show'+(type==='err'?' error':'');
-  setTimeout(()=>t.classList.remove('show'),3000);
-}
-
-// ── INIT ──────────────────────────────────────────────────────────────
-document.getElementById('newTicketDate').value=new Date().toISOString().split('T')[0];
-sbCheckConnection();
+app.init();
 </script>
 </body>
 </html>
