@@ -1288,6 +1288,18 @@
             <div class="card-title"><span class="icon">📊</span> Material Breakdown</div>
             <div id="editMaterialSliders"></div>
             <div class="pct-total invalid" id="editPctTotal">Total: 0%</div>
+            <div id="editDiversionDisplay" style="text-align:center; padding:12px 0;">
+                <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Diversion Rate</div>
+                <div id="editDiversionValue" style="font-size:2rem; font-weight:800; color:var(--success);">0%</div>
+                <div id="editDiversionBar" style="height:8px; border-radius:4px; background:var(--border); margin-top:8px; overflow:hidden;">
+                    <div id="editDiversionFill" style="height:100%; border-radius:4px; background:var(--success); width:0%; transition:width 0.3s ease;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-dim); margin-top:4px;">
+                    <span>0%</span>
+                    <span id="editDiversionCO2" style="color:var(--primary); font-weight:600;"></span>
+                    <span>100%</span>
+                </div>
+            </div>
             <div class="divider"></div>
 
             <!-- Photo Uploads -->
@@ -1802,6 +1814,14 @@
                     <div class="stat-card highlight"><div class="stat-value">${this.fmt(t.net_lbs)}</div><div class="stat-label">Net (lbs)</div></div>
                     <div class="stat-card"><div class="stat-value">${this.fmt(t.net_tons)}</div><div class="stat-label">Net (tons)</div></div>
                 </div>
+                <div style="text-align:center; padding:10px 0; margin-bottom:12px; background:${(t.diversion_pct || 0) >= 75 ? 'var(--success-light)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
+                    <div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Diversion Rate</div>
+                    <div style="font-size:1.8rem; font-weight:800; color:${(t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)'};">${t.diversion_pct || 0}%</div>
+                    <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 20px 0; overflow:hidden;">
+                        <div style="height:100%; border-radius:3px; width:${t.diversion_pct || 0}%; background:${(t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)'};"></div>
+                    </div>
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">${this.fmt(t.diverted_tons)} T diverted • ${this.fmt(t.co2e_avoided)} mt CO₂e avoided</div>
+                </div>
                 ${mats ? `<div class="card-title mt-12"><span class="icon">📊</span> Material Breakdown</div>${mats}` : ''}
                 <div class="stats-grid mt-12">
                     <div class="stat-card"><div class="stat-value text-success">${this.fmt(t.diverted_tons)}</div><div class="stat-label">Diverted</div></div>
@@ -2056,11 +2076,43 @@
         updateEditPctTotal() {
             let total = 0;
             Object.keys(this.MATERIALS).forEach(k => {
-                total += parseInt(document.getElementById(`editSlider_${k}`)?.value || 0);
+                total += parseInt(document.getElementById('editSlider_' + k)?.value || 0);
             });
             const el = document.getElementById('editPctTotal');
-            el.textContent = `Total: ${total}%`;
+            el.textContent = 'Total: ' + total + '%';
             el.className = 'pct-total ' + (total === 100 ? 'valid' : 'invalid');
+
+            // Live diversion rate
+            const landfillPct = parseInt(document.getElementById('editSlider_landfill')?.value || 0);
+            const divPct = 100 - landfillPct;
+            const netTons = parseFloat(document.getElementById('editTktTons')?.value) || 0;
+            const divertedTons = (netTons * divPct / 100);
+
+            // Calculate live CO2e
+            let co2e = 0;
+            Object.keys(this.MATERIALS).forEach(k => {
+                if (k !== 'landfill') {
+                    const pct = parseInt(document.getElementById('editSlider_' + k)?.value || 0);
+                    co2e += (netTons * pct / 100) * this.MATERIALS[k].gwp;
+                }
+            });
+
+            const divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
+            const valEl = document.getElementById('editDiversionValue');
+            const fillEl = document.getElementById('editDiversionFill');
+            const co2El = document.getElementById('editDiversionCO2');
+
+            if (valEl) {
+                valEl.textContent = divPct + '%';
+                valEl.style.color = divColor;
+            }
+            if (fillEl) {
+                fillEl.style.width = divPct + '%';
+                fillEl.style.background = divColor;
+            }
+            if (co2El) {
+                co2El.textContent = co2e.toFixed(2) + ' mt CO₂e avoided';
+            }
         },
 
         async saveTicketEdit() {
@@ -2530,7 +2582,7 @@
             this.showLoading('Compressing photo...');
 
             // Compress image before sending to API
-            const compressed = await this.compressImage(base64, 1200);
+            const compressed = await this.compressImage(base64, 800);
 
             this.showLoading('AI reading scale ticket...');
 
@@ -2541,12 +2593,12 @@
 
             try {
                 const data = await this.callOpenAI({
-                    model: 'gpt-4o',
+                    model: 'gpt-4o-mini',
                     messages: [{
                         role: 'user',
                         content: [
                             { type: 'text', text: prompt },
-                            { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                            { type: 'image_url', image_url: { url: compressed, detail: 'low' } }
                         ]
                     }],
                     max_tokens: 300,
@@ -2764,10 +2816,18 @@
                         <span class="icon">📅</span> ${monthName} ${year}
                         <span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>
                     </div>
+                    <div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
+                        <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${data.divRate}%</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">Monthly Diversion Rate</div>
+                        <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 16px 0; overflow:hidden;">
+                            <div style="height:100%; border-radius:3px; width:${data.divRate}%; background:${statusColor};"></div>
+                        </div>
+                        <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">Target: ${target}% • ${data.divRate >= target ? 'PASSING ✓' : (target - data.divRate) + '% below target'}</div>
+                    </div>
                     <div class="stats-grid">
                         <div class="stat-card" onclick="DS.showMonthDrill('${key}')" style="cursor:pointer; border-color:var(--primary); border-style:dashed;">
                             <div class="stat-value text-primary" style="font-size:1.1rem;">${data.ticketCount}</div>
-                            <div class="stat-label">Tickets <span style="color:var(--primary);">▶ Tap to view</span></div>
+                            <div class="stat-label">Tickets <span style="color:var(--primary);">▶ Tap</span></div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" style="font-size:1.1rem;">${this.fmt(data.totalTons)}</div>
@@ -3033,8 +3093,8 @@
                 }
 
                 try {
-                    // Compress image to max 1200px wide to reduce payload size
-                    const compressedB64 = await this.compressImage(this._batchBase64[idx], 1200);
+                    // Compress image to max 800px wide for faster OCR
+                    const compressedB64 = await this.compressImage(this._batchBase64[idx], 800);
 
                     const prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
                         'The ticket has a RED PRINTED 5-digit ticket number (like 83434, 83467, etc). ' +
@@ -3043,12 +3103,12 @@
                         '{"ticket_number":"XXXXX","date":"YYYY-MM-DD","gross_lbs":XXXXX,"tare_lbs":XXXXX,"net_lbs":XXXXX}';
 
                     const data = await this.callOpenAI({
-                        model: 'gpt-4o',
+                        model: 'gpt-4o-mini',
                         messages: [{
                             role: 'user',
                             content: [
                                 { type: 'text', text: prompt },
-                                { type: 'image_url', image_url: { url: compressedB64, detail: 'high' } }
+                                { type: 'image_url', image_url: { url: compressedB64, detail: 'low' } }
                             ]
                         }],
                         max_tokens: 300,
@@ -3249,14 +3309,25 @@
         },
 
         exportJSON() {
+            const totals = this.calcTicketTotals(this.state.tickets);
             const data = {
                 project: this.state.currentProject,
+                summary: {
+                    total_tickets: totals.ticketCount,
+                    total_tons: +totals.totalTons.toFixed(4),
+                    diverted_tons: +totals.divertedTons.toFixed(4),
+                    landfill_tons: +totals.landfillTons.toFixed(4),
+                    diversion_rate_pct: totals.divRate,
+                    co2e_avoided_mt: +totals.co2e.toFixed(4),
+                    leed_target_pct: this.state.currentProject?.leed_target || 75,
+                    target_met: totals.divRate >= (this.state.currentProject?.leed_target || 75)
+                },
                 tickets: this.state.tickets,
                 exported_at: new Date().toISOString(),
                 version: this.VERSION
             };
             this.downloadFile(JSON.stringify(data, null, 2),
-                `DivertScan_${this.state.currentProject?.name || 'export'}_${new Date().toISOString().split('T')[0]}.json`,
+                'DivertScan_' + (this.state.currentProject?.name || 'export') + '_' + new Date().toISOString().split('T')[0] + '.json',
                 'application/json');
         },
 
@@ -3415,7 +3486,7 @@
 
             try {
                 const data = await this.callOpenAI({
-                    model: 'gpt-4o',
+                    model: 'gpt-4o-mini',
                     messages: [{ role: 'user', content: 'Reply with only the word OK' }],
                     max_tokens: 5
                 });
