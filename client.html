@@ -237,21 +237,49 @@ var portal = {
 
         this.showLoading('Signing in...');
 
-        // Hash password
-        var hashRes = await this.api('rpc/hash_password', 'POST', { pw: pw });
-        if (!hashRes) { this.hideLoading(); this.showError('Connection error'); return; }
-        var hash = typeof hashRes === 'string' ? hashRes : hashRes;
+        // Hash password via DB function
+        try {
+            var hashResp = await fetch(SUPABASE_URL + '/rest/v1/rpc/hash_password', {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ pw: pw })
+            });
 
-        // Find client
-        var clients = await this.api('client_accounts?email=eq.' + encodeURIComponent(email) + '&password_hash=eq.' + encodeURIComponent(hash) + '&is_active=eq.true');
-        this.hideLoading();
+            if (!hashResp.ok) {
+                this.hideLoading();
+                this.showError('Server error (' + hashResp.status + '). Make sure create_client_portal.sql has been run.');
+                return;
+            }
 
-        if (!clients || clients.length === 0) {
-            this.showError('Invalid email or password');
+            var hashText = await hashResp.text();
+            // RPC returns the hash as a quoted string like "abc123..." - strip quotes
+            var hash = hashText.replace(/^"|"$/g, '').trim();
+
+            if (!hash || hash.length < 10) {
+                this.hideLoading();
+                this.showError('Password hash failed');
+                return;
+            }
+
+            // Find client by email + hash
+            var clients = await this.api('client_accounts?email=eq.' + encodeURIComponent(email) + '&password_hash=eq.' + encodeURIComponent(hash) + '&is_active=eq.true');
+            this.hideLoading();
+
+            if (!clients || clients.length === 0) {
+                this.showError('Invalid email or password');
+                return;
+            }
+
+            this.client = clients[0];
+        } catch(e) {
+            this.hideLoading();
+            this.showError('Connection error: ' + e.message);
             return;
         }
-
-        this.client = clients[0];
 
         // Update last_login
         this.api('client_accounts?id=eq.' + this.client.id, 'PATCH', { last_login: new Date().toISOString() });
