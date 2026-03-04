@@ -1496,58 +1496,71 @@
         },
 
         // ============================================================
-        // OPENAI API HELPER — handles CORS proxy for browser requests
+        // OPENAI API HELPER — routes through Supabase DB function (no CORS issues)
         // ============================================================
         async callOpenAI(body) {
-            if (!this.state.apiKey) throw new Error('No API key');
+            if (!this.state.apiKey) throw new Error('No API key set — go to Audit > Settings');
 
-            // OpenAI API does not support CORS from browsers.
-            // Route through Supabase Edge Function if available, else use CORS proxy.
-            const directUrl = 'https://api.openai.com/v1/chat/completions';
-            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(directUrl);
-
-            // Try direct first (works if not blocked by CORS), then proxy
-            const urls = [directUrl, proxyUrl];
-            let lastError = null;
-
-            for (const url of urls) {
+            // Route through Supabase RPC function to avoid CORS
+            if (this.state.supabaseUrl && this.state.supabaseKey) {
                 try {
-                    const res = await fetch(url, {
+                    const rpcUrl = this.state.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/openai_proxy';
+                    const res = await fetch(rpcUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + this.state.apiKey
+                            'apikey': this.state.supabaseKey,
+                            'Authorization': 'Bearer ' + this.state.supabaseKey
                         },
-                        body: JSON.stringify(body)
+                        body: JSON.stringify({
+                            openai_key: this.state.apiKey,
+                            request_body: body
+                        })
                     });
 
-                    if (!res.ok) {
-                        const errBody = await res.text();
-                        let errMsg = 'API error ' + res.status;
-                        try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
-
-                        if (res.status === 401) throw new Error('Invalid API key — re-enter in Audit > Settings');
-                        if (res.status === 429) throw new Error('Rate limit or quota exceeded — check OpenAI billing');
-                        if (res.status === 404) throw new Error('Model not available on your API plan');
-                        throw new Error(errMsg);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.choices) return data;
+                        if (data.error) {
+                            const msg = data.error.message || 'Unknown error';
+                            if (msg.includes('Incorrect API key') || msg.includes('invalid')) throw new Error('Invalid OpenAI API key');
+                            if (msg.includes('quota') || msg.includes('rate')) throw new Error('OpenAI quota exceeded — check billing');
+                            throw new Error(msg);
+                        }
+                        return data;
+                    } else {
+                        const errText = await res.text();
+                        console.error('RPC error:', res.status, errText);
+                        if (res.status === 404) {
+                            throw new Error('Run openai_proxy_function.sql in Supabase SQL Editor first');
+                        }
+                        throw new Error('Supabase RPC error: ' + res.status);
                     }
-
-                    return await res.json();
                 } catch (e) {
-                    lastError = e;
-                    // If it's an auth/billing error, don't retry through proxy
-                    if (e.message.includes('API key') || e.message.includes('Rate limit') || e.message.includes('not available')) {
-                        throw e;
-                    }
-                    // TypeError = network/CORS failure, try next URL
-                    if (e instanceof TypeError) {
-                        console.log('CORS blocked on ' + url.substring(0, 40) + '... trying proxy');
-                        continue;
-                    }
-                    throw e;
+                    if (e.message.includes('API key') || e.message.includes('quota') || e.message.includes('SQL Editor')) throw e;
+                    console.error('RPC call failed:', e.message);
                 }
             }
-            throw lastError || new Error('Cannot reach OpenAI API');
+
+            // Fallback: direct call (usually blocked by CORS in browser)
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + this.state.apiKey
+                    },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) return await res.json();
+                const errBody = await res.text();
+                let errMsg = 'API error ' + res.status;
+                try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
+                throw new Error(errMsg);
+            } catch (e) {
+                if (e.message.includes('API key')) throw e;
+                throw new Error('Run openai_proxy_function.sql in Supabase SQL Editor to enable AI features');
+            }
         },
 
         async supabaseUpload(bucket, path, file) {
