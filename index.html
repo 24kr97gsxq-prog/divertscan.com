@@ -2829,9 +2829,9 @@
                         <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">Target: ${target}% • ${data.divRate >= target ? 'PASSING ✓' : (target - data.divRate) + '% below target'}</div>
                     </div>
                     <div class="stats-grid">
-                        <div class="stat-card" onclick="DS.showMonthDrill('${key}')" style="cursor:pointer; border-color:var(--primary); border-style:dashed;">
+                        <div class="stat-card">
                             <div class="stat-value text-primary" style="font-size:1.1rem;">${data.ticketCount}</div>
-                            <div class="stat-label">Tickets <span style="color:var(--primary);">▶ Tap</span></div>
+                            <div class="stat-label">Tickets</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" style="font-size:1.1rem;">${this.fmt(data.totalTons)}</div>
@@ -2848,6 +2848,8 @@
                     </div>
                     ${this.renderMaterialBars(data.matTotals, data.totalTons)}
                     <div class="divider"></div>
+                    ${this.renderMonthTicketTable(months[key])}
+                    <div class="divider"></div>
                     <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
                         <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
                         <span>Cumulative: <strong style="color:${data.cumRate >= target ? 'var(--success)' : 'var(--warning)'};">${data.cumRate}%</strong> diverted</span>
@@ -2863,7 +2865,59 @@
         },
 
         // ============================================================
-        // MONTH DRILL-DOWN — SPREADSHEET VIEW
+        // INLINE MONTH TICKET TABLE
+        // ============================================================
+        renderMonthTicketTable(tickets) {
+            if (!tickets || tickets.length === 0) return '';
+
+            var sorted = [...tickets].sort(function(a,b) { return (b.ticket_date||'').localeCompare(a.ticket_date||''); });
+
+            var tbl = '<div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">' +
+                '<table style="width:100%; border-collapse:collapse; font-size:0.7rem; white-space:nowrap;">' +
+                '<thead><tr style="background:var(--bg-input); border-bottom:2px solid var(--border);">' +
+                '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Date</th>' +
+                '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Ticket#</th>' +
+                '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Net Tons</th>' +
+                '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>' +
+                '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>' +
+                '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">📷</th>' +
+                '</tr></thead><tbody>';
+
+            var sumTons = 0, sumDiverted = 0, sumCo2e = 0;
+
+            for (var i = 0; i < sorted.length; i++) {
+                var t = sorted[i];
+                sumTons += parseFloat(t.net_tons) || 0;
+                sumDiverted += parseFloat(t.diverted_tons) || 0;
+                sumCo2e += parseFloat(t.co2e_avoided) || 0;
+                var divPct = t.diversion_pct || 0;
+                var hasPhotos = t.scale_ticket_image || (Array.isArray(t.debris_images) && t.debris_images.length > 0);
+                var divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+                tbl += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
+                    '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
+                    '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>' +
+                    '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '🖼️' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
+                    '</tr>';
+            }
+
+            var totalDivRate = sumTons > 0 ? Math.round(sumDiverted / sumTons * 100) : 0;
+            tbl += '</tbody><tfoot>' +
+                '<tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">' +
+                '<td style="padding:8px 6px; font-weight:800;" colspan="2">TOTALS</td>' +
+                '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800;">' + this.fmt(sumTons) + '</td>' +
+                '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">' + totalDivRate + '%</td>' +
+                '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700;">' + this.fmt(sumCo2e) + '</td>' +
+                '<td></td></tr></tfoot></table></div>';
+
+            return tbl;
+        },
+
+        // ============================================================
+        // MONTH DRILL-DOWN — SPREADSHEET VIEW (modal - legacy)
         // ============================================================
         showMonthDrill(monthKey) {
             const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
