@@ -1743,17 +1743,39 @@
                 el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">No projects yet</div></div>';
                 return;
             }
-            el.innerHTML = this.state.projects.map(p => `
-                <div class="ticket-item" style="position:relative;">
-                    <div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">🏗️</div>
-                    <div class="ticket-info" onclick="DS.selectProject(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-                        <div class="ticket-title">${this.esc(p.name)}</div>
-                        <div class="ticket-meta">${[p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ')}</div>
-                        <div class="ticket-meta">LEED ${p.leed_version || 'v4'} • Target: ${p.leed_target || 50}% | Code: ${p.access_code || 'N/A'}</div>
-                    </div>
-                    <button class="btn btn-sm btn-outline" style="width:auto; padding:6px 10px; flex-shrink:0;" onclick="event.stopPropagation(); DS.showEditProject('${p.id}')">✏️</button>
-                </div>
-            `).join('');
+
+            // Count tickets per project and detect duplicates
+            var ticketCounts = {};
+            this.state.projects.forEach(function(p) { ticketCounts[p.id] = 0; });
+
+            // We need to fetch ticket counts — use cached data if current project, otherwise show '?'
+            var nameCounts = {};
+            this.state.projects.forEach(function(p) {
+                var lower = (p.name || '').toLowerCase().trim();
+                nameCounts[lower] = (nameCounts[lower] || 0) + 1;
+            });
+
+            el.innerHTML = this.state.projects.map(p => {
+                var lower = (p.name || '').toLowerCase().trim();
+                var isDupe = nameCounts[lower] > 1;
+                var hasDetails = [p.client, p.waste_hauler, p.location].filter(Boolean).length > 0;
+                var isCurrent = this.state.currentProject && this.state.currentProject.id === p.id;
+                var ticketCount = isCurrent ? this.state.tickets.length : null;
+
+                return '<div class="ticket-item" style="position:relative;' + (isDupe ? 'border-left:3px solid var(--warning);' : '') + '">' +
+                    '<div class="ticket-icon" style="background:' + (isCurrent ? 'var(--success-glow)' : 'var(--primary-glow)') + ';" onclick="DS.selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')">🏗️</div>' +
+                    '<div class="ticket-info" onclick="DS.selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')">' +
+                        '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + '</div>' +
+                        '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
+                        '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target || 50) + '%' +
+                            (ticketCount !== null ? ' • ' + ticketCount + ' tickets' : '') + '</div>' +
+                    '</div>' +
+                    '<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">' +
+                        '<button class="btn btn-sm btn-outline" style="width:auto; padding:4px 8px; font-size:0.65rem;" onclick="event.stopPropagation(); DS.showEditProject(\'' + p.id + '\')">✏️</button>' +
+                        '<button class="btn btn-sm" style="width:auto; padding:4px 8px; font-size:0.65rem; color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="event.stopPropagation(); DS.quickDeleteProject(\'' + p.id + '\')">🗑️</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         },
 
         // ============================================================
@@ -2021,6 +2043,41 @@
             } else {
                 this.showToast('Save failed');
             }
+        },
+
+        async quickDeleteProject(projectId) {
+            var p = this.state.projects.find(function(x) { return x.id === projectId; });
+            if (!p) return;
+
+            // Check if project has tickets
+            this.showLoading('Checking...');
+            var tickets = await this.supabase('tickets?project_id=eq.' + projectId + '&select=id&limit=1');
+            this.hideLoading();
+
+            if (tickets && tickets.length > 0) {
+                if (!confirm('"' + p.name + '" has tickets. Delete the project AND all its tickets? This cannot be undone.')) return;
+                this.showLoading('Deleting tickets...');
+                await this.supabase('tickets?project_id=eq.' + projectId, 'DELETE');
+            } else {
+                if (!confirm('Delete empty project "' + p.name + '"?')) return;
+            }
+
+            this.showLoading('Deleting project...');
+            await this.supabase('projects?id=eq.' + projectId, 'DELETE');
+            this.hideLoading();
+
+            this.state.projects = this.state.projects.filter(function(x) { return x.id !== projectId; });
+            if (this.state.currentProject && this.state.currentProject.id === projectId) {
+                this.state.currentProject = null;
+                this.state.tickets = [];
+                document.getElementById('currentProjectName').textContent = 'No Project';
+                document.getElementById('scanProjectName').textContent = 'Select a Project';
+                document.getElementById('scanProjectMeta').textContent = '';
+            }
+
+            this.renderProjectList();
+            this.showToast('"' + p.name + '" deleted');
+            this.addAuditEntry('PROJECT_DELETE', 'Deleted: ' + p.name);
         },
 
         async deleteProject() {
