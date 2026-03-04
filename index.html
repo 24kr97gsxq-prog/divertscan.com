@@ -1085,7 +1085,104 @@
                         <button class="btn btn-sm btn-success" onclick="DS.openBatchUpload('debris')">📸 Debris Photos</button>
                     </div>
                 </div>
+                <div class="card">
+                    <div class="card-title"><span class="icon">📲</span> Field Upload Link</div>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Share this link with field workers so they can upload scale ticket and debris photos from their phone. No login required.</p>
+                    <div id="fieldUploadLink" style="margin-bottom:12px;"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-sm btn-primary" onclick="DS.copyFieldLink()" style="flex:1;">📋 Copy Link</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.shareFieldLink()" style="flex:1;">📤 Share</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📥</span> Photo Review Queue
+                        <span id="queueBadge" style="margin-left:8px; background:var(--danger); color:white; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:10px; display:none;">0</span>
+                    </div>
+                    <div id="queueContent">
+                        <button class="btn btn-sm btn-outline" onclick="DS.loadPhotoQueue()">🔄 Load Queue</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><span class="icon">🏢</span> Client Portal Access</div>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Create client accounts and assign projects. Each client gets a portal code to view their project data, scale tickets, and download reports.</p>
+                    <button class="btn btn-sm btn-primary mb-12" onclick="DS.showNewClientModal()">+ New Client</button>
+                    <div id="clientList">
+                        <button class="btn btn-sm btn-outline" onclick="DS.loadClients()">🔄 Load Clients</button>
+                    </div>
+                </div>
             </div>
+
+    <!-- New Client Modal -->
+    <div class="modal-overlay" id="newClientModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">New Client Account</div>
+            <div class="form-group">
+                <label class="form-label">Company Name</label>
+                <input type="text" class="form-input" id="newClientName" placeholder="e.g. Jaguar Waste Management">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Contact Name</label>
+                    <input type="text" class="form-input" id="newClientContact" placeholder="e.g. Ross Holford">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input type="email" class="form-input" id="newClientEmail" placeholder="e.g. ross@jaguarwaste.com">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Assign Projects</label>
+                <div id="clientProjectCheckboxes" style="max-height:200px; overflow-y:auto;"></div>
+            </div>
+            <button class="btn btn-success mt-8" onclick="DS.createClient()">Create Client</button>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('newClientModal')">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Edit Client Modal -->
+    <div class="modal-overlay" id="editClientModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">Edit Client</div>
+            <input type="hidden" id="editClientId">
+            <div class="form-group">
+                <label class="form-label">Company Name</label>
+                <input type="text" class="form-input" id="editClientName">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Contact Name</label>
+                    <input type="text" class="form-input" id="editClientContact">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input type="email" class="form-input" id="editClientEmail">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Portal Code</label>
+                <input type="text" class="form-input" id="editClientCode" readonly style="color:var(--text-muted); font-weight:700; letter-spacing:0.05em;">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Portal Link</label>
+                <div id="editClientPortalLink" style="font-size:0.7rem; color:var(--primary); word-break:break-all; background:var(--bg-input); padding:8px 12px; border-radius:8px; font-family:var(--mono);"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Assigned Projects</label>
+                <div id="editClientProjects" style="max-height:200px; overflow-y:auto;"></div>
+            </div>
+            <button class="btn btn-success mt-8" onclick="DS.saveClientEdit()">💾 Save Changes</button>
+            <div class="btn-row mt-8">
+                <button class="btn btn-sm btn-primary" onclick="DS.copyClientPortalLink()" style="flex:1;">📋 Copy Portal Link</button>
+                <button class="btn btn-sm btn-outline" onclick="DS.shareClientPortal()" style="flex:1;">📤 Share</button>
+            </div>
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('editClientModal')">Cancel</button>
+            <div class="divider"></div>
+            <button class="btn btn-sm" style="color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="DS.deleteClient()">🗑️ Delete Client</button>
+        </div>
+    </div>
         </div>
 
         <!-- ============================================================
@@ -1484,6 +1581,7 @@
                     if (tab === 'ticketsTab') this.renderTickets();
                     if (tab === 'reportsTab') this.renderReports();
                     if (tab === 'projectsTab') this.renderProjectList();
+                    if (tab === 'auditTab') { this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); }
                 });
             });
         },
@@ -3691,7 +3789,371 @@
         exportAuditJSON() {
             const entries = Array.from(document.getElementById('auditLog').children).map(el => el.textContent);
             this.downloadFile(JSON.stringify({ audit_log: entries, exported_at: new Date().toISOString() }, null, 2),
-                `DivertScan_Audit_GBCI_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+                'DivertScan_Audit_GBCI_' + new Date().toISOString().split('T')[0] + '.json', 'application/json');
+        },
+
+        // ============================================================
+        // FIELD UPLOAD LINK & PHOTO REVIEW QUEUE
+        // ============================================================
+        getFieldUploadUrl() {
+            var proj = this.state.currentProject;
+            if (!proj || !proj.access_code) return null;
+            return 'https://divertscan.com/upload.html?code=' + encodeURIComponent(proj.access_code);
+        },
+
+        copyFieldLink() {
+            var url = this.getFieldUploadUrl();
+            if (!url) { this.showToast('Select a project first'); return; }
+            navigator.clipboard.writeText(url).then(function() {
+                DS.showToast('Link copied!');
+            }).catch(function() {
+                // Fallback
+                prompt('Copy this link:', url);
+            });
+        },
+
+        shareFieldLink() {
+            var proj = this.state.currentProject;
+            var url = this.getFieldUploadUrl();
+            if (!url) { this.showToast('Select a project first'); return; }
+            if (navigator.share) {
+                navigator.share({
+                    title: 'DivertScan Upload — ' + proj.name,
+                    text: 'Use this link to upload scale ticket and debris photos for ' + proj.name,
+                    url: url
+                }).catch(function() {});
+            } else {
+                this.copyFieldLink();
+            }
+        },
+
+        updateFieldLink() {
+            var el = document.getElementById('fieldUploadLink');
+            if (!el) return;
+            var proj = this.state.currentProject;
+            if (!proj) {
+                el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-dim);">Select a project first</div>';
+                return;
+            }
+            var url = this.getFieldUploadUrl();
+            el.innerHTML = '<div style="background:var(--bg-input); padding:10px 12px; border-radius:8px; font-family:var(--mono); font-size:0.65rem; word-break:break-all; color:var(--primary);">' + url + '</div>' +
+                '<div style="font-size:0.7rem; color:var(--text-muted); margin-top:6px;">Access Code: <strong>' + (proj.access_code || 'N/A') + '</strong></div>';
+        },
+
+        async loadPhotoQueue() {
+            var proj = this.state.currentProject;
+            if (!proj) { this.showToast('Select a project first'); return; }
+
+            var el = document.getElementById('queueContent');
+            el.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted);">Loading...</div>';
+
+            var data = await this.supabase('photo_queue?project_id=eq.' + proj.id + '&order=created_at.desc&limit=50');
+            if (!data) { el.innerHTML = '<div style="color:var(--danger);">Failed to load queue</div>'; return; }
+
+            this._photoQueue = data;
+            var pending = data.filter(function(q) { return q.status === 'pending'; });
+            var badge = document.getElementById('queueBadge');
+            if (pending.length > 0) {
+                badge.textContent = pending.length;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+
+            if (data.length === 0) {
+                el.innerHTML = '<div style="text-align:center; padding:16px;"><div style="font-size:1.5rem; margin-bottom:8px;">📭</div><div style="font-size:0.8rem; color:var(--text-muted);">No photos in queue</div><div style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Share the field upload link to get started</div></div>';
+                return;
+            }
+
+            var html = '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">' + pending.length + ' pending • ' + data.filter(function(q){return q.status==='approved';}).length + ' approved • ' + data.length + ' total</div>';
+
+            data.forEach(function(q) {
+                var isPending = q.status === 'pending';
+                var statusColor = isPending ? 'var(--warning)' : q.status === 'approved' ? 'var(--success)' : 'var(--text-dim)';
+                var statusLabel = isPending ? '⏳ Pending' : q.status === 'approved' ? '✅ Approved' : '❌ Rejected';
+                var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
+                var timeAgo = DS.timeAgo(q.created_at);
+
+                html += '<div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); align-items:flex-start;">' +
+                    '<div style="width:64px; height:64px; border-radius:8px; overflow:hidden; flex-shrink:0; cursor:pointer;" onclick="window.open(\'' + q.photo_url + '\')">' +
+                        '<img src="' + q.photo_url + '" style="width:100%; height:100%; object-fit:cover;">' +
+                    '</div>' +
+                    '<div style="flex:1; min-width:0;">' +
+                        '<div style="font-size:0.75rem; font-weight:700;">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
+                            (q.ticket_number ? ' — #' + q.ticket_number : '') + '</div>' +
+                        '<div style="font-size:0.65rem; color:var(--text-muted);">' + (q.submitted_by || 'Unknown') + ' • ' + timeAgo + '</div>' +
+                        (q.notes ? '<div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">📝 ' + q.notes + '</div>' : '') +
+                        '<div style="font-size:0.65rem; color:' + statusColor + '; font-weight:600; margin-top:4px;">' + statusLabel + '</div>' +
+                        (isPending ? '<div class="btn-row mt-8" style="gap:6px;">' +
+                            '<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:0.65rem; flex:1;" onclick="DS.approveQueueItem(\'' + q.id + '\')">✅ Approve</button>' +
+                            '<button class="btn btn-sm" style="padding:4px 10px; font-size:0.65rem; flex:1; color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="DS.rejectQueueItem(\'' + q.id + '\')">❌ Reject</button>' +
+                        '</div>' : '') +
+                    '</div>' +
+                '</div>';
+            });
+
+            html += '<button class="btn btn-sm btn-outline mt-12" onclick="DS.loadPhotoQueue()">🔄 Refresh</button>';
+            el.innerHTML = html;
+        },
+
+        async approveQueueItem(queueId) {
+            var q = this._photoQueue && this._photoQueue.find(function(x) { return x.id === queueId; });
+            if (!q) return;
+
+            // Update status
+            await this.supabase('photo_queue?id=eq.' + queueId, 'PATCH', {
+                status: 'approved', reviewed_at: new Date().toISOString()
+            });
+
+            // Try to match to existing ticket by ticket_number
+            if (q.ticket_number) {
+                var ticket = this.state.tickets.find(function(t) {
+                    return t.ticket_number === q.ticket_number;
+                });
+                if (ticket) {
+                    var update = {};
+                    if (q.photo_type === 'scale_ticket') {
+                        update.scale_ticket_image = q.photo_url;
+                    } else {
+                        var existing = Array.isArray(ticket.debris_images) ? ticket.debris_images : [];
+                        existing.push(q.photo_url);
+                        update.debris_images = existing;
+                    }
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
+                    Object.assign(ticket, update);
+                    this.showToast('Approved & attached to ticket #' + q.ticket_number);
+                    this.addAuditEntry('QUEUE_APPROVE', 'Photo approved and attached to ticket ' + q.ticket_number);
+                } else {
+                    this.showToast('Approved — no matching ticket found for #' + q.ticket_number);
+                    this.addAuditEntry('QUEUE_APPROVE', 'Photo approved (no matching ticket: ' + q.ticket_number + ')');
+                }
+            } else {
+                this.showToast('Approved — assign to ticket manually');
+                this.addAuditEntry('QUEUE_APPROVE', 'Photo approved (no ticket number)');
+            }
+
+            this.loadPhotoQueue();
+        },
+
+        async rejectQueueItem(queueId) {
+            if (!confirm('Reject this photo?')) return;
+            await this.supabase('photo_queue?id=eq.' + queueId, 'PATCH', {
+                status: 'rejected', reviewed_at: new Date().toISOString()
+            });
+            this.showToast('Photo rejected');
+            this.addAuditEntry('QUEUE_REJECT', 'Photo rejected');
+            this.loadPhotoQueue();
+        },
+
+        timeAgo(dateStr) {
+            if (!dateStr) return '';
+            var now = new Date();
+            var then = new Date(dateStr);
+            var diff = Math.floor((now - then) / 1000);
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+        },
+
+        // ============================================================
+        // CLIENT MANAGEMENT
+        // ============================================================
+        _clients: [],
+
+        async loadClients() {
+            var el = document.getElementById('clientList');
+            el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
+
+            var clients = await this.supabase('client_accounts?order=company_name.asc');
+            if (!clients) { el.innerHTML = '<div style="color:var(--danger)">Failed to load</div>'; return; }
+            this._clients = clients;
+
+            // Get project assignments
+            var links = await this.supabase('client_projects?select=client_id,project_id');
+            var clientProjects = {};
+            if (links) links.forEach(function(l) {
+                if (!clientProjects[l.client_id]) clientProjects[l.client_id] = [];
+                clientProjects[l.client_id].push(l.project_id);
+            });
+
+            if (clients.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);">No clients yet. Create one to give GCs portal access.</div>';
+                return;
+            }
+
+            el.innerHTML = clients.map(function(c) {
+                var projIds = clientProjects[c.id] || [];
+                var projNames = projIds.map(function(pid) {
+                    var p = DS.state.projects.find(function(x) { return x.id === pid; });
+                    return p ? p.name : '';
+                }).filter(Boolean);
+
+                return '<div class="ticket-item" style="position:relative;">' +
+                    '<div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.showEditClient(\'' + c.id + '\')">🏢</div>' +
+                    '<div class="ticket-info" onclick="DS.showEditClient(\'' + c.id + '\')">' +
+                        '<div class="ticket-title">' + DS.esc(c.company_name) + '</div>' +
+                        '<div class="ticket-meta">' + (c.contact_name || '') + (c.contact_email ? ' • ' + c.contact_email : '') + '</div>' +
+                        '<div class="ticket-meta" style="color:var(--primary);">Code: ' + c.portal_code + ' • ' + projNames.length + ' project' + (projNames.length !== 1 ? 's' : '') +
+                        (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : '') + '</div>' +
+                    '</div>' +
+                    '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.65rem;flex-shrink:0" onclick="event.stopPropagation();DS.showEditClient(\'' + c.id + '\')">✏️</button>' +
+                '</div>';
+            }).join('');
+        },
+
+        generatePortalCode() {
+            var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+            var code = '';
+            for (var i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            return code;
+        },
+
+        showNewClientModal() {
+            document.getElementById('newClientName').value = '';
+            document.getElementById('newClientContact').value = '';
+            document.getElementById('newClientEmail').value = '';
+
+            // Render project checkboxes
+            var html = '';
+            this.state.projects.forEach(function(p) {
+                html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
+                    '<input type="checkbox" value="' + p.id + '" class="newClientProjCb" style="width:18px;height:18px;">' +
+                    '<div><div style="font-weight:700;font-size:.85rem;">' + DS.esc(p.name) + '</div>' +
+                    '<div style="font-size:.7rem;color:var(--text-muted);">' + [p.location].filter(Boolean).join('') + '</div></div></label>';
+            });
+            document.getElementById('clientProjectCheckboxes').innerHTML = html;
+            this.openModal('newClientModal');
+        },
+
+        async createClient() {
+            var name = document.getElementById('newClientName').value.trim();
+            if (!name) { this.showToast('Company name required'); return; }
+
+            var client = {
+                company_name: name,
+                contact_name: document.getElementById('newClientContact').value.trim() || null,
+                contact_email: document.getElementById('newClientEmail').value.trim() || null,
+                portal_code: this.generatePortalCode()
+            };
+
+            this.showLoading('Creating...');
+            var result = await this.supabase('client_accounts', 'POST', client);
+            if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed'); return; }
+
+            var clientId = result[0].id;
+
+            // Link selected projects
+            var checks = document.querySelectorAll('.newClientProjCb:checked');
+            for (var i = 0; i < checks.length; i++) {
+                await this.supabase('client_projects', 'POST', {
+                    client_id: clientId,
+                    project_id: checks[i].value
+                });
+            }
+
+            this.hideLoading();
+            this.closeModal('newClientModal');
+            this.showToast('Client "' + name + '" created! Portal code: ' + client.portal_code);
+            this.addAuditEntry('CLIENT_CREATE', name + ' — Code: ' + client.portal_code + ' — ' + checks.length + ' projects');
+            this.loadClients();
+        },
+
+        async showEditClient(clientId) {
+            var c = this._clients.find(function(x) { return x.id === clientId; });
+            if (!c) return;
+
+            document.getElementById('editClientId').value = c.id;
+            document.getElementById('editClientName').value = c.company_name || '';
+            document.getElementById('editClientContact').value = c.contact_name || '';
+            document.getElementById('editClientEmail').value = c.contact_email || '';
+            document.getElementById('editClientCode').value = c.portal_code || '';
+            document.getElementById('editClientPortalLink').textContent = 'https://divertscan.com/portal.html?code=' + c.portal_code;
+
+            // Get current assignments
+            var links = await this.supabase('client_projects?client_id=eq.' + clientId);
+            var assignedIds = (links || []).map(function(l) { return l.project_id; });
+
+            var html = '';
+            this.state.projects.forEach(function(p) {
+                var checked = assignedIds.indexOf(p.id) >= 0 ? 'checked' : '';
+                html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
+                    '<input type="checkbox" value="' + p.id + '" class="editClientProjCb" ' + checked + ' style="width:18px;height:18px;">' +
+                    '<div><div style="font-weight:700;font-size:.85rem;">' + DS.esc(p.name) + '</div>' +
+                    '<div style="font-size:.7rem;color:var(--text-muted);">' + [p.location].filter(Boolean).join('') + '</div></div></label>';
+            });
+            document.getElementById('editClientProjects').innerHTML = html;
+            this.openModal('editClientModal');
+        },
+
+        async saveClientEdit() {
+            var clientId = document.getElementById('editClientId').value;
+            var name = document.getElementById('editClientName').value.trim();
+            if (!name) { this.showToast('Company name required'); return; }
+
+            this.showLoading('Saving...');
+
+            // Update client info
+            await this.supabase('client_accounts?id=eq.' + clientId, 'PATCH', {
+                company_name: name,
+                contact_name: document.getElementById('editClientContact').value.trim() || null,
+                contact_email: document.getElementById('editClientEmail').value.trim() || null,
+                updated_at: new Date().toISOString()
+            });
+
+            // Rebuild project links: delete all, re-insert checked
+            await this.supabase('client_projects?client_id=eq.' + clientId, 'DELETE');
+            var checks = document.querySelectorAll('.editClientProjCb:checked');
+            for (var i = 0; i < checks.length; i++) {
+                await this.supabase('client_projects', 'POST', {
+                    client_id: clientId,
+                    project_id: checks[i].value
+                });
+            }
+
+            this.hideLoading();
+            this.closeModal('editClientModal');
+            this.showToast('Client updated — ' + checks.length + ' projects assigned');
+            this.addAuditEntry('CLIENT_UPDATE', name + ' — ' + checks.length + ' projects');
+            this.loadClients();
+        },
+
+        async deleteClient() {
+            var clientId = document.getElementById('editClientId').value;
+            var c = this._clients.find(function(x) { return x.id === clientId; });
+            if (!c) return;
+            if (!confirm('Delete client "' + c.company_name + '"? This removes portal access but does NOT delete any project data.')) return;
+
+            this.showLoading('Deleting...');
+            await this.supabase('client_projects?client_id=eq.' + clientId, 'DELETE');
+            await this.supabase('client_accounts?id=eq.' + clientId, 'DELETE');
+            this.hideLoading();
+
+            this.closeModal('editClientModal');
+            this.showToast('"' + c.company_name + '" removed');
+            this.addAuditEntry('CLIENT_DELETE', c.company_name);
+            this.loadClients();
+        },
+
+        copyClientPortalLink() {
+            var code = document.getElementById('editClientCode').value;
+            var url = 'https://divertscan.com/portal.html?code=' + code;
+            navigator.clipboard.writeText(url).then(function() {
+                DS.showToast('Portal link copied!');
+            }).catch(function() { prompt('Copy this link:', url); });
+        },
+
+        shareClientPortal() {
+            var name = document.getElementById('editClientName').value;
+            var code = document.getElementById('editClientCode').value;
+            var url = 'https://divertscan.com/portal.html?code=' + code;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'DivertScan Portal — ' + name,
+                    text: 'Access your waste diversion reports and scale tickets for your projects',
+                    url: url
+                }).catch(function() {});
+            } else { this.copyClientPortalLink(); }
         },
 
         downloadFile(content, filename, type) {
