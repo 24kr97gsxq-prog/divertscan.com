@@ -802,6 +802,7 @@
             .card { border: 1px solid #ccc; box-shadow: none; page-break-inside: avoid; }
         }
     </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="app-shell">
@@ -2851,6 +2852,10 @@
                         <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
                         <span>Cumulative: <strong style="color:${data.cumRate >= target ? 'var(--success)' : 'var(--warning)'};">${data.cumRate}%</strong> diverted</span>
                     </div>
+                    <div class="btn-row mt-8">
+                        <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')" style="flex:1;">📥 Download XLSX</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')" style="flex:1;">📊 CSV</button>
+                    </div>
                 </div>`;
             });
 
@@ -3332,6 +3337,161 @@
             this.downloadFile(JSON.stringify(data, null, 2),
                 'DivertScan_' + (this.state.currentProject?.name || 'export') + '_' + new Date().toISOString().split('T')[0] + '.json',
                 'application/json');
+        },
+
+        exportMonthCSV(monthKey) {
+            const tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
+            if (tickets.length === 0) { this.showToast('No tickets'); return; }
+            const proj = this.state.currentProject;
+            const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+            const [year, month] = monthKey.split('-');
+            const monthName = monthNames[parseInt(month)];
+
+            const headers = ['Date','Ticket No','GWT (lbs)','Tare (lbs)','Net (lbs)','Tons','Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %'];
+            let csv = headers.join(',') + '\n';
+            tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
+            tickets.forEach(t => {
+                const netLbs = (parseInt(t.gross_lbs)||0) - (parseInt(t.tare_lbs)||0);
+                const tons = parseFloat(t.net_tons) || 0;
+                const divTons = parseFloat(t.diverted_tons) || 0;
+                const divPct = t.diversion_pct || 0;
+                csv += [
+                    this.fmtDate(t.ticket_date), t.ticket_number, t.gross_lbs, t.tare_lbs, netLbs, tons.toFixed(2),
+                    (t.wood_pct||0)+'%', (tons*(t.wood_pct||0)/100).toFixed(2),
+                    (t.gypsum_pct||0)+'%', (tons*(t.gypsum_pct||0)/100).toFixed(2),
+                    (t.plastic_pct||0)+'%', (tons*(t.plastic_pct||0)/100).toFixed(2),
+                    (t.occ_pct||0)+'%', (tons*(t.occ_pct||0)/100).toFixed(2),
+                    (t.metal_pct||0)+'%', (tons*(t.metal_pct||0)/100).toFixed(2),
+                    (t.concrete_pct||0)+'%', (tons*(t.concrete_pct||0)/100).toFixed(2),
+                    (t.block_pct||0)+'%', (tons*(t.block_pct||0)/100).toFixed(2),
+                    divTons.toFixed(2), divPct+'%'
+                ].join(',') + '\n';
+            });
+            this.downloadFile(csv, 'DivertScan_' + (proj?.name||'Report') + '_' + monthName + '_' + year + '.csv', 'text/csv');
+        },
+
+        exportMonthXLSX(monthKey) {
+            if (typeof XLSX === 'undefined') { this.showToast('SheetJS loading... try again'); return; }
+
+            const tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
+            if (tickets.length === 0) { this.showToast('No tickets'); return; }
+
+            const proj = this.state.currentProject;
+            const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+            const [year, month] = monthKey.split('-');
+            const monthName = monthNames[parseInt(month)];
+            tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
+
+            var wb = XLSX.utils.book_new();
+            var wsData = [];
+
+            // Header rows (matching template)
+            wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);
+            wsData.push(['Waste Diversion Report for ' + monthName + ' ' + year]);
+            wsData.push(['Company: ' + (proj?.general_contractor || proj?.client || 'N/A')]);
+            wsData.push(['Location: ' + (proj?.location || 'N/A')]);
+            wsData.push(['Project: ' + (proj?.name || 'N/A')]);
+            wsData.push(['Report by: Dalmex Recycling']);
+            wsData.push(['Contact: Robert Vandling']);
+            wsData.push(['Email: robert@dalmexrecycling.com']);
+            wsData.push([]);
+
+            // Column headers
+            wsData.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+                'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
+                'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
+
+            // Data rows
+            var sumGross=0, sumTare=0, sumNet=0, sumTons=0;
+            var sumMats = {wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
+            var sumDiverted = 0;
+
+            tickets.forEach(function(t) {
+                var gross = parseInt(t.gross_lbs)||0;
+                var tare = parseInt(t.tare_lbs)||0;
+                var net = gross - tare;
+                var tons = parseFloat(t.net_tons)||0;
+                var woodP = (t.wood_pct||0)/100, gypsumP = (t.gypsum_pct||0)/100, plasticP = (t.plastic_pct||0)/100;
+                var occP = (t.occ_pct||0)/100, metalP = (t.metal_pct||0)/100, concreteP = (t.concrete_pct||0)/100, blockP = (t.block_pct||0)/100;
+                var woodT = tons*woodP, gypsumT = tons*gypsumP, plasticT = tons*plasticP;
+                var occT = tons*occP, metalT = tons*metalP, concreteT = tons*concreteP, blockT = tons*blockP;
+                var diverted = woodT+gypsumT+plasticT+occT+metalT+concreteT+blockT;
+                var divPct = tons > 0 ? diverted/tons : 0;
+
+                sumGross+=gross; sumTare+=tare; sumNet+=net; sumTons+=tons;
+                sumMats.wood+=woodT; sumMats.gypsum+=gypsumT; sumMats.plastic+=plasticT;
+                sumMats.occ+=occT; sumMats.metal+=metalT; sumMats.concrete+=concreteT; sumMats.block+=blockT;
+                sumDiverted+=diverted;
+
+                // Parse date for Excel
+                var dateVal = t.ticket_date || '';
+
+                wsData.push([
+                    dateVal, parseInt(t.ticket_number)||t.ticket_number,
+                    gross, gross/2000, tare, tare/2000, net, tons,
+                    woodP, woodT, gypsumP, gypsumT, plasticP, plasticT,
+                    occP, occT, metalP, metalT, concreteP, concreteT, blockP, blockT,
+                    diverted, divPct
+                ]);
+            });
+
+            // Totals row
+            var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
+            wsData.push(['Totals','',
+                sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
+                sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
+                sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
+                sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
+                sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
+                sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
+                sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
+                sumTons>0?sumMats.block/sumTons:0, sumMats.block,
+                sumDiverted, totalDivPct]);
+
+            wsData.push([]);
+            wsData.push(['Total Tonnage', sumTons]);
+            wsData.push(['Diverted from landfill', sumDiverted]);
+            wsData.push(['Recycled Material %', totalDivPct]);
+
+            var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Column widths
+            ws['!cols'] = [
+                {wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
+                {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
+                {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}
+            ];
+
+            // Format percentages and number cells
+            var dataStartRow = 15; // 0-indexed row 15 = row 16 in Excel
+            var dataEndRow = dataStartRow + tickets.length;
+            for (var r = dataStartRow; r <= dataEndRow + 1; r++) {
+                // Percentage columns: I, K, M, O, Q, S, U, X (0-indexed: 8,10,12,14,16,18,20,23)
+                [8,10,12,14,16,18,20,23].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r, c:c});
+                    if (ws[addr]) ws[addr].z = '0%';
+                });
+                // Tons columns: D, F, H, J, L, N, P, R, T, V, W (3,5,7,9,11,13,15,17,19,21,22)
+                [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r, c:c});
+                    if (ws[addr]) ws[addr].z = '0.00';
+                });
+                // Weight columns: C, E, G (2,4,6)
+                [2,4,6].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r, c:c});
+                    if (ws[addr]) ws[addr].z = '#,##0';
+                });
+            }
+
+            // Summary percentage format
+            var summaryPctRow = dataEndRow + 4;
+            var addr = XLSX.utils.encode_cell({r:summaryPctRow, c:1});
+            if (ws[addr]) ws[addr].z = '0%';
+
+            XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + year);
+            XLSX.writeFile(wb, 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx');
+            this.showToast('Downloaded ' + monthName + ' ' + year + ' XLSX');
+            this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + Math.round(totalDivPct*100) + '% diverted');
         },
 
         exportAuditCSV() {
