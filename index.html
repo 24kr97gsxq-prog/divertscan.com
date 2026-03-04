@@ -952,8 +952,9 @@
                     <div class="card-title"><span class="icon">🎫</span> Scale Tickets</div>
                     <div class="btn-row mb-12">
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('all')">All</button>
-                        <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('open')">Open</button>
-                        <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('closed')">Closed</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('complete')">✅ Complete</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('incomplete')">⚠️ Needs Data</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('nophoto')">📷 No Photo</button>
                     </div>
                     <div id="ticketList">
                         <div class="empty-state">
@@ -1770,8 +1771,26 @@
         renderTickets(filter = 'all') {
             const el = document.getElementById('ticketList');
             let tickets = [...this.state.tickets];
-            if (filter === 'open') tickets = tickets.filter(t => !t.is_closed);
-            if (filter === 'closed') tickets = tickets.filter(t => t.is_closed);
+
+            if (filter === 'complete') {
+                tickets = tickets.filter(t => {
+                    var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
+                    var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
+                    var hasPhoto = t.scale_ticket_image;
+                    return hasWeight && hasMaterials && hasPhoto;
+                });
+            }
+            if (filter === 'incomplete') {
+                tickets = tickets.filter(t => {
+                    var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
+                    var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
+                    var hasPhoto = t.scale_ticket_image;
+                    return !hasWeight || !hasMaterials || !hasPhoto;
+                });
+            }
+            if (filter === 'nophoto') {
+                tickets = tickets.filter(t => !t.scale_ticket_image);
+            }
 
             // Sort newest first (last entered / most recent date)
             tickets.sort((a, b) => (b.ticket_date || '').localeCompare(a.ticket_date || ''));
@@ -1781,18 +1800,23 @@
                 return;
             }
 
-            el.innerHTML = tickets.map(t => `
+            el.innerHTML = tickets.map(t => {
+                var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
+                var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
+                var hasPhoto = t.scale_ticket_image;
+                var isComplete = hasWeight && hasMaterials && hasPhoto;
+                return `
                 <div class="ticket-item" onclick="DS.showTicketDetail('${t.id}')">
-                    <div class="ticket-icon" style="background:${t.is_closed ? 'var(--success-glow)' : 'var(--warning-glow)'};">
-                        ${t.is_closed ? '✅' : '🎫'}
+                    <div class="ticket-icon" style="background:${isComplete ? 'var(--success-glow)' : 'var(--warning-glow)'};">
+                        ${isComplete ? '✅' : '⚠️'}
                     </div>
                     <div class="ticket-info">
                         <div class="ticket-title">${this.esc(t.ticket_number)}</div>
                         <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         },
 
         filterTickets(filter) {
