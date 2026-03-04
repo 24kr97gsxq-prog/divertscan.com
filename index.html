@@ -1728,9 +1728,12 @@
 
         renderTickets(filter = 'all') {
             const el = document.getElementById('ticketList');
-            let tickets = this.state.tickets;
+            let tickets = [...this.state.tickets];
             if (filter === 'open') tickets = tickets.filter(t => !t.is_closed);
             if (filter === 'closed') tickets = tickets.filter(t => t.is_closed);
+
+            // Sort newest first (last entered / most recent date)
+            tickets.sort((a, b) => (b.ticket_date || '').localeCompare(a.ticket_date || ''));
 
             if (tickets.length === 0) {
                 el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><div class="empty-text">No tickets</div></div>';
@@ -1744,7 +1747,7 @@
                     </div>
                     <div class="ticket-info">
                         <div class="ticket-title">${this.esc(t.ticket_number)}</div>
-                        <div class="ticket-meta">${t.ticket_date} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
+                        <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
                 </div>
@@ -1806,7 +1809,7 @@
 
             document.getElementById('ticketDetailContent').innerHTML = `
                 <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">
-                    ${t.ticket_date} • ${t.hauler || ''} • ${t.scan_type || 'manual'}
+                    ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''} • ${t.scan_type || 'manual'}
                 </div>
                 <div class="stats-grid mb-12">
                     <div class="stat-card"><div class="stat-value">${this.fmt(t.gross_lbs)}</div><div class="stat-label">Gross (lbs)</div></div>
@@ -2593,12 +2596,12 @@
 
             try {
                 const data = await this.callOpenAI({
-                    model: 'gpt-4o-mini',
+                    model: 'gpt-4o',
                     messages: [{
                         role: 'user',
                         content: [
                             { type: 'text', text: prompt },
-                            { type: 'image_url', image_url: { url: compressed, detail: 'low' } }
+                            { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
                         ]
                     }],
                     max_tokens: 300,
@@ -2884,7 +2887,7 @@
                 <tbody>`;
 
             let sumTons = 0, sumDiverted = 0, sumCo2e = 0;
-            tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
+            tickets.sort((a,b) => (b.ticket_date || '').localeCompare(a.ticket_date || ''));
 
             tickets.forEach(t => {
                 sumTons += parseFloat(t.net_tons) || 0;
@@ -2894,14 +2897,14 @@
                 const hasPhotos = t.scale_ticket_image || (Array.isArray(t.debris_images) && t.debris_images.length > 0);
                 const divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
 
-                html += `<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketFromDrill('${t.id}')">
-                    <td style="padding:8px 6px; color:var(--text-muted);">${(t.ticket_date || '').substring(5)}</td>
-                    <td style="padding:8px 6px; font-weight:700; color:var(--text);">${t.ticket_number}</td>
-                    <td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">${this.fmt(t.net_tons)}</td>
-                    <td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:${divColor};">${divPct}%</td>
-                    <td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">${this.fmt(t.co2e_avoided)}</td>
-                    <td style="padding:8px 6px; text-align:center;">${hasPhotos ? '<span onclick="event.stopPropagation(); DS.showTicketPhotos(\'' + t.id + '\')" style="cursor:pointer;font-size:1rem;">🖼️</span>' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>'}</td>
-                </tr>`;
+                html += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketFromDrill(\'' + t.id + '\')">' +
+                    '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
+                    '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>' +
+                    '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>' +
+                    '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '<span onclick="event.stopPropagation(); DS.showTicketPhotos(\'' + t.id + '\')" style="cursor:pointer;font-size:1rem;">🖼️</span>' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
+                    '</tr>';
             });
 
             const totalDivRate = sumTons > 0 ? Math.round(sumDiverted / sumTons * 100) : 0;
@@ -3103,12 +3106,12 @@
                         '{"ticket_number":"XXXXX","date":"YYYY-MM-DD","gross_lbs":XXXXX,"tare_lbs":XXXXX,"net_lbs":XXXXX}';
 
                     const data = await this.callOpenAI({
-                        model: 'gpt-4o-mini',
+                        model: 'gpt-4o',
                         messages: [{
                             role: 'user',
                             content: [
                                 { type: 'text', text: prompt },
-                                { type: 'image_url', image_url: { url: compressedB64, detail: 'low' } }
+                                { type: 'image_url', image_url: { url: compressedB64, detail: 'high' } }
                             ]
                         }],
                         max_tokens: 300,
@@ -3440,6 +3443,16 @@
             if (Math.abs(num) >= 1000) return num.toLocaleString(undefined, { maximumFractionDigits: 1 });
             if (Math.abs(num) >= 1) return num.toFixed(1);
             return num.toFixed(2);
+        },
+
+        fmtDate(dateStr) {
+            if (!dateStr) return '';
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const parts = dateStr.split('-');
+            if (parts.length < 3) return dateStr;
+            const m = parseInt(parts[1]) - 1;
+            const d = parseInt(parts[2]);
+            return months[m] + ' ' + d + ', ' + parts[0];
         },
 
         esc(str) {
