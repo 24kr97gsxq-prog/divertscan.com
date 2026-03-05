@@ -247,26 +247,40 @@ tr:hover{background:var(--primary-glow)}
 
                 <!-- Scale Ticket Photos -->
                 <div class="card">
-                    <div class="card-title">📄 Scale Ticket Photos</div>
-                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Photograph each scale ticket clearly. Include ticket number and weights.</p>
-                    <div class="upload-zone" id="clientScaleZone">
-                        <div style="font-size:2rem">📄</div>
-                        <div style="font-weight:700">Tap to add scale ticket photos</div>
-                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Camera or photo library</div>
-                        <input type="file" accept="image/*" multiple capture="environment" onchange="portal.addUploadPhotos('scale', this)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                        <div class="card-title" style="margin:0">📄 Scale Ticket Photos</div>
+                        <span id="scaleCountBadge" style="background:var(--primary);color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
+                    </div>
+                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Photograph each scale ticket clearly. Include ticket number and weights.</p>
+                    <div class="btn-row" style="gap:8px;margin-bottom:10px">
+                        <div style="flex:1;position:relative">
+                            <button class="btn btn-primary" style="width:100%;font-size:.8rem;padding:12px">📷 Take Photo</button>
+                            <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('scale', this)">
+                        </div>
+                        <div style="flex:1;position:relative">
+                            <button class="btn btn-outline" style="width:100%;font-size:.8rem;padding:12px">🖼️ From Library</button>
+                            <input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('scale', this)">
+                        </div>
                     </div>
                     <div class="upload-grid" id="clientScaleGrid"></div>
                 </div>
 
-                <!-- Debris Photos -->
+                <!-- Debris / Material Photos -->
                 <div class="card">
-                    <div class="card-title">📸 Debris Photos</div>
-                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Photograph the debris in the container. Multiple angles help.</p>
-                    <div class="upload-zone" id="clientDebrisZone">
-                        <div style="font-size:2rem">📸</div>
-                        <div style="font-weight:700">Tap to add debris photos</div>
-                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Camera or photo library</div>
-                        <input type="file" accept="image/*" multiple capture="environment" onchange="portal.addUploadPhotos('debris', this)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                        <div class="card-title" style="margin:0">📸 Debris / Material Photos</div>
+                        <span id="debrisCountBadge" style="background:var(--primary);color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
+                    </div>
+                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Photograph the debris in the container or on the ground. Multiple angles help with material identification.</p>
+                    <div class="btn-row" style="gap:8px;margin-bottom:10px">
+                        <div style="flex:1;position:relative">
+                            <button class="btn btn-success" style="width:100%;font-size:.8rem;padding:12px">📷 Take Photo</button>
+                            <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('debris', this)">
+                        </div>
+                        <div style="flex:1;position:relative">
+                            <button class="btn btn-outline" style="width:100%;font-size:.8rem;padding:12px">🖼️ Batch from Library</button>
+                            <input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('debris', this)">
+                        </div>
                     </div>
                     <div class="upload-grid" id="clientDebrisGrid"></div>
                 </div>
@@ -275,8 +289,8 @@ tr:hover{background:var(--primary-glow)}
                 <div class="card">
                     <div class="card-title">📝 Details (optional)</div>
                     <div class="form-group">
-                        <label class="form-label">Ticket Number</label>
-                        <input type="text" class="form-input" id="clientTicketNum" placeholder="e.g. 83435">
+                        <label class="form-label">Ticket Number (if visible on scale ticket)</label>
+                        <input type="text" class="form-input" id="clientTicketNum" placeholder="e.g. 83435" inputmode="numeric">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Notes</label>
@@ -284,9 +298,15 @@ tr:hover{background:var(--primary-glow)}
                     </div>
                 </div>
 
-                <button class="btn btn-success" id="clientSubmitBtn" onclick="portal.submitPhotos()" disabled style="margin-bottom:100px">
+                <button class="btn btn-success" id="clientSubmitBtn" onclick="portal.submitPhotos()" disabled style="margin-bottom:16px;padding:18px;font-size:1rem">
                     📤 Submit Photos for Review
                 </button>
+                <div id="uploadSuccessMsg" class="hidden" style="text-align:center;padding:20px;margin-bottom:100px">
+                    <div style="font-size:2.5rem;margin-bottom:8px">✅</div>
+                    <div style="font-size:1rem;font-weight:800;margin-bottom:4px">Photos Submitted!</div>
+                    <div style="font-size:.8rem;color:var(--text-muted)">Photos received and queued for processing.</div>
+                    <button class="btn btn-primary mt-12" onclick="portal.resetUpload()">📷 Upload More</button>
+                </div>
             </div>
         </div>
 
@@ -517,8 +537,11 @@ var portal = {
     renderUploadGrid(type) {
         var arr = this._uploadPhotos[type];
         var grid = document.getElementById('client' + (type === 'scale' ? 'Scale' : 'Debris') + 'Grid');
-        var zone = document.getElementById('client' + (type === 'scale' ? 'Scale' : 'Debris') + 'Zone');
-        zone.classList.toggle('has-photos', arr.length > 0);
+        var badge = document.getElementById((type === 'scale' ? 'scale' : 'debris') + 'CountBadge');
+        if (badge) {
+            badge.textContent = arr.length;
+            badge.style.display = arr.length > 0 ? 'inline' : 'none';
+        }
         grid.innerHTML = arr.map(function(p, i) {
             return '<div class="upload-thumb"><img src="' + p.preview + '">' +
                 '<button class="upload-remove" onclick="portal.removeUploadPhoto(\'' + type + '\',' + i + ')">×</button></div>';
@@ -604,6 +627,21 @@ var portal = {
         }
 
         this.toast(uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' submitted for review!');
+        this._uploadPhotos = { scale: [], debris: [] };
+        this.renderUploadGrid('scale');
+        this.renderUploadGrid('debris');
+        document.getElementById('clientTicketNum').value = '';
+        document.getElementById('clientUploadNotes').value = '';
+        this.updateSubmitBtn();
+
+        // Show success message, hide form
+        document.getElementById('clientSubmitBtn').classList.add('hidden');
+        document.getElementById('uploadSuccessMsg').classList.remove('hidden');
+    },
+
+    resetUpload() {
+        document.getElementById('uploadSuccessMsg').classList.add('hidden');
+        document.getElementById('clientSubmitBtn').classList.remove('hidden');
         this._uploadPhotos = { scale: [], debris: [] };
         this.renderUploadGrid('scale');
         this.renderUploadGrid('debris');
