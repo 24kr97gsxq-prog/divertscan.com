@@ -219,7 +219,10 @@ tr:hover{background:var(--primary-glow)}
                     <div class="card-title" style="margin:0">🎫 All Scale Tickets</div>
                     <button class="btn btn-sm btn-primary" onclick="portal.exportXLSX()">📥 All Months XLSX</button>
                 </div>
-                <div class="tbl-wrap mt-8" id="dashTicketTable"></div>
+                <div class="form-group mt-8" style="margin-bottom:8px">
+                    <input type="text" class="form-input" id="clientTicketSearch" placeholder="🔍 Search ticket number..." oninput="portal.searchClientTickets(this.value)" style="padding:10px 14px;font-size:.85rem">
+                </div>
+                <div class="tbl-wrap" id="dashTicketTable"></div>
             </div>
         </div>
 
@@ -301,11 +304,17 @@ tr:hover{background:var(--primary-glow)}
                 <button class="btn btn-success" id="clientSubmitBtn" onclick="portal.submitPhotos()" disabled style="margin-bottom:16px;padding:18px;font-size:1rem">
                     📤 Submit Photos for Review
                 </button>
-                <div id="uploadSuccessMsg" class="hidden" style="text-align:center;padding:20px;margin-bottom:100px">
+                <div id="uploadSuccessMsg" class="hidden" style="text-align:center;padding:20px;margin-bottom:16px">
                     <div style="font-size:2.5rem;margin-bottom:8px">✅</div>
                     <div style="font-size:1rem;font-weight:800;margin-bottom:4px">Photos Submitted!</div>
                     <div style="font-size:.8rem;color:var(--text-muted)">Photos received and queued for processing.</div>
                     <button class="btn btn-primary mt-12" onclick="portal.resetUpload()">📷 Upload More</button>
+                </div>
+
+                <!-- Upload History -->
+                <div class="card" style="margin-bottom:100px">
+                    <div class="card-title">📋 Your Submissions</div>
+                    <div id="uploadHistory"><button class="btn btn-sm btn-outline" onclick="portal.loadUploadHistory()">🔄 Load History</button></div>
                 </div>
             </div>
         </div>
@@ -648,6 +657,81 @@ var portal = {
         document.getElementById('clientTicketNum').value = '';
         document.getElementById('clientUploadNotes').value = '';
         this.updateSubmitBtn();
+        this.loadUploadHistory();
+    },
+
+    async loadUploadHistory() {
+        var el = document.getElementById('uploadHistory');
+        if (!this.client) return;
+        el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted)">Loading...</div>';
+
+        var items = await this.api('photo_queue?submitted_by=eq.' + encodeURIComponent(this.client.name) + '&order=created_at.desc&limit=20');
+        if (!items || items.length === 0) {
+            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.8rem">No submissions yet</div>';
+            return;
+        }
+
+        el.innerHTML = items.map(function(q) {
+            var statusColor = q.status === 'pending' ? 'var(--warning)' : q.status === 'approved' ? 'var(--success)' : 'var(--text-dim)';
+            var statusLabel = q.status === 'pending' ? '⏳ Pending Review' : q.status === 'approved' ? '✅ Approved' : '❌ Rejected';
+            var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
+            var timeAgo = portal.timeAgo(q.created_at);
+
+            return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center">' +
+                '<div style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0">' +
+                    '<img src="' + q.photo_url + '" style="width:100%;height:100%;object-fit:cover">' +
+                '</div>' +
+                '<div style="flex:1;min-width:0">' +
+                    '<div style="font-size:.75rem;font-weight:700">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
+                        (q.ticket_number ? ' #' + q.ticket_number : '') + '</div>' +
+                    '<div style="font-size:.65rem;color:var(--text-muted)">' + timeAgo + '</div>' +
+                '</div>' +
+                '<div style="font-size:.65rem;font-weight:600;color:' + statusColor + '">' + statusLabel + '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    timeAgo(dateStr) {
+        if (!dateStr) return '';
+        var now = new Date();
+        var then = new Date(dateStr);
+        var diff = Math.floor((now - then) / 1000);
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+    },
+
+    searchClientTickets(query) {
+        if (!query || query.trim() === '') {
+            this.renderTicketTable();
+            return;
+        }
+        var q = query.trim().toLowerCase();
+        var filtered = this.tickets.filter(function(t) {
+            return (t.ticket_number && t.ticket_number.toLowerCase().indexOf(q) >= 0) ||
+                (t.hauler && t.hauler.toLowerCase().indexOf(q) >= 0) ||
+                (t.ticket_date && t.ticket_date.indexOf(q) >= 0);
+        });
+        var html = '';
+        if (filtered.length === 0) {
+            html = '<div style="text-align:center;padding:16px;color:var(--text-dim)">No tickets matching "' + q + '"</div>';
+        } else {
+            html = '<table><thead><tr><th>Date</th><th>Ticket #</th><th class="text-right">Tons</th>' +
+                '<th class="text-right">Div %</th><th class="text-right">CO₂e</th></tr></thead><tbody>';
+            filtered.forEach(function(t) {
+                var dp = t.diversion_pct || 0;
+                var dc = dp >= 75 ? 'text-success' : dp >= 50 ? 'text-warning' : 'text-danger';
+                html += '<tr onclick="portal.showTicket(\'' + t.id + '\')" style="cursor:pointer">' +
+                    '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
+                    '<td class="fw700">' + t.ticket_number + '</td>' +
+                    '<td class="text-right mono">' + portal.fmt(t.net_tons) + '</td>' +
+                    '<td class="text-right mono fw700 ' + dc + '">' + dp + '%</td>' +
+                    '<td class="text-right mono">' + portal.fmt(t.co2e_avoided) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+        document.getElementById('dashTicketTable').innerHTML = html;
     },
 
     // ============================================================
