@@ -342,15 +342,15 @@ showHub(){
     P.loadPendingCount();
 },
 goHub(){P.hideAll();document.getElementById('hubView').classList.remove('hidden');P.loadPendingCount();},
-goProjects(){P.hideAll();document.getElementById('projectsView').classList.remove('hidden');P.renderProjList('projectsList',function(id){P.selectProject(id);P.goReports2();});},
+goProjects(){P.hideAll();document.getElementById('projectsView').classList.remove('hidden');P.renderProjList('projectsList','report');},
 goReports(){
-    if(P.projects.length===1){P.selectProject(P.projects[0].id);P.goReports2();return;}
+    if(P.projects.length===1){P.selectProject(P.projects[0].id).then(function(){P.goReports2();});return;}
     P.hideAll();document.getElementById('projectsView').classList.remove('hidden');
-    P.renderProjList('projectsList',function(id){P.selectProject(id);P.goReports2();});
+    P.renderProjList('projectsList','report');
 },
 goReports2(){P.hideAll();document.getElementById('reportsView').classList.remove('hidden');P.renderDashboard();},
 goUpload(){P.hideAll();document.getElementById('uploadView').classList.remove('hidden');
-    P.renderProjList('uploadProjList',function(id){P._upProj=id;P.showUploadForm();});},
+    P.renderProjList('uploadProjList','upload');},
 goHistory(){P.hideAll();document.getElementById('historyView').classList.remove('hidden');P.loadHistory();},
 
 async loadPendingCount(){
@@ -361,13 +361,17 @@ async loadPendingCount(){
 },
 
 // === PROJECT LIST ===
-renderProjList(elId,onSelect){
+renderProjList(elId,mode){
     document.getElementById(elId).innerHTML=P.projects.map(p=>
-        '<div class="proj-pill'+(P.curProj&&P.curProj.id===p.id?' active':'')+'" onclick="('+onSelect+')(\''+p.id+'\')">'+
+        '<div class="proj-pill'+(P.curProj&&P.curProj.id===p.id?' active':'')+'" onclick="P.onProjPick(\''+mode+'\',\''+p.id+'\')">'+
         '<div class="proj-name">'+P.esc(p.name)+'</div>'+
         '<div class="proj-meta">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
         '<div class="proj-meta">LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%</div></div>'
     ).join('');
+},
+onProjPick(mode,id){
+    if(mode==='report'){P.selectProject(id).then(function(){P.goReports2();});}
+    else if(mode==='upload'){P._upProj=id;P.showUploadForm();}
 },
 async selectProject(id){
     P.curProj=P.projects.find(p=>p.id===id);if(!P.curProj)return;
@@ -409,14 +413,13 @@ renderMonthly(){
         var tons=0,div=0;tix.forEach(t=>{tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
         var rate=tons>0?Math.round(div/tons*100):0;
         var c=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
-        html+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
-            '<div style="font-weight:800;font-size:.85rem">📅 '+label+'</div>'+
-            '<div class="btn-row"><button class="btn btn-sm btn-outline" onclick="P.previewMonth(\''+key+'\')">👁️</button>'+
-            '<button class="btn btn-sm btn-primary" onclick="P.exportMonthXLSX(\''+key+'\')">📥</button></div></div>'+
-            '<div style="display:flex;align-items:center;gap:12px"><div style="font-size:1.3rem;font-weight:800;color:'+c+'">'+rate+'%</div>'+
-            '<div style="flex:1"><div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden">'+
+        html+='<div class="card" onclick="P.openMonth(\''+key+'\')" style="cursor:pointer">'+
+            '<div style="display:flex;align-items:center;gap:12px"><div style="font-size:1.3rem;font-weight:800;color:'+c+';min-width:50px">'+rate+'%</div>'+
+            '<div style="flex:1"><div style="font-weight:800;font-size:.85rem">📅 '+label+'</div>'+
+            '<div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px">'+
             '<div style="height:100%;width:'+rate+'%;background:'+c+';border-radius:3px"></div></div>'+
-            '<div style="font-size:.6rem;color:var(--text-muted);margin-top:3px">'+tix.length+' tickets • '+P.fmt(tons)+' T • '+P.fmt(div)+' diverted</div></div></div></div>';
+            '<div style="font-size:.6rem;color:var(--text-muted);margin-top:3px">'+tix.length+' tickets • '+P.fmt(tons)+' T • '+P.fmt(div)+' diverted</div></div>'+
+            '<div style="color:var(--text-dim);font-size:1.2rem">›</div></div></div>';
     });
     document.getElementById('rptMonthly').innerHTML=html;
 },
@@ -457,33 +460,73 @@ showTicket(id){
     document.body.appendChild(m);
 },
 
-// === MONTH PREVIEW ===
-previewMonth(key){
+// === MONTH DETAIL VIEW ===
+openMonth(key){
     var tix=(P._mg[key]||[]).slice().sort((a,b)=>(a.ticket_date||'').localeCompare(b.ticket_date||''));
+    P._monthTix=tix;P._monthKey=key;
     var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
     var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;
     tix.forEach(t=>{tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
     var rate=tons>0?Math.round(div/tons*100):0;
-    var rows='';tix.forEach(t=>{var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
-        var hp=t.scale_ticket_image?'<span class="has-photo"></span>':'<span class="no-photo"></span>';
-        rows+='<tr><td>'+P.fmtD(t.ticket_date)+'</td><td class="b">'+t.ticket_number+'</td><td class="r m">'+P.fmt(t.net_tons)+'</td>'+
-        '<td class="r">'+(t.wood_pct||0)+'%</td><td class="r">'+(t.gypsum_pct||0)+'%</td><td class="r">'+(t.occ_pct||0)+'%</td>'+
-        '<td class="r">'+(t.metal_pct||0)+'%</td><td class="r m b" style="'+dc+'">'+dp+'%</td><td class="c">'+hp+'</td></tr>';});
-    var m=document.createElement('div');m.className='modal-bg';m.onclick=function(e){if(e.target===m)m.remove();};
-    m.innerHTML='<div class="modal-sheet"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-        '<div style="font-size:1.1rem;font-weight:800">📅 '+label+'</div>'+
-        '<button class="btn-ghost" onclick="this.closest(\'.modal-bg\').remove()">✕ Close</button></div>'+
-        '<div style="text-align:center;padding:12px;background:var(--bg);border-radius:12px;margin-bottom:12px">'+
-        '<div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase">'+P.curProj.name+'</div>'+
-        '<div style="font-size:1.8rem;font-weight:800;color:'+(rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)')+'">'+rate+'%</div>'+
-        '<div style="font-size:.7rem;color:var(--text-muted)">'+tix.length+' tickets • '+P.fmt(tons)+' T total • '+P.fmt(div)+' T diverted</div></div>'+
-        '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th>'+
-        '<th class="r">Wood</th><th class="r">Gyp</th><th class="r">OCC</th><th class="r">Metal</th><th class="r">Div%</th><th class="c">📷</th></tr></thead><tbody>'+rows+
-        '<tr style="border-top:2px solid var(--primary);font-weight:800"><td colspan="2">TOTALS</td><td class="r m">'+P.fmt(tons)+'</td><td colspan="5"></td><td class="r m">'+rate+'%</td></tr>'+
-        '</tbody></table></div>'+
-        '<div class="btn-row mt-12"><button class="btn btn-primary" onclick="P.exportMonthXLSX(\''+key+'\')" style="flex:1">📥 XLSX</button>'+
-        '<button class="btn btn-outline" onclick="window.print()" style="flex:1">🖨️ Print</button></div></div>';
-    document.body.appendChild(m);
+    var gc=rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)';
+
+    // Build full-screen overlay
+    var el=document.createElement('div');el.id='monthDetail';
+    el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
+    el.innerHTML='<div class="header"><div><div class="header-logo">'+label+'</div>'+
+        '<div class="header-sub">'+P.curProj.name+'</div></div>'+
+        '<div class="btn-row" style="gap:6px"><button class="btn btn-sm btn-primary" onclick="P.exportMonthXLSX(\''+key+'\')">📥 XLSX</button>'+
+        '<button class="btn btn-sm btn-outline" onclick="window.print()">🖨️</button>'+
+        '<button class="btn-ghost" onclick="document.getElementById(\'monthDetail\').remove()">✕</button></div></div>'+
+        '<div class="container" style="padding-bottom:40px">'+
+        '<div class="card" style="text-align:center">'+
+            '<div style="font-size:2rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
+            '<div style="height:6px;border-radius:3px;background:var(--border);margin:6px 24px;overflow:hidden">'+
+            '<div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
+            '<div style="font-size:.7rem;color:var(--text-muted)">'+tix.length+' tickets • '+P.fmt(tons)+' T total • '+P.fmt(div)+' T diverted</div>'+
+        '</div>'+
+        '<div class="card"><input type="text" class="form-input" id="monthSearch" placeholder="🔍 Search ticket #..." '+
+            'oninput="P.filterMonthTickets(this.value)" style="padding:8px 12px;font-size:.85rem"></div>'+
+        '<div id="monthTicketList"></div>'+
+    '</div>';
+    document.body.appendChild(el);
+    P.renderMonthTickets(tix);
+},
+renderMonthTickets(tix){
+    var el=document.getElementById('monthTicketList');if(!el)return;
+    if(!tix.length){el.innerHTML='<div class="card" style="text-align:center;color:var(--text-dim)">No tickets found</div>';return;}
+    el.innerHTML=tix.map(t=>{
+        var dp=t.diversion_pct||0;
+        var dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
+        var hasScale=t.scale_ticket_image;
+        var hasDebris=Array.isArray(t.debris_images)&&t.debris_images.length>0;
+        var photoIcons=(hasScale?'📄':'')+(hasDebris?'📸':'');
+        if(!photoIcons)photoIcons='<span style="color:var(--text-dim);font-size:.65rem">no photos</span>';
+        return '<div class="card" onclick="P.showTicket(\''+t.id+'\')" style="cursor:pointer;padding:12px">'+
+            '<div style="display:flex;align-items:center;gap:10px">'+
+                '<div style="min-width:44px;text-align:center"><div style="font-size:1.1rem;font-weight:800;color:'+dc+'">'+dp+'%</div>'+
+                '<div style="font-size:.5rem;color:var(--text-muted)">DIV</div></div>'+
+                '<div style="flex:1;min-width:0">'+
+                    '<div style="display:flex;align-items:center;justify-content:space-between">'+
+                        '<div style="font-weight:800;font-size:.9rem">#'+t.ticket_number+'</div>'+
+                        '<div style="font-size:.7rem">'+photoIcons+'</div></div>'+
+                    '<div style="font-size:.65rem;color:var(--text-muted);margin-top:2px">'+P.fmtD(t.ticket_date)+' • '+P.fmt(t.net_tons)+' T'+
+                        (t.hauler?' • '+t.hauler:'')+'</div>'+
+                    '<div style="display:flex;gap:6px;margin-top:4px;font-size:.6rem;color:var(--text-dim)">'+
+                        (t.wood_pct?'🪵'+t.wood_pct+'% ':'')+
+                        (t.metal_pct?'🔩'+t.metal_pct+'% ':'')+
+                        (t.occ_pct?'📦'+t.occ_pct+'% ':'')+
+                        (t.gypsum_pct?'🧱'+t.gypsum_pct+'%':'')+
+                    '</div>'+
+                '</div>'+
+                '<div style="color:var(--text-dim);font-size:1.2rem">›</div>'+
+            '</div></div>';
+    }).join('');
+},
+filterMonthTickets(q){
+    if(!q.trim()){P.renderMonthTickets(P._monthTix);return;}
+    var lq=q.toLowerCase();
+    P.renderMonthTickets(P._monthTix.filter(t=>(t.ticket_number||'').toLowerCase().includes(lq)||(t.hauler||'').toLowerCase().includes(lq)));
 },
 
 // === UPLOAD ===
