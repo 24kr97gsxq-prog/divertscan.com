@@ -949,19 +949,16 @@
             <div id="ticketsTab" class="tab-content">
                 <div class="card">
                     <div class="card-title"><span class="icon">🎫</span> Scale Tickets</div>
+                    <div class="form-group" style="margin-bottom:8px">
+                        <input type="text" class="form-input" id="ticketSearch" placeholder="🔍 Search ticket number..." oninput="DS.searchTickets(this.value)" style="padding:10px 14px;font-size:.85rem">
+                    </div>
                     <div class="btn-row mb-12">
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('all')">All</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('complete')">✅ Complete</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('incomplete')">⚠️ Needs Data</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('nophoto')">📷 No Photo</button>
                     </div>
-                    <div id="ticketList">
-                        <div class="empty-state">
-                            <div class="empty-icon">🎫</div>
-                            <div class="empty-text">No tickets yet</div>
-                            <div class="empty-hint">Create a scan to generate tickets</div>
-                        </div>
-                    </div>
+                    <div id="ticketList"></div>
                 </div>
             </div>
 
@@ -1936,6 +1933,37 @@
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
                 </div>`;
+            }).join('');
+        },
+
+        searchTickets(query) {
+            if (!query || query.trim() === '') {
+                this.renderTickets();
+                return;
+            }
+            var q = query.trim().toLowerCase();
+            var el = document.getElementById('ticketList');
+            var tickets = this.state.tickets.filter(function(t) {
+                return (t.ticket_number && t.ticket_number.toLowerCase().indexOf(q) >= 0) ||
+                    (t.hauler && t.hauler.toLowerCase().indexOf(q) >= 0) ||
+                    (t.ticket_date && t.ticket_date.indexOf(q) >= 0);
+            });
+            tickets.sort(function(a,b) { return (b.ticket_date||'').localeCompare(a.ticket_date||''); });
+            if (tickets.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No tickets matching "' + this.esc(query) + '"</div>';
+                return;
+            }
+            el.innerHTML = tickets.map(function(t) {
+                var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
+                var hasMaterials = Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; });
+                var hasPhoto = t.scale_ticket_image;
+                var isComplete = hasWeight && hasMaterials && hasPhoto;
+                return '<div class="ticket-item" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
+                    '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
+                        (isComplete ? '✅' : '⚠️') + '</div>' +
+                    '<div class="ticket-info"><div class="ticket-title">' + DS.esc(t.ticket_number) + '</div>' +
+                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div></div>' +
+                    '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
             }).join('');
         },
 
@@ -3940,12 +3968,6 @@
             this.showLoading('Running OCR on scale ticket...');
 
             try {
-                // Fetch and compress the image
-                var imgResp = await fetch(q.photo_url);
-                var imgBlob = await imgResp.blob();
-                var base64 = await this.blobToBase64(imgBlob);
-                var compressed = await this.compressImage(base64, 800);
-
                 var prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
                     'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
                     '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","facility":"<string or null>","confidence":<0-100>}\n' +
@@ -3955,7 +3977,7 @@
                     model: 'gpt-4o',
                     messages: [{ role: 'user', content: [
                         { type: 'text', text: prompt },
-                        { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                        { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } }
                     ]}],
                     max_tokens: 300, temperature: 0.1
                 });
@@ -4055,12 +4077,6 @@
             this.showLoading('AI analyzing debris materials...');
 
             try {
-                // Fetch and compress
-                var imgResp = await fetch(q.photo_url);
-                var imgBlob = await imgResp.blob();
-                var base64 = await this.blobToBase64(imgBlob);
-                var compressed = await this.compressImage(base64, 800);
-
                 var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
                     'Analyze this debris photo and estimate the percentage of each material stream. ' +
                     'Return ONLY valid JSON with this exact structure:\n' +
@@ -4071,7 +4087,7 @@
                     model: 'gpt-4o',
                     messages: [{ role: 'user', content: [
                         { type: 'text', text: prompt },
-                        { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                        { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } }
                     ]}],
                     max_tokens: 500, temperature: 0.1
                 });
