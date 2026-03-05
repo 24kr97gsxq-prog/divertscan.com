@@ -491,6 +491,7 @@ var portal = {
             document.getElementById('uploadView').classList.remove('hidden');
             btns[1].classList.add('active');
             this.renderUploadProjectList();
+            this.loadUploadHistory();
         }
     },
 
@@ -662,31 +663,39 @@ var portal = {
 
     async loadUploadHistory() {
         var el = document.getElementById('uploadHistory');
-        if (!this.client) return;
+        if (!this.client || !this.projects || this.projects.length === 0) return;
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted)">Loading...</div>';
 
-        var items = await this.api('photo_queue?submitted_by=eq.' + encodeURIComponent(this.client.name) + '&order=created_at.desc&limit=20');
+        // Query by all project IDs this client has access to
+        var projectIds = this.projects.map(function(p) { return p.id; });
+        var filter = 'project_id=in.(' + projectIds.join(',') + ')&order=created_at.desc&limit=30';
+        var items = await this.api('photo_queue?' + filter);
         if (!items || items.length === 0) {
             el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.8rem">No submissions yet</div>';
             return;
         }
 
+        // Find project names
+        var projMap = {};
+        this.projects.forEach(function(p) { projMap[p.id] = p.name; });
+
         el.innerHTML = items.map(function(q) {
             var statusColor = q.status === 'pending' ? 'var(--warning)' : q.status === 'approved' ? 'var(--success)' : 'var(--text-dim)';
-            var statusLabel = q.status === 'pending' ? '⏳ Pending Review' : q.status === 'approved' ? '✅ Approved' : '❌ Rejected';
+            var statusLabel = q.status === 'pending' ? '⏳ Pending' : q.status === 'approved' ? '✅ Processed' : '❌ Rejected';
             var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
             var timeAgo = portal.timeAgo(q.created_at);
+            var projName = projMap[q.project_id] || '';
 
             return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center">' +
-                '<div style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0">' +
+                '<div style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0;cursor:pointer" onclick="window.open(\'' + q.photo_url + '\')">' +
                     '<img src="' + q.photo_url + '" style="width:100%;height:100%;object-fit:cover">' +
                 '</div>' +
                 '<div style="flex:1;min-width:0">' +
                     '<div style="font-size:.75rem;font-weight:700">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
                         (q.ticket_number ? ' #' + q.ticket_number : '') + '</div>' +
-                    '<div style="font-size:.65rem;color:var(--text-muted)">' + timeAgo + '</div>' +
+                    '<div style="font-size:.65rem;color:var(--text-muted)">' + projName + ' • ' + (q.submitted_by || '') + ' • ' + timeAgo + '</div>' +
                 '</div>' +
-                '<div style="font-size:.65rem;font-weight:600;color:' + statusColor + '">' + statusLabel + '</div>' +
+                '<div style="font-size:.65rem;font-weight:600;color:' + statusColor + ';white-space:nowrap">' + statusLabel + '</div>' +
             '</div>';
         }).join('');
     },
