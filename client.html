@@ -400,7 +400,8 @@ var portal = {
 
     renderMonthly() {
         var months = {};
-        var monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        var shortMonths = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         this.tickets.forEach(function(t) {
             var d = t.ticket_date || '';
             var key = d.substring(0, 7);
@@ -417,31 +418,175 @@ var portal = {
             var tix = months[key];
             var parts = key.split('-');
             var monthLabel = monthNames[parseInt(parts[1])] + ' ' + parts[0];
-            var tons = 0, diverted = 0;
+            var tons = 0, diverted = 0, co2e = 0;
+            var mats = {wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
             tix.forEach(function(t) {
-                tons += parseFloat(t.net_tons) || 0;
+                var tn = parseFloat(t.net_tons) || 0;
+                tons += tn;
                 diverted += parseFloat(t.diverted_tons) || 0;
+                co2e += parseFloat(t.co2e_avoided) || 0;
+                Object.keys(MATERIALS).forEach(function(k) { mats[k] += tn * ((t[k+'_pct']||0)/100); });
             });
             var rate = tons > 0 ? Math.round(diverted / tons * 100) : 0;
             var color = rate >= target ? 'var(--success)' : rate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
+            var gaugeBg = rate >= target ? 'var(--success-light)' : rate >= (target * 0.67) ? 'var(--warning-light)' : 'var(--danger-light)';
+
+            // Material bars
+            var matBars = '';
+            Object.keys(MATERIALS).forEach(function(k) {
+                if (mats[k] <= 0) return;
+                var pct = tons > 0 ? (mats[k]/tons*100) : 0;
+                matBars += '<div class="mat-bar"><div class="mat-label">' + MATERIALS[k].icon + ' ' + MATERIALS[k].name + '</div>' +
+                    '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + MATERIALS[k].color + '"></div></div>' +
+                    '<div class="mat-pct">' + pct.toFixed(1) + '%</div></div>';
+            });
+
+            // Ticket table
+            var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
+            var tblHtml = '<div class="tbl-wrap mt-8"><table><thead><tr>' +
+                '<th>Date</th><th>Ticket#</th><th class="text-right">Tons</th>' +
+                '<th class="text-right">Wood</th><th class="text-right">Gyp</th><th class="text-right">Plas</th>' +
+                '<th class="text-right">OCC</th><th class="text-right">Metal</th>' +
+                '<th class="text-right">Div%</th>' +
+                '</tr></thead><tbody>';
+            sorted.forEach(function(t) {
+                var tn = parseFloat(t.net_tons)||0;
+                var dp = t.diversion_pct || 0;
+                var dc = dp >= 75 ? 'text-success' : dp >= 50 ? 'text-warning' : 'text-danger';
+                tblHtml += '<tr onclick="portal.showTicket(\'' + t.id + '\')" style="cursor:pointer">' +
+                    '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
+                    '<td class="fw700">' + t.ticket_number + '</td>' +
+                    '<td class="text-right mono">' + portal.fmt(tn) + '</td>' +
+                    '<td class="text-right mono">' + (t.wood_pct||0) + '%</td>' +
+                    '<td class="text-right mono">' + (t.gypsum_pct||0) + '%</td>' +
+                    '<td class="text-right mono">' + (t.plastic_pct||0) + '%</td>' +
+                    '<td class="text-right mono">' + (t.occ_pct||0) + '%</td>' +
+                    '<td class="text-right mono">' + (t.metal_pct||0) + '%</td>' +
+                    '<td class="text-right mono fw700 ' + dc + '">' + dp + '%</td></tr>';
+            });
+            tblHtml += '<tr style="border-top:2px solid var(--primary);font-weight:800">' +
+                '<td colspan="2">TOTALS</td>' +
+                '<td class="text-right mono">' + portal.fmt(tons) + '</td>' +
+                '<td colspan="5"></td>' +
+                '<td class="text-right mono" style="color:' + color + '">' + rate + '%</td></tr>';
+            tblHtml += '</tbody></table></div>';
 
             html += '<div class="card">' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
                     '<div class="card-title" style="margin:0">📅 ' + monthLabel + '</div>' +
-                    '<div style="font-size:.85rem;font-weight:800;color:' + color + '">' + rate + '%</div>' +
+                    '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.65rem" onclick="portal.exportMonthXLSX(\'' + key + '\')">📥 XLSX</button>' +
                 '</div>' +
-                '<div style="display:flex;gap:12px;font-size:.75rem;color:var(--text-muted)">' +
-                    '<span>' + tix.length + ' tickets</span>' +
-                    '<span>' + portal.fmt(tons) + ' tons</span>' +
-                    '<span style="color:var(--success)">' + portal.fmt(diverted) + ' diverted</span>' +
+                '<div style="background:' + gaugeBg + ';padding:12px;border-radius:12px;text-align:center;margin-bottom:12px">' +
+                    '<div style="font-size:1.4rem;font-weight:800;color:' + color + '">' + rate + '%</div>' +
+                    '<div style="height:6px;border-radius:3px;background:var(--border);margin:6px 20px 0;overflow:hidden">' +
+                        '<div style="height:100%;width:' + rate + '%;background:' + color + ';border-radius:3px"></div></div>' +
+                    '<div style="font-size:.65rem;color:var(--text-muted);margin-top:4px">' + tix.length + ' tickets • ' + portal.fmt(tons) + ' tons • ' + portal.fmt(diverted) + ' diverted</div>' +
                 '</div>' +
-                '<div style="height:6px;border-radius:3px;background:var(--border);margin-top:8px;overflow:hidden">' +
-                    '<div style="height:100%;width:' + rate + '%;background:' + color + ';border-radius:3px"></div>' +
+                matBars +
+                tblHtml +
+                '<div style="display:flex;gap:12px;font-size:.7rem;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+                    '<span>Total: ' + portal.fmt(tons) + ' T</span>' +
+                    '<span>Diverted: ' + portal.fmt(diverted) + ' T</span>' +
+                    '<span>Landfill: ' + portal.fmt(tons - diverted) + ' T</span>' +
+                    '<span>CO₂e: ' + portal.fmt(co2e) + ' mt</span>' +
                 '</div>' +
             '</div>';
         });
 
+        this._monthGroups = months;
         document.getElementById('dashMonthly').innerHTML = html;
+    },
+
+    exportMonthXLSX(monthKey) {
+        if (typeof XLSX === 'undefined' || !this.currentProject) return;
+        var proj = this.currentProject;
+        var tix = (this._monthGroups && this._monthGroups[monthKey]) || [];
+        if (tix.length === 0) return;
+
+        var parts = monthKey.split('-');
+        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        var monthName = monthNames[parseInt(parts[1])];
+        var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
+
+        var wb = XLSX.utils.book_new();
+        var data = [];
+        data.push([],[],[],[],[],[]);
+        data.push(['Waste Diversion Report for ' + monthName + ' ' + parts[0]]);
+        data.push(['Company: ' + (proj.general_contractor || proj.client || 'Jaguar Waste Management')]);
+        data.push(['Location: ' + (proj.location || '')]);
+        data.push(['Project: ' + proj.name]);
+        data.push(['Report by: Dalmex Recycling']);
+        data.push(['Contact: Robert Vandling']);
+        data.push(['Email: robert@dalmexrecycling.com']);
+        data.push([]);
+        data.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+            'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
+            'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
+
+        var sumGross=0,sumTare=0,sumTons=0,sumDiv=0;
+        var sumMats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
+        var dataStartRow = 15;
+
+        sorted.forEach(function(t) {
+            var gross=parseInt(t.gross_lbs)||0, tare=parseInt(t.tare_lbs)||0;
+            var tons=parseFloat(t.net_tons)||0;
+            var wP=(t.wood_pct||0)/100, gP=(t.gypsum_pct||0)/100, pP=(t.plastic_pct||0)/100;
+            var oP=(t.occ_pct||0)/100, mP=(t.metal_pct||0)/100, cP=(t.concrete_pct||0)/100, bP=(t.block_pct||0)/100;
+            var wT=tons*wP, gT=tons*gP, pT=tons*pP, oT=tons*oP, mT=tons*mP, cT=tons*cP, bT=tons*bP;
+            var div=wT+gT+pT+oT+mT+cT+bT;
+            sumGross+=gross; sumTare+=tare; sumTons+=tons; sumDiv+=div;
+            sumMats.wood+=wT; sumMats.gypsum+=gT; sumMats.plastic+=pT;
+            sumMats.occ+=oT; sumMats.metal+=mT; sumMats.concrete+=cT; sumMats.block+=bT;
+            data.push([t.ticket_date, parseInt(t.ticket_number)||t.ticket_number,
+                gross, gross/2000, tare, tare/2000, gross-tare, tons,
+                wP, wT, gP, gT, pP, pT, oP, oT, mP, mT, cP, cT, bP, bT, div, tons>0?div/tons:0]);
+        });
+
+        var totalDivPct = sumTons>0 ? sumDiv/sumTons : 0;
+        data.push(['Totals','', sumGross, sumGross/2000, sumTare, sumTare/2000, sumGross-sumTare, sumTons,
+            sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
+            sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
+            sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
+            sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
+            sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
+            sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
+            sumTons>0?sumMats.block/sumTons:0, sumMats.block,
+            sumDiv, totalDivPct]);
+        data.push([]);
+        data.push(['Total Tonnage', sumTons]);
+        data.push(['Diverted from landfill', sumDiv]);
+        data.push(['Recycled Material %', totalDivPct]);
+
+        var ws = XLSX.utils.aoa_to_sheet(data);
+
+        // Column widths
+        ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
+            {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
+            {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
+
+        // Format cells
+        var dataEnd = dataStartRow + sorted.length;
+        for (var r = dataStartRow; r <= dataEnd + 1; r++) {
+            [8,10,12,14,16,18,20,23].forEach(function(c) {
+                var addr = XLSX.utils.encode_cell({r:r,c:c});
+                if (ws[addr]) ws[addr].z = '0%';
+            });
+            [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
+                var addr = XLSX.utils.encode_cell({r:r,c:c});
+                if (ws[addr]) ws[addr].z = '0.00';
+            });
+            [2,4,6].forEach(function(c) {
+                var addr = XLSX.utils.encode_cell({r:r,c:c});
+                if (ws[addr]) ws[addr].z = '#,##0';
+            });
+        }
+        // Summary % format
+        var sumRow = dataEnd + 4;
+        var addr = XLSX.utils.encode_cell({r:sumRow,c:1});
+        if (ws[addr]) ws[addr].z = '0.0%';
+
+        XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + parts[0]);
+        XLSX.writeFile(wb, proj.name.replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + parts[0] + '.xlsx');
     },
 
     renderTicketTable() {
@@ -549,12 +694,12 @@ var portal = {
         Object.keys(months).sort().forEach(function(key) {
             var parts = key.split('-');
             var monthName = monthNames[parseInt(parts[1])];
-            var mTickets = months[key].sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
+            var sorted = months[key].sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
 
             var data = [];
             data.push([],[],[],[],[],[]);
             data.push(['Waste Diversion Report for ' + monthName + ' ' + parts[0]]);
-            data.push(['Company: ' + (proj.general_contractor || proj.client || '')]);
+            data.push(['Company: ' + (proj.general_contractor || proj.client || 'Jaguar Waste Management')]);
             data.push(['Location: ' + (proj.location || '')]);
             data.push(['Project: ' + proj.name]);
             data.push(['Report by: Dalmex Recycling']);
@@ -565,21 +710,58 @@ var portal = {
                 'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
                 'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
 
-            var sumTons = 0, sumDiv = 0;
-            mTickets.forEach(function(t) {
-                var gross = parseInt(t.gross_lbs)||0, tare = parseInt(t.tare_lbs)||0;
-                var tons = parseFloat(t.net_tons)||0;
+            var sumGross=0,sumTare=0,sumTons=0,sumDiv=0;
+            var sumMats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
+
+            sorted.forEach(function(t) {
+                var gross=parseInt(t.gross_lbs)||0, tare=parseInt(t.tare_lbs)||0;
+                var tons=parseFloat(t.net_tons)||0;
                 var wP=(t.wood_pct||0)/100, gP=(t.gypsum_pct||0)/100, pP=(t.plastic_pct||0)/100;
                 var oP=(t.occ_pct||0)/100, mP=(t.metal_pct||0)/100, cP=(t.concrete_pct||0)/100, bP=(t.block_pct||0)/100;
-                var div = tons*(wP+gP+pP+oP+mP+cP+bP);
-                sumTons += tons; sumDiv += div;
+                var wT=tons*wP, gT=tons*gP, pT=tons*pP, oT=tons*oP, mT=tons*mP, cT=tons*cP, bT=tons*bP;
+                var div=wT+gT+pT+oT+mT+cT+bT;
+                sumGross+=gross; sumTare+=tare; sumTons+=tons; sumDiv+=div;
+                sumMats.wood+=wT; sumMats.gypsum+=gT; sumMats.plastic+=pT;
+                sumMats.occ+=oT; sumMats.metal+=mT; sumMats.concrete+=cT; sumMats.block+=bT;
                 data.push([t.ticket_date, parseInt(t.ticket_number)||t.ticket_number,
                     gross, gross/2000, tare, tare/2000, gross-tare, tons,
-                    wP, tons*wP, gP, tons*gP, pP, tons*pP, oP, tons*oP, mP, tons*mP, cP, tons*cP, bP, tons*bP, div, tons>0?div/tons:0]);
+                    wP, wT, gP, gT, pP, pT, oP, oT, mP, mT, cP, cT, bP, bT, div, tons>0?div/tons:0]);
             });
-            data.push(['Totals','',0,0,0,0,0,sumTons,0,0,0,0,0,0,0,0,0,0,0,0,0,0,sumDiv,sumTons>0?sumDiv/sumTons:0]);
+
+            var totalDivPct = sumTons>0 ? sumDiv/sumTons : 0;
+            data.push(['Totals','', sumGross, sumGross/2000, sumTare, sumTare/2000, sumGross-sumTare, sumTons,
+                sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
+                sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
+                sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
+                sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
+                sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
+                sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
+                sumTons>0?sumMats.block/sumTons:0, sumMats.block,
+                sumDiv, totalDivPct]);
+            data.push([]);
+            data.push(['Total Tonnage', sumTons]);
+            data.push(['Diverted from landfill', sumDiv]);
+            data.push(['Recycled Material %', totalDivPct]);
 
             var ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
+                {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
+                {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
+
+            var dataStartRow = 15;
+            var dataEnd = dataStartRow + sorted.length;
+            for (var r = dataStartRow; r <= dataEnd + 1; r++) {
+                [8,10,12,14,16,18,20,23].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '0%'; });
+                [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '0.00'; });
+                [2,4,6].forEach(function(c) {
+                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '#,##0'; });
+            }
+            var sumRow = dataEnd + 4;
+            var addr = XLSX.utils.encode_cell({r:sumRow,c:1});
+            if (ws[addr]) ws[addr].z = '0.0%';
+
             XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + parts[0]);
         });
 
