@@ -3882,13 +3882,11 @@
         },
 
         async loadPhotoQueue() {
-            var proj = this.state.currentProject;
-            if (!proj) { this.showToast('Select a project first'); return; }
-
             var el = document.getElementById('queueContent');
             el.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted);">Loading...</div>';
 
-            var data = await this.supabase('photo_queue?project_id=eq.' + proj.id + '&order=created_at.desc&limit=50');
+            // Load ALL pending photos across all projects
+            var data = await this.supabase('photo_queue?order=created_at.desc&limit=50');
             if (!data) { el.innerHTML = '<div style="color:var(--danger);">Failed to load queue</div>'; return; }
 
             this._photoQueue = data;
@@ -3902,9 +3900,13 @@
             }
 
             if (data.length === 0) {
-                el.innerHTML = '<div style="text-align:center; padding:16px;"><div style="font-size:1.5rem; margin-bottom:8px;">📭</div><div style="font-size:0.8rem; color:var(--text-muted);">No photos in queue</div><div style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Share the field upload link to get started</div></div>';
+                el.innerHTML = '<div style="text-align:center; padding:16px;"><div style="font-size:1.5rem; margin-bottom:8px;">📭</div><div style="font-size:0.8rem; color:var(--text-muted);">No photos in queue</div></div>';
                 return;
             }
+
+            // Get project names for display
+            var projMap = {};
+            this.state.projects.forEach(function(p) { projMap[p.id] = p.name; });
 
             var html = '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">' + pending.length + ' pending • ' + data.filter(function(q){return q.status==='approved';}).length + ' approved • ' + data.length + ' total</div>';
 
@@ -3914,6 +3916,7 @@
                 var statusLabel = isPending ? '⏳ Pending' : q.status === 'approved' ? '✅ Approved' : '❌ Rejected';
                 var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
                 var timeAgo = DS.timeAgo(q.created_at);
+                var projName = projMap[q.project_id] || 'Unknown project';
 
                 html += '<div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); align-items:flex-start;">' +
                     '<div style="width:64px; height:64px; border-radius:8px; overflow:hidden; flex-shrink:0; cursor:pointer;" onclick="window.open(\'' + q.photo_url + '\')">' +
@@ -3922,7 +3925,7 @@
                     '<div style="flex:1; min-width:0;">' +
                         '<div style="font-size:0.75rem; font-weight:700;">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
                             (q.ticket_number ? ' — #' + q.ticket_number : '') + '</div>' +
-                        '<div style="font-size:0.65rem; color:var(--text-muted);">' + (q.submitted_by || 'Unknown') + ' • ' + timeAgo + '</div>' +
+                        '<div style="font-size:0.65rem; color:var(--text-muted);">' + projName + ' • ' + (q.submitted_by || 'Unknown') + ' • ' + timeAgo + '</div>' +
                         (q.notes ? '<div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">📝 ' + q.notes + '</div>' : '') +
                         '<div style="font-size:0.65rem; color:' + statusColor + '; font-weight:600; margin-top:4px;">' + statusLabel + '</div>' +
                         (isPending ? '<div class="btn-row mt-8" style="gap:6px;">' +
@@ -3946,19 +3949,25 @@
                 status: 'approved', reviewed_at: new Date().toISOString()
             });
 
+            // Load tickets for the photo's project (may differ from currently selected project)
+            var projectTickets = await this.supabase('tickets?project_id=eq.' + q.project_id + '&order=ticket_date.desc');
+            if (!projectTickets) projectTickets = [];
+
             if (q.photo_type === 'scale_ticket') {
-                // Run OCR on scale ticket photo
-                await this.processQueueScaleTicket(q);
+                await this.processQueueScaleTicket(q, projectTickets);
             } else {
-                // Run AI debris analysis
-                await this.processQueueDebris(q);
+                await this.processQueueDebris(q, projectTickets);
+            }
+
+            // Refresh current project tickets if same project
+            if (this.state.currentProject && this.state.currentProject.id === q.project_id) {
+                await this.loadTickets(q.project_id);
             }
 
             this.loadPhotoQueue();
-            this.renderTickets();
         },
 
-        async processQueueScaleTicket(q) {
+        async processQueueScaleTicket(q, projectTickets) {
             if (!this.state.apiKey) {
                 this.showToast('Approved — set OpenAI key in Settings for auto-OCR');
                 this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket approved (no API key for OCR)');
@@ -3989,8 +3998,8 @@
                     var ocr = JSON.parse(text);
 
                     // Check if ticket already exists
-                    var existingTicket = ocr.ticket_number ? this.state.tickets.find(function(t) {
-                        return t.ticket_number === ocr.ticket_number || t.ticket_number === String(ocr.ticket_number);
+                    var existingTicket = ocr.ticket_number ? projectTickets.find(function(t) {
+                        return t.ticket_number === String(ocr.ticket_number);
                     }) : null;
 
                     if (existingTicket) {
@@ -4025,7 +4034,7 @@
                     }
 
                     // Link queue item to ticket
-                    var linkedTicket = this.state.tickets.find(function(t) {
+                    var linkedTicket = projectTickets.find(function(t) {
                         return t.ticket_number === String(ocr.ticket_number);
                     });
                     if (linkedTicket) {
@@ -4043,18 +4052,18 @@
             }
         },
 
-        async processQueueDebris(q) {
+        async processQueueDebris(q, projectTickets) {
             // Try to find matching ticket
             var ticket = null;
             if (q.ticket_number) {
-                ticket = this.state.tickets.find(function(t) {
+                ticket = projectTickets.find(function(t) {
                     return t.ticket_number === q.ticket_number || t.ticket_number === String(q.ticket_number);
                 });
             }
             if (!ticket) {
-                // Find the most recent ticket without debris images
-                var sorted = this.state.tickets.filter(function(t) {
-                    return t.project_id === q.project_id && (!Array.isArray(t.debris_images) || t.debris_images.length === 0);
+                // Find the most recent ticket without debris images in this project
+                var sorted = projectTickets.filter(function(t) {
+                    return !Array.isArray(t.debris_images) || t.debris_images.length === 0;
                 }).sort(function(a, b) { return (b.ticket_date || '').localeCompare(a.ticket_date || ''); });
                 if (sorted.length > 0) ticket = sorted[0];
             }
