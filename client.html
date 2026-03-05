@@ -4,1353 +4,603 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>DivertScan™ — Client Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-    --bg:#f8fafc;--card:#fff;--primary:#2563eb;--primary-glow:rgba(37,99,235,.08);
+    --bg:#f0f2f5;--card:#fff;--primary:#2563eb;--primary-glow:rgba(37,99,235,.06);
     --success:#16a34a;--success-light:#f0fdf4;--warning:#f59e0b;--warning-light:#fffbeb;
     --danger:#dc2626;--danger-light:#fef2f2;
     --text:#1e293b;--text-muted:#64748b;--text-dim:#94a3b8;--border:#e2e8f0;
-    --radius:16px;--font:'Plus Jakarta Sans',-apple-system,sans-serif;--mono:'SF Mono',monospace;
+    --radius:16px;--font:'Plus Jakarta Sans',-apple-system,sans-serif;--mono:'SF Mono',Menlo,monospace;
 }
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
-
-.container{max-width:720px;margin:0 auto;padding:16px;padding-bottom:40px}
+.container{max-width:720px;margin:0 auto;padding:12px;padding-bottom:100px}
 
 /* Header */
-.portal-header{text-align:center;padding:24px 0 16px;border-bottom:1px solid var(--border);margin-bottom:20px}
-.portal-logo{font-size:1.5rem;font-weight:800;letter-spacing:-.03em;color:var(--text)}
-.portal-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
-.portal-user{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
-.portal-welcome{font-size:.85rem;color:var(--text-muted)}
-.portal-welcome strong{color:var(--text)}
+.header{background:var(--card);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.header-logo{font-size:1.1rem;font-weight:800;letter-spacing:-.02em}
+.header-sub{font-size:.6rem;color:var(--text-muted)}
 
-/* Cards */
-.card{background:var(--card);border-radius:var(--radius);padding:20px;margin-bottom:16px;
-    box-shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.03)}
-.card-title{font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;
-    letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card-title{font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+    letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 
 /* Forms */
-.form-label{display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:6px}
-.form-input{width:100%;padding:14px 16px;border:2px solid var(--border);border-radius:12px;
-    font-family:var(--font);font-size:1rem;color:var(--text);background:var(--bg);-webkit-appearance:none}
+.form-label{display:block;font-size:.7rem;font-weight:600;color:var(--text-muted);margin-bottom:4px}
+.form-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:12px;
+    font-family:var(--font);font-size:1rem;color:var(--text);background:#fff;-webkit-appearance:none}
 .form-input:focus{outline:none;border-color:var(--primary)}
-.form-group{margin-bottom:16px}
+.form-group{margin-bottom:12px}
 
 /* Buttons */
 .btn{display:block;width:100%;padding:14px;border:none;border-radius:12px;font-family:var(--font);
-    font-size:.9rem;font-weight:700;cursor:pointer;text-align:center;transition:all .2s}
-.btn:active{transform:scale(.98)}
+    font-size:.9rem;font-weight:700;cursor:pointer;text-align:center;transition:all .15s}
+.btn:active{transform:scale(.97);opacity:.9}
 .btn-primary{background:var(--primary);color:#fff}
-.btn-outline{background:transparent;color:var(--text);border:2px solid var(--border)}
-.btn-sm{padding:8px 14px;font-size:.75rem;display:inline-block;width:auto}
 .btn-success{background:var(--success);color:#fff}
+.btn-outline{background:transparent;color:var(--text);border:2px solid var(--border)}
+.btn-sm{padding:8px 14px;font-size:.75rem;display:inline-block;width:auto;border-radius:10px}
 .btn-row{display:flex;gap:8px}
+.btn-ghost{background:none;border:none;color:var(--primary);font-weight:700;font-size:.8rem;padding:8px;cursor:pointer}
 
-/* Project cards */
-.project-card{border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;
-    cursor:pointer;transition:all .2s}
-.project-card:active{border-color:var(--primary);background:var(--primary-glow)}
-.project-card.active{border-color:var(--primary);background:var(--primary-glow)}
-.project-name{font-size:1rem;font-weight:800;margin-bottom:2px}
-.project-meta{font-size:.75rem;color:var(--text-muted)}
+/* Hub tiles */
+.hub-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.hub-tile{background:var(--card);border-radius:20px;padding:24px 16px;text-align:center;cursor:pointer;
+    border:2px solid var(--border);transition:all .2s;position:relative}
+.hub-tile:active{border-color:var(--primary);background:var(--primary-glow);transform:scale(.97)}
+.hub-icon{font-size:2.2rem;margin-bottom:8px}
+.hub-label{font-size:.85rem;font-weight:800;color:var(--text)}
+.hub-desc{font-size:.65rem;color:var(--text-muted);margin-top:2px}
+.hub-badge{position:absolute;top:10px;right:10px;background:var(--danger);color:#fff;font-size:.6rem;
+    font-weight:700;padding:2px 7px;border-radius:8px;min-width:20px;text-align:center}
+
+/* Project pills */
+.proj-pill{border:2px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.proj-pill:active{border-color:var(--primary);background:var(--primary-glow)}
+.proj-pill.active{border-color:var(--primary);background:var(--primary-glow)}
+.proj-name{font-size:.95rem;font-weight:800}
+.proj-meta{font-size:.7rem;color:var(--text-muted);margin-top:2px}
 
 /* Stats */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.stat-card{background:var(--bg);border-radius:12px;padding:12px 8px;text-align:center}
-.stat-value{font-size:1.1rem;font-weight:800;font-family:var(--mono)}
-.stat-label{font-size:.6rem;color:var(--text-muted);margin-top:2px;text-transform:uppercase}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.stat{background:var(--bg);border-radius:10px;padding:10px 6px;text-align:center}
+.stat-val{font-size:1rem;font-weight:800;font-family:var(--mono)}
+.stat-lbl{font-size:.55rem;color:var(--text-muted);margin-top:1px;text-transform:uppercase}
 
 /* Table */
-.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:.7rem;white-space:nowrap}
-th{padding:8px 6px;text-align:left;font-weight:700;color:var(--text-muted);
-    background:var(--bg);border-bottom:2px solid var(--border)}
-td{padding:8px 6px;border-bottom:1px solid var(--border)}
-tr:hover{background:var(--primary-glow)}
-.text-right{text-align:right}
-.text-center{text-align:center}
-.mono{font-family:var(--mono)}
-.fw700{font-weight:700}
-.text-success{color:var(--success)}
-.text-warning{color:var(--warning)}
-.text-danger{color:var(--danger)}
+.tbl{width:100%;border-collapse:collapse;font-size:.7rem;white-space:nowrap}
+.tbl th{padding:6px 4px;text-align:left;font-weight:700;color:var(--text-muted);background:var(--bg);
+    border-bottom:2px solid var(--border);position:sticky;top:0}
+.tbl td{padding:7px 4px;border-bottom:1px solid var(--border)}
+.tbl tr:active{background:var(--primary-glow)}
+.r{text-align:right}.c{text-align:center}.m{font-family:var(--mono)}.b{font-weight:700}
 
 /* Material bars */
-.mat-bar{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.7rem}
-.mat-label{width:80px;color:var(--text-muted);flex-shrink:0}
-.mat-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
-.mat-fill{height:100%;border-radius:4px}
-.mat-pct{width:40px;text-align:right;font-family:var(--mono);font-weight:600}
+.mb{display:flex;align-items:center;gap:5px;margin-bottom:3px;font-size:.65rem}
+.mb-l{width:70px;color:var(--text-muted);flex-shrink:0}
+.mb-t{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.mb-f{height:100%;border-radius:3px}
+.mb-p{width:36px;text-align:right;font-family:var(--mono);font-weight:600}
 
-/* Photo grid */
-.photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
-.photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)}
+/* Upload */
+.upload-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;border-radius:14px;
+    font-weight:700;font-size:.9rem;cursor:pointer;position:relative;overflow:hidden;border:none;width:100%}
+.upload-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px}
+.upload-btn.cam{background:var(--primary);color:#fff}
+.upload-btn.lib{background:var(--bg);color:var(--text);border:2px solid var(--border)}
+.photo-row{display:flex;gap:6px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
+.photo-row img{width:72px;height:72px;object-fit:cover;border-radius:10px;flex-shrink:0;border:1px solid var(--border)}
+.photo-x{position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--danger);
+    color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 
-/* Photo upload zone */
-.upload-zone{border:3px dashed var(--border);border-radius:var(--radius);padding:24px 16px;text-align:center;
-    cursor:pointer;position:relative;background:var(--bg);transition:all .2s}
-.upload-zone.has-photos{border-color:var(--success);border-style:solid;background:var(--success-light)}
-.upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px}
-.upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-.upload-thumb{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1}
-.upload-thumb img{width:100%;height:100%;object-fit:cover}
-.upload-remove{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
-    background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center}
+/* Sticky close bar */
+.sticky-top{position:sticky;top:0;z-index:50;background:var(--card);padding:10px 16px;display:flex;
+    align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin:-16px -16px 12px}
 
-/* Bottom nav */
-.portal-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);
-    border-top:1px solid var(--border);z-index:100;padding-bottom:env(safe-area-inset-bottom)}
-.portal-nav button{flex:1;padding:10px 0 6px;border:none;background:none;font-family:var(--font);
-    font-size:.65rem;font-weight:600;color:var(--text-muted);cursor:pointer;display:flex;
-    flex-direction:column;align-items:center;gap:2px}
-.portal-nav button.active{color:var(--primary)}
-.portal-nav button .nav-icon{font-size:1.2rem}
+/* Submission list */
+.sub-item{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center}
+.sub-thumb{width:44px;height:44px;border-radius:8px;overflow:hidden;flex-shrink:0}
+.sub-thumb img{width:100%;height:100%;object-fit:cover}
+.sub-info{flex:1;min-width:0}
+.sub-type{font-size:.7rem;font-weight:700}
+.sub-meta{font-size:.6rem;color:var(--text-muted)}
+.sub-status{font-size:.6rem;font-weight:700;white-space:nowrap}
 
-/* Print styles */
-@media print {
-    .portal-nav, .btn, .portal-user, #projectSelector { display:none !important; }
-    .card { break-inside:avoid; box-shadow:none; border:1px solid #ddd; }
-    body { background:#fff; color:#000; }
-    .container { max-width:100%; padding:0; }
-}
+/* Photo indicator */
+.has-photo{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--success)}
+.no-photo{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--border)}
 
-.divider{height:1px;background:var(--border);margin:16px 0}
+/* Modal overlay */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.modal-sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:720px;max-height:88vh;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 40px;animation:sheetUp .25s ease}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
 .hidden{display:none!important}
-.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mb-12{margin-bottom:12px}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mb-8{margin-bottom:8px}
 
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);
-    color:#fff;padding:14px 24px;border-radius:12px;font-weight:600;font-size:.85rem;z-index:9999;
-    animation:slideUp .3s ease;box-shadow:0 8px 24px rgba(0,0,0,.2)}
-@keyframes slideUp{from{transform:translateX(-50%) translateY(20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);
+    color:#fff;padding:12px 20px;border-radius:12px;font-weight:600;font-size:.8rem;z-index:9999;
+    animation:fadeUp .3s ease;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@keyframes fadeUp{from{transform:translateX(-50%) translateY(10px);opacity:0}to{transform:translateX(-50%);opacity:1}}
 
-.loading{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:9998}
-.loading-box{background:var(--card);padding:24px 32px;border-radius:var(--radius);text-align:center;font-weight:600}
+.loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;
+    justify-content:center;z-index:300}
+.loading-box{background:var(--card);padding:24px 32px;border-radius:var(--radius);text-align:center;font-weight:600;font-size:.9rem}
 
-@media(max-width:480px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:380px){.stats-row{grid-template-columns:repeat(2,1fr)}}
 @media(prefers-color-scheme:dark){
     :root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#475569;
-        --border:#334155;--primary-glow:rgba(37,99,235,.15);--success-light:rgba(22,163,74,.1);
+        --border:#334155;--primary-glow:rgba(37,99,235,.12);--success-light:rgba(22,163,74,.1);
         --warning-light:rgba(245,158,11,.1);--danger-light:rgba(220,38,38,.1)}
+    .form-input{background:#0f172a}
 }
+@media print{.header,.btn,.hub-grid{display:none!important}.card{break-inside:avoid;box-shadow:none;border:1px solid #ddd}}
 </style>
 </head>
 <body>
 
+<!-- HEADER -->
+<div class="header">
+    <div><div class="header-logo">DivertScan™</div><div class="header-sub">Client Portal</div></div>
+    <div id="headerRight"></div>
+</div>
+
 <div class="container" id="app">
 
-<!-- LOGIN SCREEN -->
-<div id="loginScreen">
-    <div class="portal-header">
-        <div class="portal-logo">DivertScan™</div>
-        <div class="portal-sub">Client Portal</div>
+<!-- LOGIN -->
+<div id="loginView">
+    <div style="text-align:center;padding:40px 0 20px">
+        <div style="font-size:2rem;margin-bottom:8px">🔐</div>
+        <div style="font-size:1.2rem;font-weight:800">Sign In</div>
     </div>
     <div class="card">
-        <div class="card-title">🔐 Sign In</div>
-        <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-input" id="loginEmail" placeholder="you@company.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Password</label>
-            <input type="password" class="form-input" id="loginPassword" placeholder="Enter password">
-        </div>
-        <button class="btn btn-primary" onclick="portal.login()">Sign In</button>
-        <div id="loginError" style="color:var(--danger);font-size:.8rem;text-align:center;margin-top:12px;display:none"></div>
-    </div>
-    <div style="text-align:center;font-size:.7rem;color:var(--text-dim);margin-top:16px">
-        Contact your DivertScan administrator for access credentials.
+        <div class="form-group"><label class="form-label">Email</label>
+            <input type="email" class="form-input" id="loginEmail" placeholder="you@company.com" autocomplete="email"></div>
+        <div class="form-group"><label class="form-label">Password</label>
+            <input type="password" class="form-input" id="loginPw" placeholder="Enter password"></div>
+        <button class="btn btn-primary" onclick="P.login()">Sign In</button>
+        <div id="loginErr" style="color:var(--danger);font-size:.8rem;text-align:center;margin-top:10px;display:none"></div>
     </div>
 </div>
 
-<!-- PORTAL SCREEN -->
-<div id="portalScreen" class="hidden">
-    <div class="portal-header" style="border-bottom:none;padding-bottom:8px">
-        <div class="portal-logo">DivertScan™</div>
-        <div class="portal-sub">Client Portal</div>
-    </div>
-    <div class="portal-user">
-        <div class="portal-welcome">Welcome, <strong id="clientName"></strong></div>
-        <button class="btn btn-sm btn-outline" onclick="portal.logout()">Sign Out</button>
-    </div>
-
-    <!-- Project Selector -->
-    <div class="card" id="projectSelector">
-        <div class="card-title">🏗️ Your Projects</div>
-        <div id="projectList"></div>
-    </div>
-
-    <!-- Project Dashboard (shown after selecting a project) -->
-    <div id="projectDashboard" class="hidden">
-
-        <!-- Dashboard Tab -->
-        <div id="dashboardView">
-            <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                    <div>
-                        <div id="dashProjectName" style="font-size:1.1rem;font-weight:800"></div>
-                        <div id="dashProjectMeta" style="font-size:.75rem;color:var(--text-muted)"></div>
-                    </div>
-                    <button class="btn btn-sm btn-outline" onclick="portal.backToProjects()">← Back</button>
-                </div>
-
-                <!-- Summary Stats -->
-                <div class="stats-grid mb-12" id="dashStats"></div>
-
-                <!-- Diversion Gauge -->
-                <div id="dashGauge" style="text-align:center;padding:12px 0;border-radius:var(--radius);margin-bottom:12px"></div>
-
-                <!-- Material Breakdown -->
-                <div class="card-title mt-12">📊 Material Breakdown</div>
-                <div id="dashMaterials"></div>
-            </div>
-
-            <!-- Monthly Breakdown -->
-            <div id="dashMonthly"></div>
-
-            <!-- All Tickets Table -->
-            <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <div class="card-title" style="margin:0">🎫 All Scale Tickets</div>
-                    <button class="btn btn-sm btn-primary" onclick="portal.exportXLSX()">📥 All Months XLSX</button>
-                </div>
-                <div class="form-group mt-8" style="margin-bottom:8px">
-                    <input type="text" class="form-input" id="clientTicketSearch" placeholder="🔍 Search ticket number..." oninput="portal.searchClientTickets(this.value)" style="padding:10px 14px;font-size:.85rem">
-                </div>
-                <div class="tbl-wrap" id="dashTicketTable"></div>
-            </div>
+<!-- HUB -->
+<div id="hubView" class="hidden">
+    <div style="padding:8px 0"><span style="font-size:.85rem;color:var(--text-muted)">Welcome,</span> <strong id="hubName"></strong></div>
+    <div class="hub-grid">
+        <div class="hub-tile" onclick="P.goReports()">
+            <div class="hub-icon">📊</div>
+            <div class="hub-label">Reports</div>
+            <div class="hub-desc">View diversion data</div>
         </div>
-
-        <!-- Upload Tab -->
-        <div id="uploadView" class="hidden">
-            <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                    <div>
-                        <div style="font-size:1.1rem;font-weight:800">Upload Photos</div>
-                        <div style="font-size:.75rem;color:var(--text-muted)">Submit scale tickets & debris photos for review</div>
-                    </div>
-                    <button class="btn btn-sm btn-outline" onclick="portal.backToProjects()">← Back</button>
-                </div>
-            </div>
-
-            <!-- Project selector for upload -->
-            <div class="card">
-                <div class="card-title">🏗️ Select Project</div>
-                <div id="uploadProjectList"></div>
-            </div>
-
-            <!-- Upload area (shown after project selected) -->
-            <div id="uploadArea" class="hidden">
-                <div id="uploadProjectBanner" class="card" style="text-align:center;padding:12px;background:var(--primary-glow)"></div>
-
-                <!-- Scale Ticket Photos -->
-                <div class="card">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                        <div class="card-title" style="margin:0">📄 Scale Ticket Photos</div>
-                        <span id="scaleCountBadge" style="background:var(--primary);color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
-                    </div>
-                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Photograph each scale ticket clearly. Include ticket number and weights.</p>
-                    <div class="btn-row" style="gap:8px;margin-bottom:10px">
-                        <div style="flex:1;position:relative">
-                            <button class="btn btn-primary" style="width:100%;font-size:.8rem;padding:12px">📷 Take Photo</button>
-                            <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('scale', this)">
-                        </div>
-                        <div style="flex:1;position:relative">
-                            <button class="btn btn-outline" style="width:100%;font-size:.8rem;padding:12px">🖼️ From Library</button>
-                            <input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('scale', this)">
-                        </div>
-                    </div>
-                    <div class="upload-grid" id="clientScaleGrid"></div>
-                </div>
-
-                <!-- Debris / Material Photos -->
-                <div class="card">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                        <div class="card-title" style="margin:0">📸 Debris / Material Photos</div>
-                        <span id="debrisCountBadge" style="background:var(--primary);color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
-                    </div>
-                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Photograph the debris in the container or on the ground. Multiple angles help with material identification.</p>
-                    <div class="btn-row" style="gap:8px;margin-bottom:10px">
-                        <div style="flex:1;position:relative">
-                            <button class="btn btn-success" style="width:100%;font-size:.8rem;padding:12px">📷 Take Photo</button>
-                            <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('debris', this)">
-                        </div>
-                        <div style="flex:1;position:relative">
-                            <button class="btn btn-outline" style="width:100%;font-size:.8rem;padding:12px">🖼️ Batch from Library</button>
-                            <input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="portal.addUploadPhotos('debris', this)">
-                        </div>
-                    </div>
-                    <div class="upload-grid" id="clientDebrisGrid"></div>
-                </div>
-
-                <!-- Details -->
-                <div class="card">
-                    <div class="card-title">📝 Details (optional)</div>
-                    <div class="form-group">
-                        <label class="form-label">Ticket Number (if visible on scale ticket)</label>
-                        <input type="text" class="form-input" id="clientTicketNum" placeholder="e.g. 83435" inputmode="numeric">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Notes</label>
-                        <input type="text" class="form-input" id="clientUploadNotes" placeholder="e.g. Container #3, mostly wood">
-                    </div>
-                </div>
-
-                <button class="btn btn-success" id="clientSubmitBtn" onclick="portal.submitPhotos()" disabled style="margin-bottom:16px;padding:18px;font-size:1rem">
-                    📤 Submit Photos for Review
-                </button>
-                <div id="uploadSuccessMsg" class="hidden" style="text-align:center;padding:20px;margin-bottom:16px">
-                    <div style="font-size:2.5rem;margin-bottom:8px">✅</div>
-                    <div style="font-size:1rem;font-weight:800;margin-bottom:4px">Photos Submitted!</div>
-                    <div style="font-size:.8rem;color:var(--text-muted)">Photos received and queued for processing.</div>
-                    <button class="btn btn-primary mt-12" onclick="portal.resetUpload()">📷 Upload More</button>
-                </div>
-            </div>
-
-            <!-- Upload History - OUTSIDE uploadArea so always visible -->
-            <div class="card" style="margin-bottom:100px">
-                <div class="card-title">📋 Your Submissions</div>
-                <div id="uploadHistory"><button class="btn btn-sm btn-outline" onclick="portal.loadUploadHistory()">🔄 Load History</button></div>
-            </div>
+        <div class="hub-tile" onclick="P.goUpload()">
+            <div class="hub-icon">📷</div>
+            <div class="hub-label">Upload</div>
+            <div class="hub-desc">Submit photos</div>
+            <div class="hub-badge hidden" id="pendingBadge">0</div>
         </div>
-
+        <div class="hub-tile" onclick="P.goProjects()">
+            <div class="hub-icon">🏗️</div>
+            <div class="hub-label">Projects</div>
+            <div class="hub-desc" id="hubProjCount">0 projects</div>
+        </div>
+        <div class="hub-tile" onclick="P.goHistory()">
+            <div class="hub-icon">📋</div>
+            <div class="hub-label">Submissions</div>
+            <div class="hub-desc">Upload history</div>
+        </div>
     </div>
+</div>
 
-    <!-- Bottom Nav (shown when project is selected) -->
-    <nav class="portal-nav hidden" id="portalNav">
-        <button class="active" onclick="portal.switchTab('dashboard')">
-            <span class="nav-icon">📊</span> Reports
-        </button>
-        <button onclick="portal.switchTab('upload')">
-            <span class="nav-icon">📷</span> Upload
-        </button>
-    </nav>
+<!-- PROJECTS LIST -->
+<div id="projectsView" class="hidden">
+    <div class="card">
+        <div class="sticky-top"><div style="font-weight:800;font-size:1rem">🏗️ Your Projects</div>
+            <button class="btn-ghost" onclick="P.goHub()">← Hub</button></div>
+        <div id="projectsList"></div>
+    </div>
+</div>
+
+<!-- PROJECT DASHBOARD / REPORTS -->
+<div id="reportsView" class="hidden">
+    <div class="card">
+        <div class="sticky-top">
+            <div><div id="rptProjName" style="font-weight:800;font-size:1rem"></div>
+                <div id="rptProjMeta" style="font-size:.65rem;color:var(--text-muted)"></div></div>
+            <button class="btn-ghost" onclick="P.goHub()">← Hub</button>
+        </div>
+        <div class="stats-row" id="rptStats"></div>
+        <div id="rptGauge" style="text-align:center;padding:10px 0;border-radius:12px;margin:8px 0"></div>
+        <div class="card-title mt-8">📊 Material Breakdown</div>
+        <div id="rptMaterials"></div>
+    </div>
+    <div id="rptMonthly"></div>
+    <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="card-title" style="margin:0">🎫 All Tickets</div>
+            <div class="btn-row"><button class="btn btn-sm btn-primary" onclick="P.exportAllXLSX()">📥 XLSX</button></div>
+        </div>
+        <div class="form-group mt-8" style="margin-bottom:6px">
+            <input type="text" class="form-input" id="rptSearch" placeholder="🔍 Search ticket #..." oninput="P.searchTickets(this.value)" style="padding:8px 12px;font-size:.85rem">
+        </div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch" id="rptTicketTable"></div>
+    </div>
+</div>
+
+<!-- UPLOAD -->
+<div id="uploadView" class="hidden">
+    <div class="card">
+        <div class="sticky-top"><div style="font-weight:800;font-size:1rem">📷 Upload Photos</div>
+            <button class="btn-ghost" onclick="P.goHub()">← Hub</button></div>
+        <div class="card-title">🏗️ Select Project</div>
+        <div id="uploadProjList"></div>
+    </div>
+    <div id="uploadForm" class="hidden">
+        <div id="uploadBanner" class="card" style="text-align:center;padding:10px;background:var(--primary-glow);font-weight:700"></div>
+        <div class="card">
+            <div class="card-title">📄 Scale Tickets <span id="scaleBadge" class="hidden" style="background:var(--primary);color:#fff;font-size:.6rem;padding:1px 6px;border-radius:8px;margin-left:4px">0</span></div>
+            <div class="btn-row mb-8">
+                <div class="upload-btn cam" style="flex:1">📷 Camera<input type="file" accept="image/*" capture="environment" onchange="P.addPhoto('scale',this)"></div>
+                <div class="upload-btn lib" style="flex:1">🖼️ Library<input type="file" accept="image/*" multiple onchange="P.addPhoto('scale',this)"></div>
+            </div>
+            <div class="photo-row" id="scalePhotos"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📸 Debris <span id="debrisBadge" class="hidden" style="background:var(--success);color:#fff;font-size:.6rem;padding:1px 6px;border-radius:8px;margin-left:4px">0</span></div>
+            <div class="btn-row mb-8">
+                <div class="upload-btn cam" style="flex:1;background:var(--success)">📷 Camera<input type="file" accept="image/*" capture="environment" onchange="P.addPhoto('debris',this)"></div>
+                <div class="upload-btn lib" style="flex:1">🖼️ Batch<input type="file" accept="image/*" multiple onchange="P.addPhoto('debris',this)"></div>
+            </div>
+            <div class="photo-row" id="debrisPhotos"></div>
+        </div>
+        <div class="card">
+            <div class="form-group"><label class="form-label">Ticket # (optional)</label>
+                <input type="text" class="form-input" id="upTicket" placeholder="e.g. 83435" inputmode="numeric" style="padding:10px 12px"></div>
+            <div class="form-group"><label class="form-label">Notes (optional)</label>
+                <input type="text" class="form-input" id="upNotes" placeholder="e.g. Container #3" style="padding:10px 12px"></div>
+        </div>
+        <button class="btn btn-success" id="submitBtn" onclick="P.submit()" disabled style="padding:18px;font-size:1rem;margin-bottom:16px">📤 Submit Photos</button>
+        <div id="submitSuccess" class="hidden card" style="text-align:center;padding:24px">
+            <div style="font-size:2.5rem">✅</div>
+            <div style="font-size:1rem;font-weight:800;margin:8px 0">Submitted!</div>
+            <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px">Photos received and queued for processing.</div>
+            <button class="btn btn-primary" onclick="P.resetUpload()">📷 Upload More</button>
+        </div>
+    </div>
+</div>
+
+<!-- SUBMISSION HISTORY -->
+<div id="historyView" class="hidden">
+    <div class="card">
+        <div class="sticky-top"><div style="font-weight:800;font-size:1rem">📋 Submissions</div>
+            <button class="btn-ghost" onclick="P.goHub()">← Hub</button></div>
+        <div id="historyList"><div style="text-align:center;padding:16px;color:var(--text-dim)">Loading...</div></div>
+    </div>
 </div>
 
 </div>
 
 <script>
-var SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
-var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
-
-var MATERIALS = {
-    wood: {name:'Wood',icon:'🪵',color:'#92400e'},
-    gypsum: {name:'Gypsum',icon:'🧱',color:'#7c3aed'},
-    plastic: {name:'Plastic',icon:'♻️',color:'#0891b2'},
-    occ: {name:'OCC/Cardboard',icon:'📦',color:'#b45309'},
-    metal: {name:'Metal',icon:'🔩',color:'#475569'},
-    concrete: {name:'Concrete',icon:'🧱',color:'#6b7280'},
-    block: {name:'Block',icon:'⬜',color:'#374151'}
-};
-
-var portal = {
-    client: null,
-    projects: [],
-    currentProject: null,
-    tickets: [],
-
-    async api(endpoint, method, body) {
-        var opts = {
-            method: method || 'GET',
-            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' }
-        };
-        if (method === 'GET' || !method) opts.headers['Accept'] = 'application/json';
-        if (body) opts.body = JSON.stringify(body);
-        if (method === 'PATCH' || method === 'POST') opts.headers['Prefer'] = 'return=representation';
-        try {
-            var res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, opts);
-            if (!res.ok) {
-                console.error('API error:', endpoint, res.status, await res.text());
-                return null;
-            }
-            var text = await res.text();
-            return text ? JSON.parse(text) : [];
-        } catch(e) { console.error('API fetch error:', e); return null; }
-    },
-
-    async hashPassword(pw) {
-        var data = new TextEncoder().encode('divertscan_salt_' + pw);
-        var hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        var hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-    },
-
-    async login() {
-        var email = document.getElementById('loginEmail').value.trim().toLowerCase();
-        var pw = document.getElementById('loginPassword').value;
-        if (!email || !pw) { this.showError('Enter email and password'); return; }
-
-        this.showLoading('Signing in...');
-
-        try {
-            // Hash password client-side (same algorithm as DB function)
-            var hash = await this.hashPassword(pw);
-
-            // Find client by email + hash
-            var resp = await fetch(SUPABASE_URL + '/rest/v1/client_accounts?email=eq.' + encodeURIComponent(email) + '&password_hash=eq.' + encodeURIComponent(hash) + '&is_active=eq.true', {
-                headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Accept': 'application/json' }
-            });
-            var respText = await resp.text();
-            var clients = respText ? JSON.parse(respText) : [];
-            this.hideLoading();
-
-            if (!clients || clients.length === 0) {
-                this.showError('Invalid email or password');
-                return;
-            }
-
-            this.client = clients[0];
-        } catch(e) {
-            this.hideLoading();
-            this.showError('Connection error: ' + e.message);
-            return;
-        }
-
-        // Update last_login
-        this.api('client_accounts?id=eq.' + this.client.id, 'PATCH', { last_login: new Date().toISOString() });
-
-        // Save session
-        try { localStorage.setItem('ds_client_id', this.client.id); } catch(e) {}
-
-        await this.loadProjects();
-        this.showPortal();
-    },
-
-    async loadProjects() {
-        // Get project IDs this client can access
-        var access = await this.api('client_project_access?client_id=eq.' + this.client.id + '&select=project_id');
-        if (!access || access.length === 0) { this.projects = []; return; }
-        var ids = access.map(function(a) { return a.project_id; });
-        var filter = 'id=in.(' + ids.join(',') + ')';
-        var projects = await this.api('projects?' + filter + '&order=name');
-        this.projects = projects || [];
-    },
-
-    showPortal() {
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('portalScreen').classList.remove('hidden');
-        document.getElementById('clientName').textContent = this.client.name;
-        this.renderProjectList();
-    },
-
-    renderProjectList() {
-        var el = document.getElementById('projectList');
-        if (this.projects.length === 0) {
-            el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">No projects assigned yet. Contact your DivertScan administrator.</div>';
-            return;
-        }
-        el.innerHTML = this.projects.map(function(p) {
-            return '<div class="project-card" onclick="portal.selectProject(\'' + p.id + '\')">' +
-                '<div class="project-name">' + p.name + '</div>' +
-                '<div class="project-meta">' + [p.client, p.location].filter(Boolean).join(' • ') + '</div>' +
-                '<div class="project-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target || 50) + '%</div>' +
-            '</div>';
-        }).join('');
-    },
-
-    async selectProject(projectId) {
-        var proj = this.projects.find(function(p) { return p.id === projectId; });
-        if (!proj) return;
-        this.currentProject = proj;
-
-        this.showLoading('Loading project data...');
-        var tickets = await this.api('tickets?project_id=eq.' + projectId + '&order=ticket_date.desc');
-        this.tickets = tickets || [];
-        this.hideLoading();
-
-        document.getElementById('projectSelector').classList.add('hidden');
-        document.getElementById('projectDashboard').classList.remove('hidden');
-        document.getElementById('portalNav').classList.remove('hidden');
-        document.getElementById('dashProjectName').textContent = proj.name;
-        document.getElementById('dashProjectMeta').textContent = [proj.client, proj.waste_hauler, proj.location].filter(Boolean).join(' • ');
-
-        this.renderDashboard();
-    },
-
-    backToProjects() {
-        document.getElementById('projectDashboard').classList.add('hidden');
-        document.getElementById('projectSelector').classList.remove('hidden');
-        document.getElementById('portalNav').classList.add('hidden');
-        this.currentProject = null;
-    },
-
-    switchTab(tab) {
-        var btns = document.querySelectorAll('.portal-nav button');
-        btns.forEach(function(b) { b.classList.remove('active'); });
-        if (tab === 'dashboard') {
-            document.getElementById('dashboardView').classList.remove('hidden');
-            document.getElementById('uploadView').classList.add('hidden');
-            btns[0].classList.add('active');
-        } else {
-            document.getElementById('dashboardView').classList.add('hidden');
-            document.getElementById('uploadView').classList.remove('hidden');
-            btns[1].classList.add('active');
-            this.renderUploadProjectList();
-            this.loadUploadHistory();
-        }
-    },
-
-    // ============================================================
-    // PHOTO UPLOAD
-    // ============================================================
-    _uploadPhotos: { scale: [], debris: [] },
-    _uploadProjectId: null,
-
-    renderUploadProjectList() {
-        var el = document.getElementById('uploadProjectList');
-        var self = this;
-        el.innerHTML = this.projects.map(function(p) {
-            var isSelected = self._uploadProjectId === p.id;
-            return '<div class="project-card' + (isSelected ? ' active' : '') + '" onclick="portal.selectUploadProject(\'' + p.id + '\')">' +
-                '<div class="project-name">' + p.name + '</div>' +
-                '<div class="project-meta">' + [p.client, p.location].filter(Boolean).join(' • ') + '</div>' +
-            '</div>';
-        }).join('');
-    },
-
-    selectUploadProject(projectId) {
-        this._uploadProjectId = projectId;
-        var proj = this.projects.find(function(p) { return p.id === projectId; });
-        if (!proj) return;
-        document.getElementById('uploadArea').classList.remove('hidden');
-        document.getElementById('uploadProjectBanner').innerHTML =
-            '<div style="font-weight:800">' + proj.name + '</div>' +
-            '<div style="font-size:.75rem;color:var(--text-muted)">' + [proj.client, proj.location].filter(Boolean).join(' • ') + '</div>';
-        this.renderUploadProjectList();
-        this._uploadPhotos = { scale: [], debris: [] };
-        this.renderUploadGrid('scale');
-        this.renderUploadGrid('debris');
-        this.updateSubmitBtn();
-    },
-
-    addUploadPhotos(type, input) {
-        var files = Array.from(input.files);
-        var arr = this._uploadPhotos[type];
-        var self = this;
-        files.forEach(function(file) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                arr.push({ file: file, preview: e.target.result });
-                self.renderUploadGrid(type);
-                self.updateSubmitBtn();
-            };
-            reader.readAsDataURL(file);
-        });
-        input.value = '';
-    },
-
-    renderUploadGrid(type) {
-        var arr = this._uploadPhotos[type];
-        var grid = document.getElementById('client' + (type === 'scale' ? 'Scale' : 'Debris') + 'Grid');
-        var badge = document.getElementById((type === 'scale' ? 'scale' : 'debris') + 'CountBadge');
-        if (badge) {
-            badge.textContent = arr.length;
-            badge.style.display = arr.length > 0 ? 'inline' : 'none';
-        }
-        grid.innerHTML = arr.map(function(p, i) {
-            return '<div class="upload-thumb"><img src="' + p.preview + '">' +
-                '<button class="upload-remove" onclick="portal.removeUploadPhoto(\'' + type + '\',' + i + ')">×</button></div>';
-        }).join('');
-    },
-
-    removeUploadPhoto(type, index) {
-        this._uploadPhotos[type].splice(index, 1);
-        this.renderUploadGrid(type);
-        this.updateSubmitBtn();
-    },
-
-    updateSubmitBtn() {
-        var total = this._uploadPhotos.scale.length + this._uploadPhotos.debris.length;
-        var btn = document.getElementById('clientSubmitBtn');
-        btn.disabled = total === 0 || !this._uploadProjectId;
-        btn.textContent = total > 0 ? '📤 Submit ' + total + ' Photo' + (total > 1 ? 's' : '') + ' for Review' : '📤 Submit Photos for Review';
-    },
-
-    async compressImage(file, maxDim) {
-        return new Promise(function(resolve) {
-            var img = new Image();
-            img.onload = function() {
-                var w = img.width, h = img.height;
-                if (w > maxDim || h > maxDim) {
-                    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-                    else { w = Math.round(w * maxDim / h); h = maxDim; }
-                }
-                var c = document.createElement('canvas');
-                c.width = w; c.height = h;
-                c.getContext('2d').drawImage(img, 0, 0, w, h);
-                c.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', 0.85);
-            };
-            img.src = URL.createObjectURL(file);
-        });
-    },
-
-    async submitPhotos() {
-        var allPhotos = [];
-        this._uploadPhotos.scale.forEach(function(p) { allPhotos.push({ file: p.file, type: 'scale_ticket' }); });
-        this._uploadPhotos.debris.forEach(function(p) { allPhotos.push({ file: p.file, type: 'debris' }); });
-        if (allPhotos.length === 0 || !this._uploadProjectId) return;
-
-        var btn = document.getElementById('clientSubmitBtn');
-        btn.disabled = true;
-        btn.textContent = '📤 Uploading...';
-        var uploaded = 0;
-
-        var proj = this.projects.find(function(p) { return p.id === portal._uploadProjectId; });
-        var ticketNum = document.getElementById('clientTicketNum').value.trim() || null;
-        var notes = document.getElementById('clientUploadNotes').value.trim() || null;
-
-        for (var i = 0; i < allPhotos.length; i++) {
-            try {
-                btn.textContent = '📤 Uploading ' + (i + 1) + ' of ' + allPhotos.length + '...';
-                var photo = allPhotos[i];
-                var maxDim = photo.type === 'scale_ticket' ? 1200 : 800;
-                var blob = await this.compressImage(photo.file, maxDim);
-                var ts = Date.now();
-                var path = 'queue/' + this._uploadProjectId + '/' + photo.type + '_' + ts + '_' + i + '.jpg';
-
-                var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path, {
-                    method: 'POST',
-                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
-                        'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-                    body: blob
-                });
-                if (!uploadRes.ok) continue;
-
-                var publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
-                await this.api('photo_queue', 'POST', {
-                    project_id: this._uploadProjectId,
-                    access_code: proj ? (proj.access_code || 'portal') : 'portal',
-                    submitted_by: this.client.name || 'Client',
-                    photo_type: photo.type,
-                    photo_url: publicUrl,
-                    ticket_number: ticketNum,
-                    notes: notes,
-                    status: 'pending'
-                });
-                uploaded++;
-            } catch(e) { console.error('Upload error:', e); }
-        }
-
-        this.toast(uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' submitted for review!');
-        this._uploadPhotos = { scale: [], debris: [] };
-        this.renderUploadGrid('scale');
-        this.renderUploadGrid('debris');
-        document.getElementById('clientTicketNum').value = '';
-        document.getElementById('clientUploadNotes').value = '';
-        this.updateSubmitBtn();
-
-        // Show success message, hide form, refresh history
-        document.getElementById('clientSubmitBtn').classList.add('hidden');
-        document.getElementById('uploadSuccessMsg').classList.remove('hidden');
-        this.loadUploadHistory();
-    },
-
-    resetUpload() {
-        document.getElementById('uploadSuccessMsg').classList.add('hidden');
-        document.getElementById('clientSubmitBtn').classList.remove('hidden');
-        this._uploadPhotos = { scale: [], debris: [] };
-        this.renderUploadGrid('scale');
-        this.renderUploadGrid('debris');
-        document.getElementById('clientTicketNum').value = '';
-        document.getElementById('clientUploadNotes').value = '';
-        this.updateSubmitBtn();
-        this.loadUploadHistory();
-    },
-
-    async loadUploadHistory() {
-        var el = document.getElementById('uploadHistory');
-        if (!this.client || !this.projects || this.projects.length === 0) return;
-        el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted)">Loading...</div>';
-
-        // Query by all project IDs this client has access to
-        var projectIds = this.projects.map(function(p) { return p.id; });
-        var filter = 'project_id=in.(' + projectIds.join(',') + ')&order=created_at.desc&limit=30';
-        var items = await this.api('photo_queue?' + filter);
-        if (!items || items.length === 0) {
-            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.8rem">No submissions yet</div>';
-            return;
-        }
-
-        // Find project names
-        var projMap = {};
-        this.projects.forEach(function(p) { projMap[p.id] = p.name; });
-
-        el.innerHTML = items.map(function(q) {
-            var statusColor = q.status === 'pending' ? 'var(--warning)' : q.status === 'approved' ? 'var(--success)' : 'var(--text-dim)';
-            var statusLabel = q.status === 'pending' ? '⏳ Pending' : q.status === 'approved' ? '✅ Processed' : '❌ Rejected';
-            var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
-            var timeAgo = portal.timeAgo(q.created_at);
-            var projName = projMap[q.project_id] || '';
-
-            return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center">' +
-                '<div style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0;cursor:pointer" onclick="window.open(\'' + q.photo_url + '\')">' +
-                    '<img src="' + q.photo_url + '" style="width:100%;height:100%;object-fit:cover">' +
-                '</div>' +
-                '<div style="flex:1;min-width:0">' +
-                    '<div style="font-size:.75rem;font-weight:700">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
-                        (q.ticket_number ? ' #' + q.ticket_number : '') + '</div>' +
-                    '<div style="font-size:.65rem;color:var(--text-muted)">' + projName + ' • ' + (q.submitted_by || '') + ' • ' + timeAgo + '</div>' +
-                '</div>' +
-                '<div style="font-size:.65rem;font-weight:600;color:' + statusColor + ';white-space:nowrap">' + statusLabel + '</div>' +
-            '</div>';
-        }).join('');
-    },
-
-    timeAgo(dateStr) {
-        if (!dateStr) return '';
-        var now = new Date();
-        var then = new Date(dateStr);
-        var diff = Math.floor((now - then) / 1000);
-        if (diff < 60) return 'just now';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-        return Math.floor(diff / 86400) + 'd ago';
-    },
-
-    searchClientTickets(query) {
-        if (!query || query.trim() === '') {
-            this.renderTicketTable();
-            return;
-        }
-        var q = query.trim().toLowerCase();
-        var filtered = this.tickets.filter(function(t) {
-            return (t.ticket_number && t.ticket_number.toLowerCase().indexOf(q) >= 0) ||
-                (t.hauler && t.hauler.toLowerCase().indexOf(q) >= 0) ||
-                (t.ticket_date && t.ticket_date.indexOf(q) >= 0);
-        });
-        var html = '';
-        if (filtered.length === 0) {
-            html = '<div style="text-align:center;padding:16px;color:var(--text-dim)">No tickets matching "' + q + '"</div>';
-        } else {
-            html = '<table><thead><tr><th>Date</th><th>Ticket #</th><th class="text-right">Tons</th>' +
-                '<th class="text-right">Div %</th><th class="text-right">CO₂e</th></tr></thead><tbody>';
-            filtered.forEach(function(t) {
-                var dp = t.diversion_pct || 0;
-                var dc = dp >= 75 ? 'text-success' : dp >= 50 ? 'text-warning' : 'text-danger';
-                html += '<tr onclick="portal.showTicket(\'' + t.id + '\')" style="cursor:pointer">' +
-                    '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
-                    '<td class="fw700">' + t.ticket_number + '</td>' +
-                    '<td class="text-right mono">' + portal.fmt(t.net_tons) + '</td>' +
-                    '<td class="text-right mono fw700 ' + dc + '">' + dp + '%</td>' +
-                    '<td class="text-right mono">' + portal.fmt(t.co2e_avoided) + '</td></tr>';
-            });
-            html += '</tbody></table>';
-        }
-        document.getElementById('dashTicketTable').innerHTML = html;
-    },
-
-    // ============================================================
-    // MONTH PREVIEW & PDF
-    // ============================================================
-    previewMonth(monthKey) {
-        var tix = (this._monthGroups && this._monthGroups[monthKey]) || [];
-        if (tix.length === 0) return;
-        var proj = this.currentProject;
-        var parts = monthKey.split('-');
-        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-        var monthLabel = monthNames[parseInt(parts[1])] + ' ' + parts[0];
-        var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
-
-        var tons=0,div=0,co2=0;
-        var mats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-        sorted.forEach(function(t) {
-            var tn=parseFloat(t.net_tons)||0; tons+=tn;
-            div+=parseFloat(t.diverted_tons)||0; co2+=parseFloat(t.co2e_avoided)||0;
-            Object.keys(MATERIALS).forEach(function(k) { mats[k]+=tn*((t[k+'_pct']||0)/100); });
-        });
-        var rate = tons > 0 ? Math.round(div/tons*100) : 0;
-
-        var tblRows = '';
-        sorted.forEach(function(t) {
-            var tn=parseFloat(t.net_tons)||0;
-            var dp=t.diversion_pct||0;
-            tblRows += '<tr>' +
-                '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
-                '<td style="font-weight:700">' + t.ticket_number + '</td>' +
-                '<td style="text-align:right;font-family:var(--mono)">' + portal.fmt(tn) + '</td>' +
-                '<td style="text-align:right">' + (t.wood_pct||0) + '%</td>' +
-                '<td style="text-align:right">' + (t.gypsum_pct||0) + '%</td>' +
-                '<td style="text-align:right">' + (t.plastic_pct||0) + '%</td>' +
-                '<td style="text-align:right">' + (t.occ_pct||0) + '%</td>' +
-                '<td style="text-align:right">' + (t.metal_pct||0) + '%</td>' +
-                '<td style="text-align:right">' + (t.concrete_pct||0) + '%</td>' +
-                '<td style="text-align:right;font-weight:700;color:' + (dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)') + '">' + dp + '%</td></tr>';
-        });
-
-        var modal = document.createElement('div');
-        modal.id = 'monthPreviewModal';
-        modal.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch';
-        modal.innerHTML = '<div style="max-width:720px;margin:0 auto;padding:16px;padding-bottom:40px">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
-                '<div style="font-size:1.2rem;font-weight:800">📅 ' + monthLabel + '</div>' +
-                '<button class="btn btn-sm btn-outline" onclick="document.getElementById(\'monthPreviewModal\').remove()">✕ Close</button>' +
-            '</div>' +
-            '<div class="card" style="text-align:center">' +
-                '<div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase">Waste Diversion Report</div>' +
-                '<div style="font-size:1.2rem;font-weight:800;margin:4px 0">' + proj.name + '</div>' +
-                '<div style="font-size:.75rem;color:var(--text-muted)">' + [proj.client, proj.location].filter(Boolean).join(' • ') + '</div>' +
-                '<div style="font-size:2rem;font-weight:800;margin-top:12px;color:' + (rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)') + '">' + rate + '%</div>' +
-                '<div style="font-size:.7rem;color:var(--text-muted)">Diversion Rate</div>' +
-            '</div>' +
-            '<div class="card"><div class="stats-grid">' +
-                '<div class="stat-card"><div class="stat-value">' + sorted.length + '</div><div class="stat-label">Tickets</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + portal.fmt(tons) + '</div><div class="stat-label">Total Tons</div></div>' +
-                '<div class="stat-card"><div class="stat-value text-success">' + portal.fmt(div) + '</div><div class="stat-label">Diverted</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + portal.fmt(tons-div) + '</div><div class="stat-label">Landfill</div></div>' +
-            '</div></div>' +
-            '<div class="card"><div class="card-title">📊 Material Breakdown</div>' +
-                Object.keys(MATERIALS).map(function(k) {
-                    if (mats[k]<=0) return '';
-                    var pct=tons>0?(mats[k]/tons*100):0;
-                    return '<div class="mat-bar"><div class="mat-label">'+MATERIALS[k].icon+' '+MATERIALS[k].name+'</div>' +
-                        '<div class="mat-track"><div class="mat-fill" style="width:'+pct+'%;background:'+MATERIALS[k].color+'"></div></div>' +
-                        '<div class="mat-pct">'+pct.toFixed(1)+'%</div></div>';
-                }).join('') +
-            '</div>' +
-            '<div class="card"><div class="card-title">🎫 Ticket Detail</div>' +
-                '<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:.7rem;white-space:nowrap">' +
-                '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border)">' +
-                    '<th style="padding:8px 4px;text-align:left">Date</th><th style="padding:8px 4px;text-align:left">Ticket#</th>' +
-                    '<th style="padding:8px 4px;text-align:right">Tons</th>' +
-                    '<th style="padding:8px 4px;text-align:right">Wood</th><th style="padding:8px 4px;text-align:right">Gyp</th>' +
-                    '<th style="padding:8px 4px;text-align:right">Plas</th><th style="padding:8px 4px;text-align:right">OCC</th>' +
-                    '<th style="padding:8px 4px;text-align:right">Metal</th><th style="padding:8px 4px;text-align:right">Conc</th>' +
-                    '<th style="padding:8px 4px;text-align:right">Div%</th>' +
-                '</tr></thead><tbody>' + tblRows +
-                '<tr style="border-top:2px solid var(--primary);font-weight:800"><td colspan="2">TOTALS</td>' +
-                    '<td style="text-align:right;font-family:var(--mono)">' + portal.fmt(tons) + '</td>' +
-                    '<td colspan="6"></td><td style="text-align:right;font-family:var(--mono)">' + rate + '%</td></tr>' +
-                '</tbody></table></div>' +
-            '</div>' +
-            '<div class="card" style="text-align:center;font-size:.75rem;color:var(--text-muted)">' +
-                '<div>Total Tonnage: <strong>' + portal.fmt(tons) + '</strong> • Diverted: <strong>' + portal.fmt(div) + '</strong> • Recycled Material: <strong>' + rate + '%</strong></div>' +
-                '<div style="margin-top:4px">Report by Dalmex Recycling • robert@dalmexrecycling.com</div>' +
-            '</div>' +
-            '<div class="btn-row" style="gap:8px">' +
-                '<button class="btn btn-primary" onclick="portal.exportMonthXLSX(\'' + monthKey + '\')" style="flex:1">📥 Download XLSX</button>' +
-                '<button class="btn btn-outline" onclick="portal.printMonth()" style="flex:1">🖨️ Print / PDF</button>' +
-            '</div>' +
-        '</div>';
-        document.body.appendChild(modal);
-    },
-
-    printMonth() {
-        window.print();
-    },
-
-    renderDashboard() {
-        var tickets = this.tickets;
-        var totalTons = 0, divertedTons = 0, co2e = 0;
-        var matTotals = {};
-        Object.keys(MATERIALS).forEach(function(k) { matTotals[k] = 0; });
-
-        tickets.forEach(function(t) {
-            var tons = parseFloat(t.net_tons) || 0;
-            totalTons += tons;
-            divertedTons += parseFloat(t.diverted_tons) || 0;
-            co2e += parseFloat(t.co2e_avoided) || 0;
-            Object.keys(MATERIALS).forEach(function(k) {
-                matTotals[k] += tons * ((t[k + '_pct'] || 0) / 100);
-            });
-        });
-
-        var divRate = totalTons > 0 ? Math.round(divertedTons / totalTons * 100) : 0;
-        var target = this.currentProject.leed_target || 50;
-        var gaugeColor = divRate >= target ? 'var(--success)' : divRate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
-        var gaugeBg = divRate >= target ? 'var(--success-light)' : divRate >= (target * 0.67) ? 'var(--warning-light)' : 'var(--danger-light)';
-
-        // Stats
-        document.getElementById('dashStats').innerHTML =
-            '<div class="stat-card"><div class="stat-value">' + tickets.length + '</div><div class="stat-label">Tickets</div></div>' +
-            '<div class="stat-card"><div class="stat-value">' + this.fmt(totalTons) + '</div><div class="stat-label">Total Tons</div></div>' +
-            '<div class="stat-card"><div class="stat-value text-success">' + this.fmt(divertedTons) + '</div><div class="stat-label">Diverted</div></div>' +
-            '<div class="stat-card"><div class="stat-value text-warning">' + this.fmt(co2e) + '</div><div class="stat-label">CO₂e (mt)</div></div>';
-
-        // Gauge
-        document.getElementById('dashGauge').innerHTML =
-            '<div style="background:' + gaugeBg + ';padding:16px;border-radius:var(--radius)">' +
-                '<div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase">Project Diversion Rate</div>' +
-                '<div style="font-size:2.2rem;font-weight:800;color:' + gaugeColor + '">' + divRate + '%</div>' +
-                '<div style="height:8px;border-radius:4px;background:var(--border);margin:8px 24px 0;overflow:hidden">' +
-                    '<div style="height:100%;border-radius:4px;width:' + Math.min(divRate, 100) + '%;background:' + gaugeColor + '"></div>' +
-                '</div>' +
-                '<div style="font-size:.7rem;color:var(--text-muted);margin-top:6px">LEED ' + (this.currentProject.leed_version || 'v4') + ' Target: ' + target + '% • ' +
-                    (divRate >= target ? '✅ ON TRACK' : '⚠️ ' + (target - divRate) + '% below target') + '</div>' +
-            '</div>';
-
-        // Materials
-        var matHtml = '';
-        Object.keys(MATERIALS).forEach(function(k) {
-            var tons = matTotals[k];
-            if (tons <= 0) return;
-            var pct = totalTons > 0 ? (tons / totalTons * 100) : 0;
-            matHtml += '<div class="mat-bar">' +
-                '<div class="mat-label">' + MATERIALS[k].icon + ' ' + MATERIALS[k].name + '</div>' +
-                '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + MATERIALS[k].color + '"></div></div>' +
-                '<div class="mat-pct">' + pct.toFixed(1) + '%</div>' +
-            '</div>';
-        });
-        document.getElementById('dashMaterials').innerHTML = matHtml || '<div style="font-size:.8rem;color:var(--text-dim)">No material data yet</div>';
-
-        // Monthly breakdown
-        this.renderMonthly();
-
-        // Ticket table
-        this.renderTicketTable();
-    },
-
-    renderMonthly() {
-        var months = {};
-        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-        var shortMonths = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        this.tickets.forEach(function(t) {
-            var d = t.ticket_date || '';
-            var key = d.substring(0, 7);
-            if (!key || key.length < 7) return;
-            if (!months[key]) months[key] = [];
-            months[key].push(t);
-        });
-
-        var sortedKeys = Object.keys(months).sort().reverse();
-        var target = this.currentProject.leed_target || 50;
-        var html = '';
-
-        sortedKeys.forEach(function(key) {
-            var tix = months[key];
-            var parts = key.split('-');
-            var monthLabel = monthNames[parseInt(parts[1])] + ' ' + parts[0];
-            var tons = 0, diverted = 0, co2e = 0;
-            var mats = {wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-            tix.forEach(function(t) {
-                var tn = parseFloat(t.net_tons) || 0;
-                tons += tn;
-                diverted += parseFloat(t.diverted_tons) || 0;
-                co2e += parseFloat(t.co2e_avoided) || 0;
-                Object.keys(MATERIALS).forEach(function(k) { mats[k] += tn * ((t[k+'_pct']||0)/100); });
-            });
-            var rate = tons > 0 ? Math.round(diverted / tons * 100) : 0;
-            var color = rate >= target ? 'var(--success)' : rate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
-            var gaugeBg = rate >= target ? 'var(--success-light)' : rate >= (target * 0.67) ? 'var(--warning-light)' : 'var(--danger-light)';
-
-            // Material bars
-            var matBars = '';
-            Object.keys(MATERIALS).forEach(function(k) {
-                if (mats[k] <= 0) return;
-                var pct = tons > 0 ? (mats[k]/tons*100) : 0;
-                matBars += '<div class="mat-bar"><div class="mat-label">' + MATERIALS[k].icon + ' ' + MATERIALS[k].name + '</div>' +
-                    '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + MATERIALS[k].color + '"></div></div>' +
-                    '<div class="mat-pct">' + pct.toFixed(1) + '%</div></div>';
-            });
-
-            // Ticket table
-            var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
-            var tblHtml = '<div class="tbl-wrap mt-8"><table><thead><tr>' +
-                '<th>Date</th><th>Ticket#</th><th class="text-right">Tons</th>' +
-                '<th class="text-right">Wood</th><th class="text-right">Gyp</th><th class="text-right">Plas</th>' +
-                '<th class="text-right">OCC</th><th class="text-right">Metal</th>' +
-                '<th class="text-right">Div%</th>' +
-                '</tr></thead><tbody>';
-            sorted.forEach(function(t) {
-                var tn = parseFloat(t.net_tons)||0;
-                var dp = t.diversion_pct || 0;
-                var dc = dp >= 75 ? 'text-success' : dp >= 50 ? 'text-warning' : 'text-danger';
-                tblHtml += '<tr onclick="portal.showTicket(\'' + t.id + '\')" style="cursor:pointer">' +
-                    '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
-                    '<td class="fw700">' + t.ticket_number + '</td>' +
-                    '<td class="text-right mono">' + portal.fmt(tn) + '</td>' +
-                    '<td class="text-right mono">' + (t.wood_pct||0) + '%</td>' +
-                    '<td class="text-right mono">' + (t.gypsum_pct||0) + '%</td>' +
-                    '<td class="text-right mono">' + (t.plastic_pct||0) + '%</td>' +
-                    '<td class="text-right mono">' + (t.occ_pct||0) + '%</td>' +
-                    '<td class="text-right mono">' + (t.metal_pct||0) + '%</td>' +
-                    '<td class="text-right mono fw700 ' + dc + '">' + dp + '%</td></tr>';
-            });
-            tblHtml += '<tr style="border-top:2px solid var(--primary);font-weight:800">' +
-                '<td colspan="2">TOTALS</td>' +
-                '<td class="text-right mono">' + portal.fmt(tons) + '</td>' +
-                '<td colspan="5"></td>' +
-                '<td class="text-right mono" style="color:' + color + '">' + rate + '%</td></tr>';
-            tblHtml += '</tbody></table></div>';
-
-            html += '<div class="card">' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-                    '<div class="card-title" style="margin:0">📅 ' + monthLabel + '</div>' +
-                    '<div style="display:flex;gap:4px">' +
-                        '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.6rem" onclick="portal.previewMonth(\'' + key + '\')">👁️ Preview</button>' +
-                        '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 8px;font-size:.6rem" onclick="portal.exportMonthXLSX(\'' + key + '\')">📥 XLSX</button>' +
-                    '</div>' +
-                '</div>' +
-                '<div style="background:' + gaugeBg + ';padding:12px;border-radius:12px;text-align:center;margin-bottom:12px">' +
-                    '<div style="font-size:1.4rem;font-weight:800;color:' + color + '">' + rate + '%</div>' +
-                    '<div style="height:6px;border-radius:3px;background:var(--border);margin:6px 20px 0;overflow:hidden">' +
-                        '<div style="height:100%;width:' + rate + '%;background:' + color + ';border-radius:3px"></div></div>' +
-                    '<div style="font-size:.65rem;color:var(--text-muted);margin-top:4px">' + tix.length + ' tickets • ' + portal.fmt(tons) + ' tons • ' + portal.fmt(diverted) + ' diverted</div>' +
-                '</div>' +
-                matBars +
-                tblHtml +
-                '<div style="display:flex;gap:12px;font-size:.7rem;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
-                    '<span>Total: ' + portal.fmt(tons) + ' T</span>' +
-                    '<span>Diverted: ' + portal.fmt(diverted) + ' T</span>' +
-                    '<span>Landfill: ' + portal.fmt(tons - diverted) + ' T</span>' +
-                    '<span>CO₂e: ' + portal.fmt(co2e) + ' mt</span>' +
-                '</div>' +
-            '</div>';
-        });
-
-        this._monthGroups = months;
-        document.getElementById('dashMonthly').innerHTML = html;
-    },
-
-    exportMonthXLSX(monthKey) {
-        if (typeof XLSX === 'undefined' || !this.currentProject) return;
-        var proj = this.currentProject;
-        var tix = (this._monthGroups && this._monthGroups[monthKey]) || [];
-        if (tix.length === 0) return;
-
-        var parts = monthKey.split('-');
-        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-        var monthName = monthNames[parseInt(parts[1])];
-        var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
-
-        var wb = XLSX.utils.book_new();
-        var data = [];
-        data.push([],[],[],[],[],[]);
-        data.push(['Waste Diversion Report for ' + monthName + ' ' + parts[0]]);
-        data.push(['Company: ' + (proj.general_contractor || proj.client || 'Jaguar Waste Management')]);
-        data.push(['Location: ' + (proj.location || '')]);
-        data.push(['Project: ' + proj.name]);
-        data.push(['Report by: Dalmex Recycling']);
-        data.push(['Contact: Robert Vandling']);
-        data.push(['Email: robert@dalmexrecycling.com']);
-        data.push([]);
-        data.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
-            'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
-            'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
-
-        var sumGross=0,sumTare=0,sumTons=0,sumDiv=0;
-        var sumMats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-        var dataStartRow = 15;
-
-        sorted.forEach(function(t) {
-            var gross=parseInt(t.gross_lbs)||0, tare=parseInt(t.tare_lbs)||0;
-            var tons=parseFloat(t.net_tons)||0;
-            var wP=(t.wood_pct||0)/100, gP=(t.gypsum_pct||0)/100, pP=(t.plastic_pct||0)/100;
-            var oP=(t.occ_pct||0)/100, mP=(t.metal_pct||0)/100, cP=(t.concrete_pct||0)/100, bP=(t.block_pct||0)/100;
-            var wT=tons*wP, gT=tons*gP, pT=tons*pP, oT=tons*oP, mT=tons*mP, cT=tons*cP, bT=tons*bP;
-            var div=wT+gT+pT+oT+mT+cT+bT;
-            sumGross+=gross; sumTare+=tare; sumTons+=tons; sumDiv+=div;
-            sumMats.wood+=wT; sumMats.gypsum+=gT; sumMats.plastic+=pT;
-            sumMats.occ+=oT; sumMats.metal+=mT; sumMats.concrete+=cT; sumMats.block+=bT;
-            data.push([t.ticket_date, parseInt(t.ticket_number)||t.ticket_number,
-                gross, gross/2000, tare, tare/2000, gross-tare, tons,
-                wP, wT, gP, gT, pP, pT, oP, oT, mP, mT, cP, cT, bP, bT, div, tons>0?div/tons:0]);
-        });
-
-        var totalDivPct = sumTons>0 ? sumDiv/sumTons : 0;
-        data.push(['Totals','', sumGross, sumGross/2000, sumTare, sumTare/2000, sumGross-sumTare, sumTons,
-            sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
-            sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
-            sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
-            sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
-            sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
-            sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
-            sumTons>0?sumMats.block/sumTons:0, sumMats.block,
-            sumDiv, totalDivPct]);
-        data.push([]);
-        data.push(['Total Tonnage', sumTons]);
-        data.push(['Diverted from landfill', sumDiv]);
-        data.push(['Recycled Material %', totalDivPct]);
-
-        var ws = XLSX.utils.aoa_to_sheet(data);
-
-        // Column widths
-        ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
-            {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
-            {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
-
-        // Format cells
-        var dataEnd = dataStartRow + sorted.length;
-        for (var r = dataStartRow; r <= dataEnd + 1; r++) {
-            [8,10,12,14,16,18,20,23].forEach(function(c) {
-                var addr = XLSX.utils.encode_cell({r:r,c:c});
-                if (ws[addr]) ws[addr].z = '0%';
-            });
-            [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
-                var addr = XLSX.utils.encode_cell({r:r,c:c});
-                if (ws[addr]) ws[addr].z = '0.00';
-            });
-            [2,4,6].forEach(function(c) {
-                var addr = XLSX.utils.encode_cell({r:r,c:c});
-                if (ws[addr]) ws[addr].z = '#,##0';
-            });
-        }
-        // Summary % format
-        var sumRow = dataEnd + 4;
-        var addr = XLSX.utils.encode_cell({r:sumRow,c:1});
-        if (ws[addr]) ws[addr].z = '0.0%';
-
-        XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + parts[0]);
-        XLSX.writeFile(wb, proj.name.replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + parts[0] + '.xlsx');
-    },
-
-    renderTicketTable() {
-        var tickets = this.tickets;
-        if (tickets.length === 0) {
-            document.getElementById('dashTicketTable').innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">No tickets yet</div>';
-            return;
-        }
-
-        var html = '<table><thead><tr>' +
-            '<th>Date</th><th>Ticket #</th><th class="text-right">Tons</th>' +
-            '<th class="text-right">Div %</th><th class="text-right">CO₂e</th><th class="text-center">📷</th>' +
-            '</tr></thead><tbody>';
-
-        tickets.forEach(function(t) {
-            var divPct = t.diversion_pct || 0;
-            var divColor = divPct >= 75 ? 'text-success' : divPct >= 50 ? 'text-warning' : 'text-danger';
-            var hasPhoto = t.scale_ticket_image ? '🖼️' : '';
-            var debrisCount = Array.isArray(t.debris_images) ? t.debris_images.length : 0;
-            if (debrisCount > 0) hasPhoto += (hasPhoto ? '+' : '') + '📸' + debrisCount;
-            if (!hasPhoto) hasPhoto = '<span style="color:var(--text-dim)">—</span>';
-
-            html += '<tr onclick="portal.showTicket(\'' + t.id + '\')" style="cursor:pointer">' +
-                '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
-                '<td class="fw700">' + t.ticket_number + '</td>' +
-                '<td class="text-right mono">' + portal.fmt(t.net_tons) + '</td>' +
-                '<td class="text-right mono fw700 ' + divColor + '">' + divPct + '%</td>' +
-                '<td class="text-right mono">' + portal.fmt(t.co2e_avoided) + '</td>' +
-                '<td class="text-center">' + hasPhoto + '</td>' +
-            '</tr>';
-        });
-
-        html += '</tbody></table>';
-        document.getElementById('dashTicketTable').innerHTML = html;
-    },
-
-    showTicket(ticketId) {
-        var t = this.tickets.find(function(x) { return x.id === ticketId; });
-        if (!t) return;
-
-        var mats = '';
-        Object.keys(MATERIALS).forEach(function(k) {
-            var pct = t[k + '_pct'] || 0;
-            if (pct <= 0) return;
-            var tons = (parseFloat(t.net_tons) || 0) * pct / 100;
-            mats += '<div class="mat-bar">' +
-                '<div class="mat-label">' + MATERIALS[k].icon + ' ' + MATERIALS[k].name + '</div>' +
-                '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + MATERIALS[k].color + '"></div></div>' +
-                '<div class="mat-pct">' + pct + '%</div>' +
-            '</div>';
-        });
-
-        var photos = '';
-        if (t.scale_ticket_image) {
-            photos += '<div class="card-title mt-12">📄 Scale Ticket</div>' +
-                '<img src="' + t.scale_ticket_image + '" style="width:100%;border-radius:12px;border:1px solid var(--border)">';
-        }
-        var debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
-        if (debrisArr.length > 0) {
-            photos += '<div class="card-title mt-12">📸 Debris Photos</div><div class="photo-grid">';
-            debrisArr.forEach(function(u) {
-                photos += '<img src="' + u + '" onclick="window.open(\'' + u + '\')">';
-            });
-            photos += '</div>';
-        }
-
-        var divPct = t.diversion_pct || 0;
-        var divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
-
-        var modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:flex;align-items:flex-end;justify-content:center';
-        modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
-        modal.innerHTML = '<div style="background:var(--card);border-radius:20px 20px 0 0;max-width:720px;width:100%;max-height:85vh;overflow-y:auto;padding:24px;animation:slideUp .3s ease">' +
-            '<div style="width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px"></div>' +
-            '<div style="font-size:1.1rem;font-weight:800;margin-bottom:4px">Ticket ' + t.ticket_number + '</div>' +
-            '<div style="font-size:.8rem;color:var(--text-muted);margin-bottom:16px">' + this.fmtDate(t.ticket_date) + ' • ' + (t.hauler || '') + '</div>' +
-            '<div class="stats-grid mb-12">' +
-                '<div class="stat-card"><div class="stat-value">' + this.fmt(t.gross_lbs) + '</div><div class="stat-label">Gross lbs</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.fmt(t.tare_lbs) + '</div><div class="stat-label">Tare lbs</div></div>' +
-                '<div class="stat-card"><div class="stat-value fw700">' + this.fmt(t.net_tons) + '</div><div class="stat-label">Net Tons</div></div>' +
-                '<div class="stat-card"><div class="stat-value" style="color:' + divColor + '">' + divPct + '%</div><div class="stat-label">Diverted</div></div>' +
-            '</div>' +
-            (mats ? '<div class="card-title">📊 Materials</div>' + mats : '') +
-            photos +
-            '<button class="btn btn-outline mt-12" onclick="this.closest(\'div[style]\').parentElement.remove()">✓ Done</button>' +
-        '</div>';
-        document.body.appendChild(modal);
-    },
-
-    exportXLSX() {
-        if (typeof XLSX === 'undefined' || !this.currentProject) return;
-        var proj = this.currentProject;
-        var tickets = this.tickets;
-
-        var wb = XLSX.utils.book_new();
-        var months = {};
-        tickets.forEach(function(t) {
-            var key = (t.ticket_date || '').substring(0, 7);
-            if (!key) return;
-            if (!months[key]) months[key] = [];
-            months[key].push(t);
-        });
-
-        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-        Object.keys(months).sort().forEach(function(key) {
-            var parts = key.split('-');
-            var monthName = monthNames[parseInt(parts[1])];
-            var sorted = months[key].sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
-
-            var data = [];
-            data.push([],[],[],[],[],[]);
-            data.push(['Waste Diversion Report for ' + monthName + ' ' + parts[0]]);
-            data.push(['Company: ' + (proj.general_contractor || proj.client || 'Jaguar Waste Management')]);
-            data.push(['Location: ' + (proj.location || '')]);
-            data.push(['Project: ' + proj.name]);
-            data.push(['Report by: Dalmex Recycling']);
-            data.push(['Contact: Robert Vandling']);
-            data.push(['Email: robert@dalmexrecycling.com']);
-            data.push([]);
-            data.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
-                'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
-                'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
-
-            var sumGross=0,sumTare=0,sumTons=0,sumDiv=0;
-            var sumMats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-
-            sorted.forEach(function(t) {
-                var gross=parseInt(t.gross_lbs)||0, tare=parseInt(t.tare_lbs)||0;
-                var tons=parseFloat(t.net_tons)||0;
-                var wP=(t.wood_pct||0)/100, gP=(t.gypsum_pct||0)/100, pP=(t.plastic_pct||0)/100;
-                var oP=(t.occ_pct||0)/100, mP=(t.metal_pct||0)/100, cP=(t.concrete_pct||0)/100, bP=(t.block_pct||0)/100;
-                var wT=tons*wP, gT=tons*gP, pT=tons*pP, oT=tons*oP, mT=tons*mP, cT=tons*cP, bT=tons*bP;
-                var div=wT+gT+pT+oT+mT+cT+bT;
-                sumGross+=gross; sumTare+=tare; sumTons+=tons; sumDiv+=div;
-                sumMats.wood+=wT; sumMats.gypsum+=gT; sumMats.plastic+=pT;
-                sumMats.occ+=oT; sumMats.metal+=mT; sumMats.concrete+=cT; sumMats.block+=bT;
-                data.push([t.ticket_date, parseInt(t.ticket_number)||t.ticket_number,
-                    gross, gross/2000, tare, tare/2000, gross-tare, tons,
-                    wP, wT, gP, gT, pP, pT, oP, oT, mP, mT, cP, cT, bP, bT, div, tons>0?div/tons:0]);
-            });
-
-            var totalDivPct = sumTons>0 ? sumDiv/sumTons : 0;
-            data.push(['Totals','', sumGross, sumGross/2000, sumTare, sumTare/2000, sumGross-sumTare, sumTons,
-                sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
-                sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
-                sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
-                sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
-                sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
-                sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
-                sumTons>0?sumMats.block/sumTons:0, sumMats.block,
-                sumDiv, totalDivPct]);
-            data.push([]);
-            data.push(['Total Tonnage', sumTons]);
-            data.push(['Diverted from landfill', sumDiv]);
-            data.push(['Recycled Material %', totalDivPct]);
-
-            var ws = XLSX.utils.aoa_to_sheet(data);
-            ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
-                {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
-                {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
-
-            var dataStartRow = 15;
-            var dataEnd = dataStartRow + sorted.length;
-            for (var r = dataStartRow; r <= dataEnd + 1; r++) {
-                [8,10,12,14,16,18,20,23].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '0%'; });
-                [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '0.00'; });
-                [2,4,6].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r,c:c}); if (ws[addr]) ws[addr].z = '#,##0'; });
-            }
-            var sumRow = dataEnd + 4;
-            var addr = XLSX.utils.encode_cell({r:sumRow,c:1});
-            if (ws[addr]) ws[addr].z = '0.0%';
-
-            XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + parts[0]);
-        });
-
-        XLSX.writeFile(wb, proj.name.replace(/[^a-zA-Z0-9]/g,'_') + '_Diversion_Report.xlsx');
-    },
-
-    logout() {
-        this.client = null;
-        this.projects = [];
-        this.currentProject = null;
-        this.tickets = [];
-        try { localStorage.removeItem('ds_client_id'); } catch(e) {}
-        document.getElementById('portalScreen').classList.add('hidden');
-        document.getElementById('loginScreen').classList.remove('hidden');
-        document.getElementById('loginPassword').value = '';
-    },
-
-    // Helpers
-    fmt(n) {
-        if (n == null) return '0';
-        var num = parseFloat(n);
-        if (isNaN(num)) return '0';
-        if (Math.abs(num) >= 1000) return num.toLocaleString(undefined, {maximumFractionDigits:1});
-        if (Math.abs(num) >= 1) return num.toFixed(1);
-        return num.toFixed(2);
-    },
-
-    fmtDate(d) {
-        if (!d) return '';
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var parts = d.split('-');
-        if (parts.length < 3) return d;
-        return months[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
-    },
-
-    toast(msg) {
-        var el = document.createElement('div');
-        el.className = 'toast';
-        el.textContent = msg;
-        document.body.appendChild(el);
-        setTimeout(function() { el.remove(); }, 3000);
-    },
-
-    showError(msg) {
-        var el = document.getElementById('loginError');
-        el.textContent = msg;
-        el.style.display = 'block';
-    },
-
-    showLoading(msg) {
-        var el = document.createElement('div');
-        el.className = 'loading';
-        el.id = 'loadingOverlay';
-        el.innerHTML = '<div class="loading-box">' + (msg || 'Loading...') + '</div>';
-        document.body.appendChild(el);
-    },
-
-    hideLoading() {
-        var el = document.getElementById('loadingOverlay');
-        if (el) el.remove();
-    },
-
-    async init() {
-        // Check for saved session
-        try {
-            var savedId = localStorage.getItem('ds_client_id');
-            if (savedId) {
-                var clients = await this.api('client_accounts?id=eq.' + savedId + '&is_active=eq.true');
-                if (clients && clients.length > 0) {
-                    this.client = clients[0];
-                    await this.loadProjects();
-                    this.showPortal();
-                    return;
-                }
-            }
-        } catch(e) {}
+var SB_URL='https://cyvvlngtojagfoaitoog.supabase.co';
+var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+var MATS={wood:{n:'Wood',i:'🪵',c:'#92400e'},gypsum:{n:'Gypsum',i:'🧱',c:'#7c3aed'},plastic:{n:'Plastic',i:'♻️',c:'#0891b2'},occ:{n:'OCC',i:'📦',c:'#b45309'},metal:{n:'Metal',i:'🔩',c:'#475569'},concrete:{n:'Concrete',i:'🧱',c:'#6b7280'},block:{n:'Block',i:'⬜',c:'#374151'}};
+var P={
+client:null,projects:[],curProj:null,tickets:[],_up:{scale:[],debris:[]},_upProj:null,_mg:{},
+
+// === API ===
+async api(ep,method,body){
+    var o={method:method||'GET',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}};
+    if(!method||method==='GET')o.headers['Accept']='application/json';
+    if(body)o.body=JSON.stringify(body);
+    if(method==='PATCH'||method==='POST')o.headers['Prefer']='return=representation';
+    try{var r=await fetch(SB_URL+'/rest/v1/'+ep,o);if(!r.ok)return null;var t=await r.text();return t?JSON.parse(t):[];}catch(e){return null;}
+},
+async hashPw(pw){var d=new TextEncoder().encode('divertscan_salt_'+pw);var h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');},
+
+// === AUTH ===
+async login(){
+    var email=document.getElementById('loginEmail').value.trim().toLowerCase();
+    var pw=document.getElementById('loginPw').value;
+    if(!email||!pw){P.showErr('Enter email and password');return;}
+    P.load('Signing in...');
+    try{
+        var hash=await P.hashPw(pw);
+        var r=await fetch(SB_URL+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(email)+'&password_hash=eq.'+encodeURIComponent(hash)+'&is_active=eq.true',
+            {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});
+        var clients=await r.json();P.unload();
+        if(!clients||!clients.length){P.showErr('Invalid email or password');return;}
+        P.client=clients[0];
+        P.api('client_accounts?id=eq.'+P.client.id,'PATCH',{last_login:new Date().toISOString()});
+        try{localStorage.setItem('ds_cid',P.client.id)}catch(e){}
+        await P.loadProjects();P.showHub();
+    }catch(e){P.unload();P.showErr('Connection error');}
+},
+async loadProjects(){
+    var a=await P.api('client_project_access?client_id=eq.'+P.client.id+'&select=project_id');
+    if(!a||!a.length){P.projects=[];return;}
+    var ids=a.map(x=>x.project_id);
+    P.projects=await P.api('projects?id=in.('+ids.join(',')+')'+'&order=name')||[];
+},
+logout(){P.client=null;P.projects=[];P.curProj=null;P.tickets=[];try{localStorage.removeItem('ds_cid')}catch(e){}
+    P.hideAll();document.getElementById('loginView').classList.remove('hidden');
+    document.getElementById('headerRight').innerHTML='';document.getElementById('loginPw').value='';},
+showErr(m){var e=document.getElementById('loginErr');e.textContent=m;e.style.display='block';},
+
+// === NAVIGATION ===
+hideAll(){['loginView','hubView','projectsView','reportsView','uploadView','historyView'].forEach(id=>document.getElementById(id).classList.add('hidden'));},
+showHub(){
+    P.hideAll();document.getElementById('hubView').classList.remove('hidden');
+    document.getElementById('hubName').textContent=P.client.name;
+    document.getElementById('hubProjCount').textContent=P.projects.length+' project'+(P.projects.length!==1?'s':'');
+    document.getElementById('headerRight').innerHTML='<button class="btn-ghost" onclick="P.logout()">Sign Out</button>';
+    P.loadPendingCount();
+},
+goHub(){P.hideAll();document.getElementById('hubView').classList.remove('hidden');P.loadPendingCount();},
+goProjects(){P.hideAll();document.getElementById('projectsView').classList.remove('hidden');P.renderProjList('projectsList',function(id){P.selectProject(id);P.goReports2();});},
+goReports(){
+    if(P.projects.length===1){P.selectProject(P.projects[0].id);P.goReports2();return;}
+    P.hideAll();document.getElementById('projectsView').classList.remove('hidden');
+    P.renderProjList('projectsList',function(id){P.selectProject(id);P.goReports2();});
+},
+goReports2(){P.hideAll();document.getElementById('reportsView').classList.remove('hidden');P.renderDashboard();},
+goUpload(){P.hideAll();document.getElementById('uploadView').classList.remove('hidden');
+    P.renderProjList('uploadProjList',function(id){P._upProj=id;P.showUploadForm();});},
+goHistory(){P.hideAll();document.getElementById('historyView').classList.remove('hidden');P.loadHistory();},
+
+async loadPendingCount(){
+    var ids=P.projects.map(p=>p.id);if(!ids.length)return;
+    var d=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&status=eq.pending&select=id');
+    var b=document.getElementById('pendingBadge');
+    if(d&&d.length>0){b.textContent=d.length;b.classList.remove('hidden');}else{b.classList.add('hidden');}
+},
+
+// === PROJECT LIST ===
+renderProjList(elId,onSelect){
+    document.getElementById(elId).innerHTML=P.projects.map(p=>
+        '<div class="proj-pill'+(P.curProj&&P.curProj.id===p.id?' active':'')+'" onclick="('+onSelect+')(\''+p.id+'\')">'+
+        '<div class="proj-name">'+P.esc(p.name)+'</div>'+
+        '<div class="proj-meta">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
+        '<div class="proj-meta">LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%</div></div>'
+    ).join('');
+},
+async selectProject(id){
+    P.curProj=P.projects.find(p=>p.id===id);if(!P.curProj)return;
+    P.load('Loading...');P.tickets=await P.api('tickets?project_id=eq.'+id+'&order=ticket_date.desc')||[];P.unload();
+},
+
+// === DASHBOARD ===
+renderDashboard(){
+    var p=P.curProj,t=P.tickets,tot=0,div=0,co2=0,mc={};
+    Object.keys(MATS).forEach(k=>{mc[k]=0;});
+    t.forEach(x=>{var tn=+(x.net_tons)||0;tot+=tn;div+=+(x.diverted_tons)||0;co2+=+(x.co2e_avoided)||0;
+        Object.keys(MATS).forEach(k=>{mc[k]+=tn*((x[k+'_pct']||0)/100);});});
+    var rate=tot>0?Math.round(div/tot*100):0,tgt=p.leed_target||50;
+    var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+    var gb=rate>=tgt?'var(--success-light)':rate>=tgt*.67?'var(--warning-light)':'var(--danger-light)';
+    document.getElementById('rptProjName').textContent=p.name;
+    document.getElementById('rptProjMeta').textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
+    document.getElementById('rptStats').innerHTML=
+        '<div class="stat"><div class="stat-val">'+t.length+'</div><div class="stat-lbl">Tickets</div></div>'+
+        '<div class="stat"><div class="stat-val">'+P.fmt(tot)+'</div><div class="stat-lbl">Total T</div></div>'+
+        '<div class="stat"><div class="stat-val" style="color:var(--success)">'+P.fmt(div)+'</div><div class="stat-lbl">Diverted</div></div>'+
+        '<div class="stat"><div class="stat-val" style="color:var(--warning)">'+P.fmt(co2)+'</div><div class="stat-lbl">CO₂e</div></div>';
+    document.getElementById('rptGauge').innerHTML='<div style="background:'+gb+';padding:14px;border-radius:12px">'+
+        '<div style="font-size:2rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
+        '<div style="height:6px;border-radius:3px;background:var(--border);margin:6px 20px 0;overflow:hidden">'+
+        '<div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
+        '<div style="font-size:.65rem;color:var(--text-muted);margin-top:4px">LEED '+(p.leed_version||'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ ON TRACK':'⚠️ '+(tgt-rate)+'% below')+'</div></div>';
+    var mh='';Object.keys(MATS).forEach(k=>{if(mc[k]<=0)return;var pct=tot>0?mc[k]/tot*100:0;
+        mh+='<div class="mb"><div class="mb-l">'+MATS[k].i+' '+MATS[k].n+'</div><div class="mb-t"><div class="mb-f" style="width:'+pct+'%;background:'+MATS[k].c+'"></div></div><div class="mb-p">'+pct.toFixed(1)+'%</div></div>';});
+    document.getElementById('rptMaterials').innerHTML=mh||'<div style="font-size:.75rem;color:var(--text-dim)">No data</div>';
+    P.renderMonthly();P.renderTicketTable(t);
+},
+renderMonthly(){
+    var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+    P.tickets.forEach(t=>{var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
+    P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.curProj.leed_target||50,html='';
+    keys.forEach(key=>{var tix=months[key],pts=key.split('-'),label=mn[+pts[1]]+' '+pts[0];
+        var tons=0,div=0;tix.forEach(t=>{tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
+        var rate=tons>0?Math.round(div/tons*100):0;
+        var c=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+        html+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+            '<div style="font-weight:800;font-size:.85rem">📅 '+label+'</div>'+
+            '<div class="btn-row"><button class="btn btn-sm btn-outline" onclick="P.previewMonth(\''+key+'\')">👁️</button>'+
+            '<button class="btn btn-sm btn-primary" onclick="P.exportMonthXLSX(\''+key+'\')">📥</button></div></div>'+
+            '<div style="display:flex;align-items:center;gap:12px"><div style="font-size:1.3rem;font-weight:800;color:'+c+'">'+rate+'%</div>'+
+            '<div style="flex:1"><div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden">'+
+            '<div style="height:100%;width:'+rate+'%;background:'+c+';border-radius:3px"></div></div>'+
+            '<div style="font-size:.6rem;color:var(--text-muted);margin-top:3px">'+tix.length+' tickets • '+P.fmt(tons)+' T • '+P.fmt(div)+' diverted</div></div></div></div>';
+    });
+    document.getElementById('rptMonthly').innerHTML=html;
+},
+renderTicketTable(list){
+    var tix=list||P.tickets;if(!tix.length){document.getElementById('rptTicketTable').innerHTML='<div style="text-align:center;padding:12px;color:var(--text-dim)">No tickets</div>';return;}
+    var h='<table class="tbl"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th><th class="r">Div%</th><th class="c">📷</th></tr></thead><tbody>';
+    tix.forEach(t=>{var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
+        var hasScale=t.scale_ticket_image;var hasDebris=Array.isArray(t.debris_images)&&t.debris_images.length>0;
+        var photoInd=hasScale&&hasDebris?'<span class="has-photo"></span><span class="has-photo" style="margin-left:2px"></span>':hasScale||hasDebris?'<span class="has-photo"></span>':'<span class="no-photo"></span>';
+        h+='<tr onclick="P.showTicket(\''+t.id+'\')"><td>'+P.fmtD(t.ticket_date)+'</td><td class="b">'+t.ticket_number+'</td>'+
+        '<td class="r m">'+P.fmt(t.net_tons)+'</td><td class="r m b" style="'+dc+'">'+dp+'%</td><td class="c">'+photoInd+'</td></tr>';});
+    h+='</tbody></table>';document.getElementById('rptTicketTable').innerHTML=h;
+},
+searchTickets(q){if(!q.trim()){P.renderTicketTable();return;}var lq=q.toLowerCase();
+    P.renderTicketTable(P.tickets.filter(t=>(t.ticket_number||'').toLowerCase().includes(lq)||(t.hauler||'').toLowerCase().includes(lq)||(t.ticket_date||'').includes(lq)));},
+
+// === TICKET DETAIL MODAL ===
+showTicket(id){
+    var t=P.tickets.find(x=>x.id===id);if(!t)return;
+    var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
+    var mats='';Object.keys(MATS).forEach(k=>{var pct=t[k+'_pct']||0;if(pct<=0)return;
+        mats+='<div class="mb"><div class="mb-l">'+MATS[k].i+' '+MATS[k].n+'</div><div class="mb-t"><div class="mb-f" style="width:'+pct+'%;background:'+MATS[k].c+'"></div></div><div class="mb-p">'+pct+'%</div></div>';});
+    var photos='';
+    if(t.scale_ticket_image)photos+='<div class="card-title mt-8">📄 Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:10px;border:1px solid var(--border)">';
+    var da=Array.isArray(t.debris_images)?t.debris_images:[];
+    if(da.length)photos+='<div class="card-title mt-8">📸 Debris</div><div class="photo-row">'+da.map(u=>'<img src="'+u+'" onclick="window.open(\''+u+'\')">').join('')+'</div>';
+    var m=document.createElement('div');m.className='modal-bg';m.onclick=function(e){if(e.target===m)m.remove();};
+    m.innerHTML='<div class="modal-sheet"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+        '<div style="font-size:1.1rem;font-weight:800">Ticket '+t.ticket_number+'</div>'+
+        '<button class="btn-ghost" onclick="this.closest(\'.modal-bg\').remove()">✕ Close</button></div>'+
+        '<div style="font-size:.8rem;color:var(--text-muted);margin-bottom:12px">'+P.fmtD(t.ticket_date)+' • '+(t.hauler||'')+'</div>'+
+        '<div class="stats-row"><div class="stat"><div class="stat-val">'+P.fmt(t.gross_lbs)+'</div><div class="stat-lbl">Gross lbs</div></div>'+
+        '<div class="stat"><div class="stat-val">'+P.fmt(t.tare_lbs)+'</div><div class="stat-lbl">Tare lbs</div></div>'+
+        '<div class="stat"><div class="stat-val b">'+P.fmt(t.net_tons)+'</div><div class="stat-lbl">Net Tons</div></div>'+
+        '<div class="stat"><div class="stat-val" style="color:'+dc+'">'+dp+'%</div><div class="stat-lbl">Diverted</div></div></div>'+
+        (mats?'<div class="card-title mt-8">📊 Materials</div>'+mats:'')+photos+
+        '<button class="btn btn-outline mt-12" onclick="this.closest(\'.modal-bg\').remove()">✓ Done</button></div>';
+    document.body.appendChild(m);
+},
+
+// === MONTH PREVIEW ===
+previewMonth(key){
+    var tix=(P._mg[key]||[]).slice().sort((a,b)=>(a.ticket_date||'').localeCompare(b.ticket_date||''));
+    var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+    var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;
+    tix.forEach(t=>{tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
+    var rate=tons>0?Math.round(div/tons*100):0;
+    var rows='';tix.forEach(t=>{var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
+        var hp=t.scale_ticket_image?'<span class="has-photo"></span>':'<span class="no-photo"></span>';
+        rows+='<tr><td>'+P.fmtD(t.ticket_date)+'</td><td class="b">'+t.ticket_number+'</td><td class="r m">'+P.fmt(t.net_tons)+'</td>'+
+        '<td class="r">'+(t.wood_pct||0)+'%</td><td class="r">'+(t.gypsum_pct||0)+'%</td><td class="r">'+(t.occ_pct||0)+'%</td>'+
+        '<td class="r">'+(t.metal_pct||0)+'%</td><td class="r m b" style="'+dc+'">'+dp+'%</td><td class="c">'+hp+'</td></tr>';});
+    var m=document.createElement('div');m.className='modal-bg';m.onclick=function(e){if(e.target===m)m.remove();};
+    m.innerHTML='<div class="modal-sheet"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+        '<div style="font-size:1.1rem;font-weight:800">📅 '+label+'</div>'+
+        '<button class="btn-ghost" onclick="this.closest(\'.modal-bg\').remove()">✕ Close</button></div>'+
+        '<div style="text-align:center;padding:12px;background:var(--bg);border-radius:12px;margin-bottom:12px">'+
+        '<div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase">'+P.curProj.name+'</div>'+
+        '<div style="font-size:1.8rem;font-weight:800;color:'+(rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)')+'">'+rate+'%</div>'+
+        '<div style="font-size:.7rem;color:var(--text-muted)">'+tix.length+' tickets • '+P.fmt(tons)+' T total • '+P.fmt(div)+' T diverted</div></div>'+
+        '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th>'+
+        '<th class="r">Wood</th><th class="r">Gyp</th><th class="r">OCC</th><th class="r">Metal</th><th class="r">Div%</th><th class="c">📷</th></tr></thead><tbody>'+rows+
+        '<tr style="border-top:2px solid var(--primary);font-weight:800"><td colspan="2">TOTALS</td><td class="r m">'+P.fmt(tons)+'</td><td colspan="5"></td><td class="r m">'+rate+'%</td></tr>'+
+        '</tbody></table></div>'+
+        '<div class="btn-row mt-12"><button class="btn btn-primary" onclick="P.exportMonthXLSX(\''+key+'\')" style="flex:1">📥 XLSX</button>'+
+        '<button class="btn btn-outline" onclick="window.print()" style="flex:1">🖨️ Print</button></div></div>';
+    document.body.appendChild(m);
+},
+
+// === UPLOAD ===
+showUploadForm(){
+    var proj=P.projects.find(p=>p.id===P._upProj);if(!proj)return;
+    document.getElementById('uploadForm').classList.remove('hidden');
+    document.getElementById('uploadBanner').textContent=proj.name;
+    P._up={scale:[],debris:[]};P.renderPhotos('scale');P.renderPhotos('debris');P.updateBtn();
+},
+addPhoto(type,input){var files=Array.from(input.files);var arr=P._up[type];
+    files.forEach(f=>{var r=new FileReader();r.onload=e=>{arr.push({file:f,prev:e.target.result});P.renderPhotos(type);P.updateBtn();};r.readAsDataURL(f);});input.value='';},
+renderPhotos(type){var arr=P._up[type],el=document.getElementById(type+'Photos'),b=document.getElementById(type+'Badge');
+    if(b){b.textContent=arr.length;arr.length>0?b.classList.remove('hidden'):b.classList.add('hidden');}
+    el.innerHTML=arr.map((p,i)=>'<div style="position:relative;flex-shrink:0"><img src="'+p.prev+'" style="width:72px;height:72px;object-fit:cover;border-radius:10px">'+
+        '<button class="photo-x" onclick="P.removePhoto(\''+type+'\','+i+')">×</button></div>').join('');},
+removePhoto(type,i){P._up[type].splice(i,1);P.renderPhotos(type);P.updateBtn();},
+updateBtn(){var n=P._up.scale.length+P._up.debris.length;var b=document.getElementById('submitBtn');
+    b.disabled=n===0||!P._upProj;b.textContent=n>0?'📤 Submit '+n+' Photo'+(n>1?'s':''):'📤 Submit Photos';},
+async compress(file,max){return new Promise(r=>{var img=new Image();img.onload=()=>{var w=img.width,h=img.height;
+    if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max}else{w=Math.round(w*max/h);h=max}}
+    var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+    c.toBlob(b=>r(b),'image/jpeg',0.85);};img.src=URL.createObjectURL(file);});},
+async submit(){
+    var all=[];P._up.scale.forEach(p=>all.push({file:p.file,type:'scale_ticket'}));
+    P._up.debris.forEach(p=>all.push({file:p.file,type:'debris'}));
+    if(!all.length||!P._upProj)return;
+    var btn=document.getElementById('submitBtn');btn.disabled=true;
+    var proj=P.projects.find(p=>p.id===P._upProj);
+    var tNum=document.getElementById('upTicket').value.trim()||null;
+    var notes=document.getElementById('upNotes').value.trim()||null;
+    var ok=0;
+    for(var i=0;i<all.length;i++){
+        btn.textContent='📤 '+(i+1)+'/'+all.length+'...';
+        try{var blob=await P.compress(all[i].file,all[i].type==='scale_ticket'?1200:800);
+            var path='queue/'+P._upProj+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
+            var up=await fetch(SB_URL+'/storage/v1/object/ticket-photos/'+path,{method:'POST',
+                headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+            if(!up.ok)continue;
+            var url=SB_URL+'/storage/v1/object/public/ticket-photos/'+path;
+            await P.api('photo_queue','POST',{project_id:P._upProj,access_code:proj?(proj.access_code||'portal'):'portal',
+                submitted_by:P.client.name||'Client',photo_type:all[i].type,photo_url:url,
+                ticket_number:tNum,notes:notes,status:'pending'});ok++;
+        }catch(e){console.error(e);}
     }
-};
+    P.toast(ok+' photo'+(ok>1?'s':'')+' submitted!');
+    document.getElementById('submitBtn').classList.add('hidden');
+    document.getElementById('submitSuccess').classList.remove('hidden');
+},
+resetUpload(){document.getElementById('submitSuccess').classList.add('hidden');document.getElementById('submitBtn').classList.remove('hidden');
+    P._up={scale:[],debris:[]};P.renderPhotos('scale');P.renderPhotos('debris');
+    document.getElementById('upTicket').value='';document.getElementById('upNotes').value='';P.updateBtn();},
 
-portal.init();
+// === HISTORY ===
+async loadHistory(){
+    var el=document.getElementById('historyList');
+    var ids=P.projects.map(p=>p.id);if(!ids.length){el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-dim)">No projects</div>';return;}
+    var items=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&order=created_at.desc&limit=40');
+    if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-dim)">No submissions yet</div>';return;}
+    var pm={};P.projects.forEach(p=>{pm[p.id]=p.name;});
+    el.innerHTML=items.map(q=>{
+        var sc=q.status==='pending'?'var(--warning)':q.status==='approved'?'var(--success)':'var(--text-dim)';
+        var sl=q.status==='pending'?'⏳ Pending':q.status==='approved'?'✅ Processed':'❌ Rejected';
+        return '<div class="sub-item"><div class="sub-thumb"><img src="'+q.photo_url+'"></div>'+
+            '<div class="sub-info"><div class="sub-type">'+(q.photo_type==='scale_ticket'?'📄 Scale Ticket':'📸 Debris')+(q.ticket_number?' #'+q.ticket_number:'')+'</div>'+
+            '<div class="sub-meta">'+(pm[q.project_id]||'')+' • '+P.ago(q.created_at)+'</div></div>'+
+            '<div class="sub-status" style="color:'+sc+'">'+sl+'</div></div>';
+    }).join('');
+},
+
+// === XLSX EXPORT ===
+exportMonthXLSX(key){
+    if(typeof XLSX==='undefined'||!P.curProj)return;
+    var proj=P.curProj,tix=(P._mg[key]||[]).slice().sort((a,b)=>(a.ticket_date||'').localeCompare(b.ticket_date||''));
+    var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+    var mn=mf[+pts[1]],wb=XLSX.utils.book_new(),d=[];
+    d.push([],[],[],[],[],[]);
+    d.push(['Waste Diversion Report for '+mn+' '+pts[0]]);
+    d.push(['Company: '+(proj.general_contractor||proj.client||'Jaguar Waste Management')]);
+    d.push(['Location: '+(proj.location||'')]);d.push(['Project: '+proj.name]);
+    d.push(['Report by: Dalmex Recycling']);d.push(['Contact: Robert Vandling']);d.push(['Email: robert@dalmexrecycling.com']);d.push([]);
+    d.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+        'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
+    var sG=0,sT=0,sTn=0,sD=0,sm={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
+    tix.forEach(t=>{var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
+        var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
+        var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;
+        sG+=g;sT+=ta;sTn+=tn;sD+=dv;sm.wood+=wt;sm.gypsum+=gt;sm.plastic+=pt;sm.occ+=ot;sm.metal+=mt;sm.concrete+=ct;sm.block+=bt;
+        d.push([t.ticket_date,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,dv,tn>0?dv/tn:0]);});
+    var tdp=sTn>0?sD/sTn:0;
+    d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,sTn>0?sm.plastic/sTn:0,sm.plastic,
+        sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,sD,tdp]);
+    d.push([]);d.push(['Total Tonnage',sTn]);d.push(['Diverted from landfill',sD]);d.push(['Recycled Material %',tdp]);
+    var ws=XLSX.utils.aoa_to_sheet(d);
+    ws['!cols']=[{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},{wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
+    var sr=15,er=sr+tix.length;
+    for(var r=sr;r<=er+1;r++){[8,10,12,14,16,18,20,23].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
+        [3,5,7,9,11,13,15,17,19,21,22].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
+        [2,4,6].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
+    XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);
+    XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+mn+'_'+pts[0]+'.xlsx');
+},
+exportAllXLSX(){var keys=Object.keys(P._mg).sort();if(!keys.length)return;keys.forEach(k=>P.exportMonthXLSX(k));},
+
+// === HELPERS ===
+fmt(n){if(n==null)return'0';var v=+n;if(isNaN(v))return'0';if(Math.abs(v)>=1000)return v.toLocaleString(undefined,{maximumFractionDigits:1});if(Math.abs(v)>=1)return v.toFixed(1);return v.toFixed(2);},
+fmtD(d){if(!d)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var p=d.split('-');return p.length<3?d:m[+p[1]-1]+' '+parseInt(p[2])+', '+p[0];},
+ago(d){if(!d)return'';var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';},
+esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
+toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(()=>e.remove(),3000);},
+load(m){var e=document.createElement('div');e.className='loading-overlay';e.id='_load';e.innerHTML='<div class="loading-box">'+(m||'Loading...')+'</div>';document.body.appendChild(e);},
+unload(){var e=document.getElementById('_load');if(e)e.remove();},
+
+async init(){try{var id=localStorage.getItem('ds_cid');if(id){var c=await P.api('client_accounts?id=eq.'+id+'&is_active=eq.true');
+    if(c&&c.length){P.client=c[0];await P.loadProjects();P.showHub();return;}}}catch(e){}
+    document.getElementById('loginView').classList.remove('hidden');}
+};
+P.init();
 </script>
 </body>
 </html>
