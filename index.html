@@ -4062,14 +4062,17 @@
         },
 
         async showEditClient(clientId) {
-            var c = this._clients.find(function(x) { return x.id === clientId; });
-            if (!c) return;
+            // Make sure clients are loaded
+            if (!this._clients || this._clients.length === 0) {
+                await this.loadClients();
+            }
+            var c = (this._clients || []).find(function(x) { return x.id === clientId; });
+            if (!c) { this.showToast('Client not found'); return; }
             document.getElementById('editClientId').value = c.id;
             document.getElementById('editClientContact').value = c.name || '';
             document.getElementById('editClientEmail').value = c.email || '';
             document.getElementById('editClientCompany').value = c.company || '';
             document.getElementById('editClientPassword').value = '';
-            document.getElementById('editClientPortalLink').textContent = 'https://divertscan.com/client.html';
             var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
             var html = '';
             this.state.projects.forEach(function(p) {
