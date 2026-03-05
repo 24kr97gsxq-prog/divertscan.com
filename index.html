@@ -4110,16 +4110,17 @@
 
         async deleteClient() {
             var id = document.getElementById('editClientId').value;
-            var c = this._clients.find(function(x) { return x.id === id; });
-            if (!c) return;
-            if (!confirm('Delete client "' + c.name + '"? They will lose portal access.')) return;
+            if (!id) { this.showToast('No client selected'); return; }
+            var c = (this._clients || []).find(function(x) { return x.id === id; });
+            var clientName = c ? c.name : 'this client';
+            if (!confirm('Delete "' + clientName + '"? They will lose portal access.')) return;
             this.showLoading('Deleting...');
             await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
             await this.supabase('client_accounts?id=eq.' + id, 'DELETE');
             this.hideLoading();
             this.closeModal('editClientModal');
-            this.showToast('"' + c.name + '" removed');
-            this.addAuditEntry('CLIENT_DELETE', c.name);
+            this.showToast('"' + clientName + '" removed');
+            this.addAuditEntry('CLIENT_DELETE', clientName);
             this.loadClients();
         },
 
