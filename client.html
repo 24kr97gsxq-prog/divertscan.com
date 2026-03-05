@@ -233,6 +233,13 @@ var portal = {
         } catch(e) { console.error('API fetch error:', e); return null; }
     },
 
+    async hashPassword(pw) {
+        var data = new TextEncoder().encode('divertscan_salt_' + pw);
+        var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        var hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    },
+
     async login() {
         var email = document.getElementById('loginEmail').value.trim().toLowerCase();
         var pw = document.getElementById('loginPassword').value;
@@ -240,33 +247,9 @@ var portal = {
 
         this.showLoading('Signing in...');
 
-        // Hash password via DB function
         try {
-            var hashResp = await fetch(SUPABASE_URL + '/rest/v1/rpc/hash_password', {
-                method: 'POST',
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': 'Bearer ' + SUPABASE_KEY,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ pw: pw })
-            });
-
-            if (!hashResp.ok) {
-                this.hideLoading();
-                this.showError('Server error (' + hashResp.status + '). Make sure create_client_portal.sql has been run.');
-                return;
-            }
-
-            var hashText = await hashResp.text();
-            // RPC returns the hash as a quoted string like "abc123..." - strip quotes
-            var hash = hashText.replace(/^"|"$/g, '').trim();
-
-            if (!hash || hash.length < 10) {
-                this.hideLoading();
-                this.showError('Password hash failed');
-                return;
-            }
+            // Hash password client-side (same algorithm as DB function)
+            var hash = await this.hashPassword(pw);
 
             // Find client by email + hash
             var clients = await this.api('client_accounts?email=eq.' + encodeURIComponent(email) + '&password_hash=eq.' + encodeURIComponent(hash) + '&is_active=eq.true');
