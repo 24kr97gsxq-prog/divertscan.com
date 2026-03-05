@@ -91,6 +91,35 @@ tr:hover{background:var(--primary-glow)}
 .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
 .photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)}
 
+/* Photo upload zone */
+.upload-zone{border:3px dashed var(--border);border-radius:var(--radius);padding:24px 16px;text-align:center;
+    cursor:pointer;position:relative;background:var(--bg);transition:all .2s}
+.upload-zone.has-photos{border-color:var(--success);border-style:solid;background:var(--success-light)}
+.upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px}
+.upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.upload-thumb{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1}
+.upload-thumb img{width:100%;height:100%;object-fit:cover}
+.upload-remove{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+    background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center}
+
+/* Bottom nav */
+.portal-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);
+    border-top:1px solid var(--border);z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.portal-nav button{flex:1;padding:10px 0 6px;border:none;background:none;font-family:var(--font);
+    font-size:.65rem;font-weight:600;color:var(--text-muted);cursor:pointer;display:flex;
+    flex-direction:column;align-items:center;gap:2px}
+.portal-nav button.active{color:var(--primary)}
+.portal-nav button .nav-icon{font-size:1.2rem}
+
+/* Print styles */
+@media print {
+    .portal-nav, .btn, .portal-user, #projectSelector { display:none !important; }
+    .card { break-inside:avoid; box-shadow:none; border:1px solid #ddd; }
+    body { background:#fff; color:#000; }
+    .container { max-width:100%; padding:0; }
+}
+
 .divider{height:1px;background:var(--border);margin:16px 0}
 .hidden{display:none!important}
 .mt-8{margin-top:8px}.mt-12{margin-top:12px}.mb-12{margin-bottom:12px}
@@ -158,38 +187,120 @@ tr:hover{background:var(--primary-glow)}
 
     <!-- Project Dashboard (shown after selecting a project) -->
     <div id="projectDashboard" class="hidden">
-        <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                <div>
-                    <div id="dashProjectName" style="font-size:1.1rem;font-weight:800"></div>
-                    <div id="dashProjectMeta" style="font-size:.75rem;color:var(--text-muted)"></div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboardView">
+            <div class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div>
+                        <div id="dashProjectName" style="font-size:1.1rem;font-weight:800"></div>
+                        <div id="dashProjectMeta" style="font-size:.75rem;color:var(--text-muted)"></div>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="portal.backToProjects()">← Back</button>
                 </div>
-                <button class="btn btn-sm btn-outline" onclick="portal.backToProjects()">← Back</button>
+
+                <!-- Summary Stats -->
+                <div class="stats-grid mb-12" id="dashStats"></div>
+
+                <!-- Diversion Gauge -->
+                <div id="dashGauge" style="text-align:center;padding:12px 0;border-radius:var(--radius);margin-bottom:12px"></div>
+
+                <!-- Material Breakdown -->
+                <div class="card-title mt-12">📊 Material Breakdown</div>
+                <div id="dashMaterials"></div>
             </div>
 
-            <!-- Summary Stats -->
-            <div class="stats-grid mb-12" id="dashStats"></div>
+            <!-- Monthly Breakdown -->
+            <div id="dashMonthly"></div>
 
-            <!-- Diversion Gauge -->
-            <div id="dashGauge" style="text-align:center;padding:12px 0;border-radius:var(--radius);margin-bottom:12px"></div>
-
-            <!-- Material Breakdown -->
-            <div class="card-title mt-12">📊 Material Breakdown</div>
-            <div id="dashMaterials"></div>
-        </div>
-
-        <!-- Monthly Breakdown -->
-        <div id="dashMonthly"></div>
-
-        <!-- All Tickets Table -->
-        <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between">
-                <div class="card-title" style="margin:0">🎫 All Scale Tickets</div>
-                <button class="btn btn-sm btn-primary" onclick="portal.exportXLSX()">📥 XLSX</button>
+            <!-- All Tickets Table -->
+            <div class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div class="card-title" style="margin:0">🎫 All Scale Tickets</div>
+                    <button class="btn btn-sm btn-primary" onclick="portal.exportXLSX()">📥 All Months XLSX</button>
+                </div>
+                <div class="tbl-wrap mt-8" id="dashTicketTable"></div>
             </div>
-            <div class="tbl-wrap mt-8" id="dashTicketTable"></div>
         </div>
+
+        <!-- Upload Tab -->
+        <div id="uploadView" class="hidden">
+            <div class="card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div>
+                        <div style="font-size:1.1rem;font-weight:800">Upload Photos</div>
+                        <div style="font-size:.75rem;color:var(--text-muted)">Submit scale tickets & debris photos for review</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="portal.backToProjects()">← Back</button>
+                </div>
+            </div>
+
+            <!-- Project selector for upload -->
+            <div class="card">
+                <div class="card-title">🏗️ Select Project</div>
+                <div id="uploadProjectList"></div>
+            </div>
+
+            <!-- Upload area (shown after project selected) -->
+            <div id="uploadArea" class="hidden">
+                <div id="uploadProjectBanner" class="card" style="text-align:center;padding:12px;background:var(--primary-glow)"></div>
+
+                <!-- Scale Ticket Photos -->
+                <div class="card">
+                    <div class="card-title">📄 Scale Ticket Photos</div>
+                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Photograph each scale ticket clearly. Include ticket number and weights.</p>
+                    <div class="upload-zone" id="clientScaleZone">
+                        <div style="font-size:2rem">📄</div>
+                        <div style="font-weight:700">Tap to add scale ticket photos</div>
+                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Camera or photo library</div>
+                        <input type="file" accept="image/*" multiple capture="environment" onchange="portal.addUploadPhotos('scale', this)">
+                    </div>
+                    <div class="upload-grid" id="clientScaleGrid"></div>
+                </div>
+
+                <!-- Debris Photos -->
+                <div class="card">
+                    <div class="card-title">📸 Debris Photos</div>
+                    <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">Photograph the debris in the container. Multiple angles help.</p>
+                    <div class="upload-zone" id="clientDebrisZone">
+                        <div style="font-size:2rem">📸</div>
+                        <div style="font-weight:700">Tap to add debris photos</div>
+                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Camera or photo library</div>
+                        <input type="file" accept="image/*" multiple capture="environment" onchange="portal.addUploadPhotos('debris', this)">
+                    </div>
+                    <div class="upload-grid" id="clientDebrisGrid"></div>
+                </div>
+
+                <!-- Details -->
+                <div class="card">
+                    <div class="card-title">📝 Details (optional)</div>
+                    <div class="form-group">
+                        <label class="form-label">Ticket Number</label>
+                        <input type="text" class="form-input" id="clientTicketNum" placeholder="e.g. 83435">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <input type="text" class="form-input" id="clientUploadNotes" placeholder="e.g. Container #3, mostly wood">
+                    </div>
+                </div>
+
+                <button class="btn btn-success" id="clientSubmitBtn" onclick="portal.submitPhotos()" disabled style="margin-bottom:100px">
+                    📤 Submit Photos for Review
+                </button>
+            </div>
+        </div>
+
     </div>
+
+    <!-- Bottom Nav (shown when project is selected) -->
+    <nav class="portal-nav hidden" id="portalNav">
+        <button class="active" onclick="portal.switchTab('dashboard')">
+            <span class="nav-icon">📊</span> Reports
+        </button>
+        <button onclick="portal.switchTab('upload')">
+            <span class="nav-icon">📷</span> Upload
+        </button>
+    </nav>
 </div>
 
 </div>
@@ -221,7 +332,7 @@ var portal = {
         };
         if (method === 'GET' || !method) opts.headers['Accept'] = 'application/json';
         if (body) opts.body = JSON.stringify(body);
-        if (method === 'PATCH') opts.headers['Prefer'] = 'return=representation';
+        if (method === 'PATCH' || method === 'POST') opts.headers['Prefer'] = 'return=representation';
         try {
             var res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, opts);
             if (!res.ok) {
@@ -325,6 +436,7 @@ var portal = {
 
         document.getElementById('projectSelector').classList.add('hidden');
         document.getElementById('projectDashboard').classList.remove('hidden');
+        document.getElementById('portalNav').classList.remove('hidden');
         document.getElementById('dashProjectName').textContent = proj.name;
         document.getElementById('dashProjectMeta').textContent = [proj.client, proj.waste_hauler, proj.location].filter(Boolean).join(' • ');
 
@@ -334,7 +446,269 @@ var portal = {
     backToProjects() {
         document.getElementById('projectDashboard').classList.add('hidden');
         document.getElementById('projectSelector').classList.remove('hidden');
+        document.getElementById('portalNav').classList.add('hidden');
         this.currentProject = null;
+    },
+
+    switchTab(tab) {
+        var btns = document.querySelectorAll('.portal-nav button');
+        btns.forEach(function(b) { b.classList.remove('active'); });
+        if (tab === 'dashboard') {
+            document.getElementById('dashboardView').classList.remove('hidden');
+            document.getElementById('uploadView').classList.add('hidden');
+            btns[0].classList.add('active');
+        } else {
+            document.getElementById('dashboardView').classList.add('hidden');
+            document.getElementById('uploadView').classList.remove('hidden');
+            btns[1].classList.add('active');
+            this.renderUploadProjectList();
+        }
+    },
+
+    // ============================================================
+    // PHOTO UPLOAD
+    // ============================================================
+    _uploadPhotos: { scale: [], debris: [] },
+    _uploadProjectId: null,
+
+    renderUploadProjectList() {
+        var el = document.getElementById('uploadProjectList');
+        var self = this;
+        el.innerHTML = this.projects.map(function(p) {
+            var isSelected = self._uploadProjectId === p.id;
+            return '<div class="project-card' + (isSelected ? ' active' : '') + '" onclick="portal.selectUploadProject(\'' + p.id + '\')">' +
+                '<div class="project-name">' + p.name + '</div>' +
+                '<div class="project-meta">' + [p.client, p.location].filter(Boolean).join(' • ') + '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    selectUploadProject(projectId) {
+        this._uploadProjectId = projectId;
+        var proj = this.projects.find(function(p) { return p.id === projectId; });
+        if (!proj) return;
+        document.getElementById('uploadArea').classList.remove('hidden');
+        document.getElementById('uploadProjectBanner').innerHTML =
+            '<div style="font-weight:800">' + proj.name + '</div>' +
+            '<div style="font-size:.75rem;color:var(--text-muted)">' + [proj.client, proj.location].filter(Boolean).join(' • ') + '</div>';
+        this.renderUploadProjectList();
+        this._uploadPhotos = { scale: [], debris: [] };
+        this.renderUploadGrid('scale');
+        this.renderUploadGrid('debris');
+        this.updateSubmitBtn();
+    },
+
+    addUploadPhotos(type, input) {
+        var files = Array.from(input.files);
+        var arr = this._uploadPhotos[type];
+        var self = this;
+        files.forEach(function(file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                arr.push({ file: file, preview: e.target.result });
+                self.renderUploadGrid(type);
+                self.updateSubmitBtn();
+            };
+            reader.readAsDataURL(file);
+        });
+        input.value = '';
+    },
+
+    renderUploadGrid(type) {
+        var arr = this._uploadPhotos[type];
+        var grid = document.getElementById('client' + (type === 'scale' ? 'Scale' : 'Debris') + 'Grid');
+        var zone = document.getElementById('client' + (type === 'scale' ? 'Scale' : 'Debris') + 'Zone');
+        zone.classList.toggle('has-photos', arr.length > 0);
+        grid.innerHTML = arr.map(function(p, i) {
+            return '<div class="upload-thumb"><img src="' + p.preview + '">' +
+                '<button class="upload-remove" onclick="portal.removeUploadPhoto(\'' + type + '\',' + i + ')">×</button></div>';
+        }).join('');
+    },
+
+    removeUploadPhoto(type, index) {
+        this._uploadPhotos[type].splice(index, 1);
+        this.renderUploadGrid(type);
+        this.updateSubmitBtn();
+    },
+
+    updateSubmitBtn() {
+        var total = this._uploadPhotos.scale.length + this._uploadPhotos.debris.length;
+        var btn = document.getElementById('clientSubmitBtn');
+        btn.disabled = total === 0 || !this._uploadProjectId;
+        btn.textContent = total > 0 ? '📤 Submit ' + total + ' Photo' + (total > 1 ? 's' : '') + ' for Review' : '📤 Submit Photos for Review';
+    },
+
+    async compressImage(file, maxDim) {
+        return new Promise(function(resolve) {
+            var img = new Image();
+            img.onload = function() {
+                var w = img.width, h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                    else { w = Math.round(w * maxDim / h); h = maxDim; }
+                }
+                var c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                c.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', 0.85);
+            };
+            img.src = URL.createObjectURL(file);
+        });
+    },
+
+    async submitPhotos() {
+        var allPhotos = [];
+        this._uploadPhotos.scale.forEach(function(p) { allPhotos.push({ file: p.file, type: 'scale_ticket' }); });
+        this._uploadPhotos.debris.forEach(function(p) { allPhotos.push({ file: p.file, type: 'debris' }); });
+        if (allPhotos.length === 0 || !this._uploadProjectId) return;
+
+        var btn = document.getElementById('clientSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = '📤 Uploading...';
+        var uploaded = 0;
+
+        var proj = this.projects.find(function(p) { return p.id === portal._uploadProjectId; });
+        var ticketNum = document.getElementById('clientTicketNum').value.trim() || null;
+        var notes = document.getElementById('clientUploadNotes').value.trim() || null;
+
+        for (var i = 0; i < allPhotos.length; i++) {
+            try {
+                btn.textContent = '📤 Uploading ' + (i + 1) + ' of ' + allPhotos.length + '...';
+                var photo = allPhotos[i];
+                var maxDim = photo.type === 'scale_ticket' ? 1200 : 800;
+                var blob = await this.compressImage(photo.file, maxDim);
+                var ts = Date.now();
+                var path = 'queue/' + this._uploadProjectId + '/' + photo.type + '_' + ts + '_' + i + '.jpg';
+
+                var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path, {
+                    method: 'POST',
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
+                        'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
+                    body: blob
+                });
+                if (!uploadRes.ok) continue;
+
+                var publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
+                await this.api('photo_queue', 'POST', {
+                    project_id: this._uploadProjectId,
+                    access_code: proj ? (proj.access_code || 'portal') : 'portal',
+                    submitted_by: this.client.name || 'Client',
+                    photo_type: photo.type,
+                    photo_url: publicUrl,
+                    ticket_number: ticketNum,
+                    notes: notes,
+                    status: 'pending'
+                });
+                uploaded++;
+            } catch(e) { console.error('Upload error:', e); }
+        }
+
+        this.toast(uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' submitted for review!');
+        this._uploadPhotos = { scale: [], debris: [] };
+        this.renderUploadGrid('scale');
+        this.renderUploadGrid('debris');
+        document.getElementById('clientTicketNum').value = '';
+        document.getElementById('clientUploadNotes').value = '';
+        this.updateSubmitBtn();
+    },
+
+    // ============================================================
+    // MONTH PREVIEW & PDF
+    // ============================================================
+    previewMonth(monthKey) {
+        var tix = (this._monthGroups && this._monthGroups[monthKey]) || [];
+        if (tix.length === 0) return;
+        var proj = this.currentProject;
+        var parts = monthKey.split('-');
+        var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        var monthLabel = monthNames[parseInt(parts[1])] + ' ' + parts[0];
+        var sorted = tix.slice().sort(function(a,b) { return (a.ticket_date||'').localeCompare(b.ticket_date||''); });
+
+        var tons=0,div=0,co2=0;
+        var mats={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
+        sorted.forEach(function(t) {
+            var tn=parseFloat(t.net_tons)||0; tons+=tn;
+            div+=parseFloat(t.diverted_tons)||0; co2+=parseFloat(t.co2e_avoided)||0;
+            Object.keys(MATERIALS).forEach(function(k) { mats[k]+=tn*((t[k+'_pct']||0)/100); });
+        });
+        var rate = tons > 0 ? Math.round(div/tons*100) : 0;
+
+        var tblRows = '';
+        sorted.forEach(function(t) {
+            var tn=parseFloat(t.net_tons)||0;
+            var dp=t.diversion_pct||0;
+            tblRows += '<tr>' +
+                '<td>' + portal.fmtDate(t.ticket_date) + '</td>' +
+                '<td style="font-weight:700">' + t.ticket_number + '</td>' +
+                '<td style="text-align:right;font-family:var(--mono)">' + portal.fmt(tn) + '</td>' +
+                '<td style="text-align:right">' + (t.wood_pct||0) + '%</td>' +
+                '<td style="text-align:right">' + (t.gypsum_pct||0) + '%</td>' +
+                '<td style="text-align:right">' + (t.plastic_pct||0) + '%</td>' +
+                '<td style="text-align:right">' + (t.occ_pct||0) + '%</td>' +
+                '<td style="text-align:right">' + (t.metal_pct||0) + '%</td>' +
+                '<td style="text-align:right">' + (t.concrete_pct||0) + '%</td>' +
+                '<td style="text-align:right;font-weight:700;color:' + (dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)') + '">' + dp + '%</td></tr>';
+        });
+
+        var modal = document.createElement('div');
+        modal.id = 'monthPreviewModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch';
+        modal.innerHTML = '<div style="max-width:720px;margin:0 auto;padding:16px;padding-bottom:40px">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
+                '<div style="font-size:1.2rem;font-weight:800">📅 ' + monthLabel + '</div>' +
+                '<button class="btn btn-sm btn-outline" onclick="document.getElementById(\'monthPreviewModal\').remove()">✕ Close</button>' +
+            '</div>' +
+            '<div class="card" style="text-align:center">' +
+                '<div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase">Waste Diversion Report</div>' +
+                '<div style="font-size:1.2rem;font-weight:800;margin:4px 0">' + proj.name + '</div>' +
+                '<div style="font-size:.75rem;color:var(--text-muted)">' + [proj.client, proj.location].filter(Boolean).join(' • ') + '</div>' +
+                '<div style="font-size:2rem;font-weight:800;margin-top:12px;color:' + (rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)') + '">' + rate + '%</div>' +
+                '<div style="font-size:.7rem;color:var(--text-muted)">Diversion Rate</div>' +
+            '</div>' +
+            '<div class="card"><div class="stats-grid">' +
+                '<div class="stat-card"><div class="stat-value">' + sorted.length + '</div><div class="stat-label">Tickets</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + portal.fmt(tons) + '</div><div class="stat-label">Total Tons</div></div>' +
+                '<div class="stat-card"><div class="stat-value text-success">' + portal.fmt(div) + '</div><div class="stat-label">Diverted</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + portal.fmt(tons-div) + '</div><div class="stat-label">Landfill</div></div>' +
+            '</div></div>' +
+            '<div class="card"><div class="card-title">📊 Material Breakdown</div>' +
+                Object.keys(MATERIALS).map(function(k) {
+                    if (mats[k]<=0) return '';
+                    var pct=tons>0?(mats[k]/tons*100):0;
+                    return '<div class="mat-bar"><div class="mat-label">'+MATERIALS[k].icon+' '+MATERIALS[k].name+'</div>' +
+                        '<div class="mat-track"><div class="mat-fill" style="width:'+pct+'%;background:'+MATERIALS[k].color+'"></div></div>' +
+                        '<div class="mat-pct">'+pct.toFixed(1)+'%</div></div>';
+                }).join('') +
+            '</div>' +
+            '<div class="card"><div class="card-title">🎫 Ticket Detail</div>' +
+                '<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:.7rem;white-space:nowrap">' +
+                '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border)">' +
+                    '<th style="padding:8px 4px;text-align:left">Date</th><th style="padding:8px 4px;text-align:left">Ticket#</th>' +
+                    '<th style="padding:8px 4px;text-align:right">Tons</th>' +
+                    '<th style="padding:8px 4px;text-align:right">Wood</th><th style="padding:8px 4px;text-align:right">Gyp</th>' +
+                    '<th style="padding:8px 4px;text-align:right">Plas</th><th style="padding:8px 4px;text-align:right">OCC</th>' +
+                    '<th style="padding:8px 4px;text-align:right">Metal</th><th style="padding:8px 4px;text-align:right">Conc</th>' +
+                    '<th style="padding:8px 4px;text-align:right">Div%</th>' +
+                '</tr></thead><tbody>' + tblRows +
+                '<tr style="border-top:2px solid var(--primary);font-weight:800"><td colspan="2">TOTALS</td>' +
+                    '<td style="text-align:right;font-family:var(--mono)">' + portal.fmt(tons) + '</td>' +
+                    '<td colspan="6"></td><td style="text-align:right;font-family:var(--mono)">' + rate + '%</td></tr>' +
+                '</tbody></table></div>' +
+            '</div>' +
+            '<div class="card" style="text-align:center;font-size:.75rem;color:var(--text-muted)">' +
+                '<div>Total Tonnage: <strong>' + portal.fmt(tons) + '</strong> • Diverted: <strong>' + portal.fmt(div) + '</strong> • Recycled Material: <strong>' + rate + '%</strong></div>' +
+                '<div style="margin-top:4px">Report by Dalmex Recycling • robert@dalmexrecycling.com</div>' +
+            '</div>' +
+            '<div class="btn-row" style="gap:8px">' +
+                '<button class="btn btn-primary" onclick="portal.exportMonthXLSX(\'' + monthKey + '\')" style="flex:1">📥 Download XLSX</button>' +
+                '<button class="btn btn-outline" onclick="portal.printMonth()" style="flex:1">🖨️ Print / PDF</button>' +
+            '</div>' +
+        '</div>';
+        document.body.appendChild(modal);
+    },
+
+    printMonth() {
+        window.print();
     },
 
     renderDashboard() {
@@ -474,7 +848,10 @@ var portal = {
             html += '<div class="card">' +
                 '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
                     '<div class="card-title" style="margin:0">📅 ' + monthLabel + '</div>' +
-                    '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.65rem" onclick="portal.exportMonthXLSX(\'' + key + '\')">📥 XLSX</button>' +
+                    '<div style="display:flex;gap:4px">' +
+                        '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.6rem" onclick="portal.previewMonth(\'' + key + '\')">👁️ Preview</button>' +
+                        '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 8px;font-size:.6rem" onclick="portal.exportMonthXLSX(\'' + key + '\')">📥 XLSX</button>' +
+                    '</div>' +
                 '</div>' +
                 '<div style="background:' + gaugeBg + ';padding:12px;border-radius:12px;text-align:center;margin-bottom:12px">' +
                     '<div style="font-size:1.4rem;font-weight:800;color:' + color + '">' + rate + '%</div>' +
