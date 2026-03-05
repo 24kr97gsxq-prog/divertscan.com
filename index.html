@@ -4041,9 +4041,7 @@
             if (!password || password.length < 4) { this.showToast('Password must be at least 4 characters'); return; }
 
             this.showLoading('Creating client...');
-            var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
-            if (!hashRes) { this.hideLoading(); this.showToast('Failed to hash password. Run create_client_portal.sql first.'); return; }
-            var hash = String(hashRes).replace(/^"|"$/g, '').trim();
+            var hash = await this.hashClientPassword(password);
 
             var result = await this.supabase('client_accounts', 'POST', { name: name, email: email, company: company || null, password_hash: hash, is_active: true });
             if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed - email may already exist'); return; }
@@ -4093,8 +4091,7 @@
             this.showLoading('Saving...');
             var updates = { name: name, email: email, company: company || null, updated_at: new Date().toISOString() };
             if (password && password.length >= 4) {
-                var hashRes = await this.supabase('rpc/hash_password', 'POST', { pw: password });
-                if (hashRes) updates.password_hash = String(hashRes).replace(/^"|"$/g, '').trim();
+                updates.password_hash = await this.hashClientPassword(password);
             }
             await this.supabase('client_accounts?id=eq.' + id, 'PATCH', updates);
             await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
@@ -4224,6 +4221,13 @@
             const arr = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
             return new Blob([arr], { type: mime });
+        },
+
+        async hashClientPassword(pw) {
+            var data = new TextEncoder().encode('divertscan_salt_' + pw);
+            var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            var hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
         },
 
         generateAccessCode() {
