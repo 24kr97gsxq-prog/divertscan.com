@@ -3913,39 +3913,235 @@
             var q = this._photoQueue && this._photoQueue.find(function(x) { return x.id === queueId; });
             if (!q) return;
 
-            // Update status
+            // Update status to approved
             await this.supabase('photo_queue?id=eq.' + queueId, 'PATCH', {
                 status: 'approved', reviewed_at: new Date().toISOString()
             });
 
-            // Try to match to existing ticket by ticket_number
-            if (q.ticket_number) {
-                var ticket = this.state.tickets.find(function(t) {
-                    return t.ticket_number === q.ticket_number;
-                });
-                if (ticket) {
-                    var update = {};
-                    if (q.photo_type === 'scale_ticket') {
-                        update.scale_ticket_image = q.photo_url;
-                    } else {
-                        var existing = Array.isArray(ticket.debris_images) ? ticket.debris_images : [];
-                        existing.push(q.photo_url);
-                        update.debris_images = existing;
-                    }
-                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
-                    Object.assign(ticket, update);
-                    this.showToast('Approved & attached to ticket #' + q.ticket_number);
-                    this.addAuditEntry('QUEUE_APPROVE', 'Photo approved and attached to ticket ' + q.ticket_number);
-                } else {
-                    this.showToast('Approved — no matching ticket found for #' + q.ticket_number);
-                    this.addAuditEntry('QUEUE_APPROVE', 'Photo approved (no matching ticket: ' + q.ticket_number + ')');
-                }
+            if (q.photo_type === 'scale_ticket') {
+                // Run OCR on scale ticket photo
+                await this.processQueueScaleTicket(q);
             } else {
-                this.showToast('Approved — assign to ticket manually');
-                this.addAuditEntry('QUEUE_APPROVE', 'Photo approved (no ticket number)');
+                // Run AI debris analysis
+                await this.processQueueDebris(q);
             }
 
             this.loadPhotoQueue();
+            this.renderTickets();
+        },
+
+        async processQueueScaleTicket(q) {
+            if (!this.state.apiKey) {
+                this.showToast('Approved — set OpenAI key in Settings for auto-OCR');
+                this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket approved (no API key for OCR)');
+                return;
+            }
+
+            this.showLoading('Running OCR on scale ticket...');
+
+            try {
+                // Fetch and compress the image
+                var imgResp = await fetch(q.photo_url);
+                var imgBlob = await imgResp.blob();
+                var base64 = await this.blobToBase64(imgBlob);
+                var compressed = await this.compressImage(base64, 800);
+
+                var prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
+                    'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
+                    '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","facility":"<string or null>","confidence":<0-100>}\n' +
+                    'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
+
+                var data = await this.callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{ role: 'user', content: [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                    ]}],
+                    max_tokens: 300, temperature: 0.1
+                });
+
+                this.hideLoading();
+
+                if (data.choices && data.choices[0]) {
+                    var text = data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    var ocr = JSON.parse(text);
+
+                    // Check if ticket already exists
+                    var existingTicket = ocr.ticket_number ? this.state.tickets.find(function(t) {
+                        return t.ticket_number === ocr.ticket_number || t.ticket_number === String(ocr.ticket_number);
+                    }) : null;
+
+                    if (existingTicket) {
+                        // Update existing ticket with photo
+                        await this.supabase('tickets?id=eq.' + existingTicket.id, 'PATCH', { scale_ticket_image: q.photo_url });
+                        existingTicket.scale_ticket_image = q.photo_url;
+                        this.showToast('OCR ✓ Ticket #' + ocr.ticket_number + ' — photo attached');
+                        this.addAuditEntry('QUEUE_OCR', 'Scale ticket OCR: #' + ocr.ticket_number + ' (updated existing) — confidence: ' + (ocr.confidence || 0) + '%');
+                    } else {
+                        // Create new ticket from OCR data
+                        var netLbs = ocr.net_lbs || ((ocr.gross_lbs || 0) - (ocr.tare_lbs || 0));
+                        var netTons = netLbs / 2000;
+                        var newTicket = {
+                            project_id: q.project_id,
+                            ticket_number: String(ocr.ticket_number || 'OCR-' + Date.now()),
+                            ticket_date: ocr.date || new Date().toISOString().split('T')[0],
+                            gross_lbs: ocr.gross_lbs || 0,
+                            tare_lbs: ocr.tare_lbs || 0,
+                            net_lbs: netLbs,
+                            net_tons: netTons,
+                            hauler: ocr.hauler || q.submitted_by || null,
+                            scale_ticket_image: q.photo_url,
+                            scan_type: 'ocr_queue',
+                            notes: 'Auto-created from photo queue OCR (confidence: ' + (ocr.confidence || 0) + '%)'
+                        };
+                        var result = await this.supabase('tickets', 'POST', newTicket);
+                        if (result && result.length > 0) {
+                            this.state.tickets.unshift(result[0]);
+                            this.showToast('OCR ✓ New ticket #' + ocr.ticket_number + ' created!');
+                            this.addAuditEntry('QUEUE_OCR', 'Scale ticket OCR: NEW ticket #' + ocr.ticket_number + ' — ' + netTons.toFixed(2) + 'T — confidence: ' + (ocr.confidence || 0) + '%');
+                        }
+                    }
+
+                    // Link queue item to ticket
+                    var linkedTicket = this.state.tickets.find(function(t) {
+                        return t.ticket_number === String(ocr.ticket_number);
+                    });
+                    if (linkedTicket) {
+                        await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: linkedTicket.id });
+                    }
+                } else {
+                    this.showToast('Approved — OCR could not read ticket');
+                    this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket approved (OCR failed to parse)');
+                }
+            } catch(e) {
+                this.hideLoading();
+                console.error('Queue OCR error:', e);
+                this.showToast('Approved — OCR error: ' + e.message);
+                this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket approved (OCR error: ' + e.message + ')');
+            }
+        },
+
+        async processQueueDebris(q) {
+            // Try to find matching ticket
+            var ticket = null;
+            if (q.ticket_number) {
+                ticket = this.state.tickets.find(function(t) {
+                    return t.ticket_number === q.ticket_number || t.ticket_number === String(q.ticket_number);
+                });
+            }
+            if (!ticket) {
+                // Find the most recent ticket without debris images
+                var sorted = this.state.tickets.filter(function(t) {
+                    return t.project_id === q.project_id && (!Array.isArray(t.debris_images) || t.debris_images.length === 0);
+                }).sort(function(a, b) { return (b.ticket_date || '').localeCompare(a.ticket_date || ''); });
+                if (sorted.length > 0) ticket = sorted[0];
+            }
+
+            if (!this.state.apiKey) {
+                // No API key — just attach photo to ticket
+                if (ticket) {
+                    var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                    imgs.push(q.photo_url);
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs });
+                    ticket.debris_images = imgs;
+                    this.showToast('Approved — debris photo attached to ticket #' + ticket.ticket_number);
+                } else {
+                    this.showToast('Approved — no matching ticket to attach debris photo');
+                }
+                this.addAuditEntry('QUEUE_APPROVE', 'Debris photo approved' + (ticket ? ' → ticket #' + ticket.ticket_number : ' (unmatched)'));
+                return;
+            }
+
+            this.showLoading('AI analyzing debris materials...');
+
+            try {
+                // Fetch and compress
+                var imgResp = await fetch(q.photo_url);
+                var imgBlob = await imgResp.blob();
+                var base64 = await this.blobToBase64(imgBlob);
+                var compressed = await this.compressImage(base64, 800);
+
+                var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
+                    'Analyze this debris photo and estimate the percentage of each material stream. ' +
+                    'Return ONLY valid JSON with this exact structure:\n' +
+                    '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>,"confidence":<0-100>,"notes":"<brief description>"}\n' +
+                    'Percentages MUST total exactly 100. Be accurate based on visible materials.';
+
+                var data = await this.callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{ role: 'user', content: [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
+                    ]}],
+                    max_tokens: 500, temperature: 0.1
+                });
+
+                this.hideLoading();
+
+                if (data.choices && data.choices[0] && ticket) {
+                    var text = data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    var analysis = JSON.parse(text);
+
+                    // Update ticket with AI material percentages and photo
+                    var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                    imgs.push(q.photo_url);
+                    var divertPct = (analysis.wood||0) + (analysis.gypsum||0) + (analysis.plastic||0) +
+                        (analysis.occ||0) + (analysis.metal||0) + (analysis.concrete||0) + (analysis.block||0);
+                    var tons = parseFloat(ticket.net_tons) || 0;
+                    var divertedTons = tons * divertPct / 100;
+
+                    var update = {
+                        debris_images: imgs,
+                        wood_pct: analysis.wood || 0,
+                        gypsum_pct: analysis.gypsum || 0,
+                        plastic_pct: analysis.plastic || 0,
+                        occ_pct: analysis.occ || 0,
+                        metal_pct: analysis.metal || 0,
+                        concrete_pct: analysis.concrete || 0,
+                        block_pct: analysis.block || 0,
+                        diversion_pct: Math.round(divertPct),
+                        diverted_tons: divertedTons,
+                        co2e_avoided: divertedTons * 0.58
+                    };
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
+                    Object.assign(ticket, update);
+                    await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: ticket.id });
+
+                    this.showToast('AI ✓ Ticket #' + ticket.ticket_number + ' — ' + Math.round(divertPct) + '% diversion');
+                    this.addAuditEntry('QUEUE_AI', 'Debris AI: ticket #' + ticket.ticket_number + ' → ' + Math.round(divertPct) + '% div, ' + divertedTons.toFixed(2) + 'T — ' + (analysis.notes || '') + ' (conf: ' + (analysis.confidence||0) + '%)');
+                } else if (ticket) {
+                    // AI failed but still attach photo
+                    var imgs2 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                    imgs2.push(q.photo_url);
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs2 });
+                    ticket.debris_images = imgs2;
+                    this.showToast('Approved — AI analysis failed, photo attached');
+                    this.addAuditEntry('QUEUE_APPROVE', 'Debris approved, AI failed → attached to #' + ticket.ticket_number);
+                } else {
+                    this.showToast('Approved — no ticket to attach debris analysis');
+                    this.addAuditEntry('QUEUE_APPROVE', 'Debris approved (no matching ticket)');
+                }
+            } catch(e) {
+                this.hideLoading();
+                console.error('Queue debris AI error:', e);
+                // Still attach photo if possible
+                if (ticket) {
+                    var imgs3 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                    imgs3.push(q.photo_url);
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs3 });
+                    ticket.debris_images = imgs3;
+                }
+                this.showToast('Approved — AI error, photo ' + (ticket ? 'attached' : 'saved'));
+                this.addAuditEntry('QUEUE_APPROVE', 'Debris approved (AI error: ' + e.message + ')');
+            }
+        },
+
+        blobToBase64(blob) {
+            return new Promise(function(resolve) {
+                var reader = new FileReader();
+                reader.onload = function() { resolve(reader.result); };
+                reader.readAsDataURL(blob);
+            });
         },
 
         async rejectQueueItem(queueId) {
