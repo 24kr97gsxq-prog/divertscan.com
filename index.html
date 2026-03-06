@@ -1991,10 +1991,13 @@
             let scaleHtml = '<div class="mt-12"><div class="card-title"><span class="icon">📄</span> Scale Ticket Photo</div>';
             if (t.scale_ticket_image) {
                 scaleHtml += '<img src="' + t.scale_ticket_image + '" style="width:100%;border-radius:12px;margin-bottom:8px;border:1px solid var(--border);">' +
-                    '<div style="position:relative; display:inline-block; width:100%;">' +
-                        '<button class="btn btn-sm btn-outline" style="width:100%; position:relative; overflow:hidden;">📷 Replace Photo' +
-                            '<input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px;" onchange="DS.uploadTicketPhoto(\'' + t.id + '\', \'scale\', this)">' +
-                        '</button>' +
+                    '<div class="btn-row" style="gap:6px">' +
+                        '<div style="flex:1;position:relative">' +
+                            '<button class="btn btn-sm btn-outline" style="width:100%;position:relative;overflow:hidden;">📷 Replace' +
+                                '<input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px;" onchange="DS.uploadTicketPhoto(\'' + t.id + '\', \'scale\', this)">' +
+                            '</button>' +
+                        '</div>' +
+                        '<button class="btn btn-sm" style="color:var(--danger);border:1px solid var(--danger);background:transparent;" onclick="DS.deleteScalePhoto(\'' + t.id + '\')">🗑️ Remove</button>' +
                     '</div>';
             } else {
                 scaleHtml += '<div class="photo-upload" style="padding:20px;">' +
@@ -2059,6 +2062,20 @@
         // ============================================================
         // UPLOAD PHOTOS TO EXISTING TICKETS
         // ============================================================
+        async deleteScalePhoto(ticketId) {
+            var ticket = this.state.tickets.find(function(t) { return t.id === ticketId; });
+            if (!ticket) return;
+            if (!confirm('Remove the scale ticket photo?')) return;
+
+            this.showLoading('Removing photo...');
+            await this.supabase('tickets?id=eq.' + ticketId, 'PATCH', { scale_ticket_image: null });
+            ticket.scale_ticket_image = null;
+            this.hideLoading();
+            this.showTicketDetail(ticketId);
+            this.showToast('Scale ticket photo removed');
+            this.addAuditEntry('PHOTO_DELETE', 'Scale ticket photo removed from ticket ' + ticket.ticket_number);
+        },
+
         async deleteDebrisPhoto(ticketId, photoIndex) {
             var ticket = this.state.tickets.find(function(t) { return t.id === ticketId; });
             if (!ticket) return;
