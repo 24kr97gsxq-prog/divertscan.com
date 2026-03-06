@@ -723,16 +723,33 @@ async loadHistory(){
     var ids=P.projects.map(p=>p.id);if(!ids.length){el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-dim)">No projects</div>';return;}
     var items=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&order=created_at.desc&limit=40');
     if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-dim)">No submissions yet</div>';return;}
+
+    // Fetch assigned ticket numbers
+    var assignedIds=items.filter(q=>q.assigned_ticket_id).map(q=>q.assigned_ticket_id);
+    var ticketMap={};
+    if(assignedIds.length>0){
+        var tickets=await P.api('tickets?id=in.('+assignedIds.join(',')+')&select=id,ticket_number');
+        if(tickets)tickets.forEach(t=>{ticketMap[t.id]=t.ticket_number;});
+    }
+
     var pm={};P.projects.forEach(p=>{pm[p.id]=p.name;});
     el.innerHTML=items.map(q=>{
-        var sc=q.status==='pending'?'var(--warning)':q.status==='approved'?'var(--success)':'var(--text-dim)';
-        var sl=q.status==='pending'?'⏳ Pending':q.status==='approved'?'✅ Processed':'❌ Rejected';
-        var assignedInfo=q.assigned_ticket_id?'<span class="sub-scale">Assigned</span>':'';
-        var ticketRef=q.ticket_number?'<span style="font-size:.6rem;color:var(--text-muted)"> #'+q.ticket_number+'</span>':'';
+        var assignedNum=q.assigned_ticket_id?ticketMap[q.assigned_ticket_id]:null;
+        var sc,sl;
+        if(q.status==='pending'){
+            sc='var(--warning)';sl='⏳ Pending Review';
+        }else if(q.status==='approved'&&assignedNum){
+            sc='var(--success)';sl='✅ Ticket #'+assignedNum;
+        }else if(q.status==='approved'){
+            sc='var(--success)';sl='✅ Completed';
+        }else{
+            sc='var(--text-dim)';sl='❌ Rejected';
+        }
         return '<div class="sub-item"><div class="sub-thumb" onclick="window.open(\''+q.photo_url+'\')"><img src="'+q.photo_url+'"></div>'+
-            '<div class="sub-info"><div class="sub-type">'+(q.photo_type==='scale_ticket'?'📄 Scale Ticket':'📸 Debris')+ticketRef+assignedInfo+'</div>'+
+            '<div class="sub-info"><div class="sub-type">'+(q.photo_type==='scale_ticket'?'📄 Scale Ticket':'📸 Debris')+
+            (q.ticket_number&&!assignedNum?' <span style="font-size:.6rem;color:var(--text-muted)">#'+q.ticket_number+'</span>':'')+'</div>'+
             '<div class="sub-meta">'+(pm[q.project_id]||'')+' • '+P.ago(q.created_at)+'</div></div>'+
-            '<div class="sub-status" style="color:'+sc+'">'+sl+'</div></div>';
+            '<div class="sub-status" style="color:'+sc+';font-size:.65rem;text-align:right;min-width:70px">'+sl+'</div></div>';
     }).join('');
 },
 
