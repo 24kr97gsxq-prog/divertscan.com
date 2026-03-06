@@ -4007,6 +4007,17 @@
 
         async processQueueScaleTicket(q, projectTickets) {
             if (!this.state.apiKey) {
+                // No API key — try to match by ticket_number if provided
+                if (q.ticket_number) {
+                    var match = projectTickets.find(function(t) { return t.ticket_number === String(q.ticket_number); });
+                    if (match) {
+                        await this.supabase('tickets?id=eq.' + match.id, 'PATCH', { scale_ticket_image: q.photo_url });
+                        await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: match.id });
+                        this.showToast('Approved — photo attached to ticket #' + q.ticket_number);
+                        this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket attached to #' + q.ticket_number + ' (no OCR)');
+                        return;
+                    }
+                }
                 this.showToast('Approved — set OpenAI key in Settings for auto-OCR');
                 this.addAuditEntry('QUEUE_APPROVE', 'Scale ticket approved (no API key for OCR)');
                 return;
@@ -4044,6 +4055,7 @@
                         // Update existing ticket with photo
                         await this.supabase('tickets?id=eq.' + existingTicket.id, 'PATCH', { scale_ticket_image: q.photo_url });
                         existingTicket.scale_ticket_image = q.photo_url;
+                        await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: existingTicket.id });
                         this.showToast('OCR ✓ Ticket #' + ocr.ticket_number + ' — photo attached');
                         this.addAuditEntry('QUEUE_OCR', 'Scale ticket OCR: #' + ocr.ticket_number + ' (updated existing) — confidence: ' + (ocr.confidence || 0) + '%');
                     } else {
@@ -4066,17 +4078,10 @@
                         var result = await this.supabase('tickets', 'POST', newTicket);
                         if (result && result.length > 0) {
                             this.state.tickets.unshift(result[0]);
+                            await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: result[0].id });
                             this.showToast('OCR ✓ New ticket #' + ocr.ticket_number + ' created!');
                             this.addAuditEntry('QUEUE_OCR', 'Scale ticket OCR: NEW ticket #' + ocr.ticket_number + ' — ' + netTons.toFixed(2) + 'T — confidence: ' + (ocr.confidence || 0) + '%');
                         }
-                    }
-
-                    // Link queue item to ticket
-                    var linkedTicket = projectTickets.find(function(t) {
-                        return t.ticket_number === String(ocr.ticket_number);
-                    });
-                    if (linkedTicket) {
-                        await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: linkedTicket.id });
                     }
                 } else {
                     this.showToast('Approved — OCR could not read ticket');
