@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>DivertScan Login Test</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#f0f2f5;padding:20px;min-height:100vh}
+.card{background:#fff;border-radius:16px;padding:20px;max-width:400px;margin:40px auto;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+input{width:100%;padding:14px;border:2px solid #e2e8f0;border-radius:12px;font-size:16px;margin-bottom:12px;-webkit-appearance:none}
+.btn{display:block;width:100%;padding:16px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;text-align:center}
+.btn:active{opacity:.8}
+label{display:block;font-size:13px;font-weight:600;color:#64748b;margin-bottom:4px}
+#status{margin-top:12px;padding:10px;border-radius:8px;font-size:13px;display:none}
+</style>
+</head><body>
+<div class="card">
+<h2 style="text-align:center;margin-bottom:20px">DivertScan Login Test</h2>
+<label>Email</label>
+<input type="email" id="em" placeholder="you@company.com" value="robert@xrayce.com">
+<label>Password</label>
+<input type="password" id="pw" placeholder="Password" value="hello">
+<div class="btn" id="btn" onclick="doLogin()">Sign In</div>
+<div id="status"></div>
+</div>
+<script>
+var SB='https://cyvvlngtojagfoaitoog.supabase.co';
+var KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+
+function show(msg,color){var s=document.getElementById('status');s.textContent=msg;s.style.display='block';s.style.background=color==='red'?'#fef2f2':color==='green'?'#f0fdf4':'#f0f2f5';s.style.color=color==='red'?'#dc2626':color==='green'?'#16a34a':'#333';}
+
+async function doLogin(){
+    show('Step 1: Button clicked...','blue');
+    var email=document.getElementById('em').value.trim().toLowerCase();
+    var pw=document.getElementById('pw').value;
+    if(!email||!pw){show('Enter email and password','red');return;}
+
+    // Step 2: Hash
+    try{
+        show('Step 2: Hashing password...','blue');
+        var input='divertscan_salt_'+pw;
+        var encoded=new TextEncoder().encode(input);
+        var hashBuf=await crypto.subtle.digest('SHA-256',encoded);
+        var hash=Array.from(new Uint8Array(hashBuf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+        show('Step 3: Hash = '+hash.substring(0,16)+'... Fetching...','blue');
+    }catch(e){
+        show('Hash error: '+e.message,'red');
+        return;
+    }
+
+    // Step 3: Fetch
+    try{
+        var url=SB+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(email)+'&password_hash=eq.'+encodeURIComponent(hash)+'&is_active=eq.true';
+        var r=await fetch(url,{headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Accept':'application/json'}});
+        show('Step 4: Response status = '+r.status,'blue');
+        var data=await r.json();
+        if(data&&data.length>0){
+            show('SUCCESS! Logged in as: '+data[0].name+' ('+data[0].email+')','green');
+        }else{
+            show('Login failed: No matching account. Hash: '+hash,'red');
+        }
+    }catch(e){
+        show('Fetch error: '+e.message,'red');
+    }
+}
+</script>
+</body></html>
