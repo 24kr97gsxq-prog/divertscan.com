@@ -1756,6 +1756,14 @@
             this.addAuditEntry('PROJECT', 'Selected: ' + proj.name);
         },
 
+        selectAndShowProject(projectId) {
+            var proj = this.state.projects.find(function(p) { return p.id === projectId; });
+            if (!proj) return;
+            this.selectProject(proj);
+            // Switch to tickets tab
+            this.switchTab('ticketsTab');
+        },
+
         // LEED version helpers
         updateNewProjTarget() {
             var ver = document.getElementById('newProjLeedVersion').value;
@@ -1857,9 +1865,9 @@
                 var isCurrent = this.state.currentProject && this.state.currentProject.id === p.id;
                 var ticketCount = isCurrent ? this.state.tickets.length : null;
 
-                return '<div class="ticket-item" style="position:relative;' + (isDupe ? 'border-left:3px solid var(--warning);' : '') + '">' +
-                    '<div class="ticket-icon" style="background:' + (isCurrent ? 'var(--success-glow)' : 'var(--primary-glow)') + ';" onclick="DS.selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')">🏗️</div>' +
-                    '<div class="ticket-info" onclick="DS.selectProject(' + JSON.stringify(p).replace(/"/g, '&quot;') + ')">' +
+                return '<div class="ticket-item" style="position:relative;cursor:pointer;' + (isDupe ? 'border-left:3px solid var(--warning);' : '') + (isCurrent ? 'border-color:var(--primary);box-shadow:0 0 0 1px var(--primary);' : '') + '" onclick="DS.selectAndShowProject(\'' + p.id + '\')">' +
+                    '<div class="ticket-icon" style="background:' + (isCurrent ? 'var(--success-glow)' : 'var(--primary-glow)') + ';">🏗️</div>' +
+                    '<div class="ticket-info">' +
                         '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + '</div>' +
                         '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
                         '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target || 50) + '%' +
@@ -2010,6 +2018,7 @@
             scaleHtml += '</div>';
 
             // Debris photos section — always show add-more option
+            const debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
             let debrisHtml = '<div class="mt-12"><div class="card-title"><span class="icon">📸</span> Debris Photos (' + debrisArr.length + ')</div>';
             if (debrisArr.length > 0) {
                 debrisHtml += debrisArr.map(function(u, idx) {
@@ -3971,6 +3980,7 @@
                             '<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:0.65rem; flex:1;" onclick="DS.approveQueueItem(\'' + q.id + '\')">✅ Approve</button>' +
                             '<button class="btn btn-sm" style="padding:4px 10px; font-size:0.65rem; flex:1; color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="DS.rejectQueueItem(\'' + q.id + '\')">❌ Reject</button>' +
                         '</div>' : '') +
+                        '<div class="mt-8"><button class="btn btn-sm" style="padding:3px 8px;font-size:0.6rem;color:var(--text-dim);border:1px solid var(--border);background:transparent;width:100%" onclick="DS.deleteQueueItem(\'' + q.id + '\')">🗑️ Delete Permanently</button></div>' +
                     '</div>' +
                 '</div>';
             });
@@ -4220,6 +4230,14 @@
             });
             this.showToast('Photo rejected');
             this.addAuditEntry('QUEUE_REJECT', 'Photo rejected');
+            this.loadPhotoQueue();
+        },
+
+        async deleteQueueItem(queueId) {
+            if (!confirm('Permanently delete this submission? This cannot be undone.')) return;
+            await this.supabase('photo_queue?id=eq.' + queueId, 'DELETE');
+            this.showToast('Submission deleted');
+            this.addAuditEntry('QUEUE_DELETE', 'Photo queue item permanently deleted');
             this.loadPhotoQueue();
         },
 
