@@ -957,6 +957,7 @@
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('complete')">✅ Complete</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('incomplete')">⚠️ Needs Data</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('nophoto')">📷 No Photo</button>
+                        <button class="btn btn-sm btn-primary" onclick="DS.loadAllProjectTickets()">🌐 All Projects</button>
                     </div>
                     <div id="ticketList"></div>
                 </div>
@@ -1885,11 +1886,23 @@
         // TICKET MANAGEMENT
         // ============================================================
         async loadTickets(projectId) {
-            const data = await this.supabase(`tickets?project_id=eq.${projectId}&order=ticket_date.desc`);
+            const data = await this.supabase(`tickets?project_id=eq.${projectId}&order=created_at.desc`);
             if (data) {
                 this.state.tickets = data;
+                this._showingAllProjects = false;
                 this.renderTickets();
                 this.renderReports();
+            }
+        },
+
+        async loadAllProjectTickets() {
+            this.showLoading('Loading all tickets...');
+            var allTickets = await this.supabase('tickets?order=created_at.desc&limit=200');
+            this.hideLoading();
+            if (allTickets) {
+                this.state.tickets = allTickets;
+                this._showingAllProjects = true;
+                this.renderTickets();
             }
         },
 
@@ -1917,8 +1930,8 @@
                 tickets = tickets.filter(t => !t.scale_ticket_image);
             }
 
-            // Sort newest first (last entered / most recent date)
-            tickets.sort((a, b) => (b.ticket_date || '').localeCompare(a.ticket_date || ''));
+            // Sort newest scan first (by database entry time, not ticket date)
+            tickets.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
             if (tickets.length === 0) {
                 el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><div class="empty-text">No tickets</div></div>';
@@ -1930,6 +1943,11 @@
                 var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
                 var hasPhoto = t.scale_ticket_image;
                 var isComplete = hasWeight && hasMaterials && hasPhoto;
+                var projName = '';
+                if (this._showingAllProjects) {
+                    var proj = this.state.projects.find(p => p.id === t.project_id);
+                    projName = proj ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(proj.name) + '</span>' : '';
+                }
                 return `
                 <div class="ticket-item" onclick="DS.showTicketDetail('${t.id}')">
                     <div class="ticket-icon" style="background:${isComplete ? 'var(--success-glow)' : 'var(--warning-glow)'};">
@@ -1937,7 +1955,7 @@
                     </div>
                     <div class="ticket-info">
                         <div class="ticket-title">${this.esc(t.ticket_number)}</div>
-                        <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
+                        <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div${projName}</div>
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
                 </div>`;
@@ -1956,7 +1974,7 @@
                     (t.hauler && t.hauler.toLowerCase().indexOf(q) >= 0) ||
                     (t.ticket_date && t.ticket_date.indexOf(q) >= 0);
             });
-            tickets.sort(function(a,b) { return (b.ticket_date||'').localeCompare(a.ticket_date||''); });
+            tickets.sort(function(a,b) { return (b.created_at||'').localeCompare(a.created_at||''); });
             if (tickets.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No tickets matching "' + this.esc(query) + '"</div>';
                 return;
