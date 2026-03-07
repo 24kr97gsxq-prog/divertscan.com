@@ -774,24 +774,37 @@ exportMonthXLSX(key){
     d.push(['Company: '+(proj.general_contractor||proj.client||'Jaguar Waste Management')]);
     d.push(['Location: '+(proj.location||'')]);d.push(['Project: '+proj.name]);
     d.push(['Report by: Dalmex Recycling']);d.push(['Contact: Robert Vandling']);d.push(['Email: robert@dalmexrecycling.com']);d.push([]);
-    d.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
-        'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
+    d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+        'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
+        'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
     var sG=0,sT=0,sTn=0,sD=0,sm={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-    tix.forEach(t=>{var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
+    var photoLinks=[];
+    tix.forEach(function(t,ri){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
         var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
         var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;
+        var dvp=tn>0?dv/tn:0;
         sG+=g;sT+=ta;sTn+=tn;sD+=dv;sm.wood+=wt;sm.gypsum+=gt;sm.plastic+=pt;sm.occ+=ot;sm.metal+=mt;sm.concrete+=ct;sm.block+=bt;
-        d.push([t.ticket_date,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,dv,tn>0?dv/tn:0]);});
+        var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp=df.split('-');df=parseInt(dp[1])+'/'+parseInt(dp[2])+'/'+dp[0];}
+        var pu=t.scale_ticket_image||'';if(pu)photoLinks.push({row:15+ri,col:24,url:pu});
+        d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?'View Photo':'']);});
     var tdp=sTn>0?sD/sTn:0;
-    d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,sTn>0?sm.plastic/sTn:0,sm.plastic,
-        sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,sD,tdp]);
-    d.push([]);d.push(['Total Tonnage',sTn]);d.push(['Diverted from landfill',sD]);d.push(['Recycled Material %',tdp]);
+    d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,
+        sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,sTn>0?sm.plastic/sTn:0,sm.plastic,
+        sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,
+        sTn>0?sm.block/sTn:0,sm.block,'']);
+    d.push([]);d.push(['Total Tonnage',Math.round(sTn*100)/100]);d.push(['Diverted from landfill',Math.round(sD*100)/100]);d.push(['Recycled Material %',tdp]);
     var ws=XLSX.utils.aoa_to_sheet(d);
-    ws['!cols']=[{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},{wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}];
+    ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
     var sr=15,er=sr+tix.length;
-    for(var r=sr;r<=er+1;r++){[8,10,12,14,16,18,20,23].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
-        [3,5,7,9,11,13,15,17,19,21,22].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
-        [2,4,6].forEach(c=>{var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
+    for(var r=sr;r<=er;r++){
+        [8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
+        [3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
+        [2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});
+    }
+    var ss=er+2;var a1=XLSX.utils.encode_cell({r:ss,c:1});if(ws[a1])ws[a1].z='0.00';
+    var a2=XLSX.utils.encode_cell({r:ss+1,c:1});if(ws[a2])ws[a2].z='0.00';
+    var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z='0%';
+    photoLinks.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.row,c:l.col});if(ws[a])ws[a].l={Target:l.url,Tooltip:'View photo'};});
     XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);
     XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+mn+'_'+pts[0]+'.xlsx');
 },
