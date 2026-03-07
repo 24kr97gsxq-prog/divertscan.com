@@ -3772,42 +3772,47 @@
             wsData.push(['Email: robert@dalmexrecycling.com']);
             wsData.push([]);
 
-            // Column headers
-            wsData.push(['Date','Ticket No','GWT (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
-                'Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC',
-                'Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %']);
+            // Column headers - matching image 2 format + photo column
+            wsData.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+                'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
+                'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
 
             // Data rows
-            var sumGross=0, sumTare=0, sumNet=0, sumTons=0;
+            var sumGross=0, sumTare=0, sumNet=0, sumTons=0, sumDiverted=0;
             var sumMats = {wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-            var sumDiverted = 0;
+            var photoLinks = []; // Track photo hyperlinks to add after
 
-            tickets.forEach(function(t) {
+            tickets.forEach(function(t, rowIdx) {
                 var gross = parseInt(t.gross_lbs)||0;
                 var tare = parseInt(t.tare_lbs)||0;
                 var net = gross - tare;
                 var tons = parseFloat(t.net_tons)||0;
-                var woodP = (t.wood_pct||0)/100, gypsumP = (t.gypsum_pct||0)/100, plasticP = (t.plastic_pct||0)/100;
-                var occP = (t.occ_pct||0)/100, metalP = (t.metal_pct||0)/100, concreteP = (t.concrete_pct||0)/100, blockP = (t.block_pct||0)/100;
-                var woodT = tons*woodP, gypsumT = tons*gypsumP, plasticT = tons*plasticP;
-                var occT = tons*occP, metalT = tons*metalP, concreteT = tons*concreteP, blockT = tons*blockP;
-                var diverted = woodT+gypsumT+plasticT+occT+metalT+concreteT+blockT;
+                var wp=(t.wood_pct||0)/100, gp=(t.gypsum_pct||0)/100, pp=(t.plastic_pct||0)/100;
+                var op=(t.occ_pct||0)/100, mp=(t.metal_pct||0)/100, cp=(t.concrete_pct||0)/100, bp=(t.block_pct||0)/100;
+                var wt=tons*wp, gt=tons*gp, pt=tons*pp, ot=tons*op, mt=tons*mp, ct=tons*cp, bt=tons*bp;
+                var diverted = wt+gt+pt+ot+mt+ct+bt;
                 var divPct = tons > 0 ? diverted/tons : 0;
 
-                sumGross+=gross; sumTare+=tare; sumNet+=net; sumTons+=tons;
-                sumMats.wood+=woodT; sumMats.gypsum+=gypsumT; sumMats.plastic+=plasticT;
-                sumMats.occ+=occT; sumMats.metal+=metalT; sumMats.concrete+=concreteT; sumMats.block+=blockT;
-                sumDiverted+=diverted;
+                sumGross+=gross; sumTare+=tare; sumNet+=net; sumTons+=tons; sumDiverted+=diverted;
+                sumMats.wood+=wt; sumMats.gypsum+=gt; sumMats.plastic+=pt;
+                sumMats.occ+=ot; sumMats.metal+=mt; sumMats.concrete+=ct; sumMats.block+=bt;
 
-                // Parse date for Excel
-                var dateVal = t.ticket_date || '';
+                // Format date as M/D/YYYY
+                var dateFmt = t.ticket_date || '';
+                if (dateFmt.indexOf('-') > 0) {
+                    var dp = dateFmt.split('-');
+                    dateFmt = parseInt(dp[1]) + '/' + parseInt(dp[2]) + '/' + dp[0];
+                }
+
+                var photoUrl = t.scale_ticket_image || '';
+                if (photoUrl) photoLinks.push({row: 15 + rowIdx, col: 24, url: photoUrl});
 
                 wsData.push([
-                    dateVal, parseInt(t.ticket_number)||t.ticket_number,
+                    dateFmt, parseInt(t.ticket_number)||t.ticket_number,
                     gross, gross/2000, tare, tare/2000, net, tons,
-                    woodP, woodT, gypsumP, gypsumT, plasticP, plasticT,
-                    occP, occT, metalP, metalT, concreteP, concreteT, blockP, blockT,
-                    diverted, divPct
+                    divPct, diverted,
+                    wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt,
+                    photoUrl ? 'View Photo' : ''
                 ]);
             });
 
@@ -3815,6 +3820,7 @@
             var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
             wsData.push(['Totals','',
                 sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
+                totalDivPct, sumDiverted,
                 sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
                 sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
                 sumTons>0?sumMats.plastic/sumTons:0, sumMats.plastic,
@@ -3822,47 +3828,59 @@
                 sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
                 sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
                 sumTons>0?sumMats.block/sumTons:0, sumMats.block,
-                sumDiverted, totalDivPct]);
+                '']);
 
             wsData.push([]);
-            wsData.push(['Total Tonnage', sumTons]);
-            wsData.push(['Diverted from landfill', sumDiverted]);
+            wsData.push(['Total Tonnage', Math.round(sumTons*100)/100]);
+            wsData.push(['Diverted from landfill', Math.round(sumDiverted*100)/100]);
             wsData.push(['Recycled Material %', totalDivPct]);
 
             var ws = XLSX.utils.aoa_to_sheet(wsData);
 
             // Column widths
             ws['!cols'] = [
-                {wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:8},
-                {wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},
-                {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10}
+                {wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},
+                {wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},
+                {wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}
             ];
 
-            // Format percentages and number cells
-            var dataStartRow = 15; // 0-indexed row 15 = row 16 in Excel
+            // Format cells
+            var dataStartRow = 15;
             var dataEndRow = dataStartRow + tickets.length;
-            for (var r = dataStartRow; r <= dataEndRow + 1; r++) {
-                // Percentage columns: I, K, M, O, Q, S, U, X (0-indexed: 8,10,12,14,16,18,20,23)
-                [8,10,12,14,16,18,20,23].forEach(function(c) {
+            for (var r = dataStartRow; r <= dataEndRow; r++) {
+                // Percentage columns: I(8), K(10), M(12), O(14), Q(16), S(18), U(20), W(22)
+                [8,10,12,14,16,18,20,22].forEach(function(c) {
                     var addr = XLSX.utils.encode_cell({r:r, c:c});
                     if (ws[addr]) ws[addr].z = '0%';
                 });
-                // Tons columns: D, F, H, J, L, N, P, R, T, V, W (3,5,7,9,11,13,15,17,19,21,22)
-                [3,5,7,9,11,13,15,17,19,21,22].forEach(function(c) {
+                // Tons columns: D(3), F(5), H(7), J(9), L(11), N(13), P(15), R(17), T(19), V(21), X(23)
+                [3,5,7,9,11,13,15,17,19,21,23].forEach(function(c) {
                     var addr = XLSX.utils.encode_cell({r:r, c:c});
                     if (ws[addr]) ws[addr].z = '0.00';
                 });
-                // Weight columns: C, E, G (2,4,6)
+                // Weight columns: C(2), E(4), G(6) — comma format
                 [2,4,6].forEach(function(c) {
                     var addr = XLSX.utils.encode_cell({r:r, c:c});
                     if (ws[addr]) ws[addr].z = '#,##0';
                 });
             }
 
-            // Summary percentage format
-            var summaryPctRow = dataEndRow + 4;
-            var addr = XLSX.utils.encode_cell({r:summaryPctRow, c:1});
-            if (ws[addr]) ws[addr].z = '0%';
+            // Summary formatting
+            var summaryStart = dataEndRow + 2;
+            var addr1 = XLSX.utils.encode_cell({r:summaryStart, c:1});
+            if (ws[addr1]) ws[addr1].z = '0.00';
+            var addr2 = XLSX.utils.encode_cell({r:summaryStart+1, c:1});
+            if (ws[addr2]) ws[addr2].z = '0.00';
+            var addr3 = XLSX.utils.encode_cell({r:summaryStart+2, c:1});
+            if (ws[addr3]) ws[addr3].z = '0%';
+
+            // Add hyperlinks for photo column
+            photoLinks.forEach(function(link) {
+                var addr = XLSX.utils.encode_cell({r:link.row, c:link.col});
+                if (ws[addr]) {
+                    ws[addr].l = {Target: link.url, Tooltip: 'View scale ticket photo'};
+                }
+            });
 
             XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + year);
             XLSX.writeFile(wb, 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx');
