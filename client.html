@@ -237,8 +237,8 @@ justify-content:center;z-index:300}
         <div class="form-group"><label class="form-label">Email</label>
             <input type="email" class="form-input" id="loginEmail" placeholder="you@company.com" autocomplete="email"></div>
         <div class="form-group"><label class="form-label">Password</label>
-            <input type="password" class="form-input" id="loginPw" placeholder="Enter password"></div>
-        <button class="btn btn-primary" onclick="P.login()">Sign In</button>
+            <input type="password" class="form-input" id="loginPw" placeholder="Enter password" onkeydown="if(event.key==='Enter')P.login()"></div>
+        <button class="btn btn-primary" onclick="P.login()" style="background:#2563eb;color:#fff;padding:16px;font-size:1rem;margin-top:8px">Sign In</button>
         <div id="loginErr" style="color:var(--danger);font-size:.8rem;text-align:center;margin-top:10px;display:none"></div>
     </div>
 </div>
@@ -291,11 +291,11 @@ justify-content:center;z-index:300}
 
 <!-- Theme Menu Modal -->
 
-<div id="themeMenu" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.classList.add('hidden')">
+<div id="themeMenu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-end;justify-content:center" onclick="if(event.target===this)P.hideThemeMenu()">
     <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:720px;padding:20px 16px 40px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
             <div style="font-weight:800;font-size:1rem">🎨 Theme</div>
-            <button class="btn-ghost" onclick="document.getElementById('themeMenu').classList.add('hidden')">✕</button>
+            <button class="btn-ghost" onclick="P.hideThemeMenu()">✕</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="proj-pill" onclick="P.setTheme('light')" style="text-align:center;padding:16px">
@@ -915,7 +915,8 @@ fmt(n){if(n==null)return’0’;var v=+n;if(isNaN(v))return’0’;if(Math.abs(v
 fmtD(d){if(!d)return’’;var m=[‘Jan’,‘Feb’,‘Mar’,‘Apr’,‘May’,‘Jun’,‘Jul’,‘Aug’,‘Sep’,‘Oct’,‘Nov’,‘Dec’];var p=d.split(’-’);return p.length<3?d:m[+p[1]-1]+’ ‘+parseInt(p[2])+’, ‘+p[0];},
 ago(d){if(!d)return’’;var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return’just now’;if(s<3600)return Math.floor(s/60)+‘m ago’;if(s<86400)return Math.floor(s/3600)+‘h ago’;return Math.floor(s/86400)+‘d ago’;},
 esc(s){var d=document.createElement(‘div’);d.textContent=s;return d.innerHTML;},
-showThemeMenu(){document.getElementById(‘themeMenu’).classList.remove(‘hidden’);},
+showThemeMenu(){var m=document.getElementById(‘themeMenu’);m.style.display=‘flex’;},
+hideThemeMenu(){document.getElementById(‘themeMenu’).style.display=‘none’;},
 setTheme(t){
 var html=document.documentElement;
 html.classList.remove(‘dark-mode’,‘light-mode’,‘compact-mode’,‘forest-mode’);
@@ -924,7 +925,7 @@ else if(t===‘light’)html.classList.add(‘light-mode’);
 else if(t===‘compact’)html.classList.add(‘compact-mode’,‘light-mode’);
 else if(t===‘forest’)html.classList.add(‘forest-mode’);
 try{localStorage.setItem(‘ds_theme’,t)}catch(e){}
-document.getElementById(‘themeMenu’).classList.add(‘hidden’);
+P.hideThemeMenu();
 P.toast(’Theme: ’+t.charAt(0).toUpperCase()+t.slice(1));
 },
 loadTheme(){try{var t=localStorage.getItem(‘ds_theme’);if(!t)return;
@@ -988,9 +989,17 @@ toast(m){var e=document.createElement(‘div’);e.className=‘toast’;e.textC
 load(m){var e=document.createElement(‘div’);e.className=‘loading-overlay’;e.id=’_load’;e.innerHTML=’<div class="loading-box">’+(m||‘Loading…’)+’</div>’;document.body.appendChild(e);},
 unload(){var e=document.getElementById(’_load’);if(e)e.remove();},
 
-async init(){P.loadTheme();try{var id=localStorage.getItem(‘ds_cid’);if(id){var c=await P.api(‘client_accounts?id=eq.’+id+’&is_active=eq.true’);
-if(c&&c.length){P.client=c[0];await P.loadProjects();P.showHub();return;}}}catch(e){}
-document.getElementById(‘loginView’).classList.remove(‘hidden’);}
+async init(){
+try{P.loadTheme();}catch(e){}
+try{
+var id=localStorage.getItem(‘ds_cid’);
+if(id){
+var c=await P.api(‘client_accounts?id=eq.’+id+’&is_active=eq.true’);
+if(c&&c.length){P.client=c[0];await P.loadProjects();P.showHub();return;}
+}
+}catch(e){console.log(‘Auto-login failed:’,e);}
+document.getElementById(‘loginView’).classList.remove(‘hidden’);
+}
 };
 P.init();
 </script>
