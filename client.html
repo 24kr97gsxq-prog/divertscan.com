@@ -237,8 +237,12 @@ justify-content:center;z-index:300}
         <div class="form-group"><label class="form-label">Email</label>
             <input type="email" class="form-input" id="loginEmail" placeholder="you@company.com" autocomplete="email"></div>
         <div class="form-group"><label class="form-label">Password</label>
-            <input type="password" class="form-input" id="loginPw" placeholder="Enter password" onkeydown="if(event.key==='Enter')P.login()"></div>
-        <button type="button" class="btn btn-primary" onclick="P.login()" ontouchend="P.login()" style="background:#2563eb;color:#fff;padding:16px;font-size:1rem;margin-top:8px;-webkit-appearance:none">Sign In</button>
+            <input type="password" class="form-input" id="loginPw" placeholder="Enter password" onkeydown="if(event.key==='Enter'){event.preventDefault();P.login();}"></div>
+        <div style="background:#2563eb;color:#fff;padding:16px;font-size:1rem;font-weight:700;font-family:var(--font);
+            text-align:center;border-radius:12px;cursor:pointer;margin-top:8px;-webkit-appearance:none;
+            -webkit-tap-highlight-color:rgba(0,0,0,0.1)" 
+            id="loginBtn" onclick="P.login()">Sign In</div>
+        <div id="loginLoadMsg" style="display:none;text-align:center;padding:12px;color:var(--primary);font-size:.85rem;font-weight:600">Signing in...</div>
         <div id="loginErr" style="color:var(--danger);font-size:.8rem;text-align:center;margin-top:10px;display:none"></div>
     </div>
 </div>
@@ -425,25 +429,44 @@ async api(ep,method,body){
     if(method==='PATCH'||method==='POST')o.headers['Prefer']='return=representation';
     try{var r=await fetch(SB_URL+'/rest/v1/'+ep,o);if(!r.ok)return null;var t=await r.text();return t?JSON.parse(t):[];}catch(e){return null;}
 },
-async hashPw(pw){var d=new TextEncoder().encode('divertscan_salt_'+pw);var h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');},
+async hashPw(pw){
+    var input = 'divertscan_salt_'+pw;
+    if(window.crypto && window.crypto.subtle){
+        var d=new TextEncoder().encode(input);
+        var h=await crypto.subtle.digest('SHA-256',d);
+        return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+    }
+    // Fallback: simple hash for non-HTTPS contexts
+    var hash=0;for(var i=0;i<input.length;i++){hash=((hash<<5)-hash)+input.charCodeAt(i);hash|=0;}
+    return Math.abs(hash).toString(16).padStart(64,'0');
+},
 
 // === AUTH ===
 async login(){
+    var errEl=document.getElementById('loginErr');
+    errEl.style.display='none';
     var email=document.getElementById('loginEmail').value.trim().toLowerCase();
     var pw=document.getElementById('loginPw').value;
-    if(!email||!pw){P.showErr('Enter email and password');return;}
-    P.load('Signing in...');
+    if(!email||!pw){errEl.textContent='Enter email and password';errEl.style.display='block';return;}
+    
+    var loadEl=document.getElementById('loginLoadMsg');
+    if(loadEl)loadEl.style.display='block';
+    
     try{
         var hash=await P.hashPw(pw);
-        var r=await fetch(SB_URL+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(email)+'&password_hash=eq.'+encodeURIComponent(hash)+'&is_active=eq.true',
-            {headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});
-        var clients=await r.json();P.unload();
-        if(!clients||!clients.length){P.showErr('Invalid email or password');return;}
+        var url=SB_URL+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(email)+'&password_hash=eq.'+encodeURIComponent(hash)+'&is_active=eq.true';
+        var r=await fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});
+        var clients=await r.json();
+        if(loadEl)loadEl.style.display='none';
+        if(!clients||!clients.length){errEl.textContent='Invalid email or password';errEl.style.display='block';return;}
         P.client=clients[0];
         P.api('client_accounts?id=eq.'+P.client.id,'PATCH',{last_login:new Date().toISOString()});
-        try{localStorage.setItem('ds_cid',P.client.id)}catch(e){}
+        try{localStorage.setItem('ds_cid',P.client.id);}catch(e){}
         await P.loadProjects();P.showHub();
-    }catch(e){P.unload();P.showErr('Error: '+e.message);}
+    }catch(e){
+        if(loadEl)loadEl.style.display='none';
+        errEl.textContent='Error: '+e.message;errEl.style.display='block';
+    }
 },
 async loadProjects(){
     var a=await P.api('client_project_access?client_id=eq.'+P.client.id+'&select=project_id');
