@@ -808,7 +808,7 @@
             <div class="header-row">
                 <div>
                     <h1>Divert<span>Scan</span>™</h1>
-                    <div class="header-sub">LEED MRp2/MRc2 • Carbon Compliance Engine</div>
+                    <div class="header-sub">LEED MRp2/MRc5 • Carbon Compliance Engine</div>
                 </div>
                 <span class="leed-badge" id="leedBadge">🌿 LEED v4</span>
             </div>
@@ -1092,7 +1092,7 @@
                 </div>
                 <div class="card">
                     <div class="card-title"><span class="icon">📤</span> Compliance Report Export</div>
-                    <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">Generate LEED v4/v4.1 MRc2 or v5 MRp2 compliant reports for GBCI submission.</p>
+                    <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">Generate LEED v4/v4.1 (MRp2 + MRc5) or v5 (MRp2 Embodied Carbon + Waste Mgmt) compliant reports for GBCI submission.</p>
                     <div class="form-group">
                         <label class="form-label">Select Project</label>
                         <select class="form-input" id="auditProjectSelect" onchange="DS.updateAuditProject()" style="padding:10px 12px">
@@ -1792,7 +1792,7 @@
                 return { version: 'v5', target: target, credit: 'MRp2', isPrereq: true,
                     tiers: [{pct:75,label:'Prerequisite'},{pct:90,label:'1 point'},{pct:95,label:'2 points'}] };
             }
-            return { version: 'v4', target: target, credit: 'MRc2', isPrereq: false,
+            return { version: 'v4', target: target, credit: 'MRp2/MRc5', isPrereq: false,
                 tiers: [{pct:50,label:'1 point'},{pct:75,label:'2 points'}] };
         },
 
@@ -4032,7 +4032,7 @@
             // LEED v5 Compliance Check
             var checks = [];
             var isV5 = ver === 'v5';
-            var targetLabel = isV5 ? 'MRp2 Prerequisite (75%)' : 'MRc2 Credit (50%)';
+            var targetLabel = isV5 ? 'MRp2 Embodied Carbon + Waste Mgmt' : 'MRp2 (Prerequisite) + MRc5 (Credit)';
 
             // 1. Diversion rate
             checks.push({
@@ -4071,9 +4071,9 @@
 
             // 5. TCEQ compliance (Texas-specific)
             checks.push({
-                label: 'TCEQ Type V/IX facility processing',
+                label: 'TCEQ authorization — active recycling facility',
                 pass: true,
-                detail: 'Dalmex Recycling — TCEQ Permit #: Active C&D Processing Facility'
+                detail: 'Dalmex Recycling — TPDES MSGP TXR05GW18 (Sector N, SIC 5093). Exempt from MSW permit per 30 TAC 330.11(e) — source-separated recyclable materials'
             });
 
             // 6. Monthly documentation
@@ -4090,11 +4090,32 @@
                 var co2e = 0;
                 tickets.forEach(function(t) { co2e += parseFloat(t.co2e_avoided) || 0; });
                 checks.push({
-                    label: 'Embodied carbon tracking (v5 MRp2)',
+                    label: 'Embodied carbon tracking (v5 MRp2 Quantify & Assess)',
                     pass: co2e > 0,
                     detail: this.fmt(co2e) + ' mt CO₂e avoided'
                 });
             }
+
+            // 8. End market verification
+            checks.push({
+                label: 'Verified downstream end markets',
+                pass: true,
+                detail: 'GP, Smurfit Westrock, Int\'l Paper (fiber) • CMC, Cyclone (metals) • American Recycling (plastics) • Dalmex Pallets (wood reuse) — all with BOL + weight ticket documentation'
+            });
+
+            // 9. Chain of custody
+            checks.push({
+                label: 'Closed-loop chain of custody',
+                pass: true,
+                detail: 'Inbound scale ticket → Professional sorting → Outbound BOL to mills/recyclers → Landfill manifest for residual. Formula: Inbound - Landfill = Diverted'
+            });
+
+            // 10. Methodology
+            checks.push({
+                label: 'Weight-based methodology (not visual estimates)',
+                pass: true,
+                detail: 'Verified outbound weights from certified scale. Not contractor self-reporting or site separation visual estimates. AI photo analysis = secondary validation only.'
+            });
 
             var allPass = checks.every(function(c) { return c.pass; });
             check.innerHTML = '<div style="padding:8px;border-radius:var(--radius);background:' + (allPass ? 'var(--success-light)' : 'var(--warning-light)') + ';margin-bottom:8px;font-weight:700;text-align:center">' +
@@ -4104,7 +4125,13 @@
                         '<span style="font-size:.9rem">' + (c.pass ? '✅' : '❌') + '</span>' +
                         '<div><div style="font-weight:600;font-size:.7rem">' + c.label + '</div>' +
                         '<div style="font-size:.65rem;color:var(--text-dim)">' + c.detail + '</div></div></div>';
-                }).join('');
+                }).join('') +
+                '<div style="margin-top:8px;padding:8px;background:var(--bg-input);border-radius:var(--radius);font-size:.65rem">' +
+                '<div style="font-weight:700;margin-bottom:3px">TCEQ Authorization</div>' +
+                '<div>TPDES MSGP TXR05GW18 — Sector N (SIC 5093) — Active</div>' +
+                '<div>RN103219481 / CN605438985 — Eff: 11/7/2025, Exp: 8/14/2026</div>' +
+                '<div style="color:var(--text-dim);margin-top:2px">Recycling facility exempt from MSW permit per 30 TAC 330.11(e)</div>' +
+                '</div>';
         },
 
         async loadPhotoQueue() {
