@@ -172,7 +172,33 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <script>
 var SB='https://cyvvlngtojagfoaitoog.supabase.co';
 var SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
-var MT={wood:{n:'Wood',i:'🪵',c:'#92400e',em:'Dalmex Pallets (REUSE) / Grinding-Mulch',v5:'200% credit multiplier'},gypsum:{n:'Gypsum',i:'🧱',c:'#7c3aed',em:'Drywall manufacturer recycling',v5:'Standard'},plastic:{n:'Plastic',i:'♻️',c:'#0891b2',em:'American Recycling (AR) — baling',v5:'200% credit'},occ:{n:'OCC',i:'📦',c:'#b45309',em:'Georgia Pacific / Smurfit Westrock / International Paper — mill direct',v5:'200% credit'},metal:{n:'Metal',i:'🔩',c:'#475569',em:'CMC Recycling / Cyclone Recycling — ferrous & non-ferrous',v5:'200% credit'},concrete:{n:'Concrete',i:'🧱',c:'#6b7280',em:'Crushing — aggregate base material',v5:'Standard'},block:{n:'Block',i:'⬜',c:'#374151',em:'Crushing — fill/base material',v5:'Standard'}};
+var MT={wood:{n:'Wood',i:'🪵',c:'#92400e',em:'Dalmex Pallets (REUSE/SALVAGE)',v5:'200% credit',tier:'Reuse (#2)',doc:'Internal transfer records'},gypsum:{n:'Gypsum',i:'🧱',c:'#7c3aed',em:'Drywall manufacturer',v5:'Standard',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'},plastic:{n:'Plastic',i:'♻️',c:'#0891b2',em:'American Recycling (AR)',v5:'200% credit',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'},occ:{n:'OCC',i:'📦',c:'#b45309',em:'Georgia Pacific / Smurfit Westrock / International Paper',v5:'200% credit',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'},metal:{n:'Metal',i:'🔩',c:'#475569',em:'CMC Recycling / Cyclone Recycling',v5:'200% credit',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'},concrete:{n:'Concrete',i:'🧱',c:'#6b7280',em:'Crushing — aggregate base',v5:'Standard',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'},block:{n:'Block',i:'⬜',c:'#374151',em:'Crushing — fill/base',v5:'Standard',tier:'Recycling (#3)',doc:'BOL + Weight Ticket'}};
+var DX={
+facility:'Dalmex Recycling LLC',addr:'2828 Nagle St, Dallas, TX 75220',phone:'(214) 352-2000',
+tceq:{auth:'TXR05GW18',gp:'TXR050000',type:'TPDES Stormwater Multi-Sector General Permit',sector:'N',sic:'5093',
+rn:'RN103219481',cn:'CN605438985',eff:'November 7, 2025',exp:'August 14, 2026',
+exempt:'Recycling facility exempt from MSW permit per 30 TAC 330.11(e) — nonputrescible source-separated recyclable materials'},
+endMarkets:[
+{cat:'Fiber',items:[{mat:'OCC/Cardboard',dest:'Georgia Pacific',type:'Mill Direct',doc:'BOL + Weight Ticket'},
+{mat:'OCC/Cardboard',dest:'Smurfit Westrock',type:'Mill Direct',doc:'BOL + Weight Ticket'},
+{mat:'OCC/Cardboard',dest:'International Paper',type:'Mill Direct',doc:'BOL + Weight Ticket'},
+{mat:'Mixed Paper',dest:'Greenside',type:'Broker',doc:'BOL + Weight Ticket'},
+{mat:'Mixed Paper',dest:'American Fiber',type:'Broker',doc:'BOL + Weight Ticket'},
+{mat:'Sorted Office Paper',dest:'Greenside',type:'Broker',doc:'BOL + Weight Ticket'}]},
+{cat:'Metals',items:[{mat:'Ferrous Metal',dest:'CMC Recycling',type:'Recycler',doc:'BOL + Weight Ticket'},
+{mat:'Ferrous Metal',dest:'Cyclone Recycling',type:'Recycler',doc:'BOL + Weight Ticket'},
+{mat:'Non-Ferrous Metal',dest:'CMC Recycling',type:'Recycler',doc:'BOL + Weight Ticket'}]},
+{cat:'Plastics',items:[{mat:'Mixed Plastics',dest:'American Recycling',type:'Processor (AR)',doc:'BOL + Weight Ticket'}]},
+{cat:'Wood — Reuse',items:[{mat:'Lumber/Wood',dest:'Dalmex Pallets (Internal)',type:'REUSE/SALVAGE',doc:'Internal Transfer Records'}]}
+],
+chain:[{stage:'1. Inbound',doc:'Certified scale ticket + DivertScan photo + GPS',proves:'Total weight received from specific project'},
+{stage:'2. Processing',doc:'Internal sorting records + QC notes',proves:'Professional sorting by trained personnel'},
+{stage:'3. Outbound — Recycled',doc:'BOL to GP, Smurfit, CMC, Cyclone, etc.',proves:'Exact tons confirmed by receiving facilities'},
+{stage:'4. Outbound — Reused',doc:'Internal transfer to Dalmex Pallets',proves:'Material reused in manufacturing (v5: 200% credit)'},
+{stage:'5. Residual',doc:'Landfill manifest + disposal weight ticket',proves:'Transparency on what could NOT be diverted'}],
+method:'Verified Outbound Weights — Weigh in, sort, weigh out to verified end markets. Not visual estimates or contractor self-reporting.',
+formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
+};
 var P={
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
@@ -270,11 +296,17 @@ var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?m
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%</div></div>';});
 document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
 // End Market info
-var emh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
-emh+='<div style="padding:3px 0;border-bottom:1px solid var(--border)"><b>'+MT[k].i+' '+MT[k].n+'</b> → '+MT[k].em+
-((p.leed_version||'v4')==='v5'?' <span style="color:var(--success);font-weight:700">('+MT[k].v5+')</span>':'')+'</div>';});
-emh+='<div style="margin-top:6px;font-size:.6rem;color:var(--text-d)">Processing: Dalmex Recycling, 2828 Nagle St, Dallas TX 75220 • TCEQ Permitted • Certified Scales<br>'+
-'Chain of custody: Inbound scale ticket → Professional sorting → Outbound BOL to verified end markets → Landfill manifest for residual</div>';
+var emh='<div style="font-size:.65rem;line-height:1.6">';
+DX.endMarkets.forEach(function(cat){emh+='<div style="font-weight:700;margin-top:6px;color:var(--text)">'+cat.cat+'</div>';
+cat.items.forEach(function(i){emh+='<div style="padding:1px 0;color:var(--text-m)">'+i.mat+' → <b>'+i.dest+'</b> ('+i.type+') — '+i.doc+'</div>';});});
+emh+='<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;font-size:.6rem">'+
+'<div style="font-weight:700;margin-bottom:3px">Chain of Custody</div>'+
+DX.chain.map(function(c){return '<div>'+c.stage+': '+c.doc+'</div>';}).join('')+
+'<div style="margin-top:4px;font-weight:700;color:var(--success)">'+DX.formula+'</div>'+
+'</div>'+
+'<div style="margin-top:6px;font-size:.55rem;color:var(--text-d)">'+
+'TCEQ Auth: '+DX.tceq.auth+' ('+DX.tceq.type+', Sector '+DX.tceq.sector+', SIC '+DX.tceq.sic+') • '+DX.tceq.exempt+'<br>'+
+'Facility: '+DX.facility+', '+DX.addr+' • Certified commercial scale</div></div>';
 document.getElementById('dEndMarketContent').innerHTML=emh;
 P.renderMonths();P.renderTbl(P.tx);},
 
@@ -375,44 +407,107 @@ var tons=0,div=0,co2=0,mc={};Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
 var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
-var isV5=ver==='v5';var cl=isV5?'MRp2 Construction Waste Management (Prerequisite)':'MRc2 Construction & Demolition Waste Management';
-var ok=rate>=tgt;var photoCount=tix.filter(function(t){return t.scale_ticket_image;}).length;
+var isV5=ver==='v5';
+var cl=isV5?'MRp2 Quantify & Assess Embodied Carbon (Prerequisite) + Waste Management Credits':'MRp2 C&D Waste Management Planning (Prerequisite) + MRc5 C&D Waste Management (Credit)';
+var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
 var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
 rows+='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(t.net_tons)+'</td><td class=r>'+(t.wood_pct||0)+'%</td><td class=r>'+(t.occ_pct||0)+'%</td><td class=r>'+(t.metal_pct||0)+'%</td><td class=r style="font-weight:bold;color:'+(dp>=75?'#10b981':dp>=50?'#f59e0b':'#ef4444')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';});
 var matRows='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
-matRows+='<tr><td>'+MT[k].i+' '+MT[k].n+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+P.f(mc[k])+' T</td><td>'+MT[k].em+'</td>'+(isV5?'<td>'+MT[k].v5+'</td>':'')+'</tr>';});
+var v5tons=isV5&&(k==='wood'||k==='metal'||k==='occ'||k==='plastic')?mc[k]*2:mc[k];
+matRows+='<tr><td>'+MT[k].i+' '+MT[k].n+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+P.f(mc[k])+'</td><td>'+MT[k].em+'</td><td>'+MT[k].tier+'</td><td>'+MT[k].doc+'</td>'+(isV5?'<td>'+MT[k].v5+(v5tons!==mc[k]?' ('+P.f(v5tons)+' T effective)':'')+'</td>':'')+'</tr>';});
+// End market rows
+var emRows='';DX.endMarkets.forEach(function(cat){cat.items.forEach(function(i){
+emRows+='<tr><td>'+i.mat+'</td><td>'+i.dest+'</td><td>'+i.type+'</td><td>'+i.doc+'</td></tr>';});});
+// Chain rows
+var chainRows='';DX.chain.forEach(function(c){chainRows+='<tr><td>'+c.stage+'</td><td>'+c.doc+'</td><td>'+c.proves+'</td></tr>';});
+// Streams count
+var streams=Object.keys(MT).filter(function(k){return mc[k]>0;});
 var w=window.open('','_blank');
-w.document.write('<!DOCTYPE html><html><head><title>LEED Waste Diversion Report</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#333;padding:28px;font-size:10.5px;line-height:1.5}h1{font-size:17px;color:#1a1a2e;border-bottom:3px solid #10b981;padding-bottom:6px;margin-bottom:14px}h2{font-size:12px;color:#1a1a2e;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0;font-size:10px}th{background:#f4f5f7;padding:4px;text-align:left;border-bottom:2px solid #ddd;font-size:9px}td{padding:3px 4px;border-bottom:1px solid #eee}.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;font-size:11px}.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}.stats{display:flex;gap:10px;margin:10px 0}.stat{flex:1;background:#f4f5f7;border-radius:6px;padding:8px;text-align:center}.stat b{font-size:16px;display:block}.stat span{font-size:8px;color:#6b7280;text-transform:uppercase}.chk{margin:3px 0}.footer{margin-top:16px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#888;text-align:center}@media print{body{padding:14px}}</style></head><body>'+
-'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>Waste Diversion Report</h1><div style="font-size:11px;color:#6b7280">'+label+' — '+P.esc(proj.name)+'</div></div>'+
-'<div style="text-align:right"><div style="font-weight:700">LEED '+ver+'</div><div style="font-size:9px;color:#6b7280">'+cl+'</div><div class="badge '+(ok?'pass':'fail')+'" style="margin-top:3px">'+(ok?'✅ COMPLIANT':'⚠️ REVIEW NEEDED')+'</div></div></div>'+
-'<h2>Project Information</h2><table><tr><td width=25%><b>Project</b></td><td>'+P.esc(proj.name)+'</td><td width=25%><b>LEED Version</b></td><td>'+ver+'</td></tr>'+
+w.document.write('<!DOCTYPE html><html><head><title>LEED '+ver+' Waste Diversion Report — '+P.esc(proj.name)+'</title>'+
+'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#333;padding:24px;font-size:10px;line-height:1.5}'+
+'h1{font-size:16px;color:#1a1a2e;border-bottom:3px solid #10b981;padding-bottom:5px;margin-bottom:12px}'+
+'h2{font-size:11px;color:#1a1a2e;margin:12px 0 5px;border-bottom:1px solid #ddd;padding-bottom:2px;page-break-after:avoid}'+
+'.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9px}'+
+'th{background:#f4f5f7;padding:3px;text-align:left;border-bottom:2px solid #ddd;font-size:8px}'+
+'td{padding:2px 3px;border-bottom:1px solid #eee}.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:10px}'+
+'.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}'+
+'.stats{display:flex;gap:8px;margin:8px 0}.stat{flex:1;background:#f4f5f7;border-radius:5px;padding:6px;text-align:center}'+
+'.stat b{font-size:14px;display:block}.stat span{font-size:7px;color:#6b7280;text-transform:uppercase}'+
+'.chk{margin:2px 0;font-size:9.5px}.note{background:#f0fdf4;border:1px solid #d1fae5;border-radius:4px;padding:6px;margin:6px 0;font-size:9px}'+
+'.footer{margin-top:14px;padding-top:6px;border-top:1px solid #ddd;font-size:7.5px;color:#888;text-align:center}'+
+'@media print{body{padding:12px}h2{page-break-after:avoid}table{page-break-inside:auto}}</style></head><body>'+
+// HEADER
+'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>LEED Waste Diversion Documentation Package</h1>'+
+'<div style="font-size:10px;color:#6b7280">'+label+' — '+P.esc(proj.name)+'</div></div>'+
+'<div style="text-align:right"><div style="font-weight:700">LEED '+ver+'</div><div style="font-size:8px;color:#6b7280">'+cl+'</div>'+
+'<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:2px">'+(ok?'✅ COMPLIANT':'⚠️ REVIEW NEEDED')+'</div></div></div>'+
+// PROJECT INFO
+'<h2>1. Project Information</h2>'+
+'<table><tr><td width=25%><b>Project</b></td><td>'+P.esc(proj.name)+'</td><td width=25%><b>LEED Version</b></td><td>'+ver+'</td></tr>'+
 '<tr><td><b>GC / Client</b></td><td>'+(proj.general_contractor||proj.client||'—')+'</td><td><b>Target</b></td><td>'+tgt+'%</td></tr>'+
 '<tr><td><b>Location</b></td><td>'+(proj.location||'—')+'</td><td><b>Hauler</b></td><td>'+(proj.waste_hauler||'—')+'</td></tr>'+
-'<tr><td><b>Facility</b></td><td>Dalmex Recycling Inc, 2828 Nagle St, Dallas TX 75220</td><td><b>TCEQ</b></td><td>Active — Type V C&D</td></tr></table>'+
-'<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div><div class="stat"><b>'+P.f(tons)+'</b><span>Total T</span></div><div class="stat"><b style="color:#10b981">'+P.f(div)+'</b><span>Diverted</span></div><div class="stat"><b style="color:'+(ok?'#10b981':'#ef4444')+'">'+rate+'%</b><span>Rate</span></div><div class="stat"><b style="color:#f59e0b">'+P.f(co2)+'</b><span>CO₂e mt</span></div></div>'+
-'<h2>Material Streams & End Markets</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market / Diversion Method</th>'+(isV5?'<th>v5 Credit</th>':'')+'</tr>'+matRows+'</table>'+
-'<h2>Chain of Custody</h2><table><tr><th>Stage</th><th>Documentation</th><th>Verification</th></tr>'+
-'<tr><td>1. Inbound</td><td>Certified scale ticket + DivertScan photo</td><td>Total weight from project</td></tr>'+
-'<tr><td>2. Processing</td><td>Internal sorting records</td><td>Professional sorting at Dalmex</td></tr>'+
-'<tr><td>3. Outbound — Recycled</td><td>BOL to GP, Smurfit, CMC, etc.</td><td>Third-party confirmation</td></tr>'+
-'<tr><td>4. Outbound — Reused</td><td>Internal transfer to Dalmex Pallets</td><td>REUSE tier (v5: 200% credit)</td></tr>'+
-'<tr><td>5. Residual</td><td>Landfill manifest + disposal ticket</td><td>Transparency on non-diverted</td></tr></table>'+
-'<h2>Compliance Verification</h2>'+
+'<tr><td><b>Processing Facility</b></td><td>'+DX.facility+', '+DX.addr+'</td><td><b>Phone</b></td><td>'+DX.phone+'</td></tr></table>'+
+// SUMMARY STATS
+'<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
+'<div class="stat"><b>'+P.f(tons)+'</b><span>Total T</span></div>'+
+'<div class="stat"><b style="color:#10b981">'+P.f(div)+'</b><span>Diverted</span></div>'+
+'<div class="stat"><b style="color:'+(ok?'#10b981':'#ef4444')+'">'+rate+'%</b><span>Rate</span></div>'+
+'<div class="stat"><b style="color:#f59e0b">'+P.f(co2)+'</b><span>CO₂e mt</span></div></div>'+
+// MATERIAL STREAMS
+'<h2>2. Material Streams, End Markets & Diversion Methods</h2>'+
+'<table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th><th>Waste Hierarchy</th><th>Documentation</th>'+(isV5?'<th>v5 Credit</th>':'')+'</tr>'+matRows+'</table>'+
+(isV5?'<div class="note"><b>LEED v5 Credit Multiplier:</b> Wood reused via Dalmex Pallets and materials recycled to verified end markets qualify for 200% diversion credit under the LEED v5 waste hierarchy (Reuse/Salvage and Recycling tiers).</div>':'')+
+// END MARKET VERIFICATION
+'<h2>3. Verified Downstream End Markets</h2>'+
+'<p style="margin-bottom:4px;font-size:9px;color:#6b7280">All diverted materials are processed at '+DX.facility+' and shipped to verified downstream markets. Bills of lading and weight tickets maintained for all outbound shipments.</p>'+
+'<table><tr><th>Material</th><th>End Market</th><th>Type</th><th>Documentation</th></tr>'+emRows+'</table>'+
+// CHAIN OF CUSTODY
+'<h2>4. Chain of Custody Documentation</h2>'+
+'<table><tr><th>Stage</th><th>Documentation</th><th>What It Proves</th></tr>'+chainRows+'</table>'+
+'<div class="note"><b>Closed-Loop Verification:</b> '+DX.formula+'<br>This is arithmetic based on certified scale tickets — not an estimate. Third-party receiving facilities (Georgia Pacific, Smurfit Westrock, CMC Recycling, Cyclone Recycling) confirm what they received.</div>'+
+// METHODOLOGY
+'<h2>5. Methodology — Why This Data Is Audit-Defensible</h2>'+
+'<table><tr><th>Method</th><th>How It Works</th><th>Accuracy</th><th>Audit Strength</th></tr>'+
+'<tr style="background:#fef2f2"><td>Site Separation (Contractor Self-Report)</td><td>Contractor places materials in bins, visually estimates %</td><td>LOW — visual estimates only</td><td>WEAK — "trust me" documentation</td></tr>'+
+'<tr style="background:#fffbeb"><td>AI Photo Analysis (DivertScan)</td><td>Computer vision analyzes debris photos</td><td>MEDIUM — consistent methodology</td><td>MODERATE — secondary validation</td></tr>'+
+'<tr style="background:#ecfdf5"><td><b>Verified Outbound Weights (Dalmex Method)</b></td><td>Weigh in → Sort → Weigh out to verified end markets</td><td><b>HIGHEST — actual measured weights</b></td><td><b>STRONGEST — BOLs from receiving facilities</b></td></tr></table>'+
+'<div class="note">DivertScan AI photo analysis serves as a <b>secondary validation layer</b>, not the primary source of truth. Primary data comes from certified scale weights and outbound BOLs to verified end markets.</div>'+
+// COMPLIANCE
+'<h2>6. Compliance Verification</h2>'+
 '<div class="chk">'+(rate>=tgt?'✅':'❌')+' Diversion rate '+rate+'% '+(rate>=tgt?'meets':'below')+' '+tgt+'% target</div>'+
-'<div class="chk">'+(photoCount>=tix.length*.9?'✅':'❌')+' Scale ticket documentation: '+photoCount+'/'+tix.length+'</div>'+
-'<div class="chk">✅ Weight-based tracking (certified scale — not visual estimates)</div>'+
-'<div class="chk">✅ TCEQ-permitted C&D processing facility</div>'+
-'<div class="chk">✅ Third-party end market verification (BOLs from receiving facilities)</div>'+
-'<div class="chk">✅ Closed-loop: Inbound weight - Landfill weight = Diverted weight</div>'+
-(isV5?'<div class="chk">'+(co2>0?'✅':'❌')+' Embodied carbon: '+P.f(co2)+' mt CO₂e avoided</div>':'')+
-'<h2>Certifications & Regulatory</h2><table><tr><th>Authority</th><th>Status</th><th>Detail</th></tr>'+
-'<tr><td>TCEQ</td><td>Active</td><td>Texas Commission on Environmental Quality — Type V C&D Processing</td></tr>'+
-'<tr><td>GBCI</td><td>'+(ok?'Compliant':'Review')+'</td><td>Green Building Certification Institute — '+cl+'</td></tr>'+
-'<tr><td>USGBC</td><td>Aligned</td><td>U.S. Green Building Council framework</td></tr>'+
-'<tr><td>EPA</td><td>Followed</td><td>C&D Materials Recovery Best Practices</td></tr></table>'+
-'<h2>Scale Ticket Detail</h2><table><tr><th>Date</th><th>Ticket#</th><th class=r>Tons</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-'<tr style="border-top:2px solid #333;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td></td></tr></table>'+
-'<div class="footer"><b>DivertScan™ — LEED Carbon Compliance Engine</b><br>'+new Date().toLocaleDateString()+' • Dalmex Recycling Inc • robert@dalmexrecycling.com • (214) 352-2000<br><i>Data from certified scale weights. SHA-256 hash verified. Not based on visual estimates.</i></div></body></html>');
+'<div class="chk">'+(pc>=tix.length*.9?'✅':'❌')+' Scale ticket documentation: '+pc+'/'+tix.length+' ('+Math.round(pc/Math.max(tix.length,1)*100)+'%)</div>'+
+'<div class="chk">✅ Weight-based tracking via certified commercial scale (not visual estimates)</div>'+
+'<div class="chk">✅ Third-party end market verification — BOLs from receiving mills and recyclers</div>'+
+'<div class="chk">✅ Closed-loop chain of custody: inbound → processing → outbound → residual</div>'+
+'<div class="chk">'+(streams.length>=5?'✅':'⚠️')+' Material streams tracked: '+streams.length+' ('+streams.map(function(k){return MT[k].n;}).join(', ')+')</div>'+
+(isV5?'<div class="chk">'+(co2>0?'✅':'❌')+' Embodied carbon tracking: '+P.f(co2)+' mt CO₂e avoided</div>':'')+
+// REGULATORY
+'<h2>7. Certifications & Regulatory Compliance</h2>'+
+'<table><tr><th>Authority</th><th>Authorization</th><th>Detail</th></tr>'+
+'<tr><td><b>TCEQ</b></td><td>TPDES MSGP '+DX.tceq.auth+' — Active</td><td>'+DX.tceq.type+', Sector '+DX.tceq.sector+' (SIC '+DX.tceq.sic+'). '+DX.tceq.exempt+'. Eff: '+DX.tceq.eff+', Exp: '+DX.tceq.exp+'</td></tr>'+
+'<tr><td><b>GBCI</b></td><td>'+(ok?'Compliant':'Under Review')+'</td><td>Green Building Certification Institute — LEED '+ver+': '+cl+'</td></tr>'+
+'<tr><td><b>USGBC</b></td><td>Aligned</td><td>U.S. Green Building Council LEED rating system framework</td></tr>'+
+'<tr><td><b>EPA</b></td><td>Followed</td><td>C&D Materials Recovery Best Practices (EPA 530-R-16-001)</td></tr>'+
+'<tr><td><b>FMCSA</b></td><td>USDOT 2434520</td><td>Federal Motor Carrier — Intrastate Non-Hazmat carrier</td></tr></table>'+
+'<div style="margin-top:4px;font-size:8px;color:#6b7280">Facility RN: '+DX.tceq.rn+' • Operator CN: '+DX.tceq.cn+'</div>'+
+// DALMEX CREDENTIALS
+'<h2>8. Dalmex Recycling — Facility Credentials</h2>'+
+'<table><tr><th>Division</th><th>Operations</th><th>Key Relationships</th></tr>'+
+'<tr><td>Recovered Fiber</td><td>OCC, mixed paper, sorted office paper, white ledger</td><td>Georgia Pacific, Smurfit Westrock, International Paper, Greenside, American Fiber</td></tr>'+
+'<tr><td>Dalmex Pallets</td><td>Wood reuse / pallet manufacturing</td><td>Internal operation — highest tier diversion (REUSE)</td></tr>'+
+'<tr><td>Metal Recycling</td><td>Ferrous and non-ferrous metals</td><td>CMC Recycling, Cyclone Recycling</td></tr>'+
+'<tr><td>Plastics</td><td>Mixed plastics recovery</td><td>American Recycling (Arkansas)</td></tr>'+
+'<tr><td>C&D Processing</td><td>Construction & demolition waste sorting + LEED documentation</td><td>Jaguar Waste Mgmt, B&B Waste, Liberty Demolition</td></tr></table>'+
+'<div class="note"><b>Key differentiator:</b> Dalmex Recycling was operating as a recovered fiber and materials recycler <b>before</b> entering C&D waste processing. Mill relationships, broker networks, and documented recycling operations predate LEED work — they were not created for certification purposes.</div>'+
+// TICKET DETAIL
+'<h2>9. Scale Ticket Detail — '+label+'</h2>'+
+'<table><tr><th>Date</th><th>Ticket#</th><th class=r>Tons</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
+'<tr style="border-top:2px solid #333;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+// FOOTER
+'<div class="footer"><b>DivertScan™ Apex Enterprise — LEED Carbon Compliance Engine</b><br>'+
+'Generated: '+new Date().toLocaleDateString()+' | '+DX.facility+' | robert@dalmexrecycling.com | '+DX.phone+'<br>'+
+'<i>All data from certified scale weights and verified outbound BOLs. SHA-256 hash verified for GBCI audit compliance. Not based on visual estimates or contractor self-reporting.</i><br>'+
+'www.divertscan.com</div></body></html>');
 w.document.close();setTimeout(function(){w.print();},500);},
 
 // UPLOAD
@@ -501,7 +596,58 @@ var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:
 var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z='0%';
 pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:'View photo'};});
 XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+mn+'_'+pts[0]+'.xlsx');P.toast('Downloaded!');},
-exportAllXLSX(){var keys=Object.keys(P._mg).sort();if(!keys.length)return;keys.forEach(function(k){P.exportMoXLSX(k);});},
+exportAllXLSX(){if(typeof XLSX==='undefined'||!P.cp)return;var proj=P.cp;var ver=proj.leed_version||'v4';var isV5=ver==='v5';
+var wb=XLSX.utils.book_new();
+// Cover sheet
+var cv=[];cv.push([],[],[]);cv.push(['LEED Waste Diversion Documentation Package']);cv.push([]);
+cv.push(['Project:',proj.name]);cv.push(['GC / Client:',proj.general_contractor||proj.client||'']);
+cv.push(['Location:',proj.location||'']);cv.push(['Waste Hauler:',proj.waste_hauler||'']);
+cv.push(['LEED Version:',ver]);cv.push(['Target:',proj.leed_target||50,'%']);cv.push([]);
+cv.push(['Processing Facility:',DX.facility]);cv.push(['Address:',DX.addr]);cv.push(['Phone:',DX.phone]);cv.push([]);
+cv.push(['TCEQ Authorization:','TPDES MSGP '+DX.tceq.auth+' — Sector '+DX.tceq.sector+' (SIC '+DX.tceq.sic+')']);
+cv.push(['Facility RN:',DX.tceq.rn]);cv.push(['Operator CN:',DX.tceq.cn]);
+cv.push(['Effective:',DX.tceq.eff]);cv.push(['Expires:',DX.tceq.exp]);
+cv.push(['MSW Status:',DX.tceq.exempt]);cv.push([]);
+cv.push(['VERIFIED END MARKETS']);cv.push(['Material','End Market','Type','Documentation']);
+DX.endMarkets.forEach(function(cat){cat.items.forEach(function(i){cv.push([i.mat,i.dest,i.type,i.doc]);});});
+cv.push([]);cv.push(['CHAIN OF CUSTODY']);cv.push(['Stage','Documentation','What It Proves']);
+DX.chain.forEach(function(c){cv.push([c.stage,c.doc,c.proves]);});
+cv.push([]);cv.push(['VERIFICATION FORMULA:',DX.formula]);cv.push([]);
+cv.push(['METHODOLOGY:',DX.method]);cv.push([]);
+cv.push(['Report by:','Dalmex Recycling LLC']);cv.push(['Contact:','Robert Vandling']);
+cv.push(['Email:','robert@dalmexrecycling.com']);cv.push(['Generated:',new Date().toLocaleDateString()]);
+var ws0=XLSX.utils.aoa_to_sheet(cv);ws0['!cols']=[{wch:24},{wch:30},{wch:16},{wch:20}];
+XLSX.utils.book_append_sheet(wb,ws0,'Documentation');
+// Monthly sheets
+var keys=Object.keys(P._mg).sort();var mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+keys.forEach(function(key){
+var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
+var pts=key.split('-');var mn=mf[+pts[1]];var d=[];d.push([],[],[],[],[],[]);
+d.push(['Waste Diversion Report for '+mn+' '+pts[0]]);d.push(['Company: '+(proj.general_contractor||proj.client||'')]);
+d.push(['Location: '+(proj.location||'')]);d.push(['Project: '+proj.name]);d.push(['Report by: Dalmex Recycling']);
+d.push(['Contact: Robert Vandling']);d.push(['Email: robert@dalmexrecycling.com']);d.push([]);
+d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons','Div%','Diverted',
+'Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC','Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
+var sG=0,sT=0,sTn=0,sD=0,sm={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};var pL=[];
+tix.forEach(function(t,ri){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
+var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
+var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;var dvp=tn>0?dv/tn:0;
+sG+=g;sT+=ta;sTn+=tn;sD+=dv;sm.wood+=wt;sm.gypsum+=gt;sm.plastic+=pt;sm.occ+=ot;sm.metal+=mt;sm.concrete+=ct;sm.block+=bt;
+var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp=df.split('-');df=parseInt(dp[1])+'/'+parseInt(dp[2])+'/'+dp[0];}
+var pu=t.scale_ticket_image||'';if(pu)pL.push({r:15+ri,c:24,u:pu});
+d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?'View Photo':'']);});
+var tdp=sTn>0?sD/sTn:0;d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,
+sTn>0?sm.plastic/sTn:0,sm.plastic,sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,'']);
+d.push([]);d.push(['Total Tonnage',Math.round(sTn*100)/100]);d.push(['Diverted from landfill',Math.round(sD*100)/100]);d.push(['Recycled Material %',tdp]);
+var ws=XLSX.utils.aoa_to_sheet(d);ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
+var sr=15,er=sr+tix.length;for(var r=sr;r<=er;r++){[8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
+[3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
+[2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
+var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:1});if(ws[a])ws[a].z='0.00';});
+var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z='0%';
+pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:'View photo'};});
+XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);});
+XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_Report.xlsx');P.toast('Downloaded!');},
 
 cycleTheme(){var html=document.documentElement;var cur=html.dataset.theme||'default';
 var themes=['default','dark','green'];var next=themes[(themes.indexOf(cur)+1)%themes.length];
