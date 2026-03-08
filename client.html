@@ -318,10 +318,12 @@ var html='';keys.forEach(function(key){var mtix=months[key],pts=key.split('-'),l
 var mtons=0,mdiv=0;mtix.forEach(function(t){mtons+=+(t.net_tons)||0;mdiv+=+(t.diverted_tons)||0;});
 var mrate=mtons>0?Math.round(mdiv/mtons*100):0;
 var mc=mrate>=tgt?'var(--success)':mrate>=tgt*.67?'var(--warning)':'var(--danger)';
-html+='<div class="c" style="padding:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+html+='<div class="c" style="padding:10px">'+
+'<div onclick="P.drillMonth(\''+proj.id+'\',\''+key+'\')" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer">'+
 '<div style="font-size:1rem;font-weight:800;color:'+mc+';min-width:36px">'+mrate+'%</div>'+
 '<div style="flex:1"><div style="font-weight:700;font-size:.8rem">'+label+'</div>'+
-'<div style="font-size:.55rem;color:var(--text-m)">'+mtix.length+' tickets • '+P.f(mtons)+' T</div></div></div>';
+'<div style="font-size:.55rem;color:var(--text-m)">'+mtix.length+' tickets • '+P.f(mtons)+' T</div></div>'+
+'<div style="font-size:.6rem;color:var(--primary);font-weight:600">View Report ›</div></div>';
 // Ticket rows
 html+='<div style="font-size:.65rem">';
 mtix.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
@@ -335,6 +337,19 @@ if(!keys.length)html='<div class="c" style="text-align:center;padding:16px;color
 document.getElementById('pjdMonths').innerHTML=html;},
 
 closePjDetail(){document.getElementById('pjDetail').classList.add('hidden');document.getElementById('pjListView').classList.remove('hidden');P._pjd=null;P._pjtx=null;},
+
+async drillMonth(projId,monthKey){
+// Select project in Reports, then open the month detail
+P.cp=P.pj.find(function(p){return p.id===projId;});if(!P.cp)return;
+P.tx=await P.api('tickets?project_id=eq.'+projId+'&order=created_at.desc')||[];
+// Switch to Reports tab with this project
+document.getElementById('projBar').classList.add('hidden');
+document.getElementById('dashContent').classList.remove('hidden');
+P.renderDash();
+P.go('dash');
+// Now open the month detail overlay
+P.openMo(monthKey);
+},
 
 showPjTk(id){if(!P._pjtx)return;var t=P._pjtx.find(function(x){return x.id===id;});if(!t)return;
 var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
