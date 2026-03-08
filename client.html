@@ -458,18 +458,33 @@ else{try{navigator.clipboard.writeText(txt);P.toast('Copied!');}catch(x){prompt(
 // MONTH DETAIL
 openMo(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
 P._mtx=tix;var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var gc=rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)';
+var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0,co2=0,mc={};
+Object.keys(MT).forEach(function(k){mc[k]=0;});
+tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;
+Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
+var rate=tons>0?Math.round(div/tons*100):0;var tgt=P.cp?P.cp.leed_target||50:50;
+var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+// Materials HTML
+var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tons>0?mc[k]/tons*100:0;
+mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%</div></div>';});
 var el=document.createElement('div');el.id='moDtl';
 el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
 el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">'+label+'</div>'+
 '<div class="topnav-right">'+
-'<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📥</div>'+
-'<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📄</div>'+
-'<div class="b bsm" onclick="P.emailRpt(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📧</div>'+
-'<button class="topnav-btn" onclick="document.getElementById(\'moDtl\').remove()">✕</button></div></div>'+
-'<div class="wrap"><div class="c" style="text-align:center"><div style="font-size:1.6rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
-'<div style="font-size:.65rem;color:var(--text-m)">'+tix.length+' tickets • '+P.f(tons)+' T • '+P.f(div)+' diverted</div></div>'+
+'<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem">📥 XLSX</div>'+
+'<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem">📄 PDF</div>'+
+'<div class="b bsm" onclick="P.emailRpt(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem">📧</div>'+
+'<div onclick="document.getElementById(\'moDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕</div></div></div>'+
+'<div class="wrap">'+
+'<div class="c"><div class="sg">'+
+'<div class="sc"><div class="sv">'+tix.length+'</div><div class="sl">Tickets</div></div>'+
+'<div class="sc"><div class="sv">'+P.f(tons)+'</div><div class="sl">Total T</div></div>'+
+'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(div)+'</div><div class="sl">Diverted</div></div>'+
+'<div class="sc"><div class="sv" style="color:var(--warning)">'+P.f(co2)+'</div><div class="sl">CO₂e</div></div></div>'+
+'<div style="padding:8px 0;text-align:center"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
+'<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
+'<div style="font-size:.6rem;color:var(--text-m)">LEED '+(P.cp?P.cp.leed_version||'v4':'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>'+
+(mh?'<div class="ct" style="margin-top:6px">📊 Materials</div>'+mh:'')+'</div>'+
 '<div class="c" style="padding:8px"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px"></div>'+
 '<div id="moList"></div></div>';
 document.body.appendChild(el);P.renderMoTix(tix);},
