@@ -519,10 +519,17 @@ P.renderMoTix(P._mtx.filter(function(t){return(t.ticket_number||'').toLowerCase(
 emailRpt(key){var tix=P._mg[key]||[];var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
 var rate=tons>0?Math.round(div/tons*100):0;var proj=P.cp?P.cp.name:'Project';
-window.open('mailto:?subject='+encodeURIComponent(proj+' — '+label+' Waste Diversion Report')+'&body='+encodeURIComponent(
-'Hi,\n\nPlease find the '+label+' waste diversion report for '+proj+'.\n\nSummary:\n'+
-'Tickets: '+tix.length+'\nTotal Tonnage: '+P.f(tons)+' T\nDiverted: '+P.f(div)+' T\nDiversion Rate: '+rate+'%\n\n'+
-'Download report: https://divertscan.com/client.html\n\nBest regards,\n'+(P.cl?P.cl.name:'')));},
+var subj=proj+' — '+label+' Waste Diversion Report';
+var body='Hi,\n\nPlease find the '+label+' waste diversion report for '+proj+'.\n\nSummary:\nTickets: '+tix.length+'\nTotal Tonnage: '+P.f(tons)+' T\nDiverted: '+P.f(div)+' T\nDiversion Rate: '+rate+'%\n\nBest regards,\n'+(P.cl?P.cl.name:'');
+var el=document.createElement('div');el.id='emailMenu';
+el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:flex-end;justify-content:center';
+el.onclick=function(e){if(e.target===el)el.remove();};
+el.innerHTML='<div style="background:var(--card);border-radius:16px 16px 0 0;max-width:400px;width:100%;padding:20px;animation:tu .2s ease">'+
+'<div style="font-weight:800;font-size:.9rem;margin-bottom:12px">Share Report</div>'+
+'<div onclick="window.location.href=\'mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body)+'\';document.getElementById(\'emailMenu\').remove()" style="padding:14px;background:var(--primary);color:#fff;border-radius:10px;text-align:center;font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:8px">📧 Open in Email</div>'+
+'<div onclick="navigator.clipboard.writeText(\''+subj.replace(/'/g,"\\'")+String.fromCharCode(10)+String.fromCharCode(10)+body.replace(/'/g,"\\'").replace(/\n/g,String.fromCharCode(92)+'n')+'\').then(function(){P.toast(\'Copied to clipboard!\')}).catch(function(){});document.getElementById(\'emailMenu\').remove()" style="padding:14px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:10px;text-align:center;font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:8px">📋 Copy to Clipboard</div>'+
+'<div onclick="document.getElementById(\'emailMenu\').remove()" style="padding:12px;text-align:center;color:var(--text-m);font-size:.8rem;cursor:pointer">Cancel</div></div>';
+document.body.appendChild(el);},
 
 genPDF(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
 var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
