@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -87,6 +88,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div class="wrap" id="app">
 
 <!-- LOGIN -->
+
 <div id="vLogin">
 <div style="text-align:center;padding:32px 0 16px">
 <div style="font-size:1.8rem;margin-bottom:4px">🔐</div>
@@ -103,6 +105,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <!-- REPORTS/DASHBOARD -->
+
 <div id="vDash" class="hidden">
 <div class="c" id="projBar"><div class="ct">Select Project</div><div id="projList"></div></div>
 <div id="dashContent" class="hidden">
@@ -127,6 +130,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <!-- UPLOAD -->
+
 <div id="vUpload" class="hidden">
 <div class="c"><div class="ct">📷 Upload Photos</div><div id="uProjList"></div></div>
 <div id="uForm" class="hidden">
@@ -158,12 +162,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <!-- HISTORY -->
+
 <div id="vHistory" class="hidden">
 <div class="c"><div class="ct">📋 Submission History</div>
 <div id="hList"><div style="text-align:center;padding:12px;color:var(--text-d)">Loading...</div></div>
 </div></div>
 
 <!-- PROJECTS -->
+
 <div id="vProjects" class="hidden">
 <div id="pjListView">
 <div class="c"><div class="ct">🏗️ Your Projects</div><div id="pjCards"></div></div>
@@ -205,7 +211,7 @@ endMarkets:[
 {cat:'Plastics',items:[{mat:'Mixed Plastics',dest:'American Recycling',type:'Processor (AR)',doc:'BOL + Weight Ticket'}]},
 {cat:'Wood — Reuse',items:[{mat:'Lumber/Wood',dest:'Dalmex Pallets (Internal)',type:'REUSE/SALVAGE',doc:'Internal Transfer Records'}]}
 ],
-chain:[{stage:'1. Inbound',doc:'Certified scale ticket + DivertScan photo + GPS',proves:'Total weight received from specific project'},
+chain:[{stage:'1. Inbound',doc:'Commercial scale ticket + DivertScan photo + GPS',proves:'Total weight received from specific project'},
 {stage:'2. Processing',doc:'Internal sorting records + QC notes',proves:'Professional sorting by trained personnel'},
 {stage:'3. Outbound — Recycled',doc:'BOL to GP, Smurfit, CMC, Cyclone, etc.',proves:'Exact tons confirmed by receiving facilities'},
 {stage:'4. Outbound — Reused',doc:'Internal transfer to Dalmex Pallets',proves:'Material reused in manufacturing (v5: 200% credit)'},
@@ -216,512 +222,513 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
-async api(e,m,b){var o={method:m||'GET',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'}};
-if(!m||m==='GET')o.headers['Accept']='application/json';if(b)o.body=JSON.stringify(b);
-if(m==='PATCH'||m==='POST')o.headers['Prefer']='return=representation';
-try{var r=await fetch(SB+'/rest/v1/'+e,o);if(!r.ok)return null;var t=await r.text();return t?JSON.parse(t):[];}catch(x){return null;}},
+async api(e,m,b){var o={method:m||‘GET’,headers:{‘apikey’:SK,‘Authorization’:‘Bearer ‘+SK,‘Content-Type’:‘application/json’}};
+if(!m||m===‘GET’)o.headers[‘Accept’]=‘application/json’;if(b)o.body=JSON.stringify(b);
+if(m===‘PATCH’||m===‘POST’)o.headers[‘Prefer’]=‘return=representation’;
+try{var r=await fetch(SB+’/rest/v1/’+e,o);if(!r.ok)return null;var t=await r.text();return t?JSON.parse(t):[];}catch(x){return null;}},
 
-async hp(pw){var s='divertscan_salt_'+pw;if(window.crypto&&window.crypto.subtle){var d=new TextEncoder().encode(s);var h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');}return null;},
+async hp(pw){var s=‘divertscan_salt_’+pw;if(window.crypto&&window.crypto.subtle){var d=new TextEncoder().encode(s);var h=await crypto.subtle.digest(‘SHA-256’,d);return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,‘0’);}).join(’’);}return null;},
 
 // AUTH
-async login(){var em=document.getElementById('lEmail').value.trim().toLowerCase();var pw=document.getElementById('lPw').value;
-var err=document.getElementById('lErr');var ld=document.getElementById('lLoad');err.style.display='none';
-if(!em||!pw){err.textContent='Enter email and password';err.style.display='block';return;}
-ld.style.display='block';
-try{var hash=await P.hp(pw);if(!hash){err.textContent='Secure context required (HTTPS)';err.style.display='block';ld.style.display='none';return;}
-var r=await fetch(SB+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(em)+'&password_hash=eq.'+encodeURIComponent(hash)+'&is_active=eq.true',{headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Accept':'application/json'}});
-var c=await r.json();ld.style.display='none';
-if(!c||!c.length){err.textContent='Invalid email or password';err.style.display='block';return;}
-P.cl=c[0];P.api('client_accounts?id=eq.'+P.cl.id,'PATCH',{last_login:new Date().toISOString()});
-try{localStorage.setItem('ds_cid',P.cl.id);}catch(x){}await P.loadPj();P.showApp();
-}catch(x){ld.style.display='none';err.textContent='Error: '+x.message;err.style.display='block';}},
+async login(){var em=document.getElementById(‘lEmail’).value.trim().toLowerCase();var pw=document.getElementById(‘lPw’).value;
+var err=document.getElementById(‘lErr’);var ld=document.getElementById(‘lLoad’);err.style.display=‘none’;
+if(!em||!pw){err.textContent=‘Enter email and password’;err.style.display=‘block’;return;}
+ld.style.display=‘block’;
+try{var hash=await P.hp(pw);if(!hash){err.textContent=‘Secure context required (HTTPS)’;err.style.display=‘block’;ld.style.display=‘none’;return;}
+var r=await fetch(SB+’/rest/v1/client_accounts?email=eq.’+encodeURIComponent(em)+’&password_hash=eq.’+encodeURIComponent(hash)+’&is_active=eq.true’,{headers:{‘apikey’:SK,‘Authorization’:’Bearer ’+SK,‘Accept’:‘application/json’}});
+var c=await r.json();ld.style.display=‘none’;
+if(!c||!c.length){err.textContent=‘Invalid email or password’;err.style.display=‘block’;return;}
+P.cl=c[0];P.api(‘client_accounts?id=eq.’+P.cl.id,‘PATCH’,{last_login:new Date().toISOString()});
+try{localStorage.setItem(‘ds_cid’,P.cl.id);}catch(x){}await P.loadPj();P.showApp();
+}catch(x){ld.style.display=‘none’;err.textContent=’Error: ’+x.message;err.style.display=‘block’;}},
 
-async loadPj(){var a=await P.api('client_project_access?client_id=eq.'+P.cl.id+'&select=project_id');
+async loadPj(){var a=await P.api(‘client_project_access?client_id=eq.’+P.cl.id+’&select=project_id’);
 if(!a||!a.length){P.pj=[];return;}var ids=a.map(function(x){return x.project_id;});
-P.pj=await P.api('projects?id=in.('+ids.join(',')+')&order=name')||[];},
+P.pj=await P.api(‘projects?id=in.(’+ids.join(’,’)+’)&order=name’)||[];},
 
-showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';P.go('dash');P.loadBadge();},
+showApp(){document.getElementById(‘vLogin’).classList.add(‘hidden’);document.getElementById(‘nav’).style.display=‘flex’;P.go(‘dash’);P.loadBadge();},
 
-logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];try{localStorage.removeItem('ds_cid');}catch(x){}
-document.getElementById('nav').style.display='none';['vDash','vUpload','vHistory','vProjects'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
-document.getElementById('vLogin').classList.remove('hidden');document.getElementById('lPw').value='';},
+logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];try{localStorage.removeItem(‘ds_cid’);}catch(x){}
+document.getElementById(‘nav’).style.display=‘none’;[‘vDash’,‘vUpload’,‘vHistory’,‘vProjects’].forEach(function(id){document.getElementById(id).classList.add(‘hidden’);});
+document.getElementById(‘vLogin’).classList.remove(‘hidden’);document.getElementById(‘lPw’).value=’’;},
 
-go(v){['vDash','vUpload','vHistory','vProjects'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
-document.querySelectorAll('.topnav-link').forEach(function(b){b.classList.toggle('active',b.dataset.v===v);});
-if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');
-if(P.cp){document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');}
-else{document.getElementById('projBar').classList.remove('hidden');document.getElementById('dashContent').classList.add('hidden');P.renderPL('projList','dash');}}
-if(v==='projects'){document.getElementById('vProjects').classList.remove('hidden');P.renderPjTab();}
-if(v==='upload'){document.getElementById('vUpload').classList.remove('hidden');P.renderPL('uProjList','upload');}
-if(v==='history'){document.getElementById('vHistory').classList.remove('hidden');P.loadHist();}},
+go(v){[‘vDash’,‘vUpload’,‘vHistory’,‘vProjects’].forEach(function(id){document.getElementById(id).classList.add(‘hidden’);});
+document.querySelectorAll(’.topnav-link’).forEach(function(b){b.classList.toggle(‘active’,b.dataset.v===v);});
+if(v===‘dash’){document.getElementById(‘vDash’).classList.remove(‘hidden’);
+if(P.cp){document.getElementById(‘projBar’).classList.add(‘hidden’);document.getElementById(‘dashContent’).classList.remove(‘hidden’);}
+else{document.getElementById(‘projBar’).classList.remove(‘hidden’);document.getElementById(‘dashContent’).classList.add(‘hidden’);P.renderPL(‘projList’,‘dash’);}}
+if(v===‘projects’){document.getElementById(‘vProjects’).classList.remove(‘hidden’);P.renderPjTab();}
+if(v===‘upload’){document.getElementById(‘vUpload’).classList.remove(‘hidden’);P.renderPL(‘uProjList’,‘upload’);}
+if(v===‘history’){document.getElementById(‘vHistory’).classList.remove(‘hidden’);P.loadHist();}},
 
 async loadBadge(){var ids=P.pj.map(function(p){return p.id;});if(!ids.length)return;
-var d=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&status=eq.pending&select=id');
-var n=d?d.length:0;var b=document.getElementById('navBadge');if(n>0){b.textContent=n;b.classList.remove('hidden');}else{b.classList.add('hidden');}},
+var d=await P.api(‘photo_queue?project_id=in.(’+ids.join(’,’)+’)&status=eq.pending&select=id’);
+var n=d?d.length:0;var b=document.getElementById(‘navBadge’);if(n>0){b.textContent=n;b.classList.remove(‘hidden’);}else{b.classList.add(‘hidden’);}},
 
 renderPL(el,mode){document.getElementById(el).innerHTML=P.pj.map(function(p){
-return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\''+mode+'\',\''+p.id+'\')">'+
-'<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%</div></div>';}).join('');},
+return ‘<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\''+mode+'\',\''+p.id+'\')">’+
+‘<div class="pn">’+P.esc(p.name)+’</div><div class="pm">’+[p.client,p.location].filter(Boolean).join(’ • ‘)+’</div>’+
+‘<div class="pm">LEED ‘+(p.leed_version||‘v4’)+’ • Target: ‘+(p.leed_target||50)+’%</div></div>’;}).join(’’);},
 
-async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
-P.tx=await P.api('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];
-document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');
+async pickPj(mode,id){if(mode===‘dash’){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
+P.tx=await P.api(‘tickets?project_id=eq.’+id+’&order=created_at.desc’)||[];
+document.getElementById(‘projBar’).classList.add(‘hidden’);document.getElementById(‘dashContent’).classList.remove(‘hidden’);
 P.renderDash();}else{P._up=id;P.showUForm();}},
 
-backToProj(){document.getElementById('dashContent').classList.add('hidden');document.getElementById('projBar').classList.remove('hidden');P.cp=null;P.renderPL('projList','dash');},
+backToProj(){document.getElementById(‘dashContent’).classList.add(‘hidden’);document.getElementById(‘projBar’).classList.remove(‘hidden’);P.cp=null;P.renderPL(‘projList’,‘dash’);},
 
 // EDIT PROJECT
 editProj(){if(P.cp)P.editPjById(P.cp.id);},
 
 async saveProj(){if(!P._editPj)return;
-var upd={name:document.getElementById('epName').value.trim(),client:document.getElementById('epClient').value.trim(),
-waste_hauler:document.getElementById('epHauler').value.trim(),location:document.getElementById('epLoc').value.trim()};
-await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);
+var upd={name:document.getElementById(‘epName’).value.trim(),client:document.getElementById(‘epClient’).value.trim(),
+waste_hauler:document.getElementById(‘epHauler’).value.trim(),location:document.getElementById(‘epLoc’).value.trim()};
+await P.api(‘projects?id=eq.’+P._editPj.id,‘PATCH’,upd);Object.assign(P._editPj,upd);
 if(P.cp&&P.cp.id===P._editPj.id)Object.assign(P.cp,upd);
-document.getElementById('editProjDtl').remove();P.renderDash();P.toast('Project updated');},
+document.getElementById(‘editProjDtl’).remove();P.renderDash();P.toast(‘Project updated’);},
 
 // PROJECTS TAB
-renderPjTab(){document.getElementById('pjDetail').classList.add('hidden');document.getElementById('pjListView').classList.remove('hidden');
-document.getElementById('pjCards').innerHTML=P.pj.map(function(p){
-return '<div class="pp" onclick="P.openPjDetail(\''+p.id+'\')" style="display:flex;align-items:center;gap:10px">'+
-'<div style="flex:1"><div class="pn">'+P.esc(p.name)+'</div>'+
-'<div class="pm">'+[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%</div></div>'+
-'<div style="display:flex;gap:4px"><div class="b bsm bo" onclick="event.stopPropagation();P.editPjById(\''+p.id+'\')">✏️</div>'+
-'<div style="color:var(--text-d)">›</div></div></div>';}).join('');},
+renderPjTab(){document.getElementById(‘pjDetail’).classList.add(‘hidden’);document.getElementById(‘pjListView’).classList.remove(‘hidden’);
+document.getElementById(‘pjCards’).innerHTML=P.pj.map(function(p){
+return ‘<div class="pp" onclick="P.openPjDetail(\''+p.id+'\')" style="display:flex;align-items:center;gap:10px">’+
+‘<div style="flex:1"><div class="pn">’+P.esc(p.name)+’</div>’+
+‘<div class="pm">’+[p.client,p.waste_hauler,p.location].filter(Boolean).join(’ • ‘)+’</div>’+
+‘<div class="pm">LEED ‘+(p.leed_version||‘v4’)+’ • Target: ‘+(p.leed_target||50)+’%</div></div>’+
+‘<div style="display:flex;gap:4px"><div class="b bsm bo" onclick="event.stopPropagation();P.editPjById(\''+p.id+'\')">✏️</div>’+
+‘<div style="color:var(--text-d)">›</div></div></div>’;}).join(’’);},
 
 async openPjDetail(id){var proj=P.pj.find(function(p){return p.id===id;});if(!proj)return;
-P._pjd=proj;var tix=await P.api('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];P._pjtx=tix;
-document.getElementById('pjListView').classList.add('hidden');document.getElementById('pjDetail').classList.remove('hidden');
-document.getElementById('pjdName').textContent=proj.name;
-document.getElementById('pjdMeta').textContent=[proj.client,proj.waste_hauler,proj.location].filter(Boolean).join(' • ')+' • LEED '+(proj.leed_version||'v4');
+P._pjd=proj;var tix=await P.api(‘tickets?project_id=eq.’+id+’&order=created_at.desc’)||[];P._pjtx=tix;
+document.getElementById(‘pjListView’).classList.add(‘hidden’);document.getElementById(‘pjDetail’).classList.remove(‘hidden’);
+document.getElementById(‘pjdName’).textContent=proj.name;
+document.getElementById(‘pjdMeta’).textContent=[proj.client,proj.waste_hauler,proj.location].filter(Boolean).join(’ • ‘)+’ • LEED ‘+(proj.leed_version||‘v4’);
 var tot=0,dv=0;tix.forEach(function(t){tot+=+(t.net_tons)||0;dv+=+(t.diverted_tons)||0;});
 var rate=tot>0?Math.round(dv/tot*100):0;var tgt=proj.leed_target||50;
-var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
-document.getElementById('pjdStats').innerHTML='<div class="sc"><div class="sv">'+tix.length+'</div><div class="sl">Tickets</div></div>'+
-'<div class="sc"><div class="sv">'+P.f(tot)+'</div><div class="sl">Total T</div></div>'+
-'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(dv)+'</div><div class="sl">Diverted</div></div>'+
-'<div class="sc"><div class="sv" style="color:'+gc+'">'+rate+'%</div><div class="sl">Rate</div></div>';
-document.getElementById('pjdGauge').innerHTML='<div style="padding:6px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'">'+
-'<div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:2px"></div></div>'+
-'<div style="font-size:.55rem;color:var(--text-m);margin-top:3px">Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>';
+var gc=rate>=tgt?‘var(–success)’:rate>=tgt*.67?‘var(–warning)’:‘var(–danger)’;
+document.getElementById(‘pjdStats’).innerHTML=’<div class="sc"><div class="sv">’+tix.length+’</div><div class="sl">Tickets</div></div>’+
+‘<div class="sc"><div class="sv">’+P.f(tot)+’</div><div class="sl">Total T</div></div>’+
+‘<div class="sc"><div class="sv" style="color:var(--success)">’+P.f(dv)+’</div><div class="sl">Diverted</div></div>’+
+‘<div class="sc"><div class="sv" style="color:'+gc+'">’+rate+’%</div><div class="sl">Rate</div></div>’;
+document.getElementById(‘pjdGauge’).innerHTML=’<div style="padding:6px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'">’+
+‘<div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:2px"></div></div>’+
+‘<div style="font-size:.55rem;color:var(--text-m);margin-top:3px">Target: ‘+tgt+’% • ‘+(rate>=tgt?‘✅ On Track’:‘⚠️ ‘+(tgt-rate)+’% below’)+’</div></div>’;
 // Group by month
-var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-tix.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
+var months={},mn=[’’,‘Jan’,‘Feb’,‘Mar’,‘Apr’,‘May’,‘Jun’,‘Jul’,‘Aug’,‘Sep’,‘Oct’,‘Nov’,‘Dec’];
+tix.forEach(function(t){var k=(t.ticket_date||’’).substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
 var keys=Object.keys(months).sort().reverse();
-var html='';keys.forEach(function(key){var mtix=months[key],pts=key.split('-'),label=mn[+pts[1]]+' '+pts[0];
+var html=’’;keys.forEach(function(key){var mtix=months[key],pts=key.split(’-’),label=mn[+pts[1]]+’ ‘+pts[0];
 var mtons=0,mdiv=0;mtix.forEach(function(t){mtons+=+(t.net_tons)||0;mdiv+=+(t.diverted_tons)||0;});
 var mrate=mtons>0?Math.round(mdiv/mtons*100):0;
-var mc=mrate>=tgt?'var(--success)':mrate>=tgt*.67?'var(--warning)':'var(--danger)';
-html+='<div class="c" style="padding:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
-'<div style="font-size:1rem;font-weight:800;color:'+mc+';min-width:36px">'+mrate+'%</div>'+
-'<div style="flex:1"><div style="font-weight:700;font-size:.8rem">'+label+'</div>'+
-'<div style="font-size:.55rem;color:var(--text-m)">'+mtix.length+' tickets • '+P.f(mtons)+' T</div></div></div>';
+var mc=mrate>=tgt?‘var(–success)’:mrate>=tgt*.67?‘var(–warning)’:‘var(–danger)’;
+html+=’<div class="c" style="padding:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">’+
+‘<div style="font-size:1rem;font-weight:800;color:'+mc+';min-width:36px">’+mrate+’%</div>’+
+‘<div style="flex:1"><div style="font-weight:700;font-size:.8rem">’+label+’</div>’+
+‘<div style="font-size:.55rem;color:var(--text-m)">’+mtix.length+’ tickets • ‘+P.f(mtons)+’ T</div></div></div>’;
 // Ticket rows
-html+='<div style="font-size:.65rem">';
-mtix.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
-html+='<div onclick="P.showPjTk(\''+t.id+'\')" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer">'+
-'<div style="font-weight:700;min-width:52px">#'+t.ticket_number+'</div>'+
-'<div style="flex:1;color:var(--text-m)">'+P.fd(t.ticket_date)+(t.hauler?' • '+t.hauler:'')+'</div>'+
-'<div class="m" style="min-width:36px;text-align:right">'+P.f(t.net_tons)+' T</div>'+
-'<div class="m bld" style="min-width:30px;text-align:right;color:'+dc+'">'+dp+'%</div></div>';});
-html+='</div></div>';});
-if(!keys.length)html='<div class="c" style="text-align:center;padding:16px;color:var(--text-d);font-size:.75rem">No tickets yet</div>';
-document.getElementById('pjdMonths').innerHTML=html;},
+html+=’<div style="font-size:.65rem">’;
+mtix.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?‘var(–success)’:dp>=50?‘var(–warning)’:‘var(–danger)’;
+html+=’<div onclick="P.showPjTk(\''+t.id+'\')" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer">’+
+‘<div style="font-weight:700;min-width:52px">#’+t.ticket_number+’</div>’+
+‘<div style="flex:1;color:var(--text-m)">’+P.fd(t.ticket_date)+(t.hauler?’ • ‘+t.hauler:’’)+’</div>’+
+‘<div class="m" style="min-width:36px;text-align:right">’+P.f(t.net_tons)+’ T</div>’+
+‘<div class="m bld" style="min-width:30px;text-align:right;color:'+dc+'">’+dp+’%</div></div>’;});
+html+=’</div></div>’;});
+if(!keys.length)html=’<div class="c" style="text-align:center;padding:16px;color:var(--text-d);font-size:.75rem">No tickets yet</div>’;
+document.getElementById(‘pjdMonths’).innerHTML=html;},
 
-closePjDetail(){document.getElementById('pjDetail').classList.add('hidden');document.getElementById('pjListView').classList.remove('hidden');P._pjd=null;P._pjtx=null;},
+closePjDetail(){document.getElementById(‘pjDetail’).classList.add(‘hidden’);document.getElementById(‘pjListView’).classList.remove(‘hidden’);P._pjd=null;P._pjtx=null;},
 
 showPjTk(id){if(!P._pjtx)return;var t=P._pjtx.find(function(x){return x.id===id;});if(!t)return;
-var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
-var mats='';Object.keys(MT).forEach(function(k){var pct=t[k+'_pct']||0;if(pct<=0)return;
-mats+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct+'%</div></div>';});
-var photos='';if(t.scale_ticket_image)photos+='<div class="ct" style="margin-top:10px">📄 Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">';
+var dp=t.diversion_pct||0,dc=dp>=75?‘var(–success)’:dp>=50?‘var(–warning)’:‘var(–danger)’;
+var mats=’’;Object.keys(MT).forEach(function(k){var pct=t[k+’_pct’]||0;if(pct<=0)return;
+mats+=’<div class="mb"><div class="ml">’+MT[k].i+’ ‘+MT[k].n+’</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">’+pct+’%</div></div>’;});
+var photos=’’;if(t.scale_ticket_image)photos+=’<div class="ct" style="margin-top:10px">📄 Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">’;
 var da=Array.isArray(t.debris_images)?t.debris_images:[];
-if(da.length)photos+='<div class="ct" style="margin-top:10px">📸 Debris ('+da.length+')</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">'+
-da.map(function(u){return '<img src="'+u+'" onclick="window.open(\''+u+'\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">';}).join('')+'</div>';
-var el=document.createElement('div');el.id='tkDtl';
-el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket '+t.ticket_number+'</div>'+
-'<div class="topnav-right"><div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
-'<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fd(t.ticket_date)+' • '+(t.hauler||'')+' • '+(P._pjd?P._pjd.name:'')+'</div>'+
-'<div class="sg"><div class="sc"><div class="sv">'+P.f(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
-'<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
-'<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
-'<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div></div></div>'+
-(mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
-'<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
+if(da.length)photos+=’<div class="ct" style="margin-top:10px">📸 Debris (’+da.length+’)</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">’+
+da.map(function(u){return ‘<img src="'+u+'" onclick="window.open(\''+u+'\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">’;}).join(’’)+’</div>’;
+var el=document.createElement(‘div’);el.id=‘tkDtl’;
+el.style.cssText=‘position:fixed;inset:0;background:var(–bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch’;
+el.innerHTML=’<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket ‘+t.ticket_number+’</div>’+
+‘<div class="topnav-right"><div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>’+
+‘<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">’+P.fd(t.ticket_date)+’ • ‘+(t.hauler||’’)+’ • ‘+(P._pjd?P._pjd.name:’’)+’</div>’+
+‘<div class="sg"><div class="sc"><div class="sv">’+P.f(t.gross_lbs)+’</div><div class="sl">Gross lbs</div></div>’+
+‘<div class="sc"><div class="sv">’+P.f(t.tare_lbs)+’</div><div class="sl">Tare lbs</div></div>’+
+‘<div class="sc"><div class="sv bld">’+P.f(t.net_tons)+’</div><div class="sl">Net Tons</div></div>’+
+‘<div class="sc"><div class="sv" style="color:'+dc+'">’+dp+’%</div><div class="sl">Diverted</div></div></div></div>’+
+(mats?’<div class="c"><div class="ct">📊 Materials</div>’+mats+’</div>’:’’)+(photos?’<div class="c">’+photos+’</div>’:’’)+
+‘<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>’;
 document.body.appendChild(el);},
 
 editPjById(id){var proj=P.pj.find(function(p){return p.id===id;});if(!proj)return;P._editPj=proj;
-var el=document.createElement('div');el.id='editProjDtl';
-el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Edit: '+P.esc(proj.name)+'</div>'+
-'<div class="topnav-right"><div onclick="document.getElementById(\'editProjDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
-'<div class="wrap"><div class="c">'+
-'<div class="fg"><label class="fl">Project Name</label><input type="text" class="fi" id="epName" value="'+P.esc(proj.name||'')+'"></div>'+
-'<div class="fg"><label class="fl">General Contractor / Client</label><input type="text" class="fi" id="epClient" value="'+P.esc(proj.client||proj.general_contractor||'')+'"></div>'+
-'<div class="fg"><label class="fl">Waste Hauler</label><input type="text" class="fi" id="epHauler" value="'+P.esc(proj.waste_hauler||'')+'"></div>'+
-'<div class="fg"><label class="fl">Location / Address</label><input type="text" class="fi" id="epLoc" value="'+P.esc(proj.location||'')+'"></div>'+
-'<div class="b bp" onclick="P.savePjEdit()">Save Changes</div>'+
-'</div></div>';
+var el=document.createElement(‘div’);el.id=‘editProjDtl’;
+el.style.cssText=‘position:fixed;inset:0;background:var(–bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch’;
+el.innerHTML=’<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Edit: ‘+P.esc(proj.name)+’</div>’+
+‘<div class="topnav-right"><div onclick="document.getElementById(\'editProjDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>’+
+‘<div class="wrap"><div class="c">’+
+‘<div class="fg"><label class="fl">Project Name</label><input type="text" class="fi" id="epName" value="'+P.esc(proj.name||'')+'"></div>’+
+‘<div class="fg"><label class="fl">General Contractor / Client</label><input type="text" class="fi" id="epClient" value="'+P.esc(proj.client||proj.general_contractor||'')+'"></div>’+
+‘<div class="fg"><label class="fl">Waste Hauler</label><input type="text" class="fi" id="epHauler" value="'+P.esc(proj.waste_hauler||'')+'"></div>’+
+‘<div class="fg"><label class="fl">Location / Address</label><input type="text" class="fi" id="epLoc" value="'+P.esc(proj.location||'')+'"></div>’+
+‘<div class="b bp" onclick="P.savePjEdit()">Save Changes</div>’+
+‘</div></div>’;
 document.body.appendChild(el);},
 
 editPjFromTab(){if(P._pjd)P.editPjById(P._pjd.id);},
 
 async savePjEdit(){if(!P._editPj)return;
-var upd={name:document.getElementById('epName').value.trim(),client:document.getElementById('epClient').value.trim(),
-waste_hauler:document.getElementById('epHauler').value.trim(),location:document.getElementById('epLoc').value.trim()};
-await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);
-document.getElementById('editProjDtl').remove();
-if(P._pjd&&P._pjd.id===P._editPj.id){document.getElementById('pjdName').textContent=upd.name;document.getElementById('pjdMeta').textContent=[upd.client,upd.waste_hauler,upd.location].filter(Boolean).join(' • ');}
-P.renderPjTab();P.toast('Project updated');},
+var upd={name:document.getElementById(‘epName’).value.trim(),client:document.getElementById(‘epClient’).value.trim(),
+waste_hauler:document.getElementById(‘epHauler’).value.trim(),location:document.getElementById(‘epLoc’).value.trim()};
+await P.api(‘projects?id=eq.’+P._editPj.id,‘PATCH’,upd);Object.assign(P._editPj,upd);
+document.getElementById(‘editProjDtl’).remove();
+if(P._pjd&&P._pjd.id===P._editPj.id){document.getElementById(‘pjdName’).textContent=upd.name;document.getElementById(‘pjdMeta’).textContent=[upd.client,upd.waste_hauler,upd.location].filter(Boolean).join(’ • ’);}
+P.renderPjTab();P.toast(‘Project updated’);},
 
 // DASHBOARD
 renderDash(){var p=P.cp,t=P.tx,tot=0,dv=0,co=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
 t.forEach(function(x){var tn=+(x.net_tons)||0;tot+=tn;dv+=+(x.diverted_tons)||0;co+=+(x.co2e_avoided)||0;
-Object.keys(MT).forEach(function(k){mc[k]+=tn*((x[k+'_pct']||0)/100);});});
+Object.keys(MT).forEach(function(k){mc[k]+=tn*((x[k+’_pct’]||0)/100);});});
 var rate=tot>0?Math.round(dv/tot*100):0,tgt=p.leed_target||50;
-var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
-document.getElementById('dName').textContent=p.name;
-document.getElementById('dMeta').textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
-document.getElementById('dStats').innerHTML='<div class="sc"><div class="sv">'+t.length+'</div><div class="sl">Tickets</div></div>'+
-'<div class="sc"><div class="sv">'+P.f(tot)+'</div><div class="sl">Total T</div></div>'+
-'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(dv)+'</div><div class="sl">Diverted</div></div>'+
-'<div class="sc"><div class="sv" style="color:var(--warning)">'+P.f(co)+'</div><div class="sl">CO₂e</div></div>';
-document.getElementById('dGauge').innerHTML='<div style="padding:10px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'">'+
-'<div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
-'<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
-'<div style="font-size:.6rem;color:var(--text-m)">LEED '+(p.leed_version||'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>';
-var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?mc[k]/tot*100:0;
-mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%</div></div>';});
-document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
+var gc=rate>=tgt?‘var(–success)’:rate>=tgt*.67?‘var(–warning)’:‘var(–danger)’;
+document.getElementById(‘dName’).textContent=p.name;
+document.getElementById(‘dMeta’).textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(’ • ‘);
+document.getElementById(‘dStats’).innerHTML=’<div class="sc"><div class="sv">’+t.length+’</div><div class="sl">Tickets</div></div>’+
+‘<div class="sc"><div class="sv">’+P.f(tot)+’</div><div class="sl">Total T</div></div>’+
+‘<div class="sc"><div class="sv" style="color:var(--success)">’+P.f(dv)+’</div><div class="sl">Diverted</div></div>’+
+‘<div class="sc"><div class="sv" style="color:var(--warning)">’+P.f(co)+’</div><div class="sl">CO₂e</div></div>’;
+document.getElementById(‘dGauge’).innerHTML=’<div style="padding:10px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'">’+
+‘<div style="font-size:1.8rem;font-weight:800;color:'+gc+'">’+rate+’%</div>’+
+‘<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>’+
+‘<div style="font-size:.6rem;color:var(--text-m)">LEED ‘+(p.leed_version||‘v4’)+’ Target: ‘+tgt+’% • ‘+(rate>=tgt?‘✅ On Track’:‘⚠️ ‘+(tgt-rate)+’% below’)+’</div></div>’;
+var mh=’’;Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?mc[k]/tot*100:0;
+mh+=’<div class="mb"><div class="ml">’+MT[k].i+’ ‘+MT[k].n+’</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">’+pct.toFixed(1)+’%</div></div>’;});
+document.getElementById(‘dMats’).innerHTML=mh||’<div style="font-size:.7rem;color:var(--text-d)">No data</div>’;
 P.renderMonths();P.renderTbl(P.tx);},
 
-renderMonths(){var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
-P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.cp.leed_target||50,html='';
-keys.forEach(function(key){var tix=months[key],pts=key.split('-'),label=mn[+pts[1]]+' '+pts[0];
+renderMonths(){var months={},mn=[’’,‘Jan’,‘Feb’,‘Mar’,‘Apr’,‘May’,‘Jun’,‘Jul’,‘Aug’,‘Sep’,‘Oct’,‘Nov’,‘Dec’];
+P.tx.forEach(function(t){var k=(t.ticket_date||’’).substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
+P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.cp.leed_target||50,html=’’;
+keys.forEach(function(key){var tix=months[key],pts=key.split(’-’),label=mn[+pts[1]]+’ ‘+pts[0];
 var tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var c=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
-html+='<div class="c" onclick="P.openMo(\''+key+'\')" style="cursor:pointer"><div style="display:flex;align-items:center;gap:10px">'+
-'<div style="font-size:1.1rem;font-weight:800;color:'+c+';min-width:42px">'+rate+'%</div>'+
-'<div style="flex:1"><div style="font-weight:700;font-size:.8rem">'+label+'</div>'+
-'<div style="font-size:.6rem;color:var(--text-m)">'+tix.length+' tickets • '+P.f(tons)+' T • '+P.f(div)+' div</div></div>'+
-'<div style="color:var(--text-d)">›</div></div></div>';});
-document.getElementById('dMonthly').innerHTML=html;},
+var rate=tons>0?Math.round(div/tons*100):0;var c=rate>=tgt?‘var(–success)’:rate>=tgt*.67?‘var(–warning)’:‘var(–danger)’;
+html+=’<div class="c" onclick="P.openMo(\''+key+'\')" style="cursor:pointer"><div style="display:flex;align-items:center;gap:10px">’+
+‘<div style="font-size:1.1rem;font-weight:800;color:'+c+';min-width:42px">’+rate+’%</div>’+
+‘<div style="flex:1"><div style="font-weight:700;font-size:.8rem">’+label+’</div>’+
+‘<div style="font-size:.6rem;color:var(--text-m)">’+tix.length+’ tickets • ‘+P.f(tons)+’ T • ‘+P.f(div)+’ div</div></div>’+
+‘<div style="color:var(--text-d)">›</div></div></div>’;});
+document.getElementById(‘dMonthly’).innerHTML=html;},
 
-renderTbl(list){var el=document.getElementById('dTable');if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
-var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th><th class="r">Div%</th><th class="ctr">📷</th></tr></thead><tbody>';
-list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
+renderTbl(list){var el=document.getElementById(‘dTable’);if(!list||!list.length){el.innerHTML=’<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>’;return;}
+var h=’<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th><th class="r">Div%</th><th class="ctr">📷</th></tr></thead><tbody>’;
+list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?‘color:var(–success)’:dp>=50?‘color:var(–warning)’:‘color:var(–danger)’;
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
-var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
-h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td>'+P.fd(t.ticket_date)+'</td><td class="bld">'+t.ticket_number+'</td>'+
-'<td class="r m">'+P.f(t.net_tons)+'</td><td class="r m bld" style="'+dc+'">'+dp+'%</td><td class="ctr">'+pi+'</td></tr>';});
-h+='</tbody></table>';el.innerHTML=h;},
+var pi=hs&&hd?’<span class="hp"></span><span class="hp" style="margin-left:1px"></span>’:hs||hd?’<span class="hp"></span>’:’<span class="np"></span>’;
+h+=’<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td>’+P.fd(t.ticket_date)+’</td><td class="bld">’+t.ticket_number+’</td>’+
+‘<td class="r m">’+P.f(t.net_tons)+’</td><td class="r m bld" style="'+dc+'">’+dp+’%</td><td class="ctr">’+pi+’</td></tr>’;});
+h+=’</tbody></table>’;el.innerHTML=h;},
 searchTix(q){if(!q.trim()){P.renderTbl(P.tx);return;}var lq=q.toLowerCase();
-P.renderTbl(P.tx.filter(function(t){return(t.ticket_number||'').toLowerCase().indexOf(lq)>=0||(t.hauler||'').toLowerCase().indexOf(lq)>=0;}));},
+P.renderTbl(P.tx.filter(function(t){return(t.ticket_number||’’).toLowerCase().indexOf(lq)>=0||(t.hauler||’’).toLowerCase().indexOf(lq)>=0;}));},
 
 // TICKET DETAIL
 showTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
-var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
-var mats='';Object.keys(MT).forEach(function(k){var pct=t[k+'_pct']||0;if(pct<=0)return;
-mats+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct+'%</div></div>';});
-var photos='';
-if(t.scale_ticket_image)photos+='<div class="ct" style="margin-top:10px">📄 Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">';
+var dp=t.diversion_pct||0,dc=dp>=75?‘var(–success)’:dp>=50?‘var(–warning)’:‘var(–danger)’;
+var mats=’’;Object.keys(MT).forEach(function(k){var pct=t[k+’_pct’]||0;if(pct<=0)return;
+mats+=’<div class="mb"><div class="ml">’+MT[k].i+’ ‘+MT[k].n+’</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">’+pct+’%</div></div>’;});
+var photos=’’;
+if(t.scale_ticket_image)photos+=’<div class="ct" style="margin-top:10px">📄 Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">’;
 var da=Array.isArray(t.debris_images)?t.debris_images:[];
-if(da.length)photos+='<div class="ct" style="margin-top:10px">📸 Debris ('+da.length+')</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">'+
-da.map(function(u){return '<img src="'+u+'" onclick="window.open(\''+u+'\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">';}).join('')+'</div>';
-var el=document.createElement('div');el.id='tkDtl';
-el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket '+t.ticket_number+'</div>'+
-'<div class="topnav-right"><div class="b bsm" onclick="P.shareTk(\''+t.id+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📤 Share</div>'+
-'<div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
-'<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fd(t.ticket_date)+' • '+(t.hauler||'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
-'<div class="sg"><div class="sc"><div class="sv">'+P.f(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
-'<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
-'<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
-'<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div></div></div>'+
-(mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
-'<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
+if(da.length)photos+=’<div class="ct" style="margin-top:10px">📸 Debris (’+da.length+’)</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">’+
+da.map(function(u){return ‘<img src="'+u+'" onclick="window.open(\''+u+'\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">’;}).join(’’)+’</div>’;
+var el=document.createElement(‘div’);el.id=‘tkDtl’;
+el.style.cssText=‘position:fixed;inset:0;background:var(–bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch’;
+el.innerHTML=’<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket ‘+t.ticket_number+’</div>’+
+‘<div class="topnav-right"><div class="b bsm" onclick="P.shareTk(\''+t.id+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📤 Share</div>’+
+‘<div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>’+
+‘<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">’+P.fd(t.ticket_date)+’ • ‘+(t.hauler||’’)+’ • ‘+(P.cp?P.cp.name:’’)+’</div>’+
+‘<div class="sg"><div class="sc"><div class="sv">’+P.f(t.gross_lbs)+’</div><div class="sl">Gross lbs</div></div>’+
+‘<div class="sc"><div class="sv">’+P.f(t.tare_lbs)+’</div><div class="sl">Tare lbs</div></div>’+
+‘<div class="sc"><div class="sv bld">’+P.f(t.net_tons)+’</div><div class="sl">Net Tons</div></div>’+
+‘<div class="sc"><div class="sv" style="color:'+dc+'">’+dp+’%</div><div class="sl">Diverted</div></div></div></div>’+
+(mats?’<div class="c"><div class="ct">📊 Materials</div>’+mats+’</div>’:’’)+(photos?’<div class="c">’+photos+’</div>’:’’)+
+‘<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>’;
 document.body.appendChild(el);},
 shareTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
-var txt='Ticket #'+t.ticket_number+'\nDate: '+P.fd(t.ticket_date)+'\nProject: '+(P.cp?P.cp.name:'')+'\nGross: '+P.f(t.gross_lbs)+' lbs\nTare: '+P.f(t.tare_lbs)+' lbs\nNet: '+P.f(t.net_tons)+' tons\nDiversion: '+(t.diversion_pct||0)+'%'+(t.scale_ticket_image?'\nPhoto: '+t.scale_ticket_image:'');
-if(navigator.share)navigator.share({title:'Ticket #'+t.ticket_number,text:txt}).catch(function(){});
-else{try{navigator.clipboard.writeText(txt);P.toast('Copied!');}catch(x){prompt('Copy:',txt);}}},
+var txt=‘Ticket #’+t.ticket_number+’\nDate: ‘+P.fd(t.ticket_date)+’\nProject: ‘+(P.cp?P.cp.name:’’)+’\nGross: ‘+P.f(t.gross_lbs)+’ lbs\nTare: ‘+P.f(t.tare_lbs)+’ lbs\nNet: ‘+P.f(t.net_tons)+’ tons\nDiversion: ‘+(t.diversion_pct||0)+’%’+(t.scale_ticket_image?’\nPhoto: ‘+t.scale_ticket_image:’’);
+if(navigator.share)navigator.share({title:‘Ticket #’+t.ticket_number,text:txt}).catch(function(){});
+else{try{navigator.clipboard.writeText(txt);P.toast(‘Copied!’);}catch(x){prompt(‘Copy:’,txt);}}},
 
 // MONTH DETAIL
-openMo(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
-P._mtx=tix;var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var gc=rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)';
-var el=document.createElement('div');el.id='moDtl';
-el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">'+label+'</div>'+
-'<div class="topnav-right">'+
-'<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📥</div>'+
-'<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📄</div>'+
-'<div class="b bsm" onclick="P.emailRpt(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📧</div>'+
-'<button class="topnav-btn" onclick="document.getElementById(\'moDtl\').remove()">✕</button></div></div>'+
-'<div class="wrap"><div class="c" style="text-align:center"><div style="font-size:1.6rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
-'<div style="font-size:.65rem;color:var(--text-m)">'+tix.length+' tickets • '+P.f(tons)+' T • '+P.f(div)+' diverted</div></div>'+
-'<div class="c" style="padding:8px"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px"></div>'+
-'<div id="moList"></div></div>';
+openMo(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||’’).localeCompare(b.ticket_date||’’);});
+P._mtx=tix;var pts=key.split(’-’),mf=[’’,‘January’,‘February’,‘March’,‘April’,‘May’,‘June’,‘July’,‘August’,‘September’,‘October’,‘November’,‘December’];
+var label=mf[+pts[1]]+’ ‘+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
+var rate=tons>0?Math.round(div/tons*100):0;var gc=rate>=75?‘var(–success)’:rate>=50?‘var(–warning)’:‘var(–danger)’;
+var el=document.createElement(‘div’);el.id=‘moDtl’;
+el.style.cssText=‘position:fixed;inset:0;background:var(–bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch’;
+el.innerHTML=’<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">’+label+’</div>’+
+‘<div class="topnav-right">’+
+‘<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📥</div>’+
+‘<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📄</div>’+
+‘<div class="b bsm" onclick="P.emailRpt(\''+key+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📧</div>’+
+‘<button class="topnav-btn" onclick="document.getElementById(\'moDtl\').remove()">✕</button></div></div>’+
+‘<div class="wrap"><div class="c" style="text-align:center"><div style="font-size:1.6rem;font-weight:800;color:'+gc+'">’+rate+’%</div>’+
+‘<div style="font-size:.65rem;color:var(--text-m)">’+tix.length+’ tickets • ‘+P.f(tons)+’ T • ‘+P.f(div)+’ diverted</div></div>’+
+‘<div class="c" style="padding:8px"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px"></div>’+
+‘<div id="moList"></div></div>’;
 document.body.appendChild(el);P.renderMoTix(tix);},
-renderMoTix(tix){var el=document.getElementById('moList');if(!el)return;
-if(!tix.length){el.innerHTML='<div class="c" style="text-align:center;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
-el.innerHTML=tix.map(function(t){var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';var hs=t.scale_ticket_image;
-var thumb=hs?'<div style="width:44px;height:44px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)"><img src="'+hs+'" style="width:100%;height:100%;object-fit:cover"></div>':
-'<div style="width:44px;height:44px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.25;border:1px solid var(--border)">📄</div>';
-return '<div class="c" onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer;padding:10px"><div style="display:flex;align-items:center;gap:8px">'+thumb+
-'<div style="min-width:36px;text-align:center"><div style="font-size:.9rem;font-weight:800;color:'+dc+'">'+dp+'%</div><div style="font-size:.45rem;color:var(--text-m)">DIV</div></div>'+
-'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.8rem">#'+t.ticket_number+'</div>'+
-'<div style="font-size:.6rem;color:var(--text-m)">'+P.fd(t.ticket_date)+' • '+P.f(t.net_tons)+' T'+(t.hauler?' • '+t.hauler:'')+'</div></div>'+
-'<div style="color:var(--text-d)">›</div></div></div>';}).join('');},
+renderMoTix(tix){var el=document.getElementById(‘moList’);if(!el)return;
+if(!tix.length){el.innerHTML=’<div class="c" style="text-align:center;color:var(--text-d);font-size:.75rem">No tickets</div>’;return;}
+el.innerHTML=tix.map(function(t){var dp=t.diversion_pct||0,dc=dp>=75?‘var(–success)’:dp>=50?‘var(–warning)’:‘var(–danger)’;var hs=t.scale_ticket_image;
+var thumb=hs?’<div style="width:44px;height:44px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)"><img src="'+hs+'" style="width:100%;height:100%;object-fit:cover"></div>’:
+‘<div style="width:44px;height:44px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.25;border:1px solid var(--border)">📄</div>’;
+return ‘<div class="c" onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer;padding:10px"><div style="display:flex;align-items:center;gap:8px">’+thumb+
+‘<div style="min-width:36px;text-align:center"><div style="font-size:.9rem;font-weight:800;color:'+dc+'">’+dp+’%</div><div style="font-size:.45rem;color:var(--text-m)">DIV</div></div>’+
+‘<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.8rem">#’+t.ticket_number+’</div>’+
+‘<div style="font-size:.6rem;color:var(--text-m)">’+P.fd(t.ticket_date)+’ • ‘+P.f(t.net_tons)+’ T’+(t.hauler?’ • ‘+t.hauler:’’)+’</div></div>’+
+‘<div style="color:var(--text-d)">›</div></div></div>’;}).join(’’);},
 filterMo(q){if(!q.trim()){P.renderMoTix(P._mtx);return;}var lq=q.toLowerCase();
-P.renderMoTix(P._mtx.filter(function(t){return(t.ticket_number||'').toLowerCase().indexOf(lq)>=0||(t.hauler||'').toLowerCase().indexOf(lq)>=0;}));},
+P.renderMoTix(P._mtx.filter(function(t){return(t.ticket_number||’’).toLowerCase().indexOf(lq)>=0||(t.hauler||’’).toLowerCase().indexOf(lq)>=0;}));},
 
-emailRpt(key){var tix=P._mg[key]||[];var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var proj=P.cp?P.cp.name:'Project';
-window.open('mailto:?subject='+encodeURIComponent(proj+' — '+label+' Waste Diversion Report')+'&body='+encodeURIComponent(
-'Hi,\n\nPlease find the '+label+' waste diversion report for '+proj+'.\n\nSummary:\n'+
-'Tickets: '+tix.length+'\nTotal Tonnage: '+P.f(tons)+' T\nDiverted: '+P.f(div)+' T\nDiversion Rate: '+rate+'%\n\n'+
-'Download report: https://divertscan.com/client.html\n\nBest regards,\n'+(P.cl?P.cl.name:'')));},
+emailRpt(key){var tix=P._mg[key]||[];var pts=key.split(’-’),mf=[’’,‘January’,‘February’,‘March’,‘April’,‘May’,‘June’,‘July’,‘August’,‘September’,‘October’,‘November’,‘December’];
+var label=mf[+pts[1]]+’ ‘+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
+var rate=tons>0?Math.round(div/tons*100):0;var proj=P.cp?P.cp.name:‘Project’;
+window.open(‘mailto:?subject=’+encodeURIComponent(proj+’ — ‘+label+’ Waste Diversion Report’)+’&body=’+encodeURIComponent(
+‘Hi,\n\nPlease find the ‘+label+’ waste diversion report for ‘+proj+’.\n\nSummary:\n’+
+‘Tickets: ‘+tix.length+’\nTotal Tonnage: ‘+P.f(tons)+’ T\nDiverted: ‘+P.f(div)+’ T\nDiversion Rate: ‘+rate+’%\n\n’+
+‘Download report: https://divertscan.com/client.html\n\nBest regards,\n’+(P.cl?P.cl.name:’’)));},
 
-genPDF(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
-var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-var label=mf[+pts[1]]+' '+pts[0];var proj=P.cp;if(!proj)return;
+genPDF(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||’’).localeCompare(b.ticket_date||’’);});
+var pts=key.split(’-’),mf=[’’,‘January’,‘February’,‘March’,‘April’,‘May’,‘June’,‘July’,‘August’,‘September’,‘October’,‘November’,‘December’];
+var label=mf[+pts[1]]+’ ‘+pts[0];var proj=P.cp;if(!proj)return;
 var tons=0,div=0,co2=0,mc={};Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;
-Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
-var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
-var isV5=ver==='v5';
-var cl=isV5?'MRp2 Quantify & Assess Embodied Carbon (Prerequisite) + Waste Management Credits':'MRp2 C&D Waste Management Planning (Prerequisite) + MRc5 C&D Waste Management (Credit)';
+Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+’_pct’]||0)/100);});});
+var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||‘v4’;var tgt=proj.leed_target||(ver===‘v5’?75:50);
+var isV5=ver===‘v5’;
+var cl=isV5?‘MRp2 Quantify & Assess Embodied Carbon (Prerequisite) + Waste Management Credits’:‘MRp2 C&D Waste Management Planning (Prerequisite) + MRc5 C&D Waste Management (Credit)’;
 var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
-var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
-rows+='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(t.net_tons)+'</td><td class=r>'+(t.wood_pct||0)+'%</td><td class=r>'+(t.occ_pct||0)+'%</td><td class=r>'+(t.metal_pct||0)+'%</td><td class=r style="font-weight:bold;color:'+(dp>=75?'#10b981':dp>=50?'#f59e0b':'#ef4444')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';});
-var matRows='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
-var v5tons=isV5&&(k==='wood'||k==='metal'||k==='occ'||k==='plastic')?mc[k]*2:mc[k];
-matRows+='<tr><td>'+MT[k].i+' '+MT[k].n+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+P.f(mc[k])+'</td><td>'+MT[k].em+'</td><td>'+MT[k].tier+'</td><td>'+MT[k].doc+'</td>'+(isV5?'<td>'+MT[k].v5+(v5tons!==mc[k]?' ('+P.f(v5tons)+' T effective)':'')+'</td>':'')+'</tr>';});
+var rows=’’;tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||’’;if(df.indexOf(’-’)>0){var d=df.split(’-’);df=parseInt(d[1])+’/’+parseInt(d[2])+’/’+d[0];}
+rows+=’<tr><td>’+df+’</td><td><b>’+t.ticket_number+’</b></td><td class=r>’+P.f(t.net_tons)+’</td><td class=r>’+(t.wood_pct||0)+’%</td><td class=r>’+(t.occ_pct||0)+’%</td><td class=r>’+(t.metal_pct||0)+’%</td><td class=r style="font-weight:bold;color:'+(dp>=75?'#10b981':dp>=50?'#f59e0b':'#ef4444')+'">’+dp+’%</td><td class=c>’+(t.scale_ticket_image?‘✓’:’—’)+’</td></tr>’;});
+var matRows=’’;Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
+var v5tons=isV5&&(k===‘wood’||k===‘metal’||k===‘occ’||k===‘plastic’)?mc[k]*2:mc[k];
+matRows+=’<tr><td>’+MT[k].i+’ ‘+MT[k].n+’</td><td class=r>’+(tons>0?(mc[k]/tons*100).toFixed(1):0)+’%</td><td class=r>’+P.f(mc[k])+’</td><td>’+MT[k].em+’</td><td>’+MT[k].tier+’</td><td>’+MT[k].doc+’</td>’+(isV5?’<td>’+MT[k].v5+(v5tons!==mc[k]?’ (’+P.f(v5tons)+’ T effective)’:’’)+’</td>’:’’)+’</tr>’;});
 // End market rows
-var emRows='';DX.endMarkets.forEach(function(cat){cat.items.forEach(function(i){
-emRows+='<tr><td>'+i.mat+'</td><td>'+i.dest+'</td><td>'+i.type+'</td><td>'+i.doc+'</td></tr>';});});
+var emRows=’’;DX.endMarkets.forEach(function(cat){cat.items.forEach(function(i){
+emRows+=’<tr><td>’+i.mat+’</td><td>’+i.dest+’</td><td>’+i.type+’</td><td>’+i.doc+’</td></tr>’;});});
 // Chain rows
-var chainRows='';DX.chain.forEach(function(c){chainRows+='<tr><td>'+c.stage+'</td><td>'+c.doc+'</td><td>'+c.proves+'</td></tr>';});
+var chainRows=’’;DX.chain.forEach(function(c){chainRows+=’<tr><td>’+c.stage+’</td><td>’+c.doc+’</td><td>’+c.proves+’</td></tr>’;});
 // Streams count
 var streams=Object.keys(MT).filter(function(k){return mc[k]>0;});
-var w=window.open('','_blank');
-w.document.write('<!DOCTYPE html><html><head><title>LEED '+ver+' Waste Diversion Report — '+P.esc(proj.name)+'</title>'+
-'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#333;padding:24px;font-size:10px;line-height:1.5}'+
-'h1{font-size:16px;color:#1a1a2e;border-bottom:3px solid #10b981;padding-bottom:5px;margin-bottom:12px}'+
-'h2{font-size:11px;color:#1a1a2e;margin:12px 0 5px;border-bottom:1px solid #ddd;padding-bottom:2px;page-break-after:avoid}'+
-'.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9px}'+
-'th{background:#f4f5f7;padding:3px;text-align:left;border-bottom:2px solid #ddd;font-size:8px}'+
-'td{padding:2px 3px;border-bottom:1px solid #eee}.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:10px}'+
-'.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}'+
-'.stats{display:flex;gap:8px;margin:8px 0}.stat{flex:1;background:#f4f5f7;border-radius:5px;padding:6px;text-align:center}'+
-'.stat b{font-size:14px;display:block}.stat span{font-size:7px;color:#6b7280;text-transform:uppercase}'+
-'.chk{margin:2px 0;font-size:9.5px}.note{background:#f0fdf4;border:1px solid #d1fae5;border-radius:4px;padding:6px;margin:6px 0;font-size:9px}'+
-'.footer{margin-top:14px;padding-top:6px;border-top:1px solid #ddd;font-size:7.5px;color:#888;text-align:center}'+
-'@media print{body{padding:12px}h2{page-break-after:avoid}table{page-break-inside:auto}}</style></head><body>'+
+var w=window.open(’’,’_blank’);
+w.document.write(’<!DOCTYPE html><html><head><title>LEED ‘+ver+’ Waste Diversion Report — ‘+P.esc(proj.name)+’</title>’+
+’<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#333;padding:24px;font-size:10px;line-height:1.5}’+
+‘h1{font-size:16px;color:#1a1a2e;border-bottom:3px solid #10b981;padding-bottom:5px;margin-bottom:12px}’+
+‘h2{font-size:11px;color:#1a1a2e;margin:12px 0 5px;border-bottom:1px solid #ddd;padding-bottom:2px;page-break-after:avoid}’+
+‘.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9px}’+
+‘th{background:#f4f5f7;padding:3px;text-align:left;border-bottom:2px solid #ddd;font-size:8px}’+
+‘td{padding:2px 3px;border-bottom:1px solid #eee}.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:10px}’+
+‘.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}’+
+‘.stats{display:flex;gap:8px;margin:8px 0}.stat{flex:1;background:#f4f5f7;border-radius:5px;padding:6px;text-align:center}’+
+‘.stat b{font-size:14px;display:block}.stat span{font-size:7px;color:#6b7280;text-transform:uppercase}’+
+‘.chk{margin:2px 0;font-size:9.5px}.note{background:#f0fdf4;border:1px solid #d1fae5;border-radius:4px;padding:6px;margin:6px 0;font-size:9px}’+
+‘.footer{margin-top:14px;padding-top:6px;border-top:1px solid #ddd;font-size:7.5px;color:#888;text-align:center}’+
+‘@media print{body{padding:12px}h2{page-break-after:avoid}table{page-break-inside:auto}}</style></head><body>’+
 // HEADER
-'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>LEED Waste Diversion Documentation Package</h1>'+
-'<div style="font-size:10px;color:#6b7280">'+label+' — '+P.esc(proj.name)+'</div></div>'+
-'<div style="text-align:right"><div style="font-weight:700">LEED '+ver+'</div><div style="font-size:8px;color:#6b7280">'+cl+'</div>'+
-'<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:2px">'+(ok?'✅ COMPLIANT':'⚠️ REVIEW NEEDED')+'</div></div></div>'+
+‘<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>LEED Waste Diversion Documentation Package</h1>’+
+‘<div style="font-size:10px;color:#6b7280">’+label+’ — ‘+P.esc(proj.name)+’</div></div>’+
+‘<div style="text-align:right"><div style="font-weight:700">LEED ‘+ver+’</div><div style="font-size:8px;color:#6b7280">’+cl+’</div>’+
+‘<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:2px">’+(ok?‘✅ COMPLIANT’:‘⚠️ REVIEW NEEDED’)+’</div></div></div>’+
 // PROJECT INFO
-'<h2>1. Project Information</h2>'+
-'<table><tr><td width=25%><b>Project</b></td><td>'+P.esc(proj.name)+'</td><td width=25%><b>LEED Version</b></td><td>'+ver+'</td></tr>'+
-'<tr><td><b>GC / Client</b></td><td>'+(proj.general_contractor||proj.client||'—')+'</td><td><b>Target</b></td><td>'+tgt+'%</td></tr>'+
-'<tr><td><b>Location</b></td><td>'+(proj.location||'—')+'</td><td><b>Hauler</b></td><td>'+(proj.waste_hauler||'—')+'</td></tr>'+
-'<tr><td><b>Processing Facility</b></td><td>'+DX.facility+', '+DX.addr+'</td><td><b>Phone</b></td><td>'+DX.phone+'</td></tr></table>'+
+‘<h2>1. Project Information</h2>’+
+‘<table><tr><td width=25%><b>Project</b></td><td>’+P.esc(proj.name)+’</td><td width=25%><b>LEED Version</b></td><td>’+ver+’</td></tr>’+
+‘<tr><td><b>GC / Client</b></td><td>’+(proj.general_contractor||proj.client||’—’)+’</td><td><b>Target</b></td><td>’+tgt+’%</td></tr>’+
+‘<tr><td><b>Location</b></td><td>’+(proj.location||’—’)+’</td><td><b>Hauler</b></td><td>’+(proj.waste_hauler||’—’)+’</td></tr>’+
+‘<tr><td><b>Processing Facility</b></td><td>’+DX.facility+’, ‘+DX.addr+’</td><td><b>Phone</b></td><td>’+DX.phone+’</td></tr></table>’+
 // SUMMARY STATS
-'<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
-'<div class="stat"><b>'+P.f(tons)+'</b><span>Total T</span></div>'+
-'<div class="stat"><b style="color:#10b981">'+P.f(div)+'</b><span>Diverted</span></div>'+
-'<div class="stat"><b style="color:'+(ok?'#10b981':'#ef4444')+'">'+rate+'%</b><span>Rate</span></div>'+
-'<div class="stat"><b style="color:#f59e0b">'+P.f(co2)+'</b><span>CO₂e mt</span></div></div>'+
+‘<div class="stats"><div class="stat"><b>’+tix.length+’</b><span>Tickets</span></div>’+
+‘<div class="stat"><b>’+P.f(tons)+’</b><span>Total T</span></div>’+
+‘<div class="stat"><b style="color:#10b981">’+P.f(div)+’</b><span>Diverted</span></div>’+
+‘<div class="stat"><b style="color:'+(ok?'#10b981':'#ef4444')+'">’+rate+’%</b><span>Rate</span></div>’+
+‘<div class="stat"><b style="color:#f59e0b">’+P.f(co2)+’</b><span>CO₂e mt</span></div></div>’+
 // MATERIAL STREAMS
-'<h2>2. Material Streams, End Markets & Diversion Methods</h2>'+
-'<table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th><th>Waste Hierarchy</th><th>Documentation</th>'+(isV5?'<th>v5 Credit</th>':'')+'</tr>'+matRows+'</table>'+
-(isV5?'<div class="note"><b>LEED v5 Credit Multiplier:</b> Wood reused via Dalmex Pallets and materials recycled to verified end markets qualify for 200% diversion credit under the LEED v5 waste hierarchy (Reuse/Salvage and Recycling tiers).</div>':'')+
+‘<h2>2. Material Streams, End Markets & Diversion Methods</h2>’+
+‘<table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th><th>Waste Hierarchy</th><th>Documentation</th>’+(isV5?’<th>v5 Credit</th>’:’’)+’</tr>’+matRows+’</table>’+
+(isV5?’<div class="note"><b>LEED v5 Credit Multiplier:</b> Wood reused via Dalmex Pallets and materials recycled to verified end markets qualify for 200% diversion credit under the LEED v5 waste hierarchy (Reuse/Salvage and Recycling tiers).</div>’:’’)+
 // END MARKET VERIFICATION
-'<h2>3. Verified Downstream End Markets</h2>'+
-'<p style="margin-bottom:4px;font-size:9px;color:#6b7280">All diverted materials are processed at '+DX.facility+' and shipped to verified downstream markets. Bills of lading and weight tickets maintained for all outbound shipments.</p>'+
-'<table><tr><th>Material</th><th>End Market</th><th>Type</th><th>Documentation</th></tr>'+emRows+'</table>'+
+‘<h2>3. Verified Downstream End Markets</h2>’+
+‘<p style="margin-bottom:4px;font-size:9px;color:#6b7280">All diverted materials are processed at ‘+DX.facility+’ and shipped to verified downstream markets. Bills of lading and weight tickets maintained for all outbound shipments.</p>’+
+‘<table><tr><th>Material</th><th>End Market</th><th>Type</th><th>Documentation</th></tr>’+emRows+’</table>’+
 // TICKET DETAIL
-'<h2>4. Scale Ticket Detail — '+label+'</h2>'+
-'<table><tr><th>Date</th><th>Ticket#</th><th class=r>Tons</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-'<tr style="border-top:2px solid #333;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+‘<h2>4. Scale Ticket Detail — ‘+label+’</h2>’+
+‘<table><tr><th>Date</th><th>Ticket#</th><th class=r>Tons</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>’+rows+
+‘<tr style="border-top:2px solid #333;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>’+P.f(tons)+’</td><td colspan=3></td><td class=r>’+rate+’%</td><td class=c>’+pc+’/’+tix.length+’</td></tr></table>’+
 // FOOTER
-'<div class="footer"><b>DivertScan™ Apex Enterprise — LEED Carbon Compliance Engine</b><br>'+
-'Generated: '+new Date().toLocaleDateString()+' | '+DX.facility+' | robert@dalmexrecycling.com | '+DX.phone+'<br>'+
-'<i>All data from certified scale weights and verified outbound BOLs. SHA-256 hash verified for GBCI audit compliance. Not based on visual estimates or contractor self-reporting.</i><br>'+
-'www.divertscan.com</div></body></html>');
+‘<div class="footer"><b>DivertScan™ Apex Enterprise — LEED Carbon Compliance Engine</b><br>’+
+‘Generated: ‘+new Date().toLocaleDateString()+’ | ‘+DX.facility+’ | robert@dalmexrecycling.com | ‘+DX.phone+’<br>’+
+‘<i>All data from commercial scale weights and verified outbound documentation (BOLs from receiving mills/recyclers, internal transfer records for reuse). Data integrity verified via SHA-256 hashing.</i><br>’+
+‘www.divertscan.com</div></body></html>’);
 w.document.close();setTimeout(function(){w.print();},500);},
 
 // UPLOAD
 showUForm(){var proj=P.pj.find(function(p){return p.id===P._up;});if(!proj)return;
-document.getElementById('uForm').classList.remove('hidden');document.getElementById('uBanner').textContent=proj.name;
-P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();P.renderPL('uProjList','upload');},
+document.getElementById(‘uForm’).classList.remove(‘hidden’);document.getElementById(‘uBanner’).textContent=proj.name;
+P._u={s:[],d:[]};P.renderG(‘s’);P.renderG(‘d’);P.updBtn();P.renderPL(‘uProjList’,‘upload’);},
 addP(type,input){var files=Array.from(input.files);var arr=P._u[type];
-files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.renderG(type);P.updBtn();};r.readAsDataURL(f);});input.value='';},
-renderG(type){var arr=P._u[type],el=document.getElementById(type==='s'?'sGrid':'dGrid'),b=document.getElementById(type==='s'?'sBadge':'dBadge');
-if(b){b.textContent=arr.length;arr.length>0?b.classList.remove('hidden'):b.classList.add('hidden');}
-el.innerHTML=arr.map(function(p,i){return '<div style="position:relative;flex-shrink:0"><img src="'+p.prev+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px">'+
-'<div onclick="P.rmP(\''+type+'\','+i+')" style="position:absolute;top:-3px;right:-3px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer">×</div></div>';}).join('');},
+files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.renderG(type);P.updBtn();};r.readAsDataURL(f);});input.value=’’;},
+renderG(type){var arr=P._u[type],el=document.getElementById(type===‘s’?‘sGrid’:‘dGrid’),b=document.getElementById(type===‘s’?‘sBadge’:‘dBadge’);
+if(b){b.textContent=arr.length;arr.length>0?b.classList.remove(‘hidden’):b.classList.add(‘hidden’);}
+el.innerHTML=arr.map(function(p,i){return ‘<div style="position:relative;flex-shrink:0"><img src="'+p.prev+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px">’+
+‘<div onclick="P.rmP(\''+type+'\','+i+')" style="position:absolute;top:-3px;right:-3px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer">×</div></div>’;}).join(’’);},
 rmP(type,i){P._u[type].splice(i,1);P.renderG(type);P.updBtn();},
-updBtn(){var n=P._u.s.length+P._u.d.length;var b=document.getElementById('uBtn');
-if(n>0&&P._up){b.style.opacity='1';b.style.pointerEvents='auto';b.textContent='📤 Submit '+n+' Photo'+(n>1?'s':'');}
-else{b.style.opacity='.5';b.style.pointerEvents='none';b.textContent='📤 Submit Photos';}},
+updBtn(){var n=P._u.s.length+P._u.d.length;var b=document.getElementById(‘uBtn’);
+if(n>0&&P._up){b.style.opacity=‘1’;b.style.pointerEvents=‘auto’;b.textContent=‘📤 Submit ‘+n+’ Photo’+(n>1?‘s’:’’);}
+else{b.style.opacity=’.5’;b.style.pointerEvents=‘none’;b.textContent=‘📤 Submit Photos’;}},
 async compress(file,max){return new Promise(function(r){var img=new Image();img.onload=function(){var w=img.width,h=img.height;
 if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
-var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-c.toBlob(function(b){r(b);},'image/jpeg',0.85);};img.src=URL.createObjectURL(file);});},
-async submit(){var all=[];P._u.s.forEach(function(p){all.push({file:p.file,type:'scale_ticket'});});
-P._u.d.forEach(function(p){all.push({file:p.file,type:'debris'});});if(!all.length||!P._up)return;
-var btn=document.getElementById('uBtn');btn.style.opacity='.5';btn.style.pointerEvents='none';
-var proj=P.pj.find(function(p){return p.id===P._up;});var tNum=document.getElementById('uTkt').value.trim()||null;
-var notes=document.getElementById('uNotes').value.trim()||null;var ok=0;
-for(var i=0;i<all.length;i++){btn.textContent='📤 '+(i+1)+'/'+all.length+'...';
-try{var blob=await P.compress(all[i].file,all[i].type==='scale_ticket'?1200:800);
-var path='queue/'+P._up+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
-var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
-if(!up.ok)continue;var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:P.cl.name||'Client',photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending'});ok++;}catch(x){console.error(x);}}
-P.toast(ok+' photo'+(ok>1?'s':'')+' submitted!');document.getElementById('uBtn').classList.add('hidden');document.getElementById('uOk').classList.remove('hidden');P.loadBadge();},
-resetUp(){document.getElementById('uOk').classList.add('hidden');document.getElementById('uBtn').classList.remove('hidden');
-P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';P.updBtn();},
+var c=document.createElement(‘canvas’);c.width=w;c.height=h;c.getContext(‘2d’).drawImage(img,0,0,w,h);
+c.toBlob(function(b){r(b);},‘image/jpeg’,0.85);};img.src=URL.createObjectURL(file);});},
+async submit(){var all=[];P._u.s.forEach(function(p){all.push({file:p.file,type:‘scale_ticket’});});
+P._u.d.forEach(function(p){all.push({file:p.file,type:‘debris’});});if(!all.length||!P._up)return;
+var btn=document.getElementById(‘uBtn’);btn.style.opacity=’.5’;btn.style.pointerEvents=‘none’;
+var proj=P.pj.find(function(p){return p.id===P.*up;});var tNum=document.getElementById(‘uTkt’).value.trim()||null;
+var notes=document.getElementById(‘uNotes’).value.trim()||null;var ok=0;
+for(var i=0;i<all.length;i++){btn.textContent=‘📤 ‘+(i+1)+’/’+all.length+’…’;
+try{var blob=await P.compress(all[i].file,all[i].type===‘scale_ticket’?1200:800);
+var path=‘queue/’+P.*up+’/’+all[i].type+’*’+Date.now()+’*’+i+’.jpg’;
+var up=await fetch(SB+’/storage/v1/object/ticket-photos/’+path,{method:‘POST’,headers:{‘apikey’:SK,‘Authorization’:‘Bearer ‘+SK,‘Content-Type’:‘image/jpeg’,‘x-upsert’:‘true’},body:blob});
+if(!up.ok)continue;var url=SB+’/storage/v1/object/public/ticket-photos/’+path;
+await P.api(‘photo_queue’,‘POST’,{project_id:P._up,access_code:proj?(proj.access_code||‘portal’):‘portal’,submitted_by:P.cl.name||‘Client’,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:‘pending’});ok++;}catch(x){console.error(x);}}
+P.toast(ok+’ photo’+(ok>1?‘s’:’’)+’ submitted!’);document.getElementById(‘uBtn’).classList.add(‘hidden’);document.getElementById(‘uOk’).classList.remove(‘hidden’);P.loadBadge();},
+resetUp(){document.getElementById(‘uOk’).classList.add(‘hidden’);document.getElementById(‘uBtn’).classList.remove(‘hidden’);
+P._u={s:[],d:[]};P.renderG(‘s’);P.renderG(‘d’);document.getElementById(‘uTkt’).value=’’;document.getElementById(‘uNotes’).value=’’;P.updBtn();},
 
 // HISTORY with dates and delete
-async loadHist(){var el=document.getElementById('hList');var ids=P.pj.map(function(p){return p.id;});
-if(!ids.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No projects</div>';return;}
-var items=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&order=created_at.desc&limit=50');
-if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No submissions yet</div>';return;}
+async loadHist(){var el=document.getElementById(‘hList’);var ids=P.pj.map(function(p){return p.id;});
+if(!ids.length){el.innerHTML=’<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No projects</div>’;return;}
+var items=await P.api(‘photo_queue?project_id=in.(’+ids.join(’,’)+’)&order=created_at.desc&limit=50’);
+if(!items||!items.length){el.innerHTML=’<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No submissions yet</div>’;return;}
 var aIds=items.filter(function(q){return q.assigned_ticket_id;}).map(function(q){return q.assigned_ticket_id;});
-var tm={};if(aIds.length){var tks=await P.api('tickets?id=in.('+aIds.join(',')+')&select=id,ticket_number');if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
+var tm={};if(aIds.length){var tks=await P.api(‘tickets?id=in.(’+aIds.join(’,’)+’)&select=id,ticket_number’);if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
 var pm={};P.pj.forEach(function(p){pm[p.id]=p.name;});
 el.innerHTML=items.map(function(q){var an=q.assigned_ticket_id?tm[q.assigned_ticket_id]:null;var sc,sl;
-if(q.status==='pending'){sc='var(--warning)';sl='⏳ Pending';}else if(q.status==='approved'&&an){sc='var(--success)';sl='✅ #'+an;}
-else if(q.status==='approved'){sc='var(--success)';sl='✅ Done';}else{sc='var(--text-d)';sl='❌ Rejected';}
-var dt=q.created_at?P.fd(q.created_at.substring(0,10)):'';
-return '<div class="si"><div class="st" onclick="window.open(\''+q.photo_url+'\')"><img src="'+q.photo_url+'"></div>'+
-'<div style="flex:1;min-width:0"><div style="font-size:.7rem;font-weight:700">'+(q.photo_type==='scale_ticket'?'📄 Scale':'📸 Debris')+
-(q.ticket_number&&!an?' #'+q.ticket_number:'')+'</div>'+
-'<div style="font-size:.55rem;color:var(--text-m)">'+(pm[q.project_id]||'')+' • '+dt+' • '+P.ago(q.created_at)+'</div></div>'+
-'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">'+
-'<div style="font-size:.6rem;font-weight:700;color:'+sc+'">'+sl+'</div>'+
-(q.status==='pending'?'<div onclick="P.delHist(\''+q.id+'\')" style="font-size:.55rem;color:var(--danger);cursor:pointer">🗑️ Delete</div>':'')+
-'</div></div>';}).join('');},
+if(q.status===‘pending’){sc=‘var(–warning)’;sl=‘⏳ Pending’;}else if(q.status===‘approved’&&an){sc=‘var(–success)’;sl=‘✅ #’+an;}
+else if(q.status===‘approved’){sc=‘var(–success)’;sl=‘✅ Done’;}else{sc=‘var(–text-d)’;sl=‘❌ Rejected’;}
+var dt=q.created_at?P.fd(q.created_at.substring(0,10)):’’;
+return ‘<div class="si"><div class="st" onclick="window.open(\''+q.photo_url+'\')"><img src="'+q.photo_url+'"></div>’+
+‘<div style="flex:1;min-width:0"><div style="font-size:.7rem;font-weight:700">’+(q.photo_type===‘scale_ticket’?‘📄 Scale’:‘📸 Debris’)+
+(q.ticket_number&&!an?’ #’+q.ticket_number:’’)+’</div>’+
+‘<div style="font-size:.55rem;color:var(--text-m)">’+(pm[q.project_id]||’’)+’ • ‘+dt+’ • ‘+P.ago(q.created_at)+’</div></div>’+
+‘<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">’+
+‘<div style="font-size:.6rem;font-weight:700;color:'+sc+'">’+sl+’</div>’+
+(q.status===‘pending’?’<div onclick="P.delHist(\''+q.id+'\')" style="font-size:.55rem;color:var(--danger);cursor:pointer">🗑️ Delete</div>’:’’)+
+‘</div></div>’;}).join(’’);},
 
-async delHist(id){if(!confirm('Delete this submission?'))return;
-await P.api('photo_queue?id=eq.'+id,'DELETE');P.toast('Deleted');P.loadHist();P.loadBadge();},
+async delHist(id){if(!confirm(‘Delete this submission?’))return;
+await P.api(‘photo_queue?id=eq.’+id,‘DELETE’);P.toast(‘Deleted’);P.loadHist();P.loadBadge();},
 
 // XLSX
-exportMoXLSX(key){if(typeof XLSX==='undefined'||!P.cp)return;
-var proj=P.cp,tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
-var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+exportMoXLSX(key){if(typeof XLSX===‘undefined’||!P.cp)return;
+var proj=P.cp,tix=(P.*mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||’’).localeCompare(b.ticket_date||’’);});
+var pts=key.split(’-’),mf=[’’,‘January’,‘February’,‘March’,‘April’,‘May’,‘June’,‘July’,‘August’,‘September’,‘October’,‘November’,‘December’];
 var mn=mf[+pts[1]],wb=XLSX.utils.book_new(),d=[];d.push([],[],[],[],[],[]);
-d.push(['Waste Diversion Report for '+mn+' '+pts[0]]);d.push(['Company: '+(proj.general_contractor||proj.client||'')]);
-d.push(['Location: '+(proj.location||'')]);d.push(['Project: '+proj.name]);d.push(['Report by: Dalmex Recycling']);
-d.push(['Contact: Robert Vandling']);d.push(['Email: robert@dalmexrecycling.com']);d.push([]);
-d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons','Div%','Diverted',
-'Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC','Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
+d.push([‘Waste Diversion Report for ‘+mn+’ ‘+pts[0]]);d.push([‘Company: ‘+(proj.general_contractor||proj.client||’’)]);
+d.push([‘Location: ‘+(proj.location||’’)]);d.push([‘Project: ‘+proj.name]);d.push([‘Report by: Dalmex Recycling’]);
+d.push([‘Contact: Robert Vandling’]);d.push([‘Email: robert@dalmexrecycling.com’]);d.push([]);
+d.push([‘Date’,‘Ticket No’,‘Gross (lbs)’,‘GWT (NT)’,‘Tare (lbs)’,‘Tare (NT)’,‘Net (lbs)’,‘Tons’,‘Div%’,‘Diverted’,
+‘Wood%’,‘Wood’,‘Gypsum%’,‘Gypsum’,‘Plastic%’,‘Plastic’,‘OCC%’,‘OCC’,‘Metal%’,‘Metal’,‘Concrete%’,‘Concrete’,‘Block%’,‘Block’,‘Photo’]);
 var sG=0,sT=0,sTn=0,sD=0,sm={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};var pL=[];
 tix.forEach(function(t,ri){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
 var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
 var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;var dvp=tn>0?dv/tn:0;
 sG+=g;sT+=ta;sTn+=tn;sD+=dv;sm.wood+=wt;sm.gypsum+=gt;sm.plastic+=pt;sm.occ+=ot;sm.metal+=mt;sm.concrete+=ct;sm.block+=bt;
-var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp=df.split('-');df=parseInt(dp[1])+'/'+parseInt(dp[2])+'/'+dp[0];}
-var pu=t.scale_ticket_image||'';if(pu)pL.push({r:15+ri,c:24,u:pu});
-d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?'View Photo':'']);});
-var tdp=sTn>0?sD/sTn:0;d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,
-sTn>0?sm.plastic/sTn:0,sm.plastic,sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,'']);
-d.push([]);d.push(['Total Tonnage',Math.round(sTn*100)/100]);d.push(['Diverted from landfill',Math.round(sD*100)/100]);d.push(['Recycled Material %',tdp]);
-var ws=XLSX.utils.aoa_to_sheet(d);ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
-var sr=15,er=sr+tix.length;for(var r=sr;r<=er;r++){[8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
-[3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
-[2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
-var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:1});if(ws[a])ws[a].z='0.00';});
-var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z='0%';
-pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:'View photo'};});
-XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_'+mn+'_'+pts[0]+'.xlsx');P.toast('Downloaded!');},
-exportAllXLSX(){if(typeof XLSX==='undefined'||!P.cp)return;var proj=P.cp;var ver=proj.leed_version||'v4';var isV5=ver==='v5';
+var df=t.ticket_date||’’;if(df.indexOf(’-’)>0){var dp=df.split(’-’);df=parseInt(dp[1])+’/’+parseInt(dp[2])+’/’+dp[0];}
+var pu=t.scale_ticket_image||’’;if(pu)pL.push({r:15+ri,c:24,u:pu});
+d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?‘View Photo’:’’]);});
+var tdp=sTn>0?sD/sTn:0;d.push([‘Totals’,’’,sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,
+sTn>0?sm.plastic/sTn:0,sm.plastic,sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,’’]);
+d.push([]);d.push([‘Total Tonnage’,Math.round(sTn*100)/100]);d.push([‘Diverted from landfill’,Math.round(sD*100)/100]);d.push([‘Recycled Material %’,tdp]);
+var ws=XLSX.utils.aoa_to_sheet(d);ws[’!cols’]=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
+var sr=15,er=sr+tix.length;for(var r=sr;r<=er;r++){[8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=‘0%’;});
+[3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=‘0.00’;});
+[2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=’#,##0’;});}
+var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:1});if(ws[a])ws[a].z=‘0.00’;});
+var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z=‘0%’;
+pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:‘View photo’};});
+XLSX.utils.book_append_sheet(wb,ws,mn+’ ‘+pts[0]);XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,’*’)+’*’+mn+’*’+pts[0]+’.xlsx’);P.toast(‘Downloaded!’);},
+exportAllXLSX(){if(typeof XLSX===‘undefined’||!P.cp)return;var proj=P.cp;var ver=proj.leed_version||‘v4’;var isV5=ver===‘v5’;
 var wb=XLSX.utils.book_new();
 // Cover sheet
-var cv=[];cv.push([],[],[]);cv.push(['LEED Waste Diversion Documentation Package']);cv.push([]);
-cv.push(['Project:',proj.name]);cv.push(['GC / Client:',proj.general_contractor||proj.client||'']);
-cv.push(['Location:',proj.location||'']);cv.push(['Waste Hauler:',proj.waste_hauler||'']);
-cv.push(['LEED Version:',ver]);cv.push(['Target:',proj.leed_target||50,'%']);cv.push([]);
-cv.push(['Processing Facility:',DX.facility]);cv.push(['Address:',DX.addr]);cv.push(['Phone:',DX.phone]);cv.push([]);
-cv.push(['TCEQ Authorization:','TPDES MSGP '+DX.tceq.auth+' — Sector '+DX.tceq.sector+' (SIC '+DX.tceq.sic+')']);
-cv.push(['Facility RN:',DX.tceq.rn]);cv.push(['Operator CN:',DX.tceq.cn]);
-cv.push(['Effective:',DX.tceq.eff]);cv.push(['Expires:',DX.tceq.exp]);
-cv.push(['MSW Status:',DX.tceq.exempt]);cv.push([]);
-cv.push(['VERIFIED END MARKETS']);cv.push(['Material','End Market','Type','Documentation']);
+var cv=[];cv.push([],[],[]);cv.push([‘LEED Waste Diversion Documentation Package’]);cv.push([]);
+cv.push([‘Project:’,proj.name]);cv.push([‘GC / Client:’,proj.general_contractor||proj.client||’’]);
+cv.push([‘Location:’,proj.location||’’]);cv.push([‘Waste Hauler:’,proj.waste_hauler||’’]);
+cv.push([‘LEED Version:’,ver]);cv.push([‘Target:’,proj.leed_target||50,’%’]);cv.push([]);
+cv.push([‘Processing Facility:’,DX.facility]);cv.push([‘Address:’,DX.addr]);cv.push([‘Phone:’,DX.phone]);cv.push([]);
+cv.push([‘TCEQ Authorization:’,‘TPDES MSGP ‘+DX.tceq.auth+’ — Sector ‘+DX.tceq.sector+’ (SIC ‘+DX.tceq.sic+’)’]);
+cv.push([‘Facility RN:’,DX.tceq.rn]);cv.push([‘Operator CN:’,DX.tceq.cn]);
+cv.push([‘Effective:’,DX.tceq.eff]);cv.push([‘Expires:’,DX.tceq.exp]);
+cv.push([‘MSW Status:’,DX.tceq.exempt]);cv.push([]);
+cv.push([‘VERIFIED END MARKETS’]);cv.push([‘Material’,‘End Market’,‘Type’,‘Documentation’]);
 DX.endMarkets.forEach(function(cat){cat.items.forEach(function(i){cv.push([i.mat,i.dest,i.type,i.doc]);});});
-cv.push([]);cv.push(['CHAIN OF CUSTODY']);cv.push(['Stage','Documentation','What It Proves']);
+cv.push([]);cv.push([‘CHAIN OF CUSTODY’]);cv.push([‘Stage’,‘Documentation’,‘What It Proves’]);
 DX.chain.forEach(function(c){cv.push([c.stage,c.doc,c.proves]);});
-cv.push([]);cv.push(['VERIFICATION FORMULA:',DX.formula]);cv.push([]);
-cv.push(['METHODOLOGY:',DX.method]);cv.push([]);
-cv.push(['Report by:','Dalmex Recycling LLC']);cv.push(['Contact:','Robert Vandling']);
-cv.push(['Email:','robert@dalmexrecycling.com']);cv.push(['Generated:',new Date().toLocaleDateString()]);
-var ws0=XLSX.utils.aoa_to_sheet(cv);ws0['!cols']=[{wch:24},{wch:30},{wch:16},{wch:20}];
-XLSX.utils.book_append_sheet(wb,ws0,'Documentation');
+cv.push([]);cv.push([‘VERIFICATION FORMULA:’,DX.formula]);cv.push([]);
+cv.push([‘METHODOLOGY:’,DX.method]);cv.push([]);
+cv.push([‘Report by:’,‘Dalmex Recycling LLC’]);cv.push([‘Contact:’,‘Robert Vandling’]);
+cv.push([‘Email:’,‘robert@dalmexrecycling.com’]);cv.push([‘Generated:’,new Date().toLocaleDateString()]);
+var ws0=XLSX.utils.aoa_to_sheet(cv);ws0[’!cols’]=[{wch:24},{wch:30},{wch:16},{wch:20}];
+XLSX.utils.book_append_sheet(wb,ws0,‘Documentation’);
 // Monthly sheets
-var keys=Object.keys(P._mg).sort();var mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+var keys=Object.keys(P._mg).sort();var mf=[’’,‘January’,‘February’,‘March’,‘April’,‘May’,‘June’,‘July’,‘August’,‘September’,‘October’,‘November’,‘December’];
 keys.forEach(function(key){
-var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
-var pts=key.split('-');var mn=mf[+pts[1]];var d=[];d.push([],[],[],[],[],[]);
-d.push(['Waste Diversion Report for '+mn+' '+pts[0]]);d.push(['Company: '+(proj.general_contractor||proj.client||'')]);
-d.push(['Location: '+(proj.location||'')]);d.push(['Project: '+proj.name]);d.push(['Report by: Dalmex Recycling']);
-d.push(['Contact: Robert Vandling']);d.push(['Email: robert@dalmexrecycling.com']);d.push([]);
-d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons','Div%','Diverted',
-'Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC','Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
+var tix=(P.*mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||’’).localeCompare(b.ticket_date||’’);});
+var pts=key.split(’-’);var mn=mf[+pts[1]];var d=[];d.push([],[],[],[],[],[]);
+d.push([‘Waste Diversion Report for ‘+mn+’ ‘+pts[0]]);d.push([‘Company: ‘+(proj.general_contractor||proj.client||’’)]);
+d.push([‘Location: ‘+(proj.location||’’)]);d.push([‘Project: ‘+proj.name]);d.push([‘Report by: Dalmex Recycling’]);
+d.push([‘Contact: Robert Vandling’]);d.push([‘Email: robert@dalmexrecycling.com’]);d.push([]);
+d.push([‘Date’,‘Ticket No’,‘Gross (lbs)’,‘GWT (NT)’,‘Tare (lbs)’,‘Tare (NT)’,‘Net (lbs)’,‘Tons’,‘Div%’,‘Diverted’,
+‘Wood%’,‘Wood’,‘Gypsum%’,‘Gypsum’,‘Plastic%’,‘Plastic’,‘OCC%’,‘OCC’,‘Metal%’,‘Metal’,‘Concrete%’,‘Concrete’,‘Block%’,‘Block’,‘Photo’]);
 var sG=0,sT=0,sTn=0,sD=0,sm={wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};var pL=[];
 tix.forEach(function(t,ri){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
 var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
 var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;var dvp=tn>0?dv/tn:0;
 sG+=g;sT+=ta;sTn+=tn;sD+=dv;sm.wood+=wt;sm.gypsum+=gt;sm.plastic+=pt;sm.occ+=ot;sm.metal+=mt;sm.concrete+=ct;sm.block+=bt;
-var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp=df.split('-');df=parseInt(dp[1])+'/'+parseInt(dp[2])+'/'+dp[0];}
-var pu=t.scale_ticket_image||'';if(pu)pL.push({r:15+ri,c:24,u:pu});
-d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?'View Photo':'']);});
-var tdp=sTn>0?sD/sTn:0;d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,
-sTn>0?sm.plastic/sTn:0,sm.plastic,sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,'']);
-d.push([]);d.push(['Total Tonnage',Math.round(sTn*100)/100]);d.push(['Diverted from landfill',Math.round(sD*100)/100]);d.push(['Recycled Material %',tdp]);
-var ws=XLSX.utils.aoa_to_sheet(d);ws['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
-var sr=15,er=sr+tix.length;for(var r=sr;r<=er;r++){[8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0%';});
-[3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='0.00';});
-[2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
-var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:1});if(ws[a])ws[a].z='0.00';});
-var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z='0%';
-pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:'View photo'};});
-XLSX.utils.book_append_sheet(wb,ws,mn+' '+pts[0]);});
-XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_Report.xlsx');P.toast('Downloaded!');},
+var df=t.ticket_date||’’;if(df.indexOf(’-’)>0){var dp=df.split(’-’);df=parseInt(dp[1])+’/’+parseInt(dp[2])+’/’+dp[0];}
+var pu=t.scale_ticket_image||’’;if(pu)pL.push({r:15+ri,c:24,u:pu});
+d.push([df,+(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,pu?‘View Photo’:’’]);});
+var tdp=sTn>0?sD/sTn:0;d.push([‘Totals’,’’,sG,sG/2000,sT,sT/2000,sG-sT,sTn,tdp,sD,sTn>0?sm.wood/sTn:0,sm.wood,sTn>0?sm.gypsum/sTn:0,sm.gypsum,
+sTn>0?sm.plastic/sTn:0,sm.plastic,sTn>0?sm.occ/sTn:0,sm.occ,sTn>0?sm.metal/sTn:0,sm.metal,sTn>0?sm.concrete/sTn:0,sm.concrete,sTn>0?sm.block/sTn:0,sm.block,’’]);
+d.push([]);d.push([‘Total Tonnage’,Math.round(sTn*100)/100]);d.push([‘Diverted from landfill’,Math.round(sD*100)/100]);d.push([‘Recycled Material %’,tdp]);
+var ws=XLSX.utils.aoa_to_sheet(d);ws[’!cols’]=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}];
+var sr=15,er=sr+tix.length;for(var r=sr;r<=er;r++){[8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=‘0%’;});
+[3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=‘0.00’;});
+[2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z=’#,##0’;});}
+var ss=er+2;[ss,ss+1].forEach(function(rx){var a=XLSX.utils.encode_cell({r:rx,c:1});if(ws[a])ws[a].z=‘0.00’;});
+var a3=XLSX.utils.encode_cell({r:ss+2,c:1});if(ws[a3])ws[a3].z=‘0%’;
+pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:‘View photo’};});
+XLSX.utils.book_append_sheet(wb,ws,mn+’ ‘+pts[0]);});
+XLSX.writeFile(wb,proj.name.replace(/[^a-zA-Z0-9]/g,’*’)+’_Diversion_Report.xlsx’);P.toast(‘Downloaded!’);},
 
-cycleTheme(){var html=document.documentElement;var cur=html.dataset.theme||'default';
-var themes=['default','dark','green'];var next=themes[(themes.indexOf(cur)+1)%themes.length];
-html.classList.remove('th-dark','th-green');if(next==='dark')html.classList.add('th-dark');if(next==='green')html.classList.add('th-green');
-html.dataset.theme=next;try{localStorage.setItem('ds_theme',next);}catch(x){}
-P.toast('Theme: '+{default:'Light',dark:'Dark',green:'Forest'}[next]);},
-loadTheme(){try{var t=localStorage.getItem('ds_theme');if(!t)return;document.documentElement.classList.remove('th-dark','th-green');
-if(t==='dark')document.documentElement.classList.add('th-dark');if(t==='green')document.documentElement.classList.add('th-green');
+cycleTheme(){var html=document.documentElement;var cur=html.dataset.theme||‘default’;
+var themes=[‘default’,‘dark’,‘green’];var next=themes[(themes.indexOf(cur)+1)%themes.length];
+html.classList.remove(‘th-dark’,‘th-green’);if(next===‘dark’)html.classList.add(‘th-dark’);if(next===‘green’)html.classList.add(‘th-green’);
+html.dataset.theme=next;try{localStorage.setItem(‘ds_theme’,next);}catch(x){}
+P.toast(’Theme: ’+{default:‘Light’,dark:‘Dark’,green:‘Forest’}[next]);},
+loadTheme(){try{var t=localStorage.getItem(‘ds_theme’);if(!t)return;document.documentElement.classList.remove(‘th-dark’,‘th-green’);
+if(t===‘dark’)document.documentElement.classList.add(‘th-dark’);if(t===‘green’)document.documentElement.classList.add(‘th-green’);
 document.documentElement.dataset.theme=t;}catch(x){}},
 
-f(n){if(n==null)return'0';var v=+n;if(isNaN(v))return'0';if(Math.abs(v)>=1000)return v.toLocaleString(undefined,{maximumFractionDigits:1});if(Math.abs(v)>=1)return v.toFixed(1);return v.toFixed(2);},
-fd(d){if(!d)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var p=d.split('-');return p.length<3?d:m[+p[1]-1]+' '+parseInt(p[2])+', '+p[0];},
-ago(d){if(!d)return'';var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';},
-esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
-toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
+f(n){if(n==null)return’0’;var v=+n;if(isNaN(v))return’0’;if(Math.abs(v)>=1000)return v.toLocaleString(undefined,{maximumFractionDigits:1});if(Math.abs(v)>=1)return v.toFixed(1);return v.toFixed(2);},
+fd(d){if(!d)return’’;var m=[‘Jan’,‘Feb’,‘Mar’,‘Apr’,‘May’,‘Jun’,‘Jul’,‘Aug’,‘Sep’,‘Oct’,‘Nov’,‘Dec’];var p=d.split(’-’);return p.length<3?d:m[+p[1]-1]+’ ‘+parseInt(p[2])+’, ‘+p[0];},
+ago(d){if(!d)return’’;var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return’just now’;if(s<3600)return Math.floor(s/60)+‘m ago’;if(s<86400)return Math.floor(s/3600)+‘h ago’;return Math.floor(s/86400)+‘d ago’;},
+esc(s){var d=document.createElement(‘div’);d.textContent=s;return d.innerHTML;},
+toast(m){var e=document.createElement(‘div’);e.className=‘toast’;e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
-async init(){P.loadTheme();document.getElementById('nav').style.display='none';
-try{var id=localStorage.getItem('ds_cid');if(id){var c=await P.api('client_accounts?id=eq.'+id+'&is_active=eq.true');
+async init(){P.loadTheme();document.getElementById(‘nav’).style.display=‘none’;
+try{var id=localStorage.getItem(‘ds_cid’);if(id){var c=await P.api(‘client_accounts?id=eq.’+id+’&is_active=eq.true’);
 if(c&&c.length){P.cl=c[0];await P.loadPj();P.showApp();return;}}}catch(x){}
-document.getElementById('vLogin').classList.remove('hidden');}
+document.getElementById(‘vLogin’).classList.remove(‘hidden’);}
 };
 P.init();
 </script>
+
 </body>
 </html>
