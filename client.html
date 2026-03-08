@@ -114,11 +114,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div id="dGauge" style="text-align:center;padding:8px 0"></div>
 <div class="ct" style="margin-top:8px">📊 Materials</div><div id="dMats"></div>
 </div>
-<!-- End Market Verification -->
-<div class="c" id="dEndMarket" style="font-size:.7rem">
-<div class="ct">🔗 End Market Verification</div>
-<div style="color:var(--text-m);line-height:1.6" id="dEndMarketContent"></div>
-</div>
 <div id="dMonthly"></div>
 <div class="c">
 <div style="display:flex;justify-content:space-between;align-items:center">
@@ -234,7 +229,9 @@ document.getElementById('vLogin').classList.remove('hidden');document.getElement
 
 go(v){['vDash','vUpload','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
 document.querySelectorAll('.topnav-link').forEach(function(b){b.classList.toggle('active',b.dataset.v===v);});
-if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');if(!P.cp){document.getElementById('projBar').classList.remove('hidden');document.getElementById('dashContent').classList.add('hidden');P.renderPL('projList','dash');}}
+if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');
+if(P.cp){document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');}
+else{document.getElementById('projBar').classList.remove('hidden');document.getElementById('dashContent').classList.add('hidden');P.renderPL('projList','dash');}}
 if(v==='upload'){document.getElementById('vUpload').classList.remove('hidden');P.renderPL('uProjList','upload');}
 if(v==='history'){document.getElementById('vHistory').classList.remove('hidden');P.loadHist();}},
 
@@ -295,19 +292,6 @@ document.getElementById('dGauge').innerHTML='<div style="padding:10px;border-rad
 var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?mc[k]/tot*100:0;
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%</div></div>';});
 document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
-// End Market info
-var emh='<div style="font-size:.65rem;line-height:1.6">';
-DX.endMarkets.forEach(function(cat){emh+='<div style="font-weight:700;margin-top:6px;color:var(--text)">'+cat.cat+'</div>';
-cat.items.forEach(function(i){emh+='<div style="padding:1px 0;color:var(--text-m)">'+i.mat+' → <b>'+i.dest+'</b> ('+i.type+') — '+i.doc+'</div>';});});
-emh+='<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;font-size:.6rem">'+
-'<div style="font-weight:700;margin-bottom:3px">Chain of Custody</div>'+
-DX.chain.map(function(c){return '<div>'+c.stage+': '+c.doc+'</div>';}).join('')+
-'<div style="margin-top:4px;font-weight:700;color:var(--success)">'+DX.formula+'</div>'+
-'</div>'+
-'<div style="margin-top:6px;font-size:.55rem;color:var(--text-d)">'+
-'TCEQ Auth: '+DX.tceq.auth+' ('+DX.tceq.type+', Sector '+DX.tceq.sector+', SIC '+DX.tceq.sic+') • '+DX.tceq.exempt+'<br>'+
-'Facility: '+DX.facility+', '+DX.addr+' • Certified commercial scale</div></div>';
-document.getElementById('dEndMarketContent').innerHTML=emh;
 P.renderMonths();P.renderTbl(P.tx);},
 
 renderMonths(){var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -348,13 +332,14 @@ var el=document.createElement('div');el.id='tkDtl';
 el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
 el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket '+t.ticket_number+'</div>'+
 '<div class="topnav-right"><div class="b bsm" onclick="P.shareTk(\''+t.id+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📤 Share</div>'+
-'<button class="topnav-btn" onclick="document.getElementById(\'tkDtl\').remove()">✕</button></div></div>'+
+'<div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
 '<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fd(t.ticket_date)+' • '+(t.hauler||'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
 '<div class="sg"><div class="sc"><div class="sv">'+P.f(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
 '<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
 '<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div></div></div>'+
-(mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+'</div>';
+(mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
+'<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
 document.body.appendChild(el);},
 shareTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
 var txt='Ticket #'+t.ticket_number+'\nDate: '+P.fd(t.ticket_date)+'\nProject: '+(P.cp?P.cp.name:'')+'\nGross: '+P.f(t.gross_lbs)+' lbs\nTare: '+P.f(t.tare_lbs)+' lbs\nNet: '+P.f(t.net_tons)+' tons\nDiversion: '+(t.diversion_pct||0)+'%'+(t.scale_ticket_image?'\nPhoto: '+t.scale_ticket_image:'');
