@@ -88,7 +88,16 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 
 <div class="nav">
 <div><div class="nav-brand">Dalmex Recycling</div><div class="nav-sub">Field Photo Upload</div><div id="navHauler" style="display:none;font-size:.6rem;color:#34d399;font-weight:600;margin-top:1px"></div></div>
-<button class="nav-btn" onclick="U.showRecent()">📋 Recent</button>
+<button class="nav-btn" onclick="U.showRecent()" style="position:relative">📋 Recent<span id="recentBadge" class="hidden" style="position:absolute;top:2px;right:-2px;background:#059669;color:#fff;font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:8px;min-width:16px;text-align:center"></span></button>
+</div>
+
+<div id="notifBanner" class="hidden" style="max-width:600px;margin:10px auto 0;padding:0 16px">
+<div style="background:rgba(5,150,105,.08);border:1px solid #059669;border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px">
+<div style="font-size:1.1rem;flex-shrink:0">✅</div>
+<div style="flex:1"><div id="notifText" style="font-size:.8rem;font-weight:600;color:#059669"></div>
+<div id="notifDetail" style="font-size:.7rem;color:var(--text-m);margin-top:2px"></div></div>
+<div onclick="document.getElementById('notifBanner').classList.add('hidden')" style="font-size:.8rem;color:var(--text-d);cursor:pointer;padding:2px 6px">✕</div>
+</div>
 </div>
 
 <div class="wrap">
@@ -289,6 +298,9 @@ U.renderPhotos('s');U.renderPhotos('d');U.updBtn();U.goStep(3);},
 async showRecent(){
 if(!U.name){U.toast('Enter your name first');return;}
 document.getElementById('recentOverlay').classList.remove('hidden');
+document.getElementById('recentBadge').classList.add('hidden');
+document.getElementById('notifBanner').classList.add('hidden');
+try{localStorage.setItem('ds_last_notif',new Date().toISOString());}catch(x){}
 var el=document.getElementById('recentList');
 el.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-d)">Loading...</div>';
 var items=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name)+'&order=created_at.desc&limit=40');
@@ -328,6 +340,35 @@ if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'
 esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
+async checkNotifications(){
+if(!U.name)return;
+// Get recently confirmed uploads (approved in last 7 days)
+var items=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name)+'&status=eq.approved&order=updated_at.desc&limit=20');
+if(!items||!items.length)return;
+// Check which ones are new since last seen
+var lastSeen;try{lastSeen=localStorage.getItem('ds_last_notif');}catch(x){}
+var newItems=[];
+if(lastSeen){newItems=items.filter(function(q){return q.updated_at&&q.updated_at>lastSeen;});}
+else{// First time — show all approved from last 24h
+var cutoff=new Date(Date.now()-86400000).toISOString();
+newItems=items.filter(function(q){return q.updated_at&&q.updated_at>cutoff;});}
+// Update badge
+var badge=document.getElementById('recentBadge');
+var pending=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name)+'&status=eq.pending&select=id');
+var pendingCount=pending?pending.length:0;
+if(pendingCount>0||newItems.length>0){
+var total=newItems.length+pendingCount;
+badge.textContent=total;badge.classList.remove('hidden');}
+else{badge.classList.add('hidden');}
+// Show banner for newly confirmed
+if(newItems.length>0){
+var tktNums=newItems.map(function(q){return q.ticket_number?'#'+q.ticket_number:'';}).filter(Boolean);
+document.getElementById('notifText').textContent=newItems.length+' upload'+(newItems.length>1?'s':'')+' confirmed by admin';
+document.getElementById('notifDetail').textContent=tktNums.length?'Tickets: '+tktNums.join(', '):'Tap 📋 Recent to view details';
+document.getElementById('notifBanner').classList.remove('hidden');
+// Mark as seen
+try{localStorage.setItem('ds_last_notif',new Date().toISOString());}catch(x){}}},
+
 init(){
 // Parse hauler code from URL: ?h=jaguar
 var params=new URLSearchParams(window.location.search);
@@ -337,7 +378,12 @@ document.getElementById('navHauler').textContent=U.haulerName;
 document.getElementById('navHauler').style.display='block';
 document.title='Dalmex Recycling — '+U.haulerName+' Upload';}
 // Restore saved name
-try{var n=localStorage.getItem('ds_uploader');if(n){U.name=n;document.getElementById('uName').value=n;}}catch(x){}
+try{var n=localStorage.getItem('ds_uploader');if(n){U.name=n;document.getElementById('uName').value=n;
+// Check for notifications on load
+setTimeout(function(){U.checkNotifications();},500);
+// Poll every 60 seconds
+setInterval(function(){U.checkNotifications();},60000);
+}}catch(x){}
 }
 };
 U.init();
