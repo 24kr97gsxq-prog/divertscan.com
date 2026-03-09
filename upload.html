@@ -111,7 +111,11 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <div class="step" id="s2">
 <div class="step-bar"><div class="step-dot done"></div><div class="step-dot"></div><div class="step-dot"></div></div>
 <div class="c">
-<div class="ct">Select Project</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<div class="ct" style="margin:0">Select Project</div>
+<div onclick="U.goStep(1)" style="font-size:.7rem;color:var(--primary);font-weight:600;cursor:pointer">← Change Name</div>
+</div>
+<div style="font-size:.7rem;color:var(--text-d);margin-bottom:10px">Uploading as: <b id="s2Name"></b></div>
 <div id="projList"><div style="text-align:center;padding:12px;color:var(--text-d)">Loading projects...</div></div>
 </div>
 </div>
@@ -204,6 +208,7 @@ document.getElementById('s'+n).classList.add('active');},
 saveName(){var n=document.getElementById('uName').value.trim();
 if(!n){document.getElementById('uName').style.borderColor='var(--danger)';return;}
 U.name=n;try{localStorage.setItem('ds_uploader',n);}catch(x){}
+document.getElementById('s2Name').textContent=n;
 U.loadProjects();U.goStep(2);},
 
 // STEP 2: PROJECTS
@@ -281,36 +286,45 @@ reset(){U.photos={s:[],d:[]};document.getElementById('tktNum').value='';document
 U.renderPhotos('s');U.renderPhotos('d');U.updBtn();U.goStep(3);},
 
 // RECENT
-async showRecent(){document.getElementById('recentOverlay').classList.remove('hidden');
+async showRecent(){
+if(!U.name){U.toast('Enter your name first');return;}
+document.getElementById('recentOverlay').classList.remove('hidden');
 var el=document.getElementById('recentList');
-var items=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name||'')+'&order=created_at.desc&limit=30');
-if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-d)">No uploads yet</div>';return;}
+el.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-d)">Loading...</div>';
+var items=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name)+'&order=created_at.desc&limit=40');
+if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-d)">No uploads yet</div>';return;}
+U._recent=items;
 // Get project names
 var pids=[],pm={};items.forEach(function(q){if(pids.indexOf(q.project_id)<0)pids.push(q.project_id);});
 if(pids.length){var pjs=await U.api('projects?id=in.('+pids.join(',')+')&select=id,name');if(pjs)pjs.forEach(function(p){pm[p.id]=p.name;});}
-// Get ticket numbers for assigned items
-var aIds=items.filter(function(q){return q.assigned_ticket_id;}).map(function(q){return q.assigned_ticket_id;});
-var tm={};if(aIds.length){var tks=await U.api('tickets?id=in.('+aIds.join(',')+')&select=id,ticket_number');if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
-el.innerHTML=items.map(function(q){
-var an=q.assigned_ticket_id?tm[q.assigned_ticket_id]:null;
-var sc,sl;
-if(q.status==='pending'){sc='var(--warning)';sl='⏳ Pending Review';}
-else if(q.status==='approved'&&an){sc='var(--success)';sl='✅ Confirmed — Ticket #'+an;}
-else if(q.status==='approved'){sc='var(--success)';sl='✅ Processed';}
+U._recentPM=pm;
+el.innerHTML=items.map(function(q,idx){
+var sc,sl,canDelete=false;
+if(q.status==='pending'){sc='var(--warning)';sl='⏳ Pending';canDelete=true;}
+else if(q.status==='approved'){sc='var(--success)';sl='✅ Ticket #'+(q.ticket_number||'—');}
 else{sc='var(--text-d)';sl='❌ Rejected';}
-var dt=q.created_at?U.fmtDate(q.created_at.substring(0,10)):''
+var dt=q.created_at?U.ago(q.created_at):'';
 return '<div class="ri">'+
 '<div class="ri-thumb" onclick="window.open(\''+q.photo_url+'\')"><img src="'+q.photo_url+'"></div>'+
 '<div class="ri-info"><div class="ri-type">'+(q.photo_type==='scale_ticket'?'📄 Scale Ticket':'📸 Load Photo')+
-(q.ticket_number&&!an?' #'+q.ticket_number:'')+'</div>'+
-'<div class="ri-meta">'+(pm[q.project_id]||'')+(dt?' • '+dt:'')+'</div></div>'+
-'<div class="ri-status" style="color:'+sc+'">'+sl+'</div></div>';}).join('');},
+(q.ticket_number?' #'+q.ticket_number:'')+'</div>'+
+'<div class="ri-meta">'+(pm[q.project_id]||'')+(dt?' • '+dt:'')+(q.notes?' • '+U.esc(q.notes):'')+'</div></div>'+
+'<div style="text-align:right;flex-shrink:0"><div class="ri-status" style="color:'+sc+'">'+sl+'</div>'+
+(canDelete?'<div onclick="U.deleteUpload(\''+q.id+'\','+idx+')" style="font-size:.6rem;color:var(--danger);cursor:pointer;margin-top:2px">🗑️ Delete</div>':'')+
+'</div></div>';}).join('');},
+
+async deleteUpload(id,idx){if(!confirm('Delete this upload?'))return;
+await U.api('photo_queue?id=eq.'+id,'DELETE');
+if(U._recent){U._recent.splice(idx,1);}
+U.toast('Deleted');U.showRecent();},
 
 closeRecent(){document.getElementById('recentOverlay').classList.add('hidden');},
 
 // HELPERS
 fmtDate(d){if(!d)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var p=d.split('-');return p.length<3?d:m[+p[1]-1]+' '+parseInt(p[2]);},
+ago(d){if(!d)return'';var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'just now';
+if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';},
 esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
