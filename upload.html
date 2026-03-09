@@ -87,7 +87,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <body>
 
 <div class="nav">
-<div><div class="nav-brand">Dalmex Recycling</div><div class="nav-sub">Field Photo Upload</div></div>
+<div><div class="nav-brand">Dalmex Recycling</div><div class="nav-sub">Field Photo Upload</div><div id="navHauler" style="display:none;font-size:.6rem;color:#34d399;font-weight:600;margin-top:1px"></div></div>
 <button class="nav-btn" onclick="U.showRecent()">📋 Recent</button>
 </div>
 
@@ -183,6 +183,14 @@ var SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN
 
 var U={
 name:null,projId:null,projName:null,photos:{s:[],d:[]},
+haulerCode:null,haulerName:null,
+// Hauler codes map to waste_hauler field values in Supabase
+haulers:{
+'jaguar':{name:'Jaguar Waste Management',filter:'Jaguar'},
+'liberty':{name:'Liberty Demolition',filter:'Liberty'},
+'bwaste':{name:'B&B Waste',filter:'B&B'},
+'ranger':{name:'Ranger Waste',filter:'Ranger'}
+},
 
 async api(e,m,b){var o={method:m||'GET',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'}};
 if(!m||m==='GET')o.headers['Accept']='application/json';if(b)o.body=JSON.stringify(b);
@@ -200,14 +208,21 @@ U.loadProjects();U.goStep(2);},
 
 // STEP 2: PROJECTS
 async loadProjects(){
-var pj=await U.api('projects?order=name&select=id,name,client,location,waste_hauler');
-if(!pj||!pj.length){document.getElementById('projList').innerHTML='<div style="text-align:center;padding:12px;color:var(--text-d)">No projects found</div>';return;}
+var query='projects?order=name&select=id,name,client,location,waste_hauler';
+if(U.haulerCode&&U.haulers[U.haulerCode]){
+var f=U.haulers[U.haulerCode].filter;
+query='projects?waste_hauler=ilike.%25'+encodeURIComponent(f)+'%25&order=name&select=id,name,client,location,waste_hauler';
+}
+var pj=await U.api(query);
+if(!pj||!pj.length){document.getElementById('projList').innerHTML='<div style="text-align:center;padding:16px;color:var(--text-d)">No projects found'+(U.haulerName?' for '+U.haulerName:'')+'</div>';return;}
 U._pj=pj;
+// If only one project, auto-select and skip to upload
+if(pj.length===1){U.pickProj(pj[0].id);U.projNext();return;}
 document.getElementById('projList').innerHTML=pj.map(function(p){
 return '<div class="pj" onclick="U.pickProj(\''+p.id+'\')" id="pj_'+p.id+'">'+
 '<div class="pj-check"></div>'+
 '<div><div class="pj-n">'+U.esc(p.name)+'</div>'+
-'<div class="pj-m">'+[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ')+'</div></div></div>';
+'<div class="pj-m">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div></div></div>';
 }).join('')+'<div class="b bp" id="projNextBtn" onclick="U.projNext()" style="margin-top:10px;opacity:.4;pointer-events:none">Continue →</div>';},
 
 pickProj(id){U.projId=id;var p=U._pj.find(function(x){return x.id===id;});U.projName=p?p.name:'';
@@ -256,7 +271,7 @@ var path='queue/'+U.projId+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
 var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',
 headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
 if(!up.ok)continue;var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await U.api('photo_queue','POST',{project_id:U.projId,access_code:'field',
+await U.api('photo_queue','POST',{project_id:U.projId,access_code:U.haulerCode||'field',
 submitted_by:U.name,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending'});
 ok++;}catch(x){console.error(x);}}
 document.getElementById('successDetail').textContent=ok+' photo'+(ok>1?'s':'')+' uploaded for '+U.projName+(tNum?' (Ticket #'+tNum+')':'');
@@ -300,6 +315,13 @@ esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
 init(){
+// Parse hauler code from URL: ?h=jaguar
+var params=new URLSearchParams(window.location.search);
+var h=params.get('h');
+if(h&&U.haulers[h]){U.haulerCode=h;U.haulerName=U.haulers[h].name;
+document.getElementById('navHauler').textContent=U.haulerName;
+document.getElementById('navHauler').style.display='block';
+document.title='Dalmex Recycling — '+U.haulerName+' Upload';}
 // Restore saved name
 try{var n=localStorage.getItem('ds_uploader');if(n){U.name=n;document.getElementById('uName').value=n;}}catch(x){}
 }
