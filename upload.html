@@ -222,10 +222,10 @@ U.loadProjects();U.goStep(2);},
 
 // STEP 2: PROJECTS
 async loadProjects(){
-var query='projects?order=name&select=id,name,client,location,waste_hauler';
+var query='projects?order=name&select=id,name,client,location,waste_hauler,leed_version,leed_target,general_contractor';
 if(U.haulerCode&&U.haulers[U.haulerCode]){
 var f=U.haulers[U.haulerCode].filter;
-query='projects?waste_hauler=ilike.%25'+encodeURIComponent(f)+'%25&order=name&select=id,name,client,location,waste_hauler';
+query='projects?waste_hauler=ilike.%25'+encodeURIComponent(f)+'%25&order=name&select=id,name,client,location,waste_hauler,leed_version,leed_target,general_contractor';
 }
 var pj=await U.api(query);
 if(!pj||!pj.length){document.getElementById('projList').innerHTML='<div style="text-align:center;padding:16px;color:var(--text-d)">No projects found'+(U.haulerName?' for '+U.haulerName:'')+'</div>';return;}
@@ -233,10 +233,13 @@ U._pj=pj;
 // If only one project, auto-select and skip to upload
 if(pj.length===1){U.pickProj(pj[0].id);U.projNext();return;}
 document.getElementById('projList').innerHTML=pj.map(function(p){
+var details=[p.general_contractor||p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
+var leed='LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%';
 return '<div class="pj" onclick="U.pickProj(\''+p.id+'\')" id="pj_'+p.id+'">'+
 '<div class="pj-check"></div>'+
-'<div><div class="pj-n">'+U.esc(p.name)+'</div>'+
-'<div class="pj-m">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div></div></div>';
+'<div style="flex:1"><div class="pj-n">'+U.esc(p.name)+'</div>'+
+(details?'<div class="pj-m">'+U.esc(details)+'</div>':'')+
+'<div class="pj-m">'+leed+'</div></div></div>';
 }).join('')+'<div class="b bp" id="projNextBtn" onclick="U.projNext()" style="margin-top:10px;opacity:.4;pointer-events:none">Continue →</div>';},
 
 pickProj(id){U.projId=id;var p=U._pj.find(function(x){return x.id===id;});U.projName=p?p.name:'';
@@ -245,8 +248,12 @@ document.getElementById('pj_'+id).classList.add('act');
 var btn=document.getElementById('projNextBtn');btn.style.opacity='1';btn.style.pointerEvents='auto';},
 
 projNext(){if(!U.projId)return;
+var p=U._pj.find(function(x){return x.id===U.projId;});
 document.getElementById('projName').textContent=U.projName;
-document.getElementById('uploaderName').textContent='Uploading as: '+U.name;
+var meta=[p.general_contractor||p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
+document.getElementById('uploaderName').innerHTML=
+(meta?'<div>'+U.esc(meta)+'</div>':'')+
+'<div>Uploading as: <b>'+U.esc(U.name)+'</b></div>';
 U.photos={s:[],d:[]};U.renderPhotos('s');U.renderPhotos('d');U.updBtn();
 U.goStep(3);},
 
