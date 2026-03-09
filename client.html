@@ -512,12 +512,15 @@ Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
 var landfill=tons-div;if(landfill<0)landfill=0;
 var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
 var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
-// Ticket rows with Gross/Tare
+// Build dynamic material columns from MT
+var matKeys=Object.keys(MT);
+// Ticket rows with Gross/Tare and ALL materials
 var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
 var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
-rows+='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(g)+'</td><td class=r>'+P.f(ta)+'</td><td class=r>'+P.f(t.net_tons)+'</td>'+
-'<td class=r>'+(t.wood_pct||0)+'%</td><td class=r>'+(t.occ_pct||0)+'%</td><td class=r>'+(t.metal_pct||0)+'%</td>'+
-'<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';});
+var r='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(g)+'</td><td class=r>'+P.f(ta)+'</td><td class=r>'+P.f(t.net_tons)+'</td>';
+matKeys.forEach(function(k){r+='<td class=r>'+(t[k+'_pct']||0)+'%</td>';});
+r+='<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
+rows+=r;});
 // Material rows
 var matRows='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
 matRows+='<tr><td>'+MT[k].i+' '+MT[k].n+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+P.f(mc[k])+' T</td><td>'+MT[k].em+'</td></tr>';});
@@ -531,9 +534,9 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:10.5px;line-height:1.5}'+
 'h1{font-size:18px;color:#18181b;border-bottom:3px solid #059669;padding-bottom:6px;margin-bottom:14px}'+
 'h2{font-size:11px;color:#18181b;margin:16px 0 6px;border-bottom:1px solid #d4d4d8;padding-bottom:3px;text-transform:uppercase;letter-spacing:.5px}'+
-'.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0;font-size:10px}'+
-'th{background:#f4f4f5;padding:5px 4px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px}'+
-'td{padding:4px;border-bottom:1px solid #e4e4e7}'+
+'.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0;font-size:9px}'+
+'th{background:#f4f4f5;padding:5px 3px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:7.5px;text-transform:uppercase;letter-spacing:.2px}'+
+'td{padding:3px;border-bottom:1px solid #e4e4e7}'+
 '.stats{display:flex;gap:8px;margin:10px 0}.stat{flex:1;background:#f4f4f5;border-radius:6px;padding:8px;text-align:center}'+
 '.stat b{font-size:15px;display:block;font-family:"Courier New",monospace}.stat span{font-size:7.5px;color:#71717a;text-transform:uppercase;letter-spacing:.3px}'+
 '.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;font-size:10px}'+
@@ -571,8 +574,8 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
 // TICKET TABLE
 '<h2>Scale Tickets — '+label+'</h2>'+
-'<table><tr><th>Date</th><th>Ticket#</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-'<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+'<table><tr><th>Date</th><th>Ticket#</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+MT[k].n+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
+'<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
 // FOOTER
 '<div class="footer"><b>Dalmex Recycling LLC</b> — powered by DivertScan • '+new Date().toLocaleDateString()+' • robert@dalmexrecycling.com • (214) 352-2000</div>'+
 '<div class="toolbar" onclick="window.print()" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:14px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">🖨 Print / Save as PDF</div>'+
