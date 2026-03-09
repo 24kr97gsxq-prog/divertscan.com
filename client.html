@@ -505,45 +505,77 @@ document.body.appendChild(el);},
 genPDF(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
 var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 var label=mf[+pts[1]]+' '+pts[0];var proj=P.cp;if(!proj)return;
-var tons=0,div=0,co2=0,mc={};Object.keys(MT).forEach(function(k){mc[k]=0;});
+var tons=0,div=0,co2=0,mc={},tGross=0,tTare=0;Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;
+tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
+var landfill=tons-div;if(landfill<0)landfill=0;
 var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
 var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+// Ticket rows with Gross/Tare
 var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
-rows+='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(t.net_tons)+'</td><td class=r>'+(t.wood_pct||0)+'%</td><td class=r>'+(t.occ_pct||0)+'%</td><td class=r>'+(t.metal_pct||0)+'%</td><td class=r style="font-weight:bold;color:'+(dp>=75?'#10b981':dp>=50?'#f59e0b':'#ef4444')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';});
+var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
+rows+='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td class=r>'+P.f(g)+'</td><td class=r>'+P.f(ta)+'</td><td class=r>'+P.f(t.net_tons)+'</td>'+
+'<td class=r>'+(t.wood_pct||0)+'%</td><td class=r>'+(t.occ_pct||0)+'%</td><td class=r>'+(t.metal_pct||0)+'%</td>'+
+'<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';});
+// Material rows
 var matRows='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
 matRows+='<tr><td>'+MT[k].i+' '+MT[k].n+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+P.f(mc[k])+' T</td><td>'+MT[k].em+'</td></tr>';});
+// Project-to-date cumulative (all tickets, not just this month)
+var ptdTons=0,ptdDiv=0,ptdGross=0,ptdTare=0,ptdTix=P.tx.length;
+P.tx.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;ptdGross+=+(t.gross_lbs)||0;ptdTare+=+(t.tare_lbs)||0;});
+var ptdLandfill=ptdTons-ptdDiv;if(ptdLandfill<0)ptdLandfill=0;
+var ptdRate=ptdTons>0?Math.round(ptdDiv/ptdTons*100):0;
 var w=window.open('','_blank');
 w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+P.esc(proj.name)+'</title>'+
-'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#333;padding:28px;font-size:10.5px;line-height:1.5}'+
-'h1{font-size:18px;color:#1a1a2e;border-bottom:3px solid #10b981;padding-bottom:6px;margin-bottom:14px}'+
-'h2{font-size:12px;color:#1a1a2e;margin:14px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}'+
+'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:10.5px;line-height:1.5}'+
+'h1{font-size:18px;color:#18181b;border-bottom:3px solid #059669;padding-bottom:6px;margin-bottom:14px}'+
+'h2{font-size:11px;color:#18181b;margin:16px 0 6px;border-bottom:1px solid #d4d4d8;padding-bottom:3px;text-transform:uppercase;letter-spacing:.5px}'+
 '.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0;font-size:10px}'+
-'th{background:#f4f5f7;padding:4px;text-align:left;border-bottom:2px solid #ddd;font-size:9px}td{padding:3px 4px;border-bottom:1px solid #eee}'+
-'.stats{display:flex;gap:10px;margin:10px 0}.stat{flex:1;background:#f4f5f7;border-radius:6px;padding:8px;text-align:center}'+
-'.stat b{font-size:16px;display:block}.stat span{font-size:8px;color:#6b7280;text-transform:uppercase}'+
-'.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;font-size:11px}'+
+'th{background:#f4f4f5;padding:5px 4px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px}'+
+'td{padding:4px;border-bottom:1px solid #e4e4e7}'+
+'.stats{display:flex;gap:8px;margin:10px 0}.stat{flex:1;background:#f4f4f5;border-radius:6px;padding:8px;text-align:center}'+
+'.stat b{font-size:15px;display:block;font-family:"Courier New",monospace}.stat span{font-size:7.5px;color:#71717a;text-transform:uppercase;letter-spacing:.3px}'+
+'.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;font-size:10px}'+
 '.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}'+
-'.footer{margin-top:20px;padding-top:8px;border-top:1px solid #ddd;font-size:8px;color:#888;text-align:center}'+
+'.note{background:#f4f4f5;border-radius:4px;padding:6px 8px;margin:8px 0;font-size:9px;color:#52525b}'+
+'.footer{margin-top:20px;padding-top:8px;border-top:1px solid #d4d4d8;font-size:8px;color:#a1a1aa;text-align:center}'+
 '@media print{body{padding:16px}.toolbar{display:none!important}}</style></head><body>'+
+// HEADER
 '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div>'+
-'<h1>Waste Diversion Report</h1><div style="font-size:11px;color:#6b7280">'+label+' — '+P.esc(proj.name)+'</div></div>'+
-'<div style="text-align:right"><div style="font-weight:700">LEED '+ver+'</div>'+
+'<h1>Waste Diversion Report</h1><div style="font-size:11px;color:#71717a">'+label+' — '+P.esc(proj.name)+'</div></div>'+
+'<div style="text-align:right"><div style="font-weight:700;font-size:11px">LEED '+ver+'</div>'+
 '<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:3px">'+(ok?'✅ ON TRACK':'⚠️ BELOW TARGET')+'</div></div></div>'+
-'<h2>Project</h2><table>'+
+// PROJECT
+'<h2>Project Information</h2><table>'+
 '<tr><td width=25%><b>Project</b></td><td>'+P.esc(proj.name)+'</td><td width=25%><b>LEED</b></td><td>'+ver+' • Target '+tgt+'%</td></tr>'+
 '<tr><td><b>GC / Client</b></td><td>'+(proj.general_contractor||proj.client||'—')+'</td><td><b>Hauler</b></td><td>'+(proj.waste_hauler||'—')+'</td></tr>'+
 '<tr><td><b>Location</b></td><td>'+(proj.location||'—')+'</td><td><b>Facility</b></td><td>Dalmex Recycling, Dallas TX</td></tr></table>'+
+// MONTHLY STATS
+'<h2>'+label+' Summary</h2>'+
 '<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
-'<div class="stat"><b>'+P.f(tons)+'</b><span>Total Tons</span></div>'+
-'<div class="stat"><b style="color:#10b981">'+P.f(div)+'</b><span>Diverted</span></div>'+
-'<div class="stat"><b style="color:'+(ok?'#10b981':'#ef4444')+'">'+rate+'%</b><span>Diversion Rate</span></div></div>'+
-'<h2>Material Breakdown</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
-'<h2>Scale Tickets — '+label+'</h2><table><tr><th>Date</th><th>Ticket#</th><th class=r>Tons</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-'<tr style="border-top:2px solid #333;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+'<div class="stat"><b>'+P.f(tons)+'</b><span>Generated (T)</span></div>'+
+'<div class="stat"><b style="color:#059669">'+P.f(div)+'</b><span>Diverted (T)</span></div>'+
+'<div class="stat"><b style="color:#dc2626">'+P.f(landfill)+'</b><span>Landfill (T)</span></div>'+
+'<div class="stat"><b style="color:'+(ok?'#059669':'#dc2626')+'">'+rate+'%</b><span>Diversion Rate</span></div></div>'+
+'<div class="note"><b>Calculation:</b> Total Generated ('+P.f(tons)+' T) = Diverted ('+P.f(div)+' T) + Landfill ('+P.f(landfill)+' T) &nbsp;|&nbsp; Diversion Rate = '+P.f(div)+' / '+P.f(tons)+' × 100 = '+rate+'% &nbsp;|&nbsp; Method: weight-based tracking via commercial scale</div>'+
+// PROJECT TO DATE
+'<h2>Project-to-Date Cumulative</h2>'+
+'<div class="stats"><div class="stat"><b>'+ptdTix+'</b><span>Total Tickets</span></div>'+
+'<div class="stat"><b>'+P.f(ptdTons)+'</b><span>Generated (T)</span></div>'+
+'<div class="stat"><b style="color:#059669">'+P.f(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
+'<div class="stat"><b style="color:#dc2626">'+P.f(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
+'<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+(ptdRate!==rate?'<div class="note">Cumulative project diversion: '+P.f(ptdDiv)+' T diverted / '+P.f(ptdTons)+' T generated = '+ptdRate+'% '+(ptdRate>=tgt?'(meets '+tgt+'% target)':'(below '+tgt+'% target)')+'</div>':'')+
+// MATERIALS
+'<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
+// TICKET TABLE
+'<h2>Scale Tickets — '+label+'</h2>'+
+'<table><tr><th>Date</th><th>Ticket#</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th><th class=r>Wood</th><th class=r>OCC</th><th class=r>Metal</th><th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
+'<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td><td colspan=3></td><td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+// FOOTER
 '<div class="footer"><b>Dalmex Recycling LLC</b> — powered by DivertScan • '+new Date().toLocaleDateString()+' • robert@dalmexrecycling.com • (214) 352-2000</div>'+
-'<div class="toolbar" onclick="window.print()" style="position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:14px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.2)">🖨 Print / Save as PDF</div>'+
+'<div class="toolbar" onclick="window.print()" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:14px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">🖨 Print / Save as PDF</div>'+
 '<div style="height:60px"></div></body></html>');
 w.document.close();},
 
