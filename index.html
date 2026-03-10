@@ -3672,107 +3672,272 @@
             if (!batch || !batch.items.length) return;
 
             var tktNum = document.getElementById('batchTkt_' + bIdx).value.trim();
-            if (!tktNum) { this.showToast('Enter a ticket number to process'); return; }
-
             var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
             var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
             var q0 = batch.items[0];
 
-            this.showLoading('Processing batch...');
+            // Open review modal
+            var m = document.createElement('div');
+            m.className = 'modal-overlay show';
+            m.id = 'batchReviewModal';
+            m.onclick = function(e){if(e.target===m)m.remove();};
 
-            // 1. Load project tickets
-            var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc');
-            if (!projectTickets) projectTickets = [];
+            var projMap = {};
+            this.state.projects.forEach(function(p){projMap[p.id]=p.name;});
 
-            // 2. OCR the first scale ticket if API key available
-            var ticket = null;
-            if (scale.length && this.state.apiKey) {
-                this.showLoading('OCR reading scale ticket...');
-                await this.processQueueScaleTicket(Object.assign({}, scale[0], {ticket_number: tktNum}), projectTickets);
-                // Reload tickets to get the newly created/matched ticket
-                projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
+            var html = '<div class="modal" style="max-height:92vh"><div class="modal-handle"></div>' +
+                '<div class="modal-title">Review & Process Batch</div>' +
+                '<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px">' + (projMap[q0.project_id]||'') + ' • ' + (q0.submitted_by||'') + ' • ' + batch.items.length + ' photos</div>';
+
+            // Scale ticket image — full size for cross-checking
+            if (scale.length) {
+                html += '<div class="card-title">📄 Scale Ticket</div>' +
+                    '<img src="' + scale[0].photo_url + '" style="width:100%;border-radius:8px;border:1px solid var(--border);margin-bottom:12px" onclick="window.open(\'' + scale[0].photo_url + '\')">';
             }
 
-            // Find ticket by number
-            ticket = projectTickets.find(function(t) {
-                return t.ticket_number === tktNum || t.ticket_number === String(tktNum);
+            // Debris images
+            if (debris.length) {
+                html += '<div class="card-title">📸 Debris Photos (' + debris.length + ')</div>' +
+                    '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px">';
+                debris.forEach(function(q) {
+                    html += '<img src="' + q.photo_url + '" onclick="window.open(\'' + q.photo_url + '\')" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
+                });
+                html += '</div>';
+            }
+
+            // OCR + AI results area
+            html += '<div class="divider"></div>' +
+                '<div class="form-group"><label class="form-label">Ticket Number *</label>' +
+                '<input type="text" class="form-input" id="reviewTktNum" value="' + DS.esc(tktNum||'') + '" placeholder="Enter or verify ticket number" inputmode="numeric"></div>' +
+                '<div class="form-group"><label class="form-label">Ticket Date</label>' +
+                '<input type="date" class="form-input" id="reviewTktDate" value="' + new Date().toISOString().split('T')[0] + '"></div>' +
+                '<div class="form-group"><label class="form-label">Gross (lbs)</label>' +
+                '<input type="number" class="form-input" id="reviewGross" placeholder="From scale ticket"></div>' +
+                '<div class="form-group"><label class="form-label">Tare (lbs)</label>' +
+                '<input type="number" class="form-input" id="reviewTare" placeholder="From scale ticket"></div>' +
+                '<div id="reviewNetDisplay" style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px"></div>' +
+                '<div class="divider"></div>' +
+                '<div class="card-title">Material Percentages</div>' +
+                '<div id="reviewMaterials">';
+
+            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
+            var matNames = {wood:'Wood',gypsum:'Gypsum',plastic:'Plastic',occ:'OCC',metal:'Metal',concrete:'Concrete',block:'Block'};
+            mats.forEach(function(k) {
+                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+                    '<div style="width:70px;font-size:.7rem;font-weight:600;color:var(--text-muted)">' + matNames[k] + '</div>' +
+                    '<input type="range" id="reviewMat_' + k + '" min="0" max="100" value="0" style="flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none" oninput="DS.updateReviewTotal()">' +
+                    '<input type="number" id="reviewMatN_' + k + '" min="0" max="100" value="0" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:.75rem;text-align:right" oninput="document.getElementById(\'reviewMat_'+k+'\').value=this.value;DS.updateReviewTotal()">' +
+                    '<span style="font-size:.7rem;width:12px">%</span></div>';
+            });
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+                '<div style="width:70px;font-size:.7rem;font-weight:600;color:var(--danger)">Landfill</div>' +
+                '<div id="reviewLandfill" style="flex:1;font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--danger)">100%</div></div>' +
+                '<div id="reviewDivTotal" style="font-size:.8rem;font-weight:700;margin:8px 0"></div>' +
+                '</div>' +
+                '<div id="reviewAINotes" style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px"></div>';
+
+            // Action buttons
+            html += '<div class="btn-row" style="gap:6px;margin-top:12px">';
+            if (this.state.apiKey && (scale.length || debris.length)) {
+                html += '<button class="btn btn-info" style="flex:1" onclick="DS.runBatchAI(' + bIdx + ')">🤖 Run AI / OCR</button>';
+            }
+            html += '<button class="btn btn-success" style="flex:1" onclick="DS.confirmBatch(' + bIdx + ')">✅ Confirm & Process</button></div>' +
+                '<button class="btn btn-outline mt-8" onclick="document.getElementById(\'batchReviewModal\').remove()">Cancel</button>' +
+                '</div>';
+
+            m.innerHTML = html;
+            document.body.appendChild(m);
+
+            // Net lbs auto-calc
+            document.getElementById('reviewGross').addEventListener('input', function() {
+                var g = parseInt(document.getElementById('reviewGross').value) || 0;
+                var t = parseInt(document.getElementById('reviewTare').value) || 0;
+                document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t) + ' lbs = ' + ((g-t)/2000).toFixed(2) + ' tons';
+            });
+            document.getElementById('reviewTare').addEventListener('input', function() {
+                var g = parseInt(document.getElementById('reviewGross').value) || 0;
+                var t = parseInt(document.getElementById('reviewTare').value) || 0;
+                document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t) + ' lbs = ' + ((g-t)/2000).toFixed(2) + ' tons';
             });
 
-            // 3. Analyze ALL debris photos collectively if API key and debris exist
-            if (debris.length && this.state.apiKey && ticket) {
-                this.showLoading('AI analyzing ' + debris.length + ' debris photo' + (debris.length>1?'s':'') + '...');
+            this._reviewBatchIdx = bIdx;
+        },
 
+        updateReviewTotal() {
+            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
+            var total = 0;
+            mats.forEach(function(k) {
+                var v = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
+                document.getElementById('reviewMatN_' + k).value = v;
+                total += v;
+            });
+            var landfill = Math.max(0, 100 - total);
+            document.getElementById('reviewLandfill').textContent = landfill + '%';
+            document.getElementById('reviewDivTotal').textContent = 'Diversion: ' + total + '% • Landfill: ' + landfill + '%';
+            document.getElementById('reviewDivTotal').style.color = total >= 50 ? 'var(--success)' : 'var(--danger)';
+        },
+
+        async runBatchAI(bIdx) {
+            var batch = this._pendingBatches[bIdx];
+            var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
+            var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
+
+            // OCR scale ticket
+            if (scale.length) {
+                this.showLoading('OCR reading scale ticket...');
+                try {
+                    var ocrPrompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
+                        'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
+                        '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","confidence":<0-100>}\n' +
+                        'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
+
+                    var ocrData = await this.callOpenAI({
+                        model: 'gpt-4o',
+                        messages: [{ role: 'user', content: [
+                            { type: 'text', text: ocrPrompt },
+                            { type: 'image_url', image_url: { url: scale[0].photo_url, detail: 'high' } }
+                        ]}],
+                        max_tokens: 300, temperature: 0.1
+                    });
+
+                    if (ocrData.choices && ocrData.choices[0]) {
+                        var ocrText = ocrData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                        var ocr = JSON.parse(ocrText);
+                        // Populate review form
+                        if (ocr.ticket_number) document.getElementById('reviewTktNum').value = ocr.ticket_number;
+                        if (ocr.date) {
+                            var dMs = new Date(ocr.date).getTime();
+                            if (!isNaN(dMs) && dMs <= Date.now() + 86400000 && dMs > Date.now() - 90*86400000) {
+                                document.getElementById('reviewTktDate').value = ocr.date;
+                            }
+                        }
+                        if (ocr.gross_lbs) document.getElementById('reviewGross').value = ocr.gross_lbs;
+                        if (ocr.tare_lbs) document.getElementById('reviewTare').value = ocr.tare_lbs;
+                        var g = ocr.gross_lbs||0, t2 = ocr.tare_lbs||0;
+                        document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t2) + ' lbs = ' + ((g-t2)/2000).toFixed(2) + ' tons (OCR confidence: ' + (ocr.confidence||0) + '%)';
+                        document.getElementById('reviewAINotes').textContent = '🤖 OCR: ticket #' + (ocr.ticket_number||'?') + ', ' + (ocr.gross_lbs||0) + ' gross, ' + (ocr.tare_lbs||0) + ' tare (conf: ' + (ocr.confidence||0) + '%)';
+                    }
+                } catch(e) { console.error('OCR error:', e); this.showToast('OCR failed: ' + e.message); }
+            }
+
+            // AI analyze debris
+            if (debris.length) {
+                this.showLoading('AI analyzing ' + debris.length + ' debris photo' + (debris.length>1?'s':'') + '...');
                 try {
                     var imageContent = debris.map(function(q) {
                         return { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } };
                     });
-
-                    var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
+                    var aiPrompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
                         'Analyze ALL ' + debris.length + ' debris photos together and estimate the AVERAGE percentage of each material stream across all photos. ' +
                         'Return ONLY valid JSON with this exact structure:\n' +
                         '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>,"confidence":<0-100>,"notes":"<brief description>"}\n' +
                         'Material definitions: wood=lumber/pallets/plywood, gypsum=drywall/sheetrock/wallboard, plastic=film/containers/PVC, occ=cardboard/paper, metal=steel/aluminum/copper, concrete=concrete/masonry/CMU, block=cinder block/brick.\n' +
                         'landfill=non-recyclable trash/mixed waste.\n' +
-                        'Percentages MUST total exactly 100. Average across all photos. Be accurate based on visible materials.';
+                        'Percentages MUST total exactly 100. Average across all photos.';
 
-                    var data = await this.callOpenAI({
+                    var aiData = await this.callOpenAI({
                         model: 'gpt-4o',
-                        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }].concat(imageContent) }],
+                        messages: [{ role: 'user', content: [{ type: 'text', text: aiPrompt }].concat(imageContent) }],
                         max_tokens: 500, temperature: 0.1
                     });
 
-                    if (data.choices && data.choices[0]) {
-                        var text = data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                        var analysis = JSON.parse(text);
-
-                        var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
-                        debris.forEach(function(q) { imgs.push(q.photo_url); });
-
-                        var divertPct = (analysis.wood||0) + (analysis.gypsum||0) + (analysis.plastic||0) +
-                            (analysis.occ||0) + (analysis.metal||0) + (analysis.concrete||0) + (analysis.block||0);
-                        var tons = parseFloat(ticket.net_tons) || 0;
-                        var divertedTons = tons * divertPct / 100;
-
-                        var update = {
-                            debris_images: imgs,
-                            wood_pct: analysis.wood || 0,
-                            gypsum_pct: analysis.gypsum || 0,
-                            plastic_pct: analysis.plastic || 0,
-                            occ_pct: analysis.occ || 0,
-                            metal_pct: analysis.metal || 0,
-                            concrete_pct: analysis.concrete || 0,
-                            block_pct: analysis.block || 0,
-                            diversion_pct: Math.round(divertPct),
-                            diverted_tons: divertedTons,
-                            co2e_avoided: divertedTons * 0.58,
-                            ai_notes: (analysis.notes || '') + ' (conf: ' + (analysis.confidence||0) + '%, ' + debris.length + ' photos averaged)'
-                        };
-                        await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
-                        Object.assign(ticket, update);
-                        this.addAuditEntry('BATCH_AI', 'Batch AI: ticket #' + tktNum + ' → ' + Math.round(divertPct) + '% div from ' + debris.length + ' photos — ' + (analysis.notes||''));
+                    if (aiData.choices && aiData.choices[0]) {
+                        var aiText = aiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                        var analysis = JSON.parse(aiText);
+                        // Populate sliders
+                        var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
+                        mats.forEach(function(k) {
+                            var v = analysis[k] || 0;
+                            document.getElementById('reviewMat_' + k).value = v;
+                            document.getElementById('reviewMatN_' + k).value = v;
+                        });
+                        this.updateReviewTotal();
+                        var existing = document.getElementById('reviewAINotes').textContent;
+                        document.getElementById('reviewAINotes').textContent = existing + ' | 🤖 Debris: ' + (analysis.notes||'') + ' (conf: ' + (analysis.confidence||0) + '%)';
                     }
-                } catch(e) {
-                    console.error('Batch AI error:', e);
-                    // Still attach photos even if AI fails
-                    if (ticket) {
-                        var imgs2 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
-                        debris.forEach(function(q) { imgs2.push(q.photo_url); });
-                        await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs2 });
-                    }
-                }
-            } else if (debris.length && ticket) {
-                // No API key — just attach all debris photos
-                var imgs3 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
-                debris.forEach(function(q) { imgs3.push(q.photo_url); });
-                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs3 });
+                } catch(e) { console.error('AI error:', e); this.showToast('AI analysis failed: ' + e.message); }
             }
 
-            // 4. Attach scale ticket photos to ticket
-            if (scale.length && ticket && !ticket.scale_ticket_image) {
-                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { scale_ticket_image: scale[0].photo_url });
+            this.hideLoading();
+            this.showToast('AI complete — review results and confirm');
+        },
+
+        async confirmBatch(bIdx) {
+            var batch = this._pendingBatches[bIdx];
+            if (!batch || !batch.items.length) return;
+
+            var tktNum = document.getElementById('reviewTktNum').value.trim();
+            if (!tktNum) { this.showToast('Enter a ticket number'); return; }
+
+            var tktDate = document.getElementById('reviewTktDate').value || new Date().toISOString().split('T')[0];
+            var gross = parseInt(document.getElementById('reviewGross').value) || 0;
+            var tare = parseInt(document.getElementById('reviewTare').value) || 0;
+            var netLbs = gross - tare;
+            var netTons = netLbs / 2000;
+
+            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
+            var matVals = {};
+            var divertPct = 0;
+            mats.forEach(function(k) {
+                matVals[k] = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
+                divertPct += matVals[k];
+            });
+            var divertedTons = netTons * divertPct / 100;
+
+            var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
+            var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
+            var q0 = batch.items[0];
+
+            this.showLoading('Saving ticket...');
+
+            // Check if ticket exists
+            var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
+            var ticket = projectTickets.find(function(t) { return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
+
+            var debrisUrls = debris.map(function(q){return q.photo_url;});
+
+            if (ticket) {
+                // Update existing ticket
+                var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                debrisUrls.forEach(function(u){imgs.push(u);});
+                var update = {
+                    ticket_date: tktDate,
+                    gross_lbs: gross || ticket.gross_lbs,
+                    tare_lbs: tare || ticket.tare_lbs,
+                    net_lbs: netLbs || ticket.net_lbs,
+                    net_tons: netTons || ticket.net_tons,
+                    wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
+                    occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
+                    diversion_pct: Math.round(divertPct),
+                    diverted_tons: divertedTons,
+                    co2e_avoided: divertedTons * 0.58,
+                    debris_images: imgs
+                };
+                if (scale.length && !ticket.scale_ticket_image) update.scale_ticket_image = scale[0].photo_url;
+                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
+            } else {
+                // Create new ticket
+                var newTicket = {
+                    project_id: q0.project_id,
+                    ticket_number: tktNum,
+                    ticket_date: tktDate,
+                    gross_lbs: gross, tare_lbs: tare, net_lbs: netLbs, net_tons: netTons,
+                    hauler: q0.submitted_by || null,
+                    scale_ticket_image: scale.length ? scale[0].photo_url : null,
+                    debris_images: debrisUrls.length ? debrisUrls : null,
+                    wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
+                    occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
+                    diversion_pct: Math.round(divertPct),
+                    diverted_tons: divertedTons,
+                    co2e_avoided: divertedTons * 0.58,
+                    scan_type: 'batch_queue',
+                    notes: 'Processed from photo queue batch (' + batch.items.length + ' photos)'
+                };
+                var result = await this.supabase('tickets', 'POST', newTicket);
+                if (result && result.length) ticket = result[0];
             }
 
-            // 5. Mark all queue items as approved with ticket number and assigned_ticket_id
+            // Mark all queue items as approved
             for (var i = 0; i < batch.items.length; i++) {
                 var upd = { status: 'approved', reviewed_at: new Date().toISOString(), ticket_number: tktNum };
                 if (ticket) upd.assigned_ticket_id = ticket.id;
@@ -3780,8 +3945,9 @@
             }
 
             this.hideLoading();
-            this.showToast('✅ Batch processed — Ticket #' + tktNum + ' (' + batch.items.length + ' photos)');
-            this.addAuditEntry('BATCH_APPROVE', 'Batch approved: ' + batch.items.length + ' photos → ticket #' + tktNum + ' by ' + (q0.submitted_by||''));
+            document.getElementById('batchReviewModal').remove();
+            this.showToast('✅ Ticket #' + tktNum + ' processed — ' + Math.round(divertPct) + '% diversion (' + batch.items.length + ' photos)');
+            this.addAuditEntry('BATCH_CONFIRM', 'Batch confirmed: #' + tktNum + ' → ' + Math.round(divertPct) + '% div, ' + netTons.toFixed(2) + 'T, ' + batch.items.length + ' photos by ' + (q0.submitted_by||''));
 
             // Refresh
             if (this.state.currentProject && this.state.currentProject.id === q0.project_id) {
