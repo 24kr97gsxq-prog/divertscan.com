@@ -3511,8 +3511,7 @@
             var el = document.getElementById('queueContent');
             el.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted);">Loading...</div>';
 
-            // Load ALL pending photos across all projects
-            var data = await this.supabase('photo_queue?order=created_at.desc&limit=50');
+            var data = await this.supabase('photo_queue?order=created_at.desc&limit=100');
             if (!data) { el.innerHTML = '<div style="color:var(--danger);">Failed to load queue</div>'; return; }
 
             this._photoQueue = data;
@@ -3533,41 +3532,238 @@
                 return;
             }
 
-            // Get project names for display
             var projMap = {};
             this.state.projects.forEach(function(p) { projMap[p.id] = p.name; });
 
-            var html = '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">' + pending.length + ' pending • ' + data.filter(function(q){return q.status==='approved';}).length + ' approved • ' + data.length + ' total</div>';
-
-            data.forEach(function(q) {
-                var isPending = q.status === 'pending';
-                var statusColor = isPending ? 'var(--warning)' : q.status === 'approved' ? 'var(--success)' : 'var(--text-dim)';
-                var statusLabel = isPending ? '⏳ Pending' : q.status === 'approved' ? '✅ Approved' : '❌ Rejected';
-                var typeIcon = q.photo_type === 'scale_ticket' ? '📄' : '📸';
-                var timeAgo = DS.timeAgo(q.created_at);
-                var projName = projMap[q.project_id] || 'Unknown project';
-
-                html += '<div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); align-items:flex-start;">' +
-                    '<div style="width:64px; height:64px; border-radius:8px; overflow:hidden; flex-shrink:0; cursor:pointer;" onclick="window.open(\'' + q.photo_url + '\')">' +
-                        '<img src="' + q.photo_url + '" style="width:100%; height:100%; object-fit:cover;">' +
-                    '</div>' +
-                    '<div style="flex:1; min-width:0;">' +
-                        '<div style="font-size:0.75rem; font-weight:700;">' + typeIcon + ' ' + (q.photo_type === 'scale_ticket' ? 'Scale Ticket' : 'Debris') +
-                            (q.ticket_number ? ' — #' + q.ticket_number : '') + '</div>' +
-                        '<div style="font-size:0.65rem; color:var(--text-muted);">' + projName + ' • ' + (q.submitted_by || 'Unknown') + ' • ' + timeAgo + '</div>' +
-                        (q.notes ? '<div style="font-size:0.65rem; color:var(--text-dim); margin-top:2px;">📝 ' + q.notes + '</div>' : '') +
-                        '<div style="font-size:0.65rem; color:' + statusColor + '; font-weight:600; margin-top:4px;">' + statusLabel + '</div>' +
-                        (isPending ? '<div class="btn-row mt-8" style="gap:6px;">' +
-                            '<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:0.65rem; flex:1;" onclick="DS.approveQueueItem(\'' + q.id + '\')">✅ Approve</button>' +
-                            '<button class="btn btn-sm" style="padding:4px 10px; font-size:0.65rem; flex:1; color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="DS.rejectQueueItem(\'' + q.id + '\')">❌ Reject</button>' +
-                        '</div>' : '') +
-                        '<div class="mt-8"><button class="btn btn-sm" style="padding:3px 8px;font-size:0.6rem;color:var(--text-dim);border:1px solid var(--border);background:transparent;width:100%" onclick="DS.deleteQueueItem(\'' + q.id + '\')">🗑️ Delete Permanently</button></div>' +
-                    '</div>' +
-                '</div>';
+            // Group pending items into batches by submitter + project + 5-minute window
+            var batches = [], batchMap = {};
+            pending.forEach(function(q) {
+                var t = new Date(q.created_at).getTime();
+                var key = (q.submitted_by||'') + '|' + q.project_id;
+                // Find existing batch within 5 min
+                var found = false;
+                for (var i = 0; i < batches.length; i++) {
+                    if (batches[i].key === key && Math.abs(t - batches[i].time) < 300000) {
+                        batches[i].items.push(q);
+                        found = true; break;
+                    }
+                }
+                if (!found) batches.push({key:key, time:t, items:[q]});
             });
+
+            var html = '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">' + pending.length + ' pending (' + batches.length + ' batch' + (batches.length!==1?'es':'') + ') • ' + data.filter(function(q){return q.status==='approved';}).length + ' approved</div>';
+
+            // Render batches
+            batches.forEach(function(batch, bIdx) {
+                var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
+                var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
+                var q0 = batch.items[0];
+                var projName = projMap[q0.project_id] || 'Unknown';
+                var timeAgo = DS.timeAgo(q0.created_at);
+                var tktNum = '';
+                batch.items.forEach(function(q){if(q.ticket_number)tktNum=q.ticket_number;});
+
+                html += '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;background:var(--bg-card)">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
+                    '<div><div style="font-size:.8rem;font-weight:700">' + DS.esc(projName) + '</div>' +
+                    '<div style="font-size:.65rem;color:var(--text-muted)">' + (q0.submitted_by||'Unknown') + ' • ' + timeAgo + (tktNum?' • Ticket #'+tktNum:'') + '</div></div>' +
+                    '<div style="font-size:.65rem;font-weight:600;color:var(--warning)">⏳ ' + batch.items.length + ' photo' + (batch.items.length>1?'s':'') + '</div></div>';
+
+                // Scale ticket thumbnails
+                if (scale.length) {
+                    html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">📄 Scale Ticket' + (scale.length>1?'s':'') + '</div>' +
+                        '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px">';
+                    scale.forEach(function(q) {
+                        html += '<img src="'+q.photo_url+'" onclick="window.open(\''+q.photo_url+'\')" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
+                    });
+                    html += '</div>';
+                }
+
+                // Debris thumbnails
+                if (debris.length) {
+                    html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">📸 Debris (' + debris.length + ')</div>' +
+                        '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px">';
+                    debris.forEach(function(q) {
+                        html += '<img src="'+q.photo_url+'" onclick="window.open(\''+q.photo_url+'\')" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
+                    });
+                    html += '</div>';
+                }
+
+                // Notes
+                var notes = '';
+                batch.items.forEach(function(q){if(q.notes&&!notes)notes=q.notes;});
+                if(notes) html += '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:6px">📝 '+DS.esc(notes)+'</div>';
+
+                // Ticket number input + action buttons
+                var batchIds = batch.items.map(function(q){return q.id;}).join(',');
+                html += '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Ticket # (for processing)</label>' +
+                    '<input type="text" class="form-input" id="batchTkt_'+bIdx+'" value="'+DS.esc(tktNum||'')+'" placeholder="Enter scale ticket number" inputmode="numeric" style="padding:8px 10px;font-size:.85rem"></div>' +
+                    '<div class="btn-row" style="gap:6px">' +
+                    '<button class="btn btn-sm btn-success" style="flex:1;padding:8px" onclick="DS.approveBatch('+bIdx+')">✅ Process & Approve</button>' +
+                    '<button class="btn btn-sm" style="flex:1;padding:8px;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="DS.rejectBatch('+bIdx+')">❌ Reject All</button>' +
+                    '</div></div>';
+            });
+
+            // Show recently processed (last 20 non-pending)
+            var processed = data.filter(function(q){return q.status!=='pending';}).slice(0,20);
+            if (processed.length) {
+                html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px">Recently Processed</div>';
+                processed.forEach(function(q) {
+                    var sc = q.status==='approved'?'var(--success)':'var(--text-dim)';
+                    var sl = q.status==='approved'?'✅ Processed':'❌ Rejected';
+                    var typeIcon = q.photo_type==='scale_ticket'?'📄':'📸';
+                    html += '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;font-size:.7rem">' +
+                        '<img src="'+q.photo_url+'" onclick="window.open(\''+q.photo_url+'\')" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;flex-shrink:0">' +
+                        '<div style="flex:1"><span style="font-weight:600">'+typeIcon+' '+(q.ticket_number?'#'+q.ticket_number:(q.photo_type==='scale_ticket'?'Scale':'Debris'))+'</span> • '+
+                        (projMap[q.project_id]||'')+' • '+(q.submitted_by||'')+'</div>' +
+                        '<div style="color:'+sc+';font-weight:600;font-size:.65rem">'+sl+'</div>' +
+                        '<button class="btn btn-sm" style="padding:2px 6px;font-size:.55rem;color:var(--text-dim);border:1px solid var(--border);background:transparent" onclick="DS.deleteQueueItem(\''+q.id+'\')">🗑️</button></div>';
+                });
+            }
 
             html += '<button class="btn btn-sm btn-outline mt-12" onclick="DS.loadPhotoQueue()">🔄 Refresh</button>';
             el.innerHTML = html;
+            this._pendingBatches = batches;
+        },
+
+        async approveBatch(bIdx) {
+            var batch = this._pendingBatches && this._pendingBatches[bIdx];
+            if (!batch || !batch.items.length) return;
+
+            var tktNum = document.getElementById('batchTkt_' + bIdx).value.trim();
+            if (!tktNum) { this.showToast('Enter a ticket number to process'); return; }
+
+            var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
+            var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
+            var q0 = batch.items[0];
+
+            this.showLoading('Processing batch...');
+
+            // 1. Load project tickets
+            var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc');
+            if (!projectTickets) projectTickets = [];
+
+            // 2. OCR the first scale ticket if API key available
+            var ticket = null;
+            if (scale.length && this.state.apiKey) {
+                this.showLoading('OCR reading scale ticket...');
+                await this.processQueueScaleTicket(Object.assign({}, scale[0], {ticket_number: tktNum}), projectTickets);
+                // Reload tickets to get the newly created/matched ticket
+                projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
+            }
+
+            // Find ticket by number
+            ticket = projectTickets.find(function(t) {
+                return t.ticket_number === tktNum || t.ticket_number === String(tktNum);
+            });
+
+            // 3. Analyze ALL debris photos collectively if API key and debris exist
+            if (debris.length && this.state.apiKey && ticket) {
+                this.showLoading('AI analyzing ' + debris.length + ' debris photo' + (debris.length>1?'s':'') + '...');
+
+                try {
+                    var imageContent = debris.map(function(q) {
+                        return { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } };
+                    });
+
+                    var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
+                        'Analyze ALL ' + debris.length + ' debris photos together and estimate the AVERAGE percentage of each material stream across all photos. ' +
+                        'Return ONLY valid JSON with this exact structure:\n' +
+                        '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>,"confidence":<0-100>,"notes":"<brief description>"}\n' +
+                        'Material definitions: wood=lumber/pallets/plywood, gypsum=drywall/sheetrock/wallboard, plastic=film/containers/PVC, occ=cardboard/paper, metal=steel/aluminum/copper, concrete=concrete/masonry/CMU, block=cinder block/brick.\n' +
+                        'landfill=non-recyclable trash/mixed waste.\n' +
+                        'Percentages MUST total exactly 100. Average across all photos. Be accurate based on visible materials.';
+
+                    var data = await this.callOpenAI({
+                        model: 'gpt-4o',
+                        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }].concat(imageContent) }],
+                        max_tokens: 500, temperature: 0.1
+                    });
+
+                    if (data.choices && data.choices[0]) {
+                        var text = data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                        var analysis = JSON.parse(text);
+
+                        var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                        debris.forEach(function(q) { imgs.push(q.photo_url); });
+
+                        var divertPct = (analysis.wood||0) + (analysis.gypsum||0) + (analysis.plastic||0) +
+                            (analysis.occ||0) + (analysis.metal||0) + (analysis.concrete||0) + (analysis.block||0);
+                        var tons = parseFloat(ticket.net_tons) || 0;
+                        var divertedTons = tons * divertPct / 100;
+
+                        var update = {
+                            debris_images: imgs,
+                            wood_pct: analysis.wood || 0,
+                            gypsum_pct: analysis.gypsum || 0,
+                            plastic_pct: analysis.plastic || 0,
+                            occ_pct: analysis.occ || 0,
+                            metal_pct: analysis.metal || 0,
+                            concrete_pct: analysis.concrete || 0,
+                            block_pct: analysis.block || 0,
+                            diversion_pct: Math.round(divertPct),
+                            diverted_tons: divertedTons,
+                            co2e_avoided: divertedTons * 0.58,
+                            ai_notes: (analysis.notes || '') + ' (conf: ' + (analysis.confidence||0) + '%, ' + debris.length + ' photos averaged)'
+                        };
+                        await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
+                        Object.assign(ticket, update);
+                        this.addAuditEntry('BATCH_AI', 'Batch AI: ticket #' + tktNum + ' → ' + Math.round(divertPct) + '% div from ' + debris.length + ' photos — ' + (analysis.notes||''));
+                    }
+                } catch(e) {
+                    console.error('Batch AI error:', e);
+                    // Still attach photos even if AI fails
+                    if (ticket) {
+                        var imgs2 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                        debris.forEach(function(q) { imgs2.push(q.photo_url); });
+                        await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs2 });
+                    }
+                }
+            } else if (debris.length && ticket) {
+                // No API key — just attach all debris photos
+                var imgs3 = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                debris.forEach(function(q) { imgs3.push(q.photo_url); });
+                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { debris_images: imgs3 });
+            }
+
+            // 4. Attach scale ticket photos to ticket
+            if (scale.length && ticket && !ticket.scale_ticket_image) {
+                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', { scale_ticket_image: scale[0].photo_url });
+            }
+
+            // 5. Mark all queue items as approved with ticket number and assigned_ticket_id
+            for (var i = 0; i < batch.items.length; i++) {
+                var upd = { status: 'approved', reviewed_at: new Date().toISOString(), ticket_number: tktNum };
+                if (ticket) upd.assigned_ticket_id = ticket.id;
+                await this.supabase('photo_queue?id=eq.' + batch.items[i].id, 'PATCH', upd);
+            }
+
+            this.hideLoading();
+            this.showToast('✅ Batch processed — Ticket #' + tktNum + ' (' + batch.items.length + ' photos)');
+            this.addAuditEntry('BATCH_APPROVE', 'Batch approved: ' + batch.items.length + ' photos → ticket #' + tktNum + ' by ' + (q0.submitted_by||''));
+
+            // Refresh
+            if (this.state.currentProject && this.state.currentProject.id === q0.project_id) {
+                await this.loadTickets(q0.project_id);
+            }
+            this.loadPhotoQueue();
+        },
+
+        async rejectBatch(bIdx) {
+            var batch = this._pendingBatches && this._pendingBatches[bIdx];
+            if (!batch || !batch.items.length) return;
+            if (!confirm('Reject all ' + batch.items.length + ' photos in this batch?')) return;
+
+            this.showLoading('Rejecting...');
+            for (var i = 0; i < batch.items.length; i++) {
+                await this.supabase('photo_queue?id=eq.' + batch.items[i].id, 'PATCH', {
+                    status: 'rejected', reviewed_at: new Date().toISOString()
+                });
+            }
+            this.hideLoading();
+            this.showToast('Batch rejected (' + batch.items.length + ' photos)');
+            this.addAuditEntry('BATCH_REJECT', 'Batch rejected: ' + batch.items.length + ' photos from ' + (batch.items[0].submitted_by||''));
+            this.loadPhotoQueue();
         },
 
         async approveQueueItem(queueId) {
