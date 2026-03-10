@@ -1911,34 +1911,46 @@
             const t = this.state.tickets.find(x => x.id === id);
             if (!t) return;
 
-            if (!confirm(`Delete ticket ${t.ticket_number}? This cannot be undone.`)) return;
+            if (!confirm('Delete ticket ' + t.ticket_number + '? This cannot be undone.')) return;
 
-            this.showLoading('Deleting...');
+            this.showLoading('Deleting ticket #' + t.ticket_number + '...');
 
-            // Clear photo_queue foreign key references first
-            await this.supabase('photo_queue?assigned_ticket_id=eq.' + id, 'PATCH', {assigned_ticket_id: null});
+            // Try RPC function first (handles FK automatically)
+            var rpcOk = false;
+            try {
+                var rpcRes = await fetch(this.state.supabaseUrl + '/rest/v1/rpc/delete_ticket_safe', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': this.state.supabaseKey,
+                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ticket_uuid: id})
+                });
+                if (rpcRes.ok) rpcOk = true;
+            } catch(e) { console.log('RPC not available, using REST fallback'); }
 
-            // Now delete the ticket
-            var result = await this.supabase(`tickets?id=eq.${id}`, 'DELETE');
-
-            if (result === null) {
-                this.hideLoading();
-                this.showToast('Delete failed — check console for errors');
-                return;
+            if (!rpcOk) {
+                // Fallback: clear FK references then delete via REST
+                var refs = await this.supabase('photo_queue?assigned_ticket_id=eq.' + id + '&select=id');
+                if (refs && refs.length) {
+                    for (var i = 0; i < refs.length; i++) {
+                        await this.supabase('photo_queue?id=eq.' + refs[i].id, 'PATCH', {assigned_ticket_id: null});
+                    }
+                }
+                await this.supabase('tickets?id=eq.' + id, 'DELETE');
             }
 
-            // Verify it's actually gone
-            var check = await this.supabase(`tickets?id=eq.${id}&select=id`);
+            // Verify deletion
+            var check = await this.supabase('tickets?id=eq.' + id + '&select=id');
             if (check && check.length > 0) {
                 this.hideLoading();
-                this.showToast('Delete failed — ticket still exists in database');
+                this.showToast('Delete failed — run safe_delete_function.sql in Supabase SQL Editor first');
                 return;
             }
 
-            // Remove from local state
-            this.state.tickets = this.state.tickets.filter(x => x.id !== id);
-
             // Reload fresh from server
+            this.state.tickets = this.state.tickets.filter(x => x.id !== id);
             if (this._showingAllProjects) {
                 var fresh = await this.supabase('tickets?order=created_at.desc&limit=200');
                 if (fresh) this.state.tickets = fresh;
@@ -1951,8 +1963,8 @@
             this.renderTickets();
             this.renderReports();
             this.closeModal('editTicketModal');
-            this.showToast(`Ticket ${t.ticket_number} deleted`);
-            this.addAuditEntry('TICKET_DELETE', `Deleted: ${t.ticket_number}`);
+            this.showToast('Ticket ' + t.ticket_number + ' deleted');
+            this.addAuditEntry('TICKET_DELETE', 'Deleted: ' + t.ticket_number);
         },
 
         // ============================================================
