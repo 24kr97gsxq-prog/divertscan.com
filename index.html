@@ -1913,9 +1913,20 @@
 
             this.showLoading('Deleting...');
             await this.supabase(`tickets?id=eq.${id}`, 'DELETE');
-            this.hideLoading();
 
+            // Remove from local state
             this.state.tickets = this.state.tickets.filter(x => x.id !== id);
+
+            // Reload fresh from server to be sure
+            if (this._showingAllProjects) {
+                var fresh = await this.supabase('tickets?order=created_at.desc&limit=200');
+                if (fresh) this.state.tickets = fresh;
+            } else if (this.state.currentProject) {
+                var fresh2 = await this.supabase('tickets?project_id=eq.' + this.state.currentProject.id + '&order=created_at.desc');
+                if (fresh2) this.state.tickets = fresh2;
+            }
+
+            this.hideLoading();
             this.renderTickets();
             this.renderReports();
             this.closeModal('editTicketModal');
