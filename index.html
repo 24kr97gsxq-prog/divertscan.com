@@ -983,10 +983,11 @@
             const headers = {
                 'apikey': this.state.supabaseKey,
                 'Authorization': `Bearer ${this.state.supabaseKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': method === 'POST' ? 'return=representation' : undefined
+                'Content-Type': 'application/json'
             };
-            Object.keys(headers).forEach(k => headers[k] === undefined && delete headers[k]);
+            if (method === 'POST' || method === 'PATCH') {
+                headers['Prefer'] = 'return=representation';
+            }
 
             try {
                 const opts = { method, headers };
@@ -994,11 +995,12 @@
                 const res = await fetch(url, opts);
                 if (!res.ok) {
                     const err = await res.text();
-                    console.error('Supabase error:', err);
+                    console.error('Supabase error (' + method + ' ' + endpoint + '):', res.status, err);
                     return null;
                 }
-                if (res.status === 204) return [];
-                return await res.json();
+                if (res.status === 204 || method === 'DELETE') return [];
+                const text = await res.text();
+                return text ? JSON.parse(text) : [];
             } catch (e) {
                 console.error('Supabase fetch error:', e);
                 this.showToast('Database connection error');
@@ -1912,12 +1914,31 @@
             if (!confirm(`Delete ticket ${t.ticket_number}? This cannot be undone.`)) return;
 
             this.showLoading('Deleting...');
-            await this.supabase(`tickets?id=eq.${id}`, 'DELETE');
+
+            // Clear photo_queue foreign key references first
+            await this.supabase('photo_queue?assigned_ticket_id=eq.' + id, 'PATCH', {assigned_ticket_id: null});
+
+            // Now delete the ticket
+            var result = await this.supabase(`tickets?id=eq.${id}`, 'DELETE');
+
+            if (result === null) {
+                this.hideLoading();
+                this.showToast('Delete failed — check console for errors');
+                return;
+            }
+
+            // Verify it's actually gone
+            var check = await this.supabase(`tickets?id=eq.${id}&select=id`);
+            if (check && check.length > 0) {
+                this.hideLoading();
+                this.showToast('Delete failed — ticket still exists in database');
+                return;
+            }
 
             // Remove from local state
             this.state.tickets = this.state.tickets.filter(x => x.id !== id);
 
-            // Reload fresh from server to be sure
+            // Reload fresh from server
             if (this._showingAllProjects) {
                 var fresh = await this.supabase('tickets?order=created_at.desc&limit=200');
                 if (fresh) this.state.tickets = fresh;
