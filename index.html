@@ -3873,7 +3873,7 @@
             var gross = parseInt(document.getElementById('reviewGross').value) || 0;
             var tare = parseInt(document.getElementById('reviewTare').value) || 0;
             var netLbs = gross - tare;
-            var netTons = netLbs / 2000;
+            var netTons = +(netLbs / 2000).toFixed(4);
 
             var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
             var matVals = {};
@@ -3882,62 +3882,53 @@
                 matVals[k] = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
                 divertPct += matVals[k];
             });
-            var divertedTons = netTons * divertPct / 100;
+            var divertedTons = +(netTons * divertPct / 100).toFixed(4);
 
             var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
             var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
             var q0 = batch.items[0];
 
-            this.showLoading('Saving ticket...');
+            // Collect ALL debris photo URLs
+            var allDebrisUrls = [];
+            debris.forEach(function(q){ if(q.photo_url) allDebrisUrls.push(q.photo_url); });
 
-            // Check if ticket exists
+            this.showLoading('Saving ticket #' + tktNum + '...');
+
+            // Check if ticket already exists
             var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
             var ticket = projectTickets.find(function(t) { return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
 
-            var debrisUrls = debris.map(function(q){return q.photo_url;});
+            var ticketData = {
+                ticket_date: tktDate,
+                gross_lbs: gross, tare_lbs: tare, net_lbs: netLbs, net_tons: netTons,
+                wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
+                occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
+                diversion_pct: Math.round(divertPct),
+                diverted_tons: divertedTons,
+                co2e_avoided: +(divertedTons * 0.58).toFixed(4),
+                scale_ticket_image: scale.length ? scale[0].photo_url : null,
+                debris_images: allDebrisUrls
+            };
 
             if (ticket) {
-                // Update existing ticket
-                var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
-                debrisUrls.forEach(function(u){imgs.push(u);});
-                var update = {
-                    ticket_date: tktDate,
-                    gross_lbs: gross || ticket.gross_lbs,
-                    tare_lbs: tare || ticket.tare_lbs,
-                    net_lbs: netLbs || ticket.net_lbs,
-                    net_tons: netTons || ticket.net_tons,
-                    wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
-                    occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
-                    diversion_pct: Math.round(divertPct),
-                    diverted_tons: divertedTons,
-                    co2e_avoided: divertedTons * 0.58,
-                    debris_images: imgs
-                };
-                if (scale.length && !ticket.scale_ticket_image) update.scale_ticket_image = scale[0].photo_url;
-                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', update);
+                // Merge debris images with any existing ones
+                var existingDebris = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                allDebrisUrls.forEach(function(u){ if(existingDebris.indexOf(u)<0) existingDebris.push(u); });
+                ticketData.debris_images = existingDebris;
+                if (!scale.length || ticket.scale_ticket_image) delete ticketData.scale_ticket_image;
+                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', ticketData);
+                Object.assign(ticket, ticketData);
             } else {
-                // Create new ticket
-                var newTicket = {
-                    project_id: q0.project_id,
-                    ticket_number: tktNum,
-                    ticket_date: tktDate,
-                    gross_lbs: gross, tare_lbs: tare, net_lbs: netLbs, net_tons: netTons,
-                    hauler: q0.submitted_by || null,
-                    scale_ticket_image: scale.length ? scale[0].photo_url : null,
-                    debris_images: debrisUrls.length ? debrisUrls : null,
-                    wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
-                    occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
-                    diversion_pct: Math.round(divertPct),
-                    diverted_tons: divertedTons,
-                    co2e_avoided: divertedTons * 0.58,
-                    scan_type: 'batch_queue',
-                    notes: 'Processed from photo queue batch (' + batch.items.length + ' photos)'
-                };
-                var result = await this.supabase('tickets', 'POST', newTicket);
+                ticketData.project_id = q0.project_id;
+                ticketData.ticket_number = tktNum;
+                ticketData.hauler = q0.submitted_by || null;
+                ticketData.scan_type = 'batch_queue';
+                ticketData.notes = 'Processed from photo queue (' + batch.items.length + ' photos)';
+                var result = await this.supabase('tickets', 'POST', ticketData);
                 if (result && result.length) ticket = result[0];
             }
 
-            // Mark all queue items as approved
+            // Mark ALL queue items as approved with ticket number
             for (var i = 0; i < batch.items.length; i++) {
                 var upd = { status: 'approved', reviewed_at: new Date().toISOString(), ticket_number: tktNum };
                 if (ticket) upd.assigned_ticket_id = ticket.id;
@@ -3945,11 +3936,48 @@
             }
 
             this.hideLoading();
-            document.getElementById('batchReviewModal').remove();
-            this.showToast('✅ Ticket #' + tktNum + ' processed — ' + Math.round(divertPct) + '% diversion (' + batch.items.length + ' photos)');
-            this.addAuditEntry('BATCH_CONFIRM', 'Batch confirmed: #' + tktNum + ' → ' + Math.round(divertPct) + '% div, ' + netTons.toFixed(2) + 'T, ' + batch.items.length + ' photos by ' + (q0.submitted_by||''));
 
-            // Refresh
+            // Show completed ticket summary IN the modal instead of closing
+            var projMap = {};
+            this.state.projects.forEach(function(p){projMap[p.id]=p.name;});
+            var modal = document.getElementById('batchReviewModal');
+            if (modal) {
+                var gc = divertPct >= 50 ? '#059669' : '#dc2626';
+                var matBars = '';
+                mats.forEach(function(k) {
+                    if (!matVals[k]) return;
+                    var colors = {wood:'#92400e',gypsum:'#7c3aed',plastic:'#0891b2',occ:'#b45309',metal:'#475569',concrete:'#6b7280',block:'#374151'};
+                    var names = {wood:'Wood',gypsum:'Gypsum',plastic:'Plastic',occ:'OCC',metal:'Metal',concrete:'Concrete',block:'Block'};
+                    matBars += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem">' +
+                        '<div style="width:70px;color:var(--text-muted)">' + names[k] + '</div>' +
+                        '<div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:' + matVals[k] + '%;background:' + colors[k] + ';border-radius:2px"></div></div>' +
+                        '<div style="width:36px;text-align:right;font-family:var(--mono);font-weight:700">' + matVals[k] + '%</div></div>';
+                });
+
+                var debrisHtml = '';
+                allDebrisUrls.forEach(function(u) {
+                    debrisHtml += '<img src="' + u + '" onclick="window.open(\'' + u + '\')" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
+                });
+
+                modal.querySelector('.modal').innerHTML =
+                    '<div style="text-align:center;padding:16px 0"><div style="font-size:2rem">✅</div>' +
+                    '<div style="font-size:1.1rem;font-weight:700;margin:8px 0">Ticket #' + tktNum + ' Processed</div>' +
+                    '<div style="font-size:.75rem;color:var(--text-muted)">' + (projMap[q0.project_id]||'') + ' • ' + (q0.submitted_by||'') + ' • ' + batch.items.length + ' photos</div></div>' +
+                    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0">' +
+                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + gross.toLocaleString() + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Gross lbs</div></div>' +
+                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + tare.toLocaleString() + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Tare lbs</div></div>' +
+                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + netTons.toFixed(1) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Net Tons</div></div>' +
+                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700;color:' + gc + '">' + Math.round(divertPct) + '%</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Diverted</div></div></div>' +
+                    matBars +
+                    (scale.length ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📄 Scale Ticket</div><img src="' + scale[0].photo_url + '" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:1px solid var(--border)"></div>' : '') +
+                    (debrisHtml ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📸 Debris (' + allDebrisUrls.length + ')</div><div style="display:flex;gap:6px;overflow-x:auto">' + debrisHtml + '</div></div>' : '') +
+                    '<button class="btn btn-primary mt-12" onclick="document.getElementById(\'batchReviewModal\').remove()">✓ Done</button>';
+            }
+
+            this.showToast('✅ Ticket #' + tktNum + ' — ' + Math.round(divertPct) + '% diversion');
+            this.addAuditEntry('BATCH_CONFIRM', 'Confirmed: #' + tktNum + ' → ' + Math.round(divertPct) + '% div, ' + netTons.toFixed(2) + 'T, ' + allDebrisUrls.length + ' debris + ' + scale.length + ' scale by ' + (q0.submitted_by||''));
+
+            // Refresh tickets in background
             if (this.state.currentProject && this.state.currentProject.id === q0.project_id) {
                 await this.loadTickets(q0.project_id);
             }
