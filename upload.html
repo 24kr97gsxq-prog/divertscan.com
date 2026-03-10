@@ -164,6 +164,15 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 </div>
 
 <div class="b bs" id="submitBtn" onclick="U.submit()" style="opacity:.4;pointer-events:none;padding:16px;font-size:1rem">📤 Submit</div>
+
+<!-- MY SUBMISSIONS - always visible on upload step -->
+<div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--border)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<div style="font-size:.75rem;font-weight:700">📋 My Submissions</div>
+<div onclick="U.showRecent()" style="font-size:.65rem;color:var(--primary);font-weight:600;cursor:pointer">View All →</div>
+</div>
+<div id="inlineSubmissions"><div style="text-align:center;padding:10px;color:var(--text-d);font-size:.7rem">Loading...</div></div>
+</div>
 </div>
 
 <!-- STEP 4: SUCCESS -->
@@ -172,11 +181,17 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <div class="c" style="text-align:center;padding:28px">
 <div style="font-size:2.5rem">✓</div>
 <div style="font-weight:700;font-size:1.1rem;margin:8px 0">Submitted</div>
-<div style="font-size:.8rem;color:var(--text-d)">Photos received and queued for processing</div>
+<div style="font-size:.8rem;color:var(--text-d)">Photos received and queued for admin processing</div>
 <div id="successDetail" style="font-size:.7rem;color:var(--text-m);margin-top:8px"></div>
 </div>
 <div class="b bp" onclick="U.reset()" style="margin-bottom:8px">📷 Upload More</div>
-<div class="b bo" onclick="U.showRecent()">📋 View Recent Uploads</div>
+<div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--border)">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<div style="font-size:.75rem;font-weight:700">📋 My Submissions</div>
+<div onclick="U.showRecent()" style="font-size:.65rem;color:var(--primary);font-weight:600;cursor:pointer">View All →</div>
+</div>
+<div id="successSubmissions"><div style="text-align:center;padding:10px;color:var(--text-d);font-size:.7rem">Loading...</div></div>
+</div>
 </div>
 
 <!-- RECENT UPLOADS OVERLAY -->
@@ -253,7 +268,7 @@ document.getElementById('uploaderName').innerHTML=
 (meta?'<div>'+U.esc(meta)+'</div>':'')+
 '<div>Uploading as: <b>'+U.esc(U.name)+'</b></div>';
 U.photos={s:[],d:[]};U.renderPhotos('s');U.renderPhotos('d');U.updBtn();
-U.goStep(3);},
+U.goStep(3);U.loadInlineSubmissions();},
 
 // STEP 3: PHOTOS
 add(type,input){var files=Array.from(input.files);var arr=U.photos[type];
@@ -295,10 +310,57 @@ await U.api('photo_queue','POST',{project_id:U.projId,access_code:U.haulerCode||
 submitted_by:U.name,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending',batch_id:batchId});
 ok++;}catch(x){console.error(x);}}
 document.getElementById('successDetail').textContent=ok+' photo'+(ok>1?'s':'')+' uploaded for '+U.projName+(tNum?' (Ticket #'+tNum+')':'');
-U.goStep(4);},
+U.goStep(4);U.loadSuccessSubmissions();},
 
 reset(){U.photos={s:[],d:[]};document.getElementById('tktNum').value='';document.getElementById('tktNotes').value='';
-U.renderPhotos('s');U.renderPhotos('d');U.updBtn();U.goStep(3);},
+U.renderPhotos('s');U.renderPhotos('d');U.updBtn();U.goStep(3);U.loadInlineSubmissions();},
+
+// INLINE SUBMISSIONS (shown on upload step)
+async loadInlineSubmissions(){
+var el=document.getElementById('inlineSubmissions');
+if(!U.name){el.innerHTML='';return;}
+U._renderSubmissionsTo(el);},
+
+async loadSuccessSubmissions(){
+var el=document.getElementById('successSubmissions');
+if(!el||!U.name)return;
+U._renderSubmissionsTo(el);},
+
+async _renderSubmissionsTo(el){
+var items=await U.api('photo_queue?submitted_by=eq.'+encodeURIComponent(U.name)+'&order=created_at.desc&limit=15');
+if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.7rem">No submissions yet</div>';return;}
+// Get project names
+var pids=[],pm={};items.forEach(function(q){if(pids.indexOf(q.project_id)<0)pids.push(q.project_id);});
+if(pids.length){var pjs=await U.api('projects?id=in.('+pids.join(',')+')&select=id,name');if(pjs)pjs.forEach(function(p){pm[p.id]=p.name;});}
+// Group by batch or time
+var groups={},order=[];
+items.forEach(function(q){
+var key=q.batch_id||(q.project_id+'_'+q.created_at.substring(0,16));
+if(!groups[key]){groups[key]={items:[],project:pm[q.project_id]||'',time:q.created_at};order.push(key);}
+groups[key].items.push(q);});
+var html='';
+order.forEach(function(key){
+var g=groups[key];
+var scale=g.items.filter(function(q){return q.photo_type==='scale_ticket';});
+var debris=g.items.filter(function(q){return q.photo_type==='debris';});
+var isPending=g.items.some(function(q){return q.status==='pending';});
+var isApproved=g.items.some(function(q){return q.status==='approved';});
+var tktNum='';g.items.forEach(function(q){if(q.ticket_number)tktNum=q.ticket_number;});
+var sc,sl;
+if(isPending&&!isApproved){sc='var(--warning)';sl='⏳ Pending';}
+else if(isApproved){sc='var(--success)';sl='✅ Processed'+(tktNum?' #'+tktNum:'');}
+else{sc='var(--text-d)';sl='❌ Rejected';}
+html+='<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center">';
+// Thumbnails
+html+='<div style="display:flex;gap:3px;flex-shrink:0">';
+if(scale.length)html+='<img src="'+scale[0].photo_url+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">';
+if(debris.length)html+='<img src="'+debris[0].photo_url+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">';
+if(debris.length>1)html+='<div style="width:36px;height:36px;border-radius:4px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--text-d);font-weight:700">+'+(debris.length-1)+'</div>';
+html+='</div>';
+html+='<div style="flex:1;min-width:0"><div style="font-size:.7rem;font-weight:700">'+U.esc(g.project)+'</div>'+
+'<div style="font-size:.6rem;color:var(--text-d)">'+g.items.length+' photo'+(g.items.length>1?'s':'')+' • '+U.ago(g.time)+'</div></div>'+
+'<div style="font-size:.65rem;font-weight:600;color:'+sc+';white-space:nowrap;flex-shrink:0">'+sl+'</div></div>';});
+el.innerHTML=html;},
 
 // RECENT
 async showRecent(){
