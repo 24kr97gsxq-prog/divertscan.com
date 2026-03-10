@@ -3535,20 +3535,29 @@
             var projMap = {};
             this.state.projects.forEach(function(p) { projMap[p.id] = p.name; });
 
-            // Group pending items into batches by submitter + project + 5-minute window
-            var batches = [], batchMap = {};
+            // Group pending items into batches — by batch_id if available, else by submitter+project+5min window
+            var batches = [], batchIdMap = {};
             pending.forEach(function(q) {
-                var t = new Date(q.created_at).getTime();
-                var key = (q.submitted_by||'') + '|' + q.project_id;
-                // Find existing batch within 5 min
-                var found = false;
-                for (var i = 0; i < batches.length; i++) {
-                    if (batches[i].key === key && Math.abs(t - batches[i].time) < 300000) {
-                        batches[i].items.push(q);
-                        found = true; break;
+                if (q.batch_id) {
+                    // Group by batch_id
+                    if (!batchIdMap[q.batch_id]) {
+                        batchIdMap[q.batch_id] = {key:q.batch_id, time:new Date(q.created_at).getTime(), items:[]};
+                        batches.push(batchIdMap[q.batch_id]);
                     }
+                    batchIdMap[q.batch_id].items.push(q);
+                } else {
+                    // Fallback: group by submitter + project + 5 min window
+                    var t = new Date(q.created_at).getTime();
+                    var key = (q.submitted_by||'') + '|' + q.project_id;
+                    var found = false;
+                    for (var i = 0; i < batches.length; i++) {
+                        if (!batches[i].key.startsWith('batch_') && batches[i].key === key && Math.abs(t - batches[i].time) < 300000) {
+                            batches[i].items.push(q);
+                            found = true; break;
+                        }
+                    }
+                    if (!found) batches.push({key:key, time:t, items:[q]});
                 }
-                if (!found) batches.push({key:key, time:t, items:[q]});
             });
 
             var html = '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px;">' + pending.length + ' pending (' + batches.length + ' batch' + (batches.length!==1?'es':'') + ') • ' + data.filter(function(q){return q.status==='approved';}).length + ' approved</div>';
@@ -3850,10 +3859,20 @@
                         // Create new ticket from OCR data
                         var netLbs = ocr.net_lbs || ((ocr.gross_lbs || 0) - (ocr.tare_lbs || 0));
                         var netTons = netLbs / 2000;
+                        // Validate OCR date — reject if >90 days old or in the future
+                        var ocrDate = ocr.date;
+                        var today = new Date().toISOString().split('T')[0];
+                        if (ocrDate) {
+                            var dMs = new Date(ocrDate).getTime();
+                            var nowMs = Date.now();
+                            if (isNaN(dMs) || dMs > nowMs + 86400000 || dMs < nowMs - 90*86400000) {
+                                ocrDate = today; // Bad date from OCR, use today
+                            }
+                        } else { ocrDate = today; }
                         var newTicket = {
                             project_id: q.project_id,
                             ticket_number: String(ocr.ticket_number || 'OCR-' + Date.now()),
-                            ticket_date: ocr.date || new Date().toISOString().split('T')[0],
+                            ticket_date: ocrDate,
                             gross_lbs: ocr.gross_lbs || 0,
                             tare_lbs: ocr.tare_lbs || 0,
                             net_lbs: netLbs,
