@@ -378,10 +378,10 @@
                 <!-- Export -->
                 <div class="card">
                     <div class="card-title"><span class="icon">📤</span> Export</div>
-                    <div class="btn-row">
+                    <div class="btn-row" style="flex-wrap:wrap">
                         <button class="btn btn-sm btn-primary" onclick="DS.exportPDF()">📄 PDF Report</button>
-                        <button class="btn btn-info btn-sm" onclick="DS.exportCSV()">📊 CSV</button>
-                        <button class="btn btn-sm btn-outline" onclick="DS.exportJSON()">📋 JSON</button>
+                        <button class="btn btn-sm btn-info" onclick="DS.exportAllXLSX()">📥 Full XLSX</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.exportCSV()">📊 CSV</button>
                     </div>
                 </div>
             </div>
@@ -2500,8 +2500,8 @@
             // Material breakdown — All Time
             document.getElementById('reportMaterials').innerHTML = this.renderMaterialBars(totals.matTotals, totals.totalTons);
 
-            // Render monthly if that view is active
-            if (this.reportView === 'monthly') this.renderMonthlyReport();
+            // Always build month groups for exports, and render monthly view
+            this.renderMonthlyReport();
 
             // Apply current view state
             this.setReportView(this.reportView);
@@ -3463,6 +3463,116 @@
             XLSX.writeFile(wb, 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx');
             this.showToast('Downloaded ' + monthName + ' ' + year + ' XLSX');
             this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + Math.round(totalDivPct*100) + '% diverted');
+        },
+
+        exportAllXLSX() {
+            if (typeof XLSX === 'undefined') { this.showToast('SheetJS loading...'); return; }
+            var proj = this.state.currentProject;
+            if (!proj) { this.showToast('Select a project first'); return; }
+            var allTickets = this.state.tickets;
+            if (!allTickets.length) { this.showToast('No tickets'); return; }
+
+            var wb = XLSX.utils.book_new();
+            var totals = this.calcTicketTotals(allTickets);
+
+            // SUMMARY SHEET with actual data
+            var sum = [];
+            sum.push([]);sum.push([]);sum.push([]);
+            sum.push(['LEED Waste Diversion Report']);
+            sum.push([]);
+            sum.push(['Project:', proj.name]);
+            sum.push(['GC / Client:', proj.general_contractor || proj.client || '']);
+            sum.push(['Location:', proj.location || '']);
+            sum.push(['Waste Hauler:', proj.waste_hauler || '']);
+            sum.push(['LEED Version:', proj.leed_version || 'v4']);
+            sum.push(['Target:', '', '', (proj.leed_target || 50) / 100]);
+            sum.push([]);
+            sum.push(['Processing Facility:', 'Dalmex Recycling LLC']);
+            sum.push(['Address:', '2828 Nagle St, Dallas, TX 75220']);
+            sum.push(['Phone:', '(214) 352-2000']);
+            sum.push([]);
+            sum.push(['Report by:', 'Dalmex Recycling LLC']);
+            sum.push(['Contact:', 'Robert Vandling']);
+            sum.push(['Email:', 'robert@dalmexrecycling.com']);
+            sum.push(['Generated:', new Date().toLocaleDateString()]);
+            sum.push([]);sum.push([]);
+            sum.push(['PROJECT SUMMARY']);
+            sum.push(['Total Tickets:', allTickets.length]);
+            sum.push(['Total Tonnage:', totals.totalTons]);
+            sum.push(['Diverted:', totals.divertedTons]);
+            sum.push(['Landfill:', totals.totalTons - totals.divertedTons]);
+            sum.push(['Diversion Rate:', totals.divRate / 100]);
+            sum.push(['CO2e Avoided:', totals.co2e]);
+            sum.push(['Target Met:', totals.divRate >= (proj.leed_target || 50) ? 'YES' : 'NO']);
+            sum.push([]);
+            sum.push(['MONTHLY BREAKDOWN']);
+            sum.push(['Month', 'Tickets', 'Tonnage', 'Diverted', 'Landfill', 'Rate']);
+
+            // Group by month
+            var months = {};
+            allTickets.forEach(function(t) {
+                var k = (t.ticket_date || '').substring(0, 7);
+                if (k.length >= 7) { if (!months[k]) months[k] = []; months[k].push(t); }
+            });
+            var sortedKeys = Object.keys(months).sort();
+            var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+            sortedKeys.forEach(function(key) {
+                var mTix = months[key];
+                var mTotals = DS.calcTicketTotals(mTix);
+                var pts = key.split('-');
+                sum.push([monthNames[+pts[1]] + ' ' + pts[0], mTix.length, mTotals.totalTons, mTotals.divertedTons, mTotals.totalTons - mTotals.divertedTons, mTotals.divRate / 100]);
+            });
+
+            var sumWs = XLSX.utils.aoa_to_sheet(sum);
+            sumWs['!cols'] = [{wch:20},{wch:30},{wch:12},{wch:12},{wch:12},{wch:10}];
+            // Format percentages and numbers
+            var targetCell = XLSX.utils.encode_cell({r:10, c:3});
+            if (sumWs[targetCell]) sumWs[targetCell].z = '0%';
+            var rateCell = XLSX.utils.encode_cell({r:27, c:1});
+            if (sumWs[rateCell]) sumWs[rateCell].z = '0%';
+            for (var mr = 33; mr < 33 + sortedKeys.length; mr++) {
+                var rc = XLSX.utils.encode_cell({r:mr, c:5});
+                if (sumWs[rc]) sumWs[rc].z = '0%';
+                [2,3,4].forEach(function(c) { var a = XLSX.utils.encode_cell({r:mr,c:c}); if(sumWs[a]) sumWs[a].z = '0.00'; });
+            }
+            XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
+
+            // ADD EACH MONTH AS A SHEET
+            var self = this;
+            sortedKeys.forEach(function(key) {
+                var mTix = months[key].slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
+                var pts = key.split('-');
+                var mName = monthNames[+pts[1]];
+                var d = [];
+                d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+                    'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
+                    'Metal%','Metal','Concrete%','Concrete','Block%','Block']);
+                var sG=0,sT=0,sTn=0,sD=0;
+                mTix.forEach(function(t) {
+                    var g=parseInt(t.gross_lbs)||0, ta=parseInt(t.tare_lbs)||0, tn=parseFloat(t.net_tons)||0;
+                    var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
+                    var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp;
+                    var dv=wt+gt+pt+ot+mt+ct+bt;
+                    sG+=g;sT+=ta;sTn+=tn;sD+=dv;
+                    var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp2=df.split('-');df=parseInt(dp2[1])+'/'+parseInt(dp2[2])+'/'+dp2[0];}
+                    d.push([df,parseInt(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,
+                        tn>0?dv/tn:0,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);
+                });
+                d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
+                var mWs = XLSX.utils.aoa_to_sheet(d);
+                mWs['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
+                // Format cells
+                for(var r2=1;r2<=mTix.length+1;r2++){
+                    [8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0%';});
+                    [3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0.00';});
+                    [2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='#,##0';});
+                }
+                XLSX.utils.book_append_sheet(wb, mWs, mName + ' ' + pts[0]);
+            });
+
+            XLSX.writeFile(wb, 'DivertScan_' + (proj.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_Full_Report.xlsx');
+            this.showToast('Downloaded full report XLSX');
         },
 
         exportAuditCSV() {
