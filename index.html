@@ -403,6 +403,10 @@
                     </div>
                 </div>
                 <div class="card">
+                    <div class="card-title"><span class="icon">📊</span> Client Login Log</div>
+                    <div id="loginLogContent"><button class="btn btn-sm btn-outline" onclick="DS.loadLoginLog()">📋 Load Login History</button></div>
+                </div>
+                <div class="card">
                     <div class="card-title"><span class="icon">📲</span> Field Upload Links</div>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Share these links with hauler drivers. Each link only shows that hauler's projects. No login required.</p>
                     <div id="fieldUploadLinks" style="margin-bottom:10px;font-size:.7rem"></div>
@@ -966,7 +970,7 @@
                     if (tab === 'ticketsTab') this.renderTickets();
                     if (tab === 'reportsTab') this.renderReports();
                     if (tab === 'projectsTab') this.renderProjectList();
-                    if (tab === 'auditTab') { this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.populateAuditProjectSelect(); }
+                    if (tab === 'auditTab') { this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); }
                 });
             });
         },
@@ -4339,6 +4343,32 @@
                     '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.65rem;flex-shrink:0" onclick="event.stopPropagation();DS.showEditClient(\'' + c.id + '\')">\u270F\uFE0F</button>' +
                 '</div>';
             }).join('');
+        },
+
+        async loadLoginLog() {
+            var el = document.getElementById('loginLogContent');
+            el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
+            var logs = await this.supabase('client_logins?order=logged_in_at.desc&limit=50');
+            if (!logs || !logs.length) {
+                el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No login history yet. Run create_login_log.sql in Supabase first.</div>';
+                return;
+            }
+            var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' recent logins</div>';
+            logs.forEach(function(log) {
+                var dt = log.logged_in_at ? new Date(log.logged_in_at) : null;
+                var timeStr = dt ? dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+                var ago = DS.timeAgo(log.logged_in_at);
+                var ua = log.user_agent || '';
+                var device = ua.indexOf('iPad') >= 0 ? '📱 iPad' : ua.indexOf('iPhone') >= 0 ? '📱 iPhone' : ua.indexOf('Android') >= 0 ? '📱 Android' : '💻 Desktop';
+                html += '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;font-size:.7rem">' +
+                    '<div style="font-size:.9rem;flex-shrink:0">' + device + '</div>' +
+                    '<div style="flex:1"><div style="font-weight:600">' + DS.esc(log.client_name || 'Unknown') + '</div>' +
+                    '<div style="font-size:.6rem;color:var(--text-dim)">' + DS.esc(log.client_email || '') + '</div></div>' +
+                    '<div style="text-align:right;flex-shrink:0"><div style="font-weight:500">' + ago + '</div>' +
+                    '<div style="font-size:.55rem;color:var(--text-dim)">' + timeStr + '</div></div></div>';
+            });
+            html += '<button class="btn btn-sm btn-outline mt-8" onclick="DS.loadLoginLog()">🔄 Refresh</button>';
+            el.innerHTML = html;
         },
 
         showNewClientModal() {
