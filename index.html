@@ -136,12 +136,14 @@
     .loading-text{background:var(--bg-card);padding:16px 24px;border-radius:var(--radius);font-weight:600;font-size:.85rem}
     .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .6s linear infinite;display:inline-block;vertical-align:middle}
     @keyframes sp{to{transform:rotate(360deg)}}
-    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg-deep);padding:10px 20px;border-radius:8px;font-weight:600;font-size:.8rem;z-index:9999;animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg-deep);padding:10px 20px;border-radius:8px;font-weight:600;font-size:.8rem;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.15);display:none;animation:tu .25s ease}
+    .toast.show{display:block}
     @keyframes tu{from{transform:translateX(-50%) translateY(6px);opacity:0}to{transform:translateX(-50%);opacity:1}}
     .text-success{color:var(--success)}.text-warning{color:var(--warning)}.text-danger{color:var(--danger)}.text-primary{color:var(--primary)}
     .hidden{display:none!important}
-    .bottom-nav{display:flex;background:#18181b;padding:0 8px;align-items:center;gap:1px;flex-shrink:0;order:-1;min-height:var(--nav-height);border-bottom:1px solid #27272a}
-    .nav-btn{display:flex;align-items:center;gap:5px;padding:14px 14px;background:none;border:none;color:#a1a1aa;font-family:var(--font);font-size:.8rem;font-weight:500;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s;position:relative}
+    .bottom-nav{display:flex;background:#18181b;padding:0 4px;align-items:center;gap:0;flex-shrink:0;order:-1;min-height:var(--nav-height);border-bottom:1px solid #27272a;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .bottom-nav::-webkit-scrollbar{display:none}
+    .nav-btn{display:flex;align-items:center;gap:4px;padding:14px 10px;background:none;border:none;color:#a1a1aa;font-family:var(--font);font-size:.7rem;font-weight:500;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s;position:relative;flex-shrink:0}
     .nav-btn.active{color:#fafafa;border-bottom-color:var(--primary)}.nav-btn:hover{color:#d4d4d8}
     .nav-btn.active::before{display:none}.nav-icon{font-size:1rem}
     @media(max-width:480px){.stats-grid{grid-template-columns:repeat(2,1fr)}.form-row{flex-direction:column}}
@@ -3826,19 +3828,24 @@ const DS = {
         var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
         var total = 0;
         mats.forEach(function(k) {
-            var v = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
+            var slider = document.getElementById('reviewMat_' + k);
+            var numInput = document.getElementById('reviewMatN_' + k);
+            var v = parseInt(slider.value) || 0;
             if (v < 0) v = 0;
             if (v > 100) v = 100;
-            // Cap: if adding this would exceed 100, reduce it
-            if (total + v > 100) v = Math.max(0, 100 - total);
-            document.getElementById('reviewMat_' + k).value = v;
-            document.getElementById('reviewMatN_' + k).value = v;
+            slider.value = v;
+            numInput.value = v;
             total += v;
         });
         var landfill = Math.max(0, 100 - total);
         document.getElementById('reviewLandfill').textContent = landfill + '%';
-        document.getElementById('reviewDivTotal').textContent = 'Diversion: ' + Math.min(total, 100) + '% • Landfill: ' + landfill + '%';
-        document.getElementById('reviewDivTotal').style.color = total >= 50 ? 'var(--success)' : 'var(--danger)';
+        if (total > 100) {
+            document.getElementById('reviewDivTotal').textContent = '⚠️ Total: ' + total + '% — must be ≤ 100%. Adjust sliders.';
+            document.getElementById('reviewDivTotal').style.color = 'var(--danger)';
+        } else {
+            document.getElementById('reviewDivTotal').textContent = 'Diversion: ' + total + '% • Landfill: ' + landfill + '%';
+            document.getElementById('reviewDivTotal').style.color = total >= 50 ? 'var(--success)' : 'var(--danger)';
+        }
     },
 
     async runBatchAI(bIdx) {
@@ -3949,6 +3956,7 @@ const DS = {
             matVals[k] = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
             divertPct += matVals[k];
         });
+        if (divertPct > 100) { this.showToast('Material percentages total ' + divertPct + '% — must be ≤ 100%'); return; }
         var divertedTons = +(netTons * divertPct / 100).toFixed(4);
 
         var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
