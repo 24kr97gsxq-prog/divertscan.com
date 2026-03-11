@@ -297,6 +297,8 @@ var r=await fetch(SB+'/rest/v1/client_accounts?email=eq.'+encodeURIComponent(em)
 var c=await r.json();ld.style.display='none';
 if(!c||!c.length){err.textContent='Invalid email or password';err.style.display='block';return;}
 P.cl=c[0];P.api('client_accounts?id=eq.'+P.cl.id,'PATCH',{last_login:new Date().toISOString()});
+// Log the login
+P.api('client_logins','POST',{client_id:P.cl.id,client_name:P.cl.name||'',client_email:P.cl.email||em,user_agent:navigator.userAgent.substring(0,200)});
 try{localStorage.setItem('ds_cid',P.cl.id);}catch(x){}await P.loadPj();P.showApp();
 }catch(x){ld.style.display='none';err.textContent='Error: '+x.message;err.style.display='block';}},
 
@@ -732,7 +734,10 @@ toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m
 
 async init(){P.loadTheme();document.getElementById('nav').style.display='none';
 try{var id=localStorage.getItem('ds_cid');if(id){var c=await P.api('client_accounts?id=eq.'+id+'&is_active=eq.true');
-if(c&&c.length){P.cl=c[0];await P.loadPj();P.showApp();return;}}}catch(x){}
+if(c&&c.length){P.cl=c[0];
+P.api('client_logins','POST',{client_id:P.cl.id,client_name:P.cl.name||'',client_email:P.cl.email||'',user_agent:navigator.userAgent.substring(0,200)});
+P.api('client_accounts?id=eq.'+P.cl.id,'PATCH',{last_login:new Date().toISOString()});
+await P.loadPj();P.showApp();return;}}}catch(x){}
 document.getElementById('vLogin').classList.remove('hidden');}
 };
 P.init();
