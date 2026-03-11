@@ -385,6 +385,7 @@
             <div class="card">
                 <div class="card-title"><span class="icon">📤</span> Export</div>
                 <div class="btn-row">
+                    <button class="btn btn-sm btn-primary" onclick="DS.exportPDF()">📄 PDF Report</button>
                     <button class="btn btn-info btn-sm" onclick="DS.exportCSV()">📊 CSV</button>
                     <button class="btn btn-sm btn-outline" onclick="DS.exportJSON()">📋 JSON</button>
                 </div>
@@ -2651,7 +2652,8 @@ const DS = {
                     <span>Cumulative: <strong style="color:${data.cumRate >= target ? 'var(--success)' : 'var(--warning)'};">${data.cumRate}%</strong> diverted</span>
                 </div>
                 <div class="btn-row mt-8">
-                    <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')" style="flex:1;">📥 Download XLSX</button>
+                    <button class="btn btn-sm btn-primary" onclick="DS.exportMonthPDF('${key}')" style="flex:1;">📄 PDF</button>
+                    <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')" style="flex:1;">📥 XLSX</button>
                     <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')" style="flex:1;">📊 CSV</button>
                 </div>
             </div>`;
@@ -3187,6 +3189,108 @@ const DS = {
         this.downloadFile(JSON.stringify(data, null, 2),
             'DivertScan_' + (this.state.currentProject?.name || 'export') + '_' + new Date().toISOString().split('T')[0] + '.json',
             'application/json');
+    },
+
+    exportPDF() {
+        var proj = this.state.currentProject;
+        if (!proj) { this.showToast('Select a project first'); return; }
+        var tickets = this.state.tickets;
+        if (!tickets.length) { this.showToast('No tickets to export'); return; }
+        this._generatePDF(proj, tickets, 'All Time');
+    },
+
+    exportMonthPDF(monthKey) {
+        var proj = this.state.currentProject;
+        if (!proj) { this.showToast('Select a project first'); return; }
+        var tix = (this._monthGroups && this._monthGroups[monthKey]) || [];
+        if (!tix.length) { this.showToast('No tickets for this month'); return; }
+        var pts = monthKey.split('-');
+        var mf = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        var label = mf[+pts[1]] + ' ' + pts[0];
+        this._generatePDF(proj, tix, label);
+    },
+
+    _generatePDF(proj, tix, label) {
+        tix = tix.slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
+        var tons=0,div=0,tGross=0,tTare=0,mc={};
+        var matKeys = Object.keys(this.MATERIALS);
+        matKeys.forEach(function(k){mc[k]=0;});
+        tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;
+            tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
+            matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
+        var landfill=Math.max(0,tons-div);
+        var rate=tons>0?Math.round(div/tons*100):0;
+        var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
+        var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+
+        // Cumulative project-to-date
+        var allTix = this.state.tickets;
+        var ptdTons=0,ptdDiv=0;
+        allTix.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;});
+        var ptdLandfill=Math.max(0,ptdTons-ptdDiv);
+        var ptdRate=ptdTons>0?Math.round(ptdDiv/ptdTons*100):0;
+
+        // Ticket rows
+        var rows='';
+        tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';
+            if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
+            var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
+            var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td class=r>'+DS.fmt(g)+'</td><td class=r>'+DS.fmt(ta)+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';
+            matKeys.forEach(function(k){r+='<td class=r>'+(t[k+'_pct']||0)+'%</td>';});
+            r+='<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
+            rows+=r;});
+
+        // Material rows
+        var matRows='';
+        var matNames={wood:'Wood',gypsum:'Gypsum',plastic:'Plastic',occ:'OCC',metal:'Metal',concrete:'Concrete',block:'Block'};
+        var matEm={wood:'Dalmex Pallets (REUSE/SALVAGE)',gypsum:'Gypsum Recycling / Wallboard',plastic:'American Recycling (AR)',occ:'Georgia Pacific / Smurfit Westrock / International Paper',metal:'CMC Recycling / Cyclone Recycling',concrete:'Crushing — aggregate base',block:'Crushing — fill/base'};
+        matKeys.forEach(function(k){if(mc[k]<=0)return;
+            matRows+='<tr><td>'+matNames[k]+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+DS.fmt(mc[k])+' T</td><td>'+matEm[k]+'</td></tr>';});
+
+        var w=window.open('','_blank');
+        w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+DS.esc(proj.name)+'</title>'+
+        '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:10.5px;line-height:1.5}'+
+        'h1{font-size:18px;color:#18181b;border-bottom:3px solid #059669;padding-bottom:6px;margin-bottom:14px}'+
+        'h2{font-size:11px;color:#18181b;margin:16px 0 6px;border-bottom:1px solid #d4d4d8;padding-bottom:3px;text-transform:uppercase;letter-spacing:.5px}'+
+        '.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:6px 0;font-size:9px}'+
+        'th{background:#f4f4f5;padding:5px 3px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:7.5px;text-transform:uppercase;letter-spacing:.2px}'+
+        'td{padding:3px;border-bottom:1px solid #e4e4e7}'+
+        '.stats{display:flex;gap:8px;margin:10px 0}.stat{flex:1;background:#f4f4f5;border-radius:6px;padding:8px;text-align:center}'+
+        '.stat b{font-size:15px;display:block;font-family:"Courier New",monospace}.stat span{font-size:7.5px;color:#71717a;text-transform:uppercase;letter-spacing:.3px}'+
+        '.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;font-size:10px}'+
+        '.pass{background:#ecfdf5;color:#059669}.fail{background:#fef2f2;color:#dc2626}'+
+        '.note{background:#f4f4f5;border-radius:4px;padding:6px 8px;margin:8px 0;font-size:9px;color:#52525b}'+
+        '.footer{margin-top:20px;padding-top:8px;border-top:1px solid #d4d4d8;font-size:8px;color:#a1a1aa;text-align:center}'+
+        '@media print{body{padding:16px}.toolbar{display:none!important}}</style></head><body>'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div>'+
+        '<h1>Waste Diversion Report</h1><div style="font-size:11px;color:#71717a">'+label+' — '+DS.esc(proj.name)+'</div></div>'+
+        '<div style="text-align:right"><div style="font-weight:700;font-size:11px">LEED '+ver+'</div>'+
+        '<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:3px">'+(ok?'✅ ON TRACK':'⚠️ BELOW TARGET')+'</div></div></div>'+
+        '<h2>Project Information</h2><table>'+
+        '<tr><td width=25%><b>Project</b></td><td>'+DS.esc(proj.name)+'</td><td width=25%><b>LEED</b></td><td>'+ver+' • Target '+tgt+'%</td></tr>'+
+        '<tr><td><b>GC / Client</b></td><td>'+(proj.general_contractor||proj.client||'—')+'</td><td><b>Hauler</b></td><td>'+(proj.waste_hauler||'—')+'</td></tr>'+
+        '<tr><td><b>Location</b></td><td>'+(proj.location||'—')+'</td><td><b>Facility</b></td><td>Dalmex Recycling, Dallas TX</td></tr></table>'+
+        '<h2>'+label+' Summary</h2>'+
+        '<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
+        '<div class="stat"><b>'+DS.fmt(tons)+'</b><span>Generated (T)</span></div>'+
+        '<div class="stat"><b style="color:#059669">'+DS.fmt(div)+'</b><span>Diverted (T)</span></div>'+
+        '<div class="stat"><b style="color:#dc2626">'+DS.fmt(landfill)+'</b><span>Landfill (T)</span></div>'+
+        '<div class="stat"><b style="color:'+(ok?'#059669':'#dc2626')+'">'+rate+'%</b><span>Diversion Rate</span></div></div>'+
+        '<div class="note"><b>Calculation:</b> Total Generated ('+DS.fmt(tons)+' T) = Diverted ('+DS.fmt(div)+' T) + Landfill ('+DS.fmt(landfill)+' T) | Diversion Rate = '+DS.fmt(div)+' / '+DS.fmt(tons)+' × 100 = '+rate+'% | Method: weight-based tracking via commercial scale</div>'+
+        '<h2>Project-to-Date Cumulative</h2>'+
+        '<div class="stats"><div class="stat"><b>'+allTix.length+'</b><span>Total Tickets</span></div>'+
+        '<div class="stat"><b>'+DS.fmt(ptdTons)+'</b><span>Generated (T)</span></div>'+
+        '<div class="stat"><b style="color:#059669">'+DS.fmt(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
+        '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
+        '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+        '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
+        '<h2>Scale Tickets — '+label+'</h2>'+
+        '<table><tr><th>Date</th><th>Ticket#</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
+        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+        '<div class="footer"><b>Dalmex Recycling LLC</b> — powered by DivertScan • '+new Date().toLocaleDateString()+' • robert@dalmexrecycling.com • (214) 352-2000</div>'+
+        '<div class="toolbar" onclick="window.print()" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:14px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">🖨 Print / Save as PDF</div>'+
+        '<div style="height:60px"></div></body></html>');
+        w.document.close();
     },
 
     exportMonthCSV(monthKey) {
@@ -3745,21 +3849,25 @@ const DS = {
             '<div class="modal-title">Review & Process Batch</div>' +
             '<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px">' + (projMap[q0.project_id]||'') + ' • ' + (q0.submitted_by||'') + ' • ' + batch.items.length + ' photos</div>';
 
-        // Scale ticket image — full size for cross-checking
-        if (scale.length) {
-            html += '<div class="card-title">📄 Scale Ticket</div>' +
-                '<img src="' + scale[0].photo_url + '" style="width:100%;border-radius:8px;border:1px solid var(--border);margin-bottom:12px" onclick="window.open(\'' + scale[0].photo_url + '\')">';
-        }
+        // Photos section - collapsible
+        html += '<div style="background:var(--bg-input);border-radius:8px;padding:10px;margin-bottom:12px">' +
+            '<div onclick="var p=document.getElementById(\'reviewPhotos\');p.style.display=p.style.display===\'none\'?\'block\':\'none\'" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:.7rem;font-weight:700">' +
+            '<span>📷 Photos (' + batch.items.length + ')</span><span id="photoToggle" style="color:var(--primary)">▼ Show</span></div>' +
+            '<div id="reviewPhotos" style="display:none;margin-top:8px">';
 
-        // Debris images
+        if (scale.length) {
+            html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📄 Scale Ticket</div>' +
+                '<img src="' + scale[0].photo_url + '" style="width:100%;border-radius:8px;border:1px solid var(--border);margin-bottom:8px" onclick="window.open(\'' + scale[0].photo_url + '\')">';
+        }
         if (debris.length) {
-            html += '<div class="card-title">📸 Debris Photos (' + debris.length + ')</div>' +
-                '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px">';
+            html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📸 Debris (' + debris.length + ')</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(' + Math.min(debris.length, 2) + ',1fr);gap:6px;margin-bottom:8px">';
             debris.forEach(function(q) {
-                html += '<img src="' + q.photo_url + '" onclick="window.open(\'' + q.photo_url + '\')" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
+                html += '<img src="' + q.photo_url + '" onclick="window.open(\'' + q.photo_url + '\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">';
             });
             html += '</div>';
         }
+        html += '</div></div>';
 
         // OCR + AI results area
         html += '<div class="divider"></div>' +
@@ -3820,7 +3928,14 @@ const DS = {
 
         // Auto-run AI/OCR immediately if API key is available
         if (this.state.apiKey && (scale.length || debris.length)) {
-            setTimeout(function() { DS.runBatchAI(bIdx); }, 100);
+            // Show photos first so admin can see them
+            var photosDiv = document.getElementById('reviewPhotos');
+            if (photosDiv) { photosDiv.style.display = 'block'; document.getElementById('photoToggle').textContent = '▲ Hide'; }
+            setTimeout(function() { DS.runBatchAI(bIdx); }, 300);
+        } else {
+            // No API key - show photos permanently
+            var photosDiv2 = document.getElementById('reviewPhotos');
+            if (photosDiv2) { photosDiv2.style.display = 'block'; document.getElementById('photoToggle').textContent = '▲ Hide'; }
         }
     },
 
@@ -3919,15 +4034,33 @@ const DS = {
                     var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
                     var rawTotal = 0;
                     mats.forEach(function(k) { rawTotal += (analysis[k] || 0); });
-                    var scale = rawTotal > 100 ? 100 / rawTotal : 1;
+                    // Scale down if over 100
+                    var scaleFactor = (rawTotal > 100) ? (100 / rawTotal) : 1;
+                    var adjusted = {};
+                    var adjTotal = 0;
                     mats.forEach(function(k) {
-                        var v = Math.round((analysis[k] || 0) * scale);
-                        document.getElementById('reviewMat_' + k).value = v;
-                        document.getElementById('reviewMatN_' + k).value = v;
+                        adjusted[k] = Math.round((analysis[k] || 0) * scaleFactor);
+                        adjTotal += adjusted[k];
                     });
-                    this.updateReviewTotal();
+                    // Fix rounding: if total > 100 after rounding, subtract from largest
+                    if (adjTotal > 100) {
+                        var largest = mats.reduce(function(a, b) { return adjusted[a] >= adjusted[b] ? a : b; });
+                        adjusted[largest] -= (adjTotal - 100);
+                    }
+                    // Apply to sliders
+                    mats.forEach(function(k) {
+                        var v = Math.max(0, adjusted[k]);
+                        var slider = document.getElementById('reviewMat_' + k);
+                        var numInput = document.getElementById('reviewMatN_' + k);
+                        slider.value = v;
+                        numInput.value = v;
+                        slider.setAttribute('value', v);
+                    });
+                    // Force update after DOM settles
+                    var self = this;
+                    setTimeout(function() { self.updateReviewTotal(); }, 50);
                     var existing = document.getElementById('reviewAINotes').textContent;
-                    document.getElementById('reviewAINotes').textContent = existing + ' | 🤖 Debris: ' + (analysis.notes||'') + ' (conf: ' + (analysis.confidence||0) + '%)' + (rawTotal > 100 ? ' [normalized from ' + rawTotal + '%]' : '');
+                    document.getElementById('reviewAINotes').textContent = existing + ' | 🤖 Debris: ' + (analysis.notes||'') + ' (conf: ' + (analysis.confidence||0) + '%)' + (rawTotal > 100 ? ' [scaled from ' + rawTotal + '% to 100%]' : '');
                 }
             } catch(e) { console.error('AI error:', e); this.showToast('AI analysis failed: ' + e.message); }
         }
@@ -4046,7 +4179,9 @@ const DS = {
                 matBars +
                 (scale.length ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📄 Scale Ticket</div><img src="' + scale[0].photo_url + '" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:1px solid var(--border)"></div>' : '') +
                 (debrisHtml ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📸 Debris (' + allDebrisUrls.length + ')</div><div style="display:flex;gap:6px;overflow-x:auto">' + debrisHtml + '</div></div>' : '') +
-                '<button class="btn btn-primary mt-12" onclick="document.getElementById(\'batchReviewModal\').remove()">✓ Done</button>';
+                '<div class="btn-row mt-12" style="gap:6px">' +
+                '<button class="btn btn-primary" style="flex:1" onclick="DS.shareTicketSummary(\'' + tktNum + '\',' + gross + ',' + tare + ',' + netTons.toFixed(2) + ',' + Math.round(divertPct) + ',\'' + DS.esc(projMap[q0.project_id]||'') + '\')">📤 Share Summary</button>' +
+                '<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'batchReviewModal\').remove()">✓ Done</button></div>';
         }
 
         this.showToast('✅ Ticket #' + tktNum + ' — ' + Math.round(divertPct) + '% diversion');
@@ -4057,6 +4192,23 @@ const DS = {
             await this.loadTickets(q0.project_id);
         }
         this.loadPhotoQueue();
+    },
+
+    shareTicketSummary(tktNum, gross, tare, netTons, divPct, projName) {
+        var text = 'Dalmex Recycling — Ticket #' + tktNum + ' Processed\n\n' +
+            'Project: ' + projName + '\n' +
+            'Gross: ' + gross.toLocaleString() + ' lbs\n' +
+            'Tare: ' + tare.toLocaleString() + ' lbs\n' +
+            'Net: ' + netTons + ' tons\n' +
+            'Diversion Rate: ' + divPct + '%\n\n' +
+            'View full report: https://divertscan.com/client.html\n\n' +
+            'Dalmex Recycling LLC\n(214) 352-2000 • robert@dalmexrecycling.com';
+
+        if (navigator.share) {
+            navigator.share({ title: 'Ticket #' + tktNum + ' Processed', text: text }).catch(function(){});
+        } else {
+            navigator.clipboard.writeText(text).then(function() { DS.showToast('Summary copied to clipboard'); }).catch(function() { prompt('Copy:', text); });
+        }
     },
 
     async rejectBatch(bIdx) {
