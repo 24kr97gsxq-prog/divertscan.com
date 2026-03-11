@@ -1267,10 +1267,11 @@
                         '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
                         '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target || 50) + '%' +
                             (ticketCount !== null ? ' • ' + ticketCount + ' tickets' : '') + '</div>' +
-                    '</div>' +
-                    '<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">' +
-                        '<button class="btn btn-sm btn-outline" style="width:auto; padding:4px 8px; font-size:0.65rem;" onclick="event.stopPropagation(); DS.showEditProject(\'' + p.id + '\')">✏️</button>' +
-                        '<button class="btn btn-sm" style="width:auto; padding:4px 8px; font-size:0.65rem; color:var(--danger); border:1px solid var(--danger); background:transparent;" onclick="event.stopPropagation(); DS.quickDeleteProject(\'' + p.id + '\')">🗑️</button>' +
+                        '<div style="display:flex;gap:6px;margin-top:6px">' +
+                            '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.selectAndShowProject(\'' + p.id + '\')">📊 Reports</button>' +
+                            '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.showEditProject(\'' + p.id + '\')">✏️ Edit</button>' +
+                            '<button class="btn btn-sm" style="width:auto;padding:4px 10px;font-size:.6rem;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="event.stopPropagation();DS.quickDeleteProject(\'' + p.id + '\')">🗑️</button>' +
+                        '</div>' +
                     '</div>' +
                 '</div>';
             }).join('');
@@ -3399,16 +3400,37 @@
         },
 
         async checkPendingQueue() {
-            var data = await this.supabase('photo_queue?status=eq.pending&select=id');
-            var cnt = data ? data.length : 0;
+            var pendingData = await this.supabase('photo_queue?status=eq.pending&select=id');
+            var pendingCnt = pendingData ? pendingData.length : 0;
+
+            // Check for recent client logins (last 24 hours)
+            var loginCnt = 0;
+            try {
+                var since = new Date(Date.now() - 86400000).toISOString();
+                var logins = await this.supabase('client_logins?logged_in_at=gte.' + since + '&select=id');
+                loginCnt = logins ? logins.length : 0;
+            } catch(e) {}
+
+            var totalNotif = pendingCnt + loginCnt;
+
             var badge = document.getElementById('queueBadge');
             var navBadge = document.getElementById('auditNavBadge');
-            if (cnt > 0) {
-                if (badge) { badge.textContent = cnt; badge.style.display = 'inline'; }
-                if (navBadge) { navBadge.textContent = cnt; navBadge.style.display = 'inline'; }
+
+            if (totalNotif > 0) {
+                if (badge) { badge.textContent = pendingCnt; badge.style.display = pendingCnt > 0 ? 'inline' : 'none'; }
+                if (navBadge) { navBadge.textContent = totalNotif; navBadge.style.display = 'inline'; }
             } else {
                 if (badge) badge.style.display = 'none';
                 if (navBadge) navBadge.style.display = 'none';
+            }
+
+            // Show notification summary on init
+            if (totalNotif > 0 && !this._notifShown) {
+                this._notifShown = true;
+                var parts = [];
+                if (pendingCnt > 0) parts.push(pendingCnt + ' photo' + (pendingCnt > 1 ? 's' : '') + ' pending review');
+                if (loginCnt > 0) parts.push(loginCnt + ' client login' + (loginCnt > 1 ? 's' : '') + ' in last 24h');
+                this.showToast('📬 ' + parts.join(' • '));
             }
         },
 
