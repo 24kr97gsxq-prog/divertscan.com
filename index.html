@@ -410,6 +410,16 @@
                     <div id="loginLogContent"><button class="btn btn-sm btn-outline" onclick="DS.loadLoginLog()">📋 Load Login History</button></div>
                 </div>
                 <div class="card">
+                    <div class="card-title"><span class="icon">🔗</span> Samsara Integration</div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Pull scale tickets and photos from Jaguar's Samsara account directly into DivertScan.</p>
+                    <div id="samsaraStatus" style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px"></div>
+                    <div id="samsaraResults" style="margin-bottom:8px"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-sm btn-primary" onclick="DS.syncSamsara()" style="flex:1">🔄 Sync Samsara</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.showSamsaraSettings()" style="flex:0;padding:8px 12px">⚙️</button>
+                    </div>
+                </div>
+                <div class="card">
                     <div class="card-title"><span class="icon">📲</span> Field Upload Links</div>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Share these links with hauler drivers. Each link only shows that hauler's projects. No login required.</p>
                     <div id="fieldUploadLinks" style="margin-bottom:10px;font-size:.7rem"></div>
@@ -4318,6 +4328,106 @@
             } else {
                 navigator.clipboard.writeText(text).then(function() { DS.showToast('Summary copied to clipboard'); }).catch(function() { prompt('Copy:', text); });
             }
+        },
+
+        // ============================================================
+        // SAMSARA INTEGRATION
+        // ============================================================
+        async syncSamsara() {
+            var statusEl = document.getElementById('samsaraStatus');
+            var resultsEl = document.getElementById('samsaraResults');
+            statusEl.textContent = '⏳ Connecting to Samsara...';
+            resultsEl.innerHTML = '';
+            this.showLoading('Syncing Samsara...');
+
+            try {
+                var url = this.state.supabaseUrl + '/functions/v1/samsara-sync';
+                var res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!res.ok) {
+                    var errText = await res.text();
+                    statusEl.innerHTML = '<span style="color:var(--danger)">❌ Sync failed (' + res.status + ')</span>';
+                    if (res.status === 404) {
+                        resultsEl.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim);padding:8px;background:var(--bg-input);border-radius:6px">' +
+                            'Edge Function not deployed yet. Follow the deployment guide:<br>' +
+                            '<b>1.</b> Install Supabase CLI<br>' +
+                            '<b>2.</b> Deploy the samsara-sync function<br>' +
+                            '<b>3.</b> Set API token as secret<br>' +
+                            '<a href="https://supabase.com/docs/guides/functions" target="_blank" style="color:var(--primary)">Supabase Functions Guide →</a></div>';
+                    } else {
+                        resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--danger);word-break:break-all">' + this.esc(errText).substring(0, 200) + '</div>';
+                    }
+                    this.hideLoading();
+                    return;
+                }
+
+                var data = await res.json();
+                this.hideLoading();
+
+                if (data.error) {
+                    statusEl.innerHTML = '<span style="color:var(--danger)">❌ ' + this.esc(data.error) + '</span>';
+                    return;
+                }
+
+                statusEl.innerHTML = '<span style="color:var(--success)">✅ Last sync: ' + new Date().toLocaleTimeString() + '</span>';
+
+                var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px">';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.synced || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Synced</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.skipped || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Skipped</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.totalDrivers || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Drivers</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.totalVehicles || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Vehicles</div></div>';
+                html += '</div>';
+
+                if (data.synced > 0) {
+                    html += '<div style="font-size:.65rem;color:var(--success);font-weight:600">' + data.synced + ' new scale ticket' + (data.synced > 1 ? 's' : '') + ' added to Photo Queue</div>';
+                    this.showToast('🔗 ' + data.synced + ' ticket' + (data.synced > 1 ? 's' : '') + ' synced from Samsara');
+                    this.loadPhotoQueue();
+                } else if (data.totalDocuments === 0) {
+                    html += '<div style="font-size:.65rem;color:var(--text-dim)">No documents found. Jaguar may not be using Samsara forms for scale tickets yet.</div>';
+                } else {
+                    html += '<div style="font-size:.65rem;color:var(--text-dim)">All documents already synced — nothing new.</div>';
+                }
+
+                if (data.errors > 0) {
+                    html += '<div style="font-size:.65rem;color:var(--danger);margin-top:4px">' + data.errors + ' error' + (data.errors > 1 ? 's' : '') + ' — check console for details</div>';
+                }
+
+                resultsEl.innerHTML = html;
+                this.addAuditEntry('SAMSARA_SYNC', 'Synced: ' + data.synced + ' new, ' + data.skipped + ' skipped, ' + data.totalDrivers + ' drivers, ' + data.totalVehicles + ' vehicles');
+
+            } catch(e) {
+                this.hideLoading();
+                statusEl.innerHTML = '<span style="color:var(--danger)">❌ Connection failed</span>';
+                resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--text-dim)">Could not reach Edge Function. Deploy samsara-sync first.</div>';
+                console.error('Samsara sync error:', e);
+            }
+        },
+
+        showSamsaraSettings() {
+            var token = localStorage.getItem('ds_samsara_token') || '';
+            var m = document.createElement('div');
+            m.className = 'modal-overlay show';
+            m.id = 'samsaraSettingsModal';
+            m.onclick = function(e) { if (e.target === m) m.remove(); };
+            m.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+                '<div class="modal-title">Samsara Settings</div>' +
+                '<div class="form-group"><label class="form-label">Samsara API Token</label>' +
+                '<input type="text" class="form-input" id="samsaraTokenInput" value="' + (token ? '••••••••' : '') + '" placeholder="samsara_api_..."></div>' +
+                '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:12px">Token is stored as a Supabase secret on the server. This field is for reference only — the Edge Function uses the secret, not this value.</div>' +
+                '<div class="form-group"><label class="form-label">Status</label>' +
+                '<div style="font-size:.75rem">' +
+                (token ? '✅ Token saved locally' : '⚠️ No token saved locally') +
+                '</div></div>' +
+                '<button class="btn btn-success mt-8" onclick="var v=document.getElementById(\'samsaraTokenInput\').value.trim();if(v&&v.indexOf(\'••\')<0){localStorage.setItem(\'ds_samsara_token\',v);DS.showToast(\'Token saved\');}document.getElementById(\'samsaraSettingsModal\').remove()">Save</button>' +
+                '<button class="btn btn-outline mt-8" onclick="document.getElementById(\'samsaraSettingsModal\').remove()">Close</button>' +
+                '</div>';
+            document.body.appendChild(m);
         },
 
         async rejectBatch(bIdx) {
