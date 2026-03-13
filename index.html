@@ -3586,7 +3586,42 @@
             this.showToast('Downloaded full report XLSX');
         },
 
-        exportAuditCSV() {
+        exportQBOInvoice() {
+            const proj = this.state.currentProject;
+            if (!proj) { this.showToast('Select a project first'); return; }
+            const tickets = this.state.tickets.filter(t => (parseFloat(t.net_tons) || 0) > 0);
+            if (!tickets.length) { this.showToast('No tickets with weight data'); return; }
+            const JAGUAR_NAMES = ['jaguar','jaguar waste','jaguar waste management'];
+            const PRODUCT = 'LEED Landfill diversion:Roll Off Service Sorting';
+            const today = new Date();
+            const invoiceDate = (today.getMonth()+1) + '/' + today.getDate() + '/' + today.getFullYear();
+            const dueDate = new Date(today.getTime() + 14*86400000);
+            const dueDateStr = (dueDate.getMonth()+1) + '/' + dueDate.getDate() + '/' + dueDate.getFullYear();
+            const invoiceNo = 'DS-' + today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+            const headers = ['InvoiceNo','Customer','InvoiceDate','DueDate','ServiceDate','Product/Service','Description','Qty','Rate','Amount','Class'];
+            const rows = [];
+            tickets.forEach(t => {
+                const hauler = (t.hauler || 'Unknown').trim();
+                const isJaguar = JAGUAR_NAMES.includes(hauler.toLowerCase());
+                const rate = isJaguar ? 0.00 : 125.00;
+                const qty = Math.round((parseFloat(t.net_tons) || 0) * 100) / 100;
+                if (qty <= 0) return;
+                const amount = Math.round(qty * rate * 100) / 100;
+                let svcDate = t.ticket_date || t.service_date || '';
+                if (svcDate.includes('-')) {
+                    const p = svcDate.split('-');
+                    svcDate = parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
+                }
+                rows.push([invoiceNo, hauler, invoiceDate, dueDateStr, svcDate, PRODUCT, t.ticket_number || '', qty.toFixed(2), rate.toFixed(2), amount.toFixed(2), 'Recycling']);
+            });
+            if (!rows.length) { this.showToast('No valid tickets to export'); return; }
+            const esc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g,'""') + '"' : s; };
+            const csv = [headers.map(esc).join(','), ...rows.map(r => r.map(esc).join(','))].join('\n');
+            const fname = 'DivertScan_QBO_' + (proj.name || 'Invoice').replace(/[^a-zA-Z0-9]/g,'_') + '_' + today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0') + '.csv';
+            this.downloadFile(csv, fname, 'text/csv');
+            this.addAuditEntry('EXPORT_QBO', proj.name + ' — ' + rows.length + ' line items exported for QBO import');
+        },
+        exportAuditCSV() { 
             const log = document.getElementById('auditLog').innerText;
             this.downloadFile(log, `DivertScan_Audit_${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
         },
