@@ -1,4 +1,4 @@
-        async approveBatch(bIdx) {
+async approveBatch(bIdx) {
             var batch = this._pendingBatches && this._pendingBatches[bIdx];
             if (!batch || !batch.items.length) return;
             var q0 = batch.items[0];
