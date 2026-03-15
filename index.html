@@ -4093,12 +4093,12 @@
                         'B) A debris/load photo (showing physical waste material, dumpster contents, debris pile)\n\n' +
                         'If A (scale ticket), extract these fields:\n' +
                         '- ticket_number: the RED PRINTED 5-digit number (usually top of ticket)\n' +
-                        '- day_of_month: ONLY the day number (1-31) from the date printed on the ticket. The date is printed in MM/DD/YY format. I need ONLY the DD part — the 2-digit day of month. Look carefully at the middle number between the two slashes. Return just the number.\n' +
+                        '- printed_date: Read the COMPLETE date string EXACTLY as printed on the ticket, character by character. It will look like MM/DD/YY with slashes. Return it exactly as printed (e.g. "03/06/26" or "3/6/26"). Do NOT interpret or convert it — just copy the exact characters you see.\n' +
                         '- gross_lbs: the GROSS weight in pounds (larger number)\n' +
                         '- tare_lbs: the TARE weight in pounds (smaller number, weight of empty truck)\n' +
                         '- net_lbs: NET weight (gross minus tare)\n\n' +
                         'Return ONLY valid JSON:\n' +
-                        '{"type":"scale_ticket","ticket_number":"XXXXX or null","day_of_month":0,"gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
+                        '{"type":"scale_ticket","ticket_number":"XXXXX or null","printed_date":"MM/DD/YY as printed or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
 
                     var data = await this.callOpenAI({
                         model: 'gpt-4o',
@@ -4150,13 +4150,21 @@
                     var useMonth = batchMonthEl ? parseInt(batchMonthEl.value) : new Date().getMonth();
                     var useYear = batchYearEl ? parseInt(batchYearEl.value) : new Date().getFullYear();
                     var monthStr = String(useMonth+1).padStart(2,'0');
-                    // Build date: selected year + selected month + AI-read day
+                    // Parse the raw printed date ourselves — AI returns it as "MM/DD/YY" or "M/D/YY"
                     var useDate = today;
                     var dayHint = '';
-                    if (ocr.day_of_month && ocr.day_of_month >= 1 && ocr.day_of_month <= 31) {
-                        var dayStr = String(ocr.day_of_month).padStart(2,'0');
-                        useDate = useYear + '-' + monthStr + '-' + dayStr;
-                        dayHint = '<span style="font-size:.55rem;color:var(--text-dim)">AI read day: ' + ocr.day_of_month + '</span>';
+                    if (ocr.printed_date) {
+                        var parts = ocr.printed_date.replace(/-/g,'/').split('/');
+                        if (parts.length >= 2) {
+                            var dayNum = parseInt(parts[1]); // DD is the second part of MM/DD/YY
+                            if (dayNum >= 1 && dayNum <= 31) {
+                                var dayStr = String(dayNum).padStart(2,'0');
+                                useDate = useYear + '-' + monthStr + '-' + dayStr;
+                                dayHint = '<span style="font-size:.55rem;color:var(--text-dim)">Printed: ' + ocr.printed_date + ' → day ' + dayNum + '</span>';
+                            } else {
+                                dayHint = '<span style="font-size:.55rem;color:var(--warning)">⚠️ Could not parse: ' + ocr.printed_date + '</span>';
+                            }
+                        }
                     }
                     html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                         '<div style="display:flex;gap:8px;margin-bottom:8px">' +
