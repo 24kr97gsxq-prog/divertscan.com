@@ -4396,86 +4396,240 @@
         },
 
         // ============================================================
-        // SAMSARA INTEGRATION
+        // SAMSARA INTEGRATION (Client-Side Direct API)
         // ============================================================
         async syncSamsara() {
             var statusEl = document.getElementById('samsaraStatus');
             var resultsEl = document.getElementById('samsaraResults');
+            var token = localStorage.getItem('ds_samsara_token');
+
+            if (!token) {
+                statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ No Samsara token saved</span>';
+                resultsEl.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim)">Tap ⚙️ to enter your Samsara API token first.</div>';
+                return;
+            }
+
             statusEl.textContent = '⏳ Connecting to Samsara...';
             resultsEl.innerHTML = '';
             this.showLoading('Syncing Samsara...');
 
+            var SAMSARA = 'https://api.samsara.com';
+            var synced = 0, skipped = 0, errors = 0;
+
             try {
-                var url = this.state.supabaseUrl + '/functions/v1/samsara-sync';
-                var res = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + this.state.supabaseKey,
-                        'Content-Type': 'application/json'
-                    }
+                // Step 1: Fetch document types to find scale ticket forms
+                statusEl.textContent = '⏳ Reading document types...';
+                var dtRes = await fetch(SAMSARA + '/v1/fleet/drivers/document_types', {
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
 
-                if (!res.ok) {
-                    var errText = await res.text();
-                    statusEl.innerHTML = '<span style="color:var(--danger)">❌ Sync failed (' + res.status + ')</span>';
-                    if (res.status === 404) {
-                        resultsEl.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim);padding:8px;background:var(--bg-input);border-radius:6px">' +
-                            'Edge Function not deployed yet. Follow the deployment guide:<br>' +
-                            '<b>1.</b> Install Supabase CLI<br>' +
-                            '<b>2.</b> Deploy the samsara-sync function<br>' +
-                            '<b>3.</b> Set API token as secret<br>' +
-                            '<a href="https://supabase.com/docs/guides/functions" target="_blank" style="color:var(--primary)">Supabase Functions Guide →</a></div>';
+                if (!dtRes.ok) {
+                    var errTxt = await dtRes.text();
+                    if (dtRes.status === 401 || dtRes.status === 403) {
+                        statusEl.innerHTML = '<span style="color:var(--danger)">❌ Invalid or expired token</span>';
+                        resultsEl.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim)">Check your Samsara API token in ⚙️ Settings. Make sure it has Read Documents scope enabled.</div>';
                     } else {
-                        resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--danger);word-break:break-all">' + this.esc(errText).substring(0, 200) + '</div>';
+                        statusEl.innerHTML = '<span style="color:var(--danger)">❌ Samsara API error (' + dtRes.status + ')</span>';
+                        resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--danger)">' + this.esc(errTxt).substring(0, 200) + '</div>';
                     }
                     this.hideLoading();
                     return;
                 }
 
-                var data = await res.json();
-                this.hideLoading();
+                var dtData = await dtRes.json();
+                var docTypes = dtData.documentTypes || [];
 
-                if (data.error) {
-                    statusEl.innerHTML = '<span style="color:var(--danger)">❌ ' + this.esc(data.error) + '</span>';
+                // Find scale ticket document types
+                var scaleKW = ['scale', 'ticket', 'weight', 'load', 'receipt', 'dump', 'disposal', 'dalmex'];
+                var scaleTypes = docTypes.filter(function(dt) {
+                    var name = (dt.name || '').toLowerCase();
+                    return scaleKW.some(function(kw) { return name.indexOf(kw) >= 0; });
+                });
+
+                if (scaleTypes.length === 0) {
+                    this.hideLoading();
+                    statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ No scale ticket forms found</span>';
+                    var typeList = docTypes.map(function(dt) { return dt.name; }).join(', ');
+                    resultsEl.innerHTML = '<div style="font-size:.7rem;color:var(--text-dim);padding:8px;background:var(--bg-input);border-radius:6px">' +
+                        '<b>Available document types in Samsara:</b><br>' + this.esc(typeList) +
+                        '<br><br>Ask Jaguar what form name they use for scale tickets, then tell Robert/Claude to add it to the keyword list.</div>';
                     return;
                 }
 
+                // Step 2: Fetch documents from last 7 days
+                statusEl.textContent = '⏳ Fetching documents...';
+                var startTime = new Date(Date.now() - 7 * 86400000).toISOString();
+                var endTime = new Date().toISOString();
+
+                var docsRes = await fetch(SAMSARA + '/fleet/documents?startTime=' + encodeURIComponent(startTime) + '&endTime=' + encodeURIComponent(endTime), {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                if (!docsRes.ok) {
+                    this.hideLoading();
+                    statusEl.innerHTML = '<span style="color:var(--danger)">❌ Failed to fetch documents</span>';
+                    return;
+                }
+
+                var docsData = await docsRes.json();
+                var allDocs = docsData.data || [];
+
+                // Filter to scale ticket types
+                var scaleUuids = scaleTypes.map(function(dt) { return dt.uuid; });
+                var scaleDocs = allDocs.filter(function(doc) {
+                    var typeId = (doc.documentType && doc.documentType.uuid) || doc.documentTypeUuid || '';
+                    return scaleUuids.indexOf(typeId) >= 0;
+                });
+
+                // Step 3: Check existing synced docs to prevent dupes
+                statusEl.textContent = '⏳ Checking for duplicates...';
+                var existingIds = new Set();
+                var existQ = await this.supabase('photo_queue?samsara_doc_id=not.is.null&select=samsara_doc_id');
+                if (existQ) existQ.forEach(function(q) { existingIds.add(q.samsara_doc_id); });
+
+                // Step 4: Process each document
+                statusEl.textContent = '⏳ Processing ' + scaleDocs.length + ' documents...';
+                var projectId = this.state.currentProject ? this.state.currentProject.id : null;
+
+                for (var di = 0; di < scaleDocs.length; di++) {
+                    var doc = scaleDocs[di];
+                    var docId = doc.id || doc.uuid || '';
+
+                    if (existingIds.has(docId)) { skipped++; continue; }
+
+                    try {
+                        var fields = doc.fields || [];
+                        var tktNum = null, gross = null, tare = null, net = null;
+                        var photoUrl = null, driverName = null, tktDate = null;
+                        var allPhotos = [];
+
+                        // Parse fields
+                        for (var fi = 0; fi < fields.length; fi++) {
+                            var f = fields[fi];
+                            var lbl = (f.label || '').toLowerCase();
+                            var vt = f.valueType || '';
+
+                            // Ticket number
+                            if (lbl.indexOf('ticket') >= 0 && (lbl.indexOf('number') >= 0 || lbl.indexOf('#') >= 0 || lbl.indexOf('no') >= 0)) {
+                                tktNum = f.stringValue || (f.numberValue ? String(f.numberValue) : null);
+                            }
+                            // Weights
+                            if (lbl.indexOf('gross') >= 0) gross = parseFloat(f.numberValue || f.stringValue || '0') || null;
+                            if (lbl.indexOf('tare') >= 0) tare = parseFloat(f.numberValue || f.stringValue || '0') || null;
+                            if (lbl.indexOf('net') >= 0 && lbl.indexOf('weight') >= 0) net = parseFloat(f.numberValue || f.stringValue || '0') || null;
+
+                            // Photos
+                            if (vt === 'ValueType_Photo' || lbl.indexOf('photo') >= 0 || lbl.indexOf('image') >= 0 || lbl.indexOf('picture') >= 0) {
+                                if (f.photoValue) {
+                                    var pu = typeof f.photoValue === 'string' ? f.photoValue : (f.photoValue.url || '');
+                                    if (pu && pu.indexOf('http') === 0) allPhotos.push(pu);
+                                }
+                                if (Array.isArray(f.photoValue)) {
+                                    f.photoValue.forEach(function(p) {
+                                        var u = typeof p === 'string' ? p : (p.url || '');
+                                        if (u && u.indexOf('http') === 0) allPhotos.push(u);
+                                    });
+                                }
+                            }
+
+                            // Date
+                            if (lbl.indexOf('date') >= 0 && lbl.indexOf('create') < 0) {
+                                tktDate = f.stringValue || f.dateValue || null;
+                            }
+                        }
+
+                        // Driver
+                        if (doc.driver) driverName = doc.driver.name || null;
+
+                        // Fallback date
+                        if (!tktDate) tktDate = (doc.createdAtTime || doc.createdAt || new Date().toISOString()).split('T')[0];
+
+                        photoUrl = allPhotos.length > 0 ? allPhotos[0] : null;
+
+                        // Skip if nothing useful
+                        if (!photoUrl && !tktNum) { skipped++; continue; }
+
+                        // Step 5: Insert into photo_queue
+                        var queueItem = {
+                            submitted_by: driverName || 'Samsara',
+                            photo_type: 'scale_ticket',
+                            photo_url: photoUrl,
+                            ticket_number: tktNum,
+                            notes: 'Samsara: ' + (driverName || '?') + ' • ' + (tktDate || '') +
+                                   (gross ? ' • G:' + gross : '') + (tare ? ' • T:' + tare : '') + (net ? ' • N:' + net : ''),
+                            status: 'pending',
+                            samsara_doc_id: docId,
+                            samsara_data: JSON.stringify({
+                                ticket_number: tktNum, gross_lbs: gross, tare_lbs: tare, net_lbs: net,
+                                ticket_date: tktDate, driver: driverName, photos: allPhotos,
+                                document_type: (doc.documentType && doc.documentType.name) || 'Unknown'
+                            })
+                        };
+
+                        if (projectId) queueItem.project_id = projectId;
+
+                        var insertRes = await this.supabase('photo_queue', 'POST', queueItem);
+                        if (insertRes) { synced++; } else { errors++; }
+
+                    } catch(docErr) {
+                        console.error('Samsara doc error:', docId, docErr);
+                        errors++;
+                    }
+                }
+
+                // Step 6: Get fleet stats
+                var totalDrivers = 0, totalVehicles = 0;
+                try {
+                    var drRes = await fetch(SAMSARA + '/fleet/drivers', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (drRes.ok) { var drData = await drRes.json(); totalDrivers = (drData.data || []).length; }
+                } catch(e) {}
+                try {
+                    var vhRes = await fetch(SAMSARA + '/fleet/vehicles', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (vhRes.ok) { var vhData = await vhRes.json(); totalVehicles = (vhData.data || []).length; }
+                } catch(e) {}
+
+                this.hideLoading();
+
+                // Display results
                 statusEl.innerHTML = '<span style="color:var(--success)">✅ Last sync: ' + new Date().toLocaleTimeString() + '</span>';
 
                 var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px">';
-                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.synced || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Synced</div></div>';
-                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.skipped || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Skipped</div></div>';
-                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.totalDrivers || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Drivers</div></div>';
-                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + (data.totalVehicles || 0) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Vehicles</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + synced + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Synced</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + skipped + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Skipped</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + totalDrivers + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Drivers</div></div>';
+                html += '<div style="background:var(--bg-input);border-radius:6px;padding:6px;text-align:center"><div style="font-family:var(--mono);font-weight:700;font-size:1rem">' + totalVehicles + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Vehicles</div></div>';
                 html += '</div>';
 
-                if (data.synced > 0) {
-                    html += '<div style="font-size:.65rem;color:var(--success);font-weight:600">' + data.synced + ' new scale ticket' + (data.synced > 1 ? 's' : '') + ' added to Photo Queue</div>';
-                    this.showToast('🔗 ' + data.synced + ' ticket' + (data.synced > 1 ? 's' : '') + ' synced from Samsara');
+                if (synced > 0) {
+                    html += '<div style="font-size:.65rem;color:var(--success);font-weight:600">' + synced + ' new scale ticket' + (synced > 1 ? 's' : '') + ' added to Photo Queue</div>';
+                    this.showToast('🔗 ' + synced + ' ticket' + (synced > 1 ? 's' : '') + ' synced from Samsara');
                     this.loadPhotoQueue();
-                } else if (data.totalDocuments === 0) {
-                    html += '<div style="font-size:.65rem;color:var(--text-dim)">No documents found. Jaguar may not be using Samsara forms for scale tickets yet.</div>';
+                } else if (scaleDocs.length === 0) {
+                    html += '<div style="font-size:.65rem;color:var(--text-dim)">No documents found in last 7 days. Jaguar may not be using Samsara forms yet.</div>';
                 } else {
-                    html += '<div style="font-size:.65rem;color:var(--text-dim)">All documents already synced — nothing new.</div>';
+                    html += '<div style="font-size:.65rem;color:var(--text-dim)">All ' + scaleDocs.length + ' documents already synced — nothing new.</div>';
                 }
 
-                if (data.errors > 0) {
-                    html += '<div style="font-size:.65rem;color:var(--danger);margin-top:4px">' + data.errors + ' error' + (data.errors > 1 ? 's' : '') + ' — check console for details</div>';
+                html += '<div style="font-size:.55rem;color:var(--text-dim);margin-top:6px">Doc types matched: ' + scaleTypes.map(function(dt) { return dt.name; }).join(', ') + ' • Total docs scanned: ' + allDocs.length + '</div>';
+
+                if (errors > 0) {
+                    html += '<div style="font-size:.65rem;color:var(--danger);margin-top:4px">' + errors + ' error' + (errors > 1 ? 's' : '') + ' — check console</div>';
                 }
 
                 resultsEl.innerHTML = html;
-                this.addAuditEntry('SAMSARA_SYNC', 'Synced: ' + data.synced + ' new, ' + data.skipped + ' skipped, ' + data.totalDrivers + ' drivers, ' + data.totalVehicles + ' vehicles');
+                this.addAuditEntry('SAMSARA_SYNC', 'Synced: ' + synced + ' new, ' + skipped + ' skipped, ' + totalDrivers + ' drivers, ' + totalVehicles + ' vehicles, ' + scaleTypes.length + ' doc types');
 
             } catch(e) {
                 this.hideLoading();
                 statusEl.innerHTML = '<span style="color:var(--danger)">❌ Connection failed</span>';
-                resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--text-dim)">Could not reach Edge Function. Deploy samsara-sync first.</div>';
+                resultsEl.innerHTML = '<div style="font-size:.65rem;color:var(--danger)">' + (e.message || 'Unknown error') + '</div>';
                 console.error('Samsara sync error:', e);
             }
         },
 
         showSamsaraSettings() {
             var token = localStorage.getItem('ds_samsara_token') || '';
+            var masked = token ? token.substring(0, 12) + '••••••••' : '';
             var m = document.createElement('div');
             m.className = 'modal-overlay show';
             m.id = 'samsaraSettingsModal';
@@ -4483,14 +4637,16 @@
             m.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
                 '<div class="modal-title">Samsara Settings</div>' +
                 '<div class="form-group"><label class="form-label">Samsara API Token</label>' +
-                '<input type="text" class="form-input" id="samsaraTokenInput" value="' + (token ? '••••••••' : '') + '" placeholder="samsara_api_..."></div>' +
-                '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:12px">Token is stored as a Supabase secret on the server. This field is for reference only — the Edge Function uses the secret, not this value.</div>' +
+                '<input type="text" class="form-input" id="samsaraTokenInput" value="' + masked + '" placeholder="samsara_api_..." style="font-family:var(--mono);font-size:.75rem"></div>' +
+                '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:12px">Token is stored in your browser only. Get it from Samsara Dashboard → Settings → API Tokens.<br>Required scopes: Read Documents, Read Drivers, Read Vehicles.</div>' +
+                '<div class="form-group"><label class="form-label">Sync Range</label>' +
+                '<div style="font-size:.75rem;color:var(--text-muted)">Currently syncs last 7 days of documents</div></div>' +
                 '<div class="form-group"><label class="form-label">Status</label>' +
-                '<div style="font-size:.75rem">' +
-                (token ? '✅ Token saved locally' : '⚠️ No token saved locally') +
-                '</div></div>' +
-                '<button class="btn btn-success mt-8" onclick="var v=document.getElementById(\'samsaraTokenInput\').value.trim();if(v&&v.indexOf(\'••\')<0){localStorage.setItem(\'ds_samsara_token\',v);DS.showToast(\'Token saved\');}document.getElementById(\'samsaraSettingsModal\').remove()">Save</button>' +
-                '<button class="btn btn-outline mt-8" onclick="document.getElementById(\'samsaraSettingsModal\').remove()">Close</button>' +
+                '<div style="font-size:.75rem">' + (token ? '✅ Token saved' : '⚠️ No token — enter above') + '</div></div>' +
+                '<div class="btn-row mt-8" style="gap:6px">' +
+                '<button class="btn btn-success" style="flex:1" onclick="var v=document.getElementById(\'samsaraTokenInput\').value.trim();if(v && v.indexOf(\'••••\')<0){localStorage.setItem(\'ds_samsara_token\',v);DS.showToast(\'✅ Token saved\');}else if(v.indexOf(\'••••\')>=0){DS.showToast(\'Token unchanged\');}document.getElementById(\'samsaraSettingsModal\').remove()">Save</button>' +
+                '<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'samsaraSettingsModal\').remove()">Cancel</button></div>' +
+                '<button class="btn btn-sm mt-8" style="width:100%;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="localStorage.removeItem(\'ds_samsara_token\');DS.showToast(\'Token removed\');document.getElementById(\'samsaraSettingsModal\').remove()">🗑️ Remove Token</button>' +
                 '</div>';
             document.body.appendChild(m);
         },
