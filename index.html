@@ -4074,9 +4074,15 @@
                     var classPrompt = 'Look at this image. Is it:\n' +
                         'A) A scale ticket / weight ticket / receipt (printed paper with numbers, weights, dates)\n' +
                         'B) A debris/load photo (showing physical waste material, dumpster contents, debris pile)\n\n' +
-                        'If A (scale ticket), also extract: ticket_number (5-digit red printed number), date (YYYY-MM-DD), gross_lbs, tare_lbs, net_lbs.\n' +
+                        'If A (scale ticket), extract these fields carefully:\n' +
+                        '- ticket_number: the RED PRINTED 5-digit number (usually top of ticket)\n' +
+                        '- date: The date printed on the ticket. It is printed in MM/DD/YY format. Convert it to YYYY-MM-DD. The current year is ' + new Date().getFullYear() + '. If the year shows as 2-digit (e.g. 26), it means ' + new Date().getFullYear() + '. READ THE EXACT DAY NUMBER PRINTED — do NOT guess or default.\n' +
+                        '- gross_lbs: the GROSS weight in pounds (larger number)\n' +
+                        '- tare_lbs: the TARE weight in pounds (smaller number, weight of empty truck)\n' +
+                        '- net_lbs: NET weight (gross minus tare)\n\n' +
+                        'CRITICAL: Read the date EXACTLY as printed on the ticket. Pay close attention to the DAY of the month — it is clearly printed. Do not confuse day and month.\n\n' +
                         'Return ONLY valid JSON:\n' +
-                        '{"type":"scale_ticket" or "debris","ticket_number":"XXXXX or null","date":"YYYY-MM-DD or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
+                        '{"type":"scale_ticket","ticket_number":"XXXXX or null","date":"YYYY-MM-DD or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
 
                     var data = await this.callOpenAI({
                         model: 'gpt-4o',
@@ -4122,34 +4128,21 @@
                 scaleTickets.forEach(function(item, i) {
                     var ocr = item.ocr;
                     var today = new Date().toISOString().split('T')[0];
-                    var curYear = new Date().getFullYear();
-                    // Date sanity check: if OCR year is wrong, fix it
-                    var ocrDate = ocr.date || today;
-                    if (ocrDate && ocrDate !== today) {
-                        var dp = ocrDate.split('-');
-                        var ocrYear = parseInt(dp[0]);
-                        // If year is more than 1 year off from current, force current year
-                        if (isNaN(ocrYear) || Math.abs(ocrYear - curYear) > 1) {
-                            ocrDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
-                        }
-                        // If date is in the future, use today
-                        if (new Date(ocrDate).getTime() > Date.now() + 86400000) {
-                            ocrDate = today;
-                        }
-                        // If date is more than 90 days old, flag it but keep month/day with current year
-                        if (new Date(ocrDate).getTime() < Date.now() - 90*86400000) {
-                            ocrDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
-                            // Re-check after year fix
-                            if (new Date(ocrDate).getTime() > Date.now() + 86400000) ocrDate = today;
-                        }
-                    }
+                    // Use OCR date if available, default to today
+                    var useDate = ocr.date || today;
+                    // Block future dates
+                    if (new Date(useDate).getTime() > Date.now() + 86400000) useDate = today;
+                    // Block dates more than 1 year old
+                    if (new Date(useDate).getTime() < Date.now() - 365*86400000) useDate = today;
+                    var ocrDateHint = ocr.date && ocr.date !== useDate ? '<span style="font-size:.55rem;color:var(--warning)">⚠️ OCR read: ' + ocr.date + ' (corrected)</span>' : (ocr.date ? '<span style="font-size:.55rem;color:var(--text-dim)">OCR read: ' + ocr.date + '</span>' : '');
                     html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                         '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                         '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
                         '<div style="flex:1">' +
                         '<div style="font-size:.65rem;color:var(--success);font-weight:700;margin-bottom:4px">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
                         '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
-                        '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+ocrDate+'" style="margin-bottom:4px;font-size:.8rem">' +
+                        '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
+                        ocrDateHint +
                         '<div style="display:flex;gap:4px">' +
                         '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
                         '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
@@ -4196,13 +4189,7 @@
                 var netLbs = gross - tare;
                 var netTons = +(netLbs / 2000).toFixed(4);
                 var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || new Date().toISOString().split('T')[0];
-                // Date sanity check at save time
-                var curYear = new Date().getFullYear();
-                var dp = tktDate.split('-');
-                var tktYear = parseInt(dp[0]);
-                if (isNaN(tktYear) || Math.abs(tktYear - curYear) > 1) {
-                    tktDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
-                }
+                // Block future dates at save time
                 if (new Date(tktDate).getTime() > Date.now() + 86400000) {
                     tktDate = new Date().toISOString().split('T')[0];
                 }
