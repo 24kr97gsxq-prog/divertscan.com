@@ -1364,14 +1364,17 @@
                     var proj = this.state.projects.find(p => p.id === t.project_id);
                     projName = proj ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(proj.name) + '</span>' : '';
                 }
+                var uploadInfo = t.created_at ? '<span style="color:var(--info);" title="Uploaded: ' + new Date(t.created_at).toLocaleString() + '">📤 ' + this.timeAgo(t.created_at) + '</span>' : '';
+                var scanBadge = t.scan_type === 'batch_queue' ? '<span style="background:var(--info);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">BATCH</span> ' : '';
                 return `
                 <div class="ticket-item" onclick="DS.showTicketDetail('${t.id}')">
                     <div class="ticket-icon" style="background:${isComplete ? 'var(--success-glow)' : 'var(--warning-glow)'};">
                         ${isComplete ? '✅' : '⚠️'}
                     </div>
                     <div class="ticket-info">
-                        <div class="ticket-title">${this.esc(t.ticket_number)}</div>
+                        <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}</div>
                         <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div${projName}</div>
+                        <div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">${uploadInfo}</div>
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
                 </div>`;
@@ -1400,11 +1403,14 @@
                 var hasMaterials = Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; });
                 var hasPhoto = t.scale_ticket_image;
                 var isComplete = hasWeight && hasMaterials && hasPhoto;
+                var uploadInfo = t.created_at ? '<span style="color:var(--info);">📤 ' + DS.timeAgo(t.created_at) + '</span>' : '';
+                var scanBadge = t.scan_type === 'batch_queue' ? '<span style="background:var(--info);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">BATCH</span> ' : '';
                 return '<div class="ticket-item" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                     '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                         (isComplete ? '✅' : '⚠️') + '</div>' +
-                    '<div class="ticket-info"><div class="ticket-title">' + DS.esc(t.ticket_number) + '</div>' +
-                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div></div>' +
+                    '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + '</div>' +
+                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                    '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                     '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
             }).join('');
         },
@@ -1472,8 +1478,12 @@
             '</div></div>';
 
             document.getElementById('ticketDetailContent').innerHTML = `
-                <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
                     ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''} • ${t.scan_type || 'manual'}
+                </div>
+                <div style="font-size:0.65rem; color:var(--text-dim); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap;">
+                    ${t.created_at ? '<span>📤 Uploaded: ' + new Date(t.created_at).toLocaleString() + ' (' + this.timeAgo(t.created_at) + ')</span>' : ''}
+                    ${t.updated_at && t.updated_at !== t.created_at ? '<span>✏️ Updated: ' + new Date(t.updated_at).toLocaleString() + '</span>' : ''}
                 </div>
                 <div class="stats-grid mb-12">
                     <div class="stat-card"><div class="stat-value">${this.fmt(t.gross_lbs)}</div><div class="stat-label">Gross (lbs)</div></div>
