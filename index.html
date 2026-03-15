@@ -4106,19 +4106,40 @@
             if (rowsEl && scaleTickets.length > 0) {
                 var html = '<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);margin-bottom:8px">'+
                     '📄 ' + scaleTickets.length + ' Scale Ticket' + (scaleTickets.length>1?'s':'') +
-                    (debrisPhotos.length ? ' + 📸 ' + debrisPhotos.length + ' Debris (attaches to last ticket)' : '') +
+                    (debrisPhotos.length ? ' + 📸 ' + debrisPhotos.length + ' Debris (distributed across tickets)' : '') +
                     '</div>';
 
                 scaleTickets.forEach(function(item, i) {
                     var ocr = item.ocr;
                     var today = new Date().toISOString().split('T')[0];
+                    var curYear = new Date().getFullYear();
+                    // Date sanity check: if OCR year is wrong, fix it
+                    var ocrDate = ocr.date || today;
+                    if (ocrDate && ocrDate !== today) {
+                        var dp = ocrDate.split('-');
+                        var ocrYear = parseInt(dp[0]);
+                        // If year is more than 1 year off from current, force current year
+                        if (isNaN(ocrYear) || Math.abs(ocrYear - curYear) > 1) {
+                            ocrDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
+                        }
+                        // If date is in the future, use today
+                        if (new Date(ocrDate).getTime() > Date.now() + 86400000) {
+                            ocrDate = today;
+                        }
+                        // If date is more than 90 days old, flag it but keep month/day with current year
+                        if (new Date(ocrDate).getTime() < Date.now() - 90*86400000) {
+                            ocrDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
+                            // Re-check after year fix
+                            if (new Date(ocrDate).getTime() > Date.now() + 86400000) ocrDate = today;
+                        }
+                    }
                     html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                         '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                         '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
                         '<div style="flex:1">' +
                         '<div style="font-size:.65rem;color:var(--success);font-weight:700;margin-bottom:4px">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
                         '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
-                        '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+(ocr.date||today)+'" style="margin-bottom:4px;font-size:.8rem">' +
+                        '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+ocrDate+'" style="margin-bottom:4px;font-size:.8rem">' +
                         '<div style="display:flex;gap:4px">' +
                         '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
                         '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
@@ -4148,8 +4169,8 @@
 
             var q0 = batch.items[0];
             var created = 0, updated = 0, failed = 0;
-            var lastTicketId = null;
             var allDebrisUrls = debrisPhotos.map(function(d){ return d.q.photo_url; });
+            var createdTicketIds = []; // Track all ticket IDs for debris distribution
 
             this.showLoading('Saving ' + scaleTickets.length + ' ticket' + (scaleTickets.length>1?'s':'') + '...');
 
@@ -4165,9 +4186,16 @@
                 var netLbs = gross - tare;
                 var netTons = +(netLbs / 2000).toFixed(4);
                 var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || new Date().toISOString().split('T')[0];
-
-                // Attach debris only to the last ticket
-                var isLast = (i === scaleTickets.length - 1);
+                // Date sanity check at save time
+                var curYear = new Date().getFullYear();
+                var dp = tktDate.split('-');
+                var tktYear = parseInt(dp[0]);
+                if (isNaN(tktYear) || Math.abs(tktYear - curYear) > 1) {
+                    tktDate = curYear + '-' + (dp[1]||'01') + '-' + (dp[2]||'01');
+                }
+                if (new Date(tktDate).getTime() > Date.now() + 86400000) {
+                    tktDate = new Date().toISOString().split('T')[0];
+                }
 
                 var ticketData = {
                     ticket_date: tktDate,
@@ -4178,16 +4206,14 @@
                     scale_ticket_image: item.q.photo_url,
                     hauler: q0.submitted_by || null,
                     scan_type: 'batch_queue',
-                    debris_images: isLast && allDebrisUrls.length ? allDebrisUrls : []
+                    debris_images: []
                 };
 
                 var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum; });
                 var ticketId = null;
 
                 if (existing) {
-                    // Merge debris
                     var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
-                    if (isLast) allDebrisUrls.forEach(function(u){ if(existDebris.indexOf(u)<0) existDebris.push(u); });
                     ticketData.debris_images = existDebris;
                     await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
                     ticketId = existing.id;
@@ -4203,7 +4229,7 @@
                     } else { failed++; continue; }
                 }
 
-                lastTicketId = ticketId;
+                createdTicketIds.push({ id: ticketId, num: tktNum });
 
                 // Mark queue item approved
                 await this.supabase('photo_queue?id=eq.' + item.q.id, 'PATCH', {
@@ -4214,12 +4240,35 @@
                 });
             }
 
-            // Mark debris items approved, attach to last ticket
+            // Distribute debris photos round-robin across all created tickets
+            if (allDebrisUrls.length > 0 && createdTicketIds.length > 0) {
+                // Build a map: ticketId -> array of debris URLs
+                var debrisMap = {};
+                createdTicketIds.forEach(function(t){ debrisMap[t.id] = []; });
+                allDebrisUrls.forEach(function(url, idx) {
+                    var target = createdTicketIds[idx % createdTicketIds.length];
+                    debrisMap[target.id].push(url);
+                });
+                // Update each ticket with its assigned debris
+                for (var ti = 0; ti < createdTicketIds.length; ti++) {
+                    var tInfo = createdTicketIds[ti];
+                    var newDebris = debrisMap[tInfo.id];
+                    if (!newDebris || !newDebris.length) continue;
+                    // Merge with any existing debris on that ticket
+                    var existTk = projectTickets.find(function(t){ return t.id === tInfo.id; });
+                    var merged = existTk && Array.isArray(existTk.debris_images) ? existTk.debris_images.slice() : [];
+                    newDebris.forEach(function(u){ if(merged.indexOf(u)<0) merged.push(u); });
+                    await this.supabase('tickets?id=eq.' + tInfo.id, 'PATCH', { debris_images: merged });
+                }
+            }
+
+            // Mark debris queue items approved
             for (var di = 0; di < debrisPhotos.length; di++) {
+                var debrisTarget = createdTicketIds.length > 0 ? createdTicketIds[di % createdTicketIds.length] : null;
                 await this.supabase('photo_queue?id=eq.' + debrisPhotos[di].q.id, 'PATCH', {
                     status: 'approved',
                     reviewed_at: new Date().toISOString(),
-                    assigned_ticket_id: lastTicketId
+                    assigned_ticket_id: debrisTarget ? debrisTarget.id : null
                 });
             }
 
@@ -4246,7 +4295,8 @@
             if (created > 0) parts.push(created + ' new ticket' + (created>1?'s':'') + ' created');
             if (updated > 0) parts.push(updated + ' updated');
             if (failed > 0) parts.push(failed + ' skipped (no ticket #)');
-            if (debrisPhotos.length > 0) parts.push(debrisPhotos.length + ' debris attached');
+            if (debrisPhotos.length > 0 && createdTicketIds.length > 0) parts.push(debrisPhotos.length + ' debris distributed across ' + createdTicketIds.length + ' ticket' + (createdTicketIds.length>1?'s':''));
+            else if (debrisPhotos.length > 0) parts.push(debrisPhotos.length + ' debris attached');
 
             this.showToast('✅ ' + parts.join(' • '));
             this.addAuditEntry('BATCH_PROCESS',
