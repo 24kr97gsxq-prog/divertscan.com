@@ -3986,364 +3986,273 @@
         async approveBatch(bIdx) {
             var batch = this._pendingBatches && this._pendingBatches[bIdx];
             if (!batch || !batch.items.length) return;
+            var q0 = batch.items[0];
+            var projMap = {};
+            this.state.projects.forEach(function(p){projMap[p.id]=p.name;});
 
-            var tktNum = document.getElementById('batchTkt_' + bIdx).value.trim();
+            // Separate by type (all come in as scale_ticket now, but legacy batches may have debris)
             var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
             var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
-            var q0 = batch.items[0];
 
-            // Open review modal
+            // Build review modal
             var m = document.createElement('div');
             m.className = 'modal-overlay show';
             m.id = 'batchReviewModal';
             m.onclick = function(e){if(e.target===m)m.remove();};
 
-            var projMap = {};
-            this.state.projects.forEach(function(p){projMap[p.id]=p.name;});
-
             var html = '<div class="modal" style="max-height:92vh"><div class="modal-handle"></div>' +
-                '<div class="modal-title">Review & Process Batch</div>' +
-                '<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px">' + (projMap[q0.project_id]||'') + ' • ' + (q0.submitted_by||'') + ' • ' + batch.items.length + ' photos</div>';
+                '<div class="modal-title">Process ' + batch.items.length + ' Photo' + (batch.items.length>1?'s':'') + '</div>' +
+                '<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px">' +
+                (projMap[q0.project_id]||'Unknown Project') + ' • ' + (q0.submitted_by||'Unknown') + '</div>';
 
-            // Photos section - collapsible
-            html += '<div style="background:var(--bg-input);border-radius:8px;padding:10px;margin-bottom:12px">' +
-                '<div onclick="var p=document.getElementById(\'reviewPhotos\');p.style.display=p.style.display===\'none\'?\'block\':\'none\'" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:.7rem;font-weight:700">' +
-                '<span>📷 Photos (' + batch.items.length + ')</span><span id="photoToggle" style="color:var(--primary)">▼ Show</span></div>' +
-                '<div id="reviewPhotos" style="display:none;margin-top:8px">';
-
-            if (scale.length) {
-                html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📄 Scale Ticket</div>' +
-                    '<img src="' + scale[0].photo_url + '" style="width:100%;border-radius:8px;border:1px solid var(--border);margin-bottom:8px" onclick="window.open(\'' + scale[0].photo_url + '\')">';
-            }
-            if (debris.length) {
-                html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📸 Debris (' + debris.length + ')</div>' +
-                    '<div style="display:grid;grid-template-columns:repeat(' + Math.min(debris.length, 2) + ',1fr);gap:6px;margin-bottom:8px">';
-                debris.forEach(function(q) {
-                    html += '<img src="' + q.photo_url + '" onclick="window.open(\'' + q.photo_url + '\')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer">';
-                });
-                html += '</div>';
-            }
-            html += '</div></div>';
-
-            // OCR + AI results area
-            html += '<div class="divider"></div>' +
-                '<div class="form-group"><label class="form-label">Ticket Number *</label>' +
-                '<input type="text" class="form-input" id="reviewTktNum" value="' + DS.esc(tktNum||'') + '" placeholder="Enter or verify ticket number" inputmode="numeric"></div>' +
-                '<div class="form-group"><label class="form-label">Ticket Date</label>' +
-                '<input type="date" class="form-input" id="reviewTktDate" value="' + new Date().toISOString().split('T')[0] + '"></div>' +
-                '<div class="form-group"><label class="form-label">Gross (lbs)</label>' +
-                '<input type="number" class="form-input" id="reviewGross" placeholder="From scale ticket"></div>' +
-                '<div class="form-group"><label class="form-label">Tare (lbs)</label>' +
-                '<input type="number" class="form-input" id="reviewTare" placeholder="From scale ticket"></div>' +
-                '<div id="reviewNetDisplay" style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px"></div>' +
-                '<div class="divider"></div>' +
-                '<div class="card-title">Material Percentages</div>' +
-                '<div id="reviewMaterials">';
-
-            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
-            var matNames = {wood:'Wood',gypsum:'Gypsum',plastic:'Plastic',occ:'OCC',metal:'Metal',concrete:'Concrete',block:'Block'};
-            mats.forEach(function(k) {
-                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-                    '<div style="width:70px;font-size:.7rem;font-weight:600;color:var(--text-muted)">' + matNames[k] + '</div>' +
-                    '<input type="range" id="reviewMat_' + k + '" min="0" max="100" value="0" style="flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none" oninput="DS.updateReviewTotal()">' +
-                    '<input type="number" id="reviewMatN_' + k + '" min="0" max="100" value="0" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:.75rem;text-align:right" oninput="document.getElementById(\'reviewMat_'+k+'\').value=this.value;DS.updateReviewTotal()">' +
-                    '<span style="font-size:.7rem;width:12px">%</span></div>';
+            // Show all photos in a grid with classification status
+            html += '<div id="photoClassGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">';
+            batch.items.forEach(function(q, idx) {
+                html += '<div id="photoCell_'+idx+'" style="position:relative;border:2px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open(\''+q.photo_url+'\')">'+
+                    '<img src="'+q.photo_url+'" style="width:100%;aspect-ratio:1;object-fit:cover">'+
+                    '<div id="photoLabel_'+idx+'" style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:.55rem;font-weight:700;padding:2px;background:rgba(0,0,0,.6);color:#fff">'+
+                    (q.photo_type==='scale_ticket'?'📄 SCALE':'📸 DEBRIS')+'</div></div>';
             });
-            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-                '<div style="width:70px;font-size:.7rem;font-weight:600;color:var(--danger)">Landfill</div>' +
-                '<div id="reviewLandfill" style="flex:1;font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--danger)">100%</div></div>' +
-                '<div id="reviewDivTotal" style="font-size:.8rem;font-weight:700;margin:8px 0"></div>' +
-                '</div>' +
-                '<div id="reviewAINotes" style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px"></div>';
+            html += '</div>';
 
-            // Action buttons
-            html += '<div class="btn-row" style="gap:6px;margin-top:12px">';
-            if (this.state.apiKey && (scale.length || debris.length)) {
-                html += '<button class="btn btn-info" style="flex:1" onclick="DS.runBatchAI(' + bIdx + ')">🤖 Re-run AI / OCR</button>';
+            // AI classify button
+            if (this.state.apiKey) {
+                html += '<button class="btn btn-info mb-12" style="width:100%" id="classifyBtn" onclick="DS._classifyAndProcess('+bIdx+')">'+
+                    '🤖 AI Read & Process All ' + batch.items.length + ' Photos</button>';
             }
-            html += '<button class="btn btn-success" style="flex:1" onclick="DS.confirmBatch(' + bIdx + ')">✅ Confirm & Process</button></div>' +
-                '<button class="btn btn-outline mt-8" onclick="document.getElementById(\'batchReviewModal\').remove()">Cancel</button>' +
+
+            // Manual ticket rows — one per scale ticket photo
+            html += '<div id="ticketRows"></div>';
+
+            html += '<button id="confirmAllBtn" class="btn btn-success mb-8 hidden" style="width:100%" onclick="DS._confirmAllTickets('+bIdx+')">✅ Create All Tickets</button>'+
+                '<button class="btn btn-outline" style="width:100%" onclick="document.getElementById(\'batchReviewModal\').remove()">Cancel</button>'+
                 '</div>';
 
             m.innerHTML = html;
             document.body.appendChild(m);
 
-            // Net lbs auto-calc
-            document.getElementById('reviewGross').addEventListener('input', function() {
-                var g = parseInt(document.getElementById('reviewGross').value) || 0;
-                var t = parseInt(document.getElementById('reviewTare').value) || 0;
-                document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t) + ' lbs = ' + ((g-t)/2000).toFixed(2) + ' tons';
-            });
-            document.getElementById('reviewTare').addEventListener('input', function() {
-                var g = parseInt(document.getElementById('reviewGross').value) || 0;
-                var t = parseInt(document.getElementById('reviewTare').value) || 0;
-                document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t) + ' lbs = ' + ((g-t)/2000).toFixed(2) + ' tons';
-            });
+            this._activeBatch = batch;
+            this._activeBatchIdx = bIdx;
+            this._ticketData = [];
 
-            this._reviewBatchIdx = bIdx;
-
-            // Auto-run AI/OCR immediately if API key is available
-            if (this.state.apiKey && (scale.length || debris.length)) {
-                // Show photos first so admin can see them
-                var photosDiv = document.getElementById('reviewPhotos');
-                if (photosDiv) { photosDiv.style.display = 'block'; document.getElementById('photoToggle').textContent = '▲ Hide'; }
-                setTimeout(function() { DS.runBatchAI(bIdx); }, 300);
-            } else {
-                // No API key - show photos permanently
-                var photosDiv2 = document.getElementById('reviewPhotos');
-                if (photosDiv2) { photosDiv2.style.display = 'block'; document.getElementById('photoToggle').textContent = '▲ Hide'; }
+            // Auto-run AI if key available
+            if (this.state.apiKey) {
+                setTimeout(function(){ DS._classifyAndProcess(bIdx); }, 400);
             }
         },
 
-        updateReviewTotal() {
-            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
-            var total = 0;
-            mats.forEach(function(k) {
-                var slider = document.getElementById('reviewMat_' + k);
-                var numInput = document.getElementById('reviewMatN_' + k);
-                var v = parseInt(slider.value) || 0;
-                if (v < 0) v = 0;
-                if (v > 100) v = 100;
-                slider.value = v;
-                numInput.value = v;
-                total += v;
-            });
-            var landfill = Math.max(0, 100 - total);
-            document.getElementById('reviewLandfill').textContent = landfill + '%';
-            if (total > 100) {
-                document.getElementById('reviewDivTotal').textContent = '⚠️ Total: ' + total + '% — must be ≤ 100%. Adjust sliders.';
-                document.getElementById('reviewDivTotal').style.color = 'var(--danger)';
-            } else {
-                document.getElementById('reviewDivTotal').textContent = 'Diversion: ' + total + '% • Landfill: ' + landfill + '%';
-                document.getElementById('reviewDivTotal').style.color = total >= 50 ? 'var(--success)' : 'var(--danger)';
-            }
-        },
+        async _classifyAndProcess(bIdx) {
+            var batch = this._activeBatch;
+            if (!batch) return;
 
-        async runBatchAI(bIdx) {
-            var batch = this._pendingBatches[bIdx];
-            var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
-            var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
+            var btn = document.getElementById('classifyBtn');
+            if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
 
-            // OCR scale ticket
-            if (scale.length) {
-                this.showLoading('OCR reading scale ticket...');
+            this._ticketData = [];
+            var scaleTickets = [];
+            var debrisPhotos = [];
+
+            // Step 1: Classify each photo
+            for (var idx = 0; idx < batch.items.length; idx++) {
+                var q = batch.items[idx];
+                var cell = document.getElementById('photoCell_' + idx);
+                var label = document.getElementById('photoLabel_' + idx);
+
+                if (label) label.textContent = '🔍 Reading...';
+
                 try {
-                    var ocrPrompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
-                        'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
-                        '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","confidence":<0-100>}\n' +
-                        'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
+                    var classPrompt = 'Look at this image. Is it:\n' +
+                        'A) A scale ticket / weight ticket / receipt (printed paper with numbers, weights, dates)\n' +
+                        'B) A debris/load photo (showing physical waste material, dumpster contents, debris pile)\n\n' +
+                        'If A (scale ticket), also extract: ticket_number (5-digit red printed number), date (YYYY-MM-DD), gross_lbs, tare_lbs, net_lbs.\n' +
+                        'Return ONLY valid JSON:\n' +
+                        '{"type":"scale_ticket" or "debris","ticket_number":"XXXXX or null","date":"YYYY-MM-DD or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
 
-                    var ocrData = await this.callOpenAI({
+                    var data = await this.callOpenAI({
                         model: 'gpt-4o',
                         messages: [{ role: 'user', content: [
-                            { type: 'text', text: ocrPrompt },
-                            { type: 'image_url', image_url: { url: scale[0].photo_url, detail: 'high' } }
+                            { type: 'text', text: classPrompt },
+                            { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } }
                         ]}],
-                        max_tokens: 300, temperature: 0.1
+                        max_tokens: 200, temperature: 0.1
                     });
 
-                    if (ocrData.choices && ocrData.choices[0]) {
-                        var ocrText = ocrData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                        var ocr = JSON.parse(ocrText);
-                        // Populate review form
-                        if (ocr.ticket_number) document.getElementById('reviewTktNum').value = ocr.ticket_number;
-                        if (ocr.date) {
-                            var dMs = new Date(ocr.date).getTime();
-                            if (!isNaN(dMs) && dMs <= Date.now() + 86400000 && dMs > Date.now() - 90*86400000) {
-                                document.getElementById('reviewTktDate').value = ocr.date;
-                            }
-                        }
-                        if (ocr.gross_lbs) document.getElementById('reviewGross').value = ocr.gross_lbs;
-                        if (ocr.tare_lbs) document.getElementById('reviewTare').value = ocr.tare_lbs;
-                        var g = ocr.gross_lbs||0, t2 = ocr.tare_lbs||0;
-                        document.getElementById('reviewNetDisplay').textContent = 'Net: ' + (g-t2) + ' lbs = ' + ((g-t2)/2000).toFixed(2) + ' tons (OCR confidence: ' + (ocr.confidence||0) + '%)';
-                        document.getElementById('reviewAINotes').textContent = '🤖 OCR: ticket #' + (ocr.ticket_number||'?') + ', ' + (ocr.gross_lbs||0) + ' gross, ' + (ocr.tare_lbs||0) + ' tare (conf: ' + (ocr.confidence||0) + '%)';
+                    var text = (data.choices&&data.choices[0]&&data.choices[0].message.content)||'{}';
+                    text = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+                    var result = JSON.parse(text);
+
+                    if (result.type === 'scale_ticket') {
+                        scaleTickets.push({ q: q, ocr: result, idx: idx });
+                        if (cell) cell.style.borderColor = 'var(--success)';
+                        if (label) label.textContent = '📄 SCALE #' + (result.ticket_number||'?');
+                    } else {
+                        debrisPhotos.push({ q: q, idx: idx });
+                        if (cell) cell.style.borderColor = 'var(--info)';
+                        if (label) label.textContent = '📸 DEBRIS';
                     }
-                } catch(e) { console.error('OCR error:', e); this.showToast('OCR failed: ' + e.message); }
+                } catch(e) {
+                    console.error('Classify error idx '+idx+':', e);
+                    // Default to scale_ticket if unsure
+                    scaleTickets.push({ q: q, ocr: {}, idx: idx });
+                    if (label) label.textContent = '📄 SCALE (unread)';
+                }
             }
 
-            // AI analyze debris
-            if (debris.length) {
-                this.showLoading('AI analyzing ' + debris.length + ' debris photo' + (debris.length>1?'s':'') + '...');
-                try {
-                    var imageContent = debris.map(function(q) {
-                        return { type: 'image_url', image_url: { url: q.photo_url, detail: 'high' } };
-                    });
-                    var aiPrompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
-                        'Analyze ALL ' + debris.length + ' debris photos together and estimate the AVERAGE percentage of each material stream across all photos. ' +
-                        'Return ONLY valid JSON with this exact structure:\n' +
-                        '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>,"confidence":<0-100>,"notes":"<brief description>"}\n' +
-                        'Material definitions: wood=lumber/pallets/plywood, gypsum=drywall/sheetrock/wallboard, plastic=film/containers/PVC, occ=cardboard/paper, metal=steel/aluminum/copper, concrete=concrete/masonry/CMU, block=cinder block/brick.\n' +
-                        'landfill=non-recyclable trash/mixed waste.\n' +
-                        'Percentages MUST total exactly 100. Average across all photos.';
+            this._classifiedScale = scaleTickets;
+            this._classifiedDebris = debrisPhotos;
 
-                    var aiData = await this.callOpenAI({
-                        model: 'gpt-4o',
-                        messages: [{ role: 'user', content: [{ type: 'text', text: aiPrompt }].concat(imageContent) }],
-                        max_tokens: 500, temperature: 0.1
-                    });
+            // Step 2: Build editable ticket rows for each scale ticket
+            var rowsEl = document.getElementById('ticketRows');
+            if (rowsEl && scaleTickets.length > 0) {
+                var html = '<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);margin-bottom:8px">'+
+                    '📄 ' + scaleTickets.length + ' Scale Ticket' + (scaleTickets.length>1?'s':'') +
+                    (debrisPhotos.length ? ' + 📸 ' + debrisPhotos.length + ' Debris (attaches to last ticket)' : '') +
+                    '</div>';
 
-                    if (aiData.choices && aiData.choices[0]) {
-                        var aiText = aiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                        var analysis = JSON.parse(aiText);
-                        // Normalize: if material percentages exceed 100, scale them down
-                        var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
-                        var rawTotal = 0;
-                        mats.forEach(function(k) { rawTotal += (analysis[k] || 0); });
-                        // Scale down if over 100
-                        var scaleFactor = (rawTotal > 100) ? (100 / rawTotal) : 1;
-                        var adjusted = {};
-                        var adjTotal = 0;
-                        mats.forEach(function(k) {
-                            adjusted[k] = Math.round((analysis[k] || 0) * scaleFactor);
-                            adjTotal += adjusted[k];
-                        });
-                        // Fix rounding: if total > 100 after rounding, subtract from largest
-                        if (adjTotal > 100) {
-                            var largest = mats.reduce(function(a, b) { return adjusted[a] >= adjusted[b] ? a : b; });
-                            adjusted[largest] -= (adjTotal - 100);
-                        }
-                        // Apply to sliders
-                        mats.forEach(function(k) {
-                            var v = Math.max(0, adjusted[k]);
-                            var slider = document.getElementById('reviewMat_' + k);
-                            var numInput = document.getElementById('reviewMatN_' + k);
-                            slider.value = v;
-                            numInput.value = v;
-                            slider.setAttribute('value', v);
-                        });
-                        // Force update after DOM settles
-                        var self = this;
-                        setTimeout(function() { self.updateReviewTotal(); }, 50);
-                        var existing = document.getElementById('reviewAINotes').textContent;
-                        document.getElementById('reviewAINotes').textContent = existing + ' | 🤖 Debris: ' + (analysis.notes||'') + ' (conf: ' + (analysis.confidence||0) + '%)' + (rawTotal > 100 ? ' [scaled from ' + rawTotal + '% to 100%]' : '');
-                    }
-                } catch(e) { console.error('AI error:', e); this.showToast('AI analysis failed: ' + e.message); }
+                scaleTickets.forEach(function(item, i) {
+                    var ocr = item.ocr;
+                    var today = new Date().toISOString().split('T')[0];
+                    html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
+                        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+                        '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
+                        '<div style="flex:1">' +
+                        '<div style="font-size:.65rem;color:var(--success);font-weight:700;margin-bottom:4px">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
+                        '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
+                        '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+(ocr.date||today)+'" style="margin-bottom:4px;font-size:.8rem">' +
+                        '<div style="display:flex;gap:4px">' +
+                        '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
+                        '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
+                        '</div>' +
+                        '</div></div></div>';
+                });
+
+                rowsEl.innerHTML = html;
+            } else if (rowsEl && scaleTickets.length === 0) {
+                rowsEl.innerHTML = '<div style="color:var(--warning);font-size:.75rem;padding:8px">⚠️ No scale tickets detected — all photos will be saved as debris</div>';
             }
 
-            this.hideLoading();
-            this.showToast('AI complete — review results and confirm');
+            // Show confirm button
+            var confirmBtn = document.getElementById('confirmAllBtn');
+            if (confirmBtn) confirmBtn.classList.remove('hidden');
+
+            if (btn) { btn.disabled = false; btn.textContent = '🤖 Re-run AI Classification'; }
+
+            this.showToast(scaleTickets.length + ' scale tickets + ' + debrisPhotos.length + ' debris detected');
         },
 
-        async confirmBatch(bIdx) {
-            var batch = this._pendingBatches[bIdx];
-            if (!batch || !batch.items.length) return;
+        async _confirmAllTickets(bIdx) {
+            var batch = this._activeBatch;
+            var scaleTickets = this._classifiedScale || [];
+            var debrisPhotos = this._classifiedDebris || [];
+            if (!batch) return;
 
-            var tktNum = document.getElementById('reviewTktNum').value.trim();
-            if (!tktNum) { this.showToast('Enter a ticket number'); return; }
-
-            var tktDate = document.getElementById('reviewTktDate').value || new Date().toISOString().split('T')[0];
-            var gross = parseInt(document.getElementById('reviewGross').value) || 0;
-            var tare = parseInt(document.getElementById('reviewTare').value) || 0;
-            var netLbs = gross - tare;
-            var netTons = +(netLbs / 2000).toFixed(4);
-
-            var mats = ['wood','gypsum','plastic','occ','metal','concrete','block'];
-            var matVals = {};
-            var divertPct = 0;
-            mats.forEach(function(k) {
-                matVals[k] = parseInt(document.getElementById('reviewMat_' + k).value) || 0;
-                divertPct += matVals[k];
-            });
-            if (divertPct > 100) { this.showToast('Material percentages total ' + divertPct + '% — must be ≤ 100%'); return; }
-            var divertedTons = +(netTons * divertPct / 100).toFixed(4);
-
-            var scale = batch.items.filter(function(q){return q.photo_type==='scale_ticket';});
-            var debris = batch.items.filter(function(q){return q.photo_type==='debris';});
             var q0 = batch.items[0];
+            var created = 0, updated = 0, failed = 0;
+            var lastTicketId = null;
+            var allDebrisUrls = debrisPhotos.map(function(d){ return d.q.photo_url; });
 
-            // Collect ALL debris photo URLs
-            var allDebrisUrls = [];
-            debris.forEach(function(q){ if(q.photo_url) allDebrisUrls.push(q.photo_url); });
+            this.showLoading('Saving ' + scaleTickets.length + ' ticket' + (scaleTickets.length>1?'s':'') + '...');
 
-            this.showLoading('Saving ticket #' + tktNum + '...');
-
-            // Check if ticket already exists
             var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
-            var ticket = projectTickets.find(function(t) { return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
 
-            var ticketData = {
-                ticket_date: tktDate,
-                gross_lbs: gross, tare_lbs: tare, net_lbs: netLbs, net_tons: netTons,
-                wood_pct: matVals.wood, gypsum_pct: matVals.gypsum, plastic_pct: matVals.plastic,
-                occ_pct: matVals.occ, metal_pct: matVals.metal, concrete_pct: matVals.concrete, block_pct: matVals.block,
-                diversion_pct: Math.round(divertPct),
-                diverted_tons: divertedTons,
-                co2e_avoided: +(divertedTons * 0.58).toFixed(4),
-                scale_ticket_image: scale.length ? scale[0].photo_url : null,
-                debris_images: allDebrisUrls
-            };
+            for (var i = 0; i < scaleTickets.length; i++) {
+                var item = scaleTickets[i];
+                var tktNum = ((document.getElementById('mt_num_'+i)||{}).value||'').trim();
+                if (!tktNum) { failed++; continue; }
 
-            if (ticket) {
-                // Merge debris images with any existing ones
-                var existingDebris = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
-                allDebrisUrls.forEach(function(u){ if(existingDebris.indexOf(u)<0) existingDebris.push(u); });
-                ticketData.debris_images = existingDebris;
-                if (!scale.length || ticket.scale_ticket_image) delete ticketData.scale_ticket_image;
-                await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', ticketData);
-                Object.assign(ticket, ticketData);
-            } else {
-                ticketData.project_id = q0.project_id;
-                ticketData.ticket_number = tktNum;
-                ticketData.hauler = q0.submitted_by || null;
-                ticketData.scan_type = 'batch_queue';
-                ticketData.notes = 'Processed from photo queue (' + batch.items.length + ' photos)';
-                var result = await this.supabase('tickets', 'POST', ticketData);
-                if (result && result.length) ticket = result[0];
+                var gross = parseInt((document.getElementById('mt_gross_'+i)||{}).value) || 0;
+                var tare = parseInt((document.getElementById('mt_tare_'+i)||{}).value) || 0;
+                var netLbs = gross - tare;
+                var netTons = +(netLbs / 2000).toFixed(4);
+                var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || new Date().toISOString().split('T')[0];
+
+                // Attach debris only to the last ticket
+                var isLast = (i === scaleTickets.length - 1);
+
+                var ticketData = {
+                    ticket_date: tktDate,
+                    gross_lbs: gross,
+                    tare_lbs: tare,
+                    net_lbs: netLbs,
+                    net_tons: netTons,
+                    scale_ticket_image: item.q.photo_url,
+                    hauler: q0.submitted_by || null,
+                    scan_type: 'batch_queue',
+                    debris_images: isLast && allDebrisUrls.length ? allDebrisUrls : []
+                };
+
+                var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum; });
+                var ticketId = null;
+
+                if (existing) {
+                    // Merge debris
+                    var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
+                    if (isLast) allDebrisUrls.forEach(function(u){ if(existDebris.indexOf(u)<0) existDebris.push(u); });
+                    ticketData.debris_images = existDebris;
+                    await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
+                    ticketId = existing.id;
+                    updated++;
+                } else {
+                    ticketData.project_id = q0.project_id;
+                    ticketData.ticket_number = tktNum;
+                    var result = await this.supabase('tickets', 'POST', ticketData);
+                    if (result && result.length) {
+                        ticketId = result[0].id;
+                        this.state.tickets.unshift(result[0]);
+                        created++;
+                    } else { failed++; continue; }
+                }
+
+                lastTicketId = ticketId;
+
+                // Mark queue item approved
+                await this.supabase('photo_queue?id=eq.' + item.q.id, 'PATCH', {
+                    status: 'approved',
+                    reviewed_at: new Date().toISOString(),
+                    ticket_number: tktNum,
+                    assigned_ticket_id: ticketId
+                });
             }
 
-            // Mark ALL queue items as approved with ticket number
-            for (var i = 0; i < batch.items.length; i++) {
-                var upd = { status: 'approved', reviewed_at: new Date().toISOString(), ticket_number: tktNum };
-                if (ticket) upd.assigned_ticket_id = ticket.id;
-                await this.supabase('photo_queue?id=eq.' + batch.items[i].id, 'PATCH', upd);
+            // Mark debris items approved, attach to last ticket
+            for (var di = 0; di < debrisPhotos.length; di++) {
+                await this.supabase('photo_queue?id=eq.' + debrisPhotos[di].q.id, 'PATCH', {
+                    status: 'approved',
+                    reviewed_at: new Date().toISOString(),
+                    assigned_ticket_id: lastTicketId
+                });
+            }
+
+            // Handle case where NO scale tickets — save all as debris on newest ticket
+            if (scaleTickets.length === 0 && debrisPhotos.length > 0 && projectTickets.length > 0) {
+                var newest = projectTickets[0];
+                var existImgs = Array.isArray(newest.debris_images) ? newest.debris_images.slice() : [];
+                allDebrisUrls.forEach(function(u){ if(existImgs.indexOf(u)<0) existImgs.push(u); });
+                await this.supabase('tickets?id=eq.' + newest.id, 'PATCH', { debris_images: existImgs });
+                for (var di2 = 0; di2 < debrisPhotos.length; di2++) {
+                    await this.supabase('photo_queue?id=eq.' + debrisPhotos[di2].q.id, 'PATCH', {
+                        status: 'approved', reviewed_at: new Date().toISOString(), assigned_ticket_id: newest.id
+                    });
+                }
+                this.showToast('📸 ' + debrisPhotos.length + ' debris photos attached to #' + newest.ticket_number);
             }
 
             this.hideLoading();
 
-            // Show completed ticket summary IN the modal instead of closing
-            var projMap = {};
-            this.state.projects.forEach(function(p){projMap[p.id]=p.name;});
             var modal = document.getElementById('batchReviewModal');
-            if (modal) {
-                var gc = divertPct >= 50 ? '#059669' : '#dc2626';
-                var matBars = '';
-                mats.forEach(function(k) {
-                    if (!matVals[k]) return;
-                    var colors = {wood:'#92400e',gypsum:'#7c3aed',plastic:'#0891b2',occ:'#b45309',metal:'#475569',concrete:'#6b7280',block:'#374151'};
-                    var names = {wood:'Wood',gypsum:'Gypsum',plastic:'Plastic',occ:'OCC',metal:'Metal',concrete:'Concrete',block:'Block'};
-                    matBars += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem">' +
-                        '<div style="width:70px;color:var(--text-muted)">' + names[k] + '</div>' +
-                        '<div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:' + matVals[k] + '%;background:' + colors[k] + ';border-radius:2px"></div></div>' +
-                        '<div style="width:36px;text-align:right;font-family:var(--mono);font-weight:700">' + matVals[k] + '%</div></div>';
-                });
+            if (modal) modal.remove();
 
-                var debrisHtml = '';
-                allDebrisUrls.forEach(function(u) {
-                    debrisHtml += '<img src="' + u + '" onclick="window.open(\'' + u + '\')" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">';
-                });
+            var parts = [];
+            if (created > 0) parts.push(created + ' new ticket' + (created>1?'s':'') + ' created');
+            if (updated > 0) parts.push(updated + ' updated');
+            if (failed > 0) parts.push(failed + ' skipped (no ticket #)');
+            if (debrisPhotos.length > 0) parts.push(debrisPhotos.length + ' debris attached');
 
-                modal.querySelector('.modal').innerHTML =
-                    '<div style="text-align:center;padding:16px 0"><div style="font-size:2rem">✅</div>' +
-                    '<div style="font-size:1.1rem;font-weight:700;margin:8px 0">Ticket #' + tktNum + ' Processed</div>' +
-                    '<div style="font-size:.75rem;color:var(--text-muted)">' + (projMap[q0.project_id]||'') + ' • ' + (q0.submitted_by||'') + ' • ' + batch.items.length + ' photos</div></div>' +
-                    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0">' +
-                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + gross.toLocaleString() + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Gross lbs</div></div>' +
-                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + tare.toLocaleString() + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Tare lbs</div></div>' +
-                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700">' + netTons.toFixed(1) + '</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Net Tons</div></div>' +
-                    '<div style="background:var(--bg-input);border-radius:8px;padding:8px;text-align:center"><div style="font-family:var(--mono);font-weight:700;color:' + gc + '">' + Math.round(divertPct) + '%</div><div style="font-size:.5rem;color:var(--text-dim);text-transform:uppercase">Diverted</div></div></div>' +
-                    matBars +
-                    (scale.length ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📄 Scale Ticket</div><img src="' + scale[0].photo_url + '" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:1px solid var(--border)"></div>' : '') +
-                    (debrisHtml ? '<div style="margin:12px 0"><div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px">📸 Debris (' + allDebrisUrls.length + ')</div><div style="display:flex;gap:6px;overflow-x:auto">' + debrisHtml + '</div></div>' : '') +
-                    '<div class="btn-row mt-12" style="gap:6px">' +
-                    '<button class="btn btn-primary" style="flex:1" onclick="DS.shareTicketSummary(\'' + tktNum + '\',' + gross + ',' + tare + ',' + netTons.toFixed(2) + ',' + Math.round(divertPct) + ',\'' + DS.esc(projMap[q0.project_id]||'') + '\')">📤 Share Summary</button>' +
-                    '<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'batchReviewModal\').remove()">✓ Done</button></div>';
-            }
+            this.showToast('✅ ' + parts.join(' • '));
+            this.addAuditEntry('BATCH_PROCESS',
+                (q0.submitted_by||'Unknown') + ' — ' + parts.join(', ') +
+                ' — ' + batch.items.length + ' photos total');
 
-            this.showToast('✅ Ticket #' + tktNum + ' — ' + Math.round(divertPct) + '% diversion');
-            this.addAuditEntry('BATCH_CONFIRM', 'Confirmed: #' + tktNum + ' → ' + Math.round(divertPct) + '% div, ' + netTons.toFixed(2) + 'T, ' + allDebrisUrls.length + ' debris + ' + scale.length + ' scale by ' + (q0.submitted_by||''));
-
-            // Refresh tickets in background
             if (this.state.currentProject && this.state.currentProject.id === q0.project_id) {
                 await this.loadTickets(q0.project_id);
             }
