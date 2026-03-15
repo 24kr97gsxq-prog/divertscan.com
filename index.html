@@ -4031,6 +4031,23 @@
                     '🤖 AI Read & Process All ' + batch.items.length + ' Photos</button>';
             }
 
+            // Month/Year override for batch date assignment
+            var curMonth = new Date().getMonth(); // 0-indexed
+            var curYear = new Date().getFullYear();
+            html += '<div style="background:var(--bg-input);border-radius:8px;padding:10px;margin-bottom:12px">' +
+                '<div style="font-size:.65rem;font-weight:700;color:var(--text-muted);margin-bottom:6px">📅 Batch Month/Year (AI reads day from each ticket)</div>' +
+                '<div style="display:flex;gap:6px">' +
+                '<select id="batchMonth" class="form-input" style="flex:1;font-size:.8rem">';
+            var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            for (var mi = 0; mi < 12; mi++) {
+                html += '<option value="'+mi+'"'+(mi===curMonth?' selected':'')+'>'+monthNames[mi]+'</option>';
+            }
+            html += '</select>' +
+                '<select id="batchYear" class="form-input" style="width:90px;font-size:.8rem">' +
+                '<option value="'+(curYear-1)+'">'+(curYear-1)+'</option>' +
+                '<option value="'+curYear+'" selected>'+curYear+'</option>' +
+                '</select></div></div>';
+
             // Manual ticket rows — one per scale ticket photo
             html += '<div id="ticketRows"></div>';
 
@@ -4072,17 +4089,16 @@
 
                 try {
                     var classPrompt = 'Look at this image. Is it:\n' +
-                        'A) A scale ticket / weight ticket / receipt (printed paper with numbers, weights, dates)\n' +
+                        'A) A scale ticket / weight ticket / receipt (printed paper with numbers, weights)\n' +
                         'B) A debris/load photo (showing physical waste material, dumpster contents, debris pile)\n\n' +
-                        'If A (scale ticket), extract these fields carefully:\n' +
+                        'If A (scale ticket), extract these fields:\n' +
                         '- ticket_number: the RED PRINTED 5-digit number (usually top of ticket)\n' +
-                        '- date: The date printed on the ticket. It is printed in MM/DD/YY format. Convert it to YYYY-MM-DD. The current year is ' + new Date().getFullYear() + '. If the year shows as 2-digit (e.g. 26), it means ' + new Date().getFullYear() + '. READ THE EXACT DAY NUMBER PRINTED — do NOT guess or default.\n' +
+                        '- day_of_month: ONLY the day number (1-31) from the date printed on the ticket. The date is printed in MM/DD/YY format. I need ONLY the DD part — the 2-digit day of month. Look carefully at the middle number between the two slashes. Return just the number.\n' +
                         '- gross_lbs: the GROSS weight in pounds (larger number)\n' +
                         '- tare_lbs: the TARE weight in pounds (smaller number, weight of empty truck)\n' +
                         '- net_lbs: NET weight (gross minus tare)\n\n' +
-                        'CRITICAL: Read the date EXACTLY as printed on the ticket. Pay close attention to the DAY of the month — it is clearly printed. Do not confuse day and month.\n\n' +
                         'Return ONLY valid JSON:\n' +
-                        '{"type":"scale_ticket","ticket_number":"XXXXX or null","date":"YYYY-MM-DD or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
+                        '{"type":"scale_ticket","ticket_number":"XXXXX or null","day_of_month":0,"gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
 
                     var data = await this.callOpenAI({
                         model: 'gpt-4o',
@@ -4128,13 +4144,20 @@
                 scaleTickets.forEach(function(item, i) {
                     var ocr = item.ocr;
                     var today = new Date().toISOString().split('T')[0];
-                    // Use OCR date if available, default to today
-                    var useDate = ocr.date || today;
-                    // Block future dates
-                    if (new Date(useDate).getTime() > Date.now() + 86400000) useDate = today;
-                    // Block dates more than 1 year old
-                    if (new Date(useDate).getTime() < Date.now() - 365*86400000) useDate = today;
-                    var ocrDateHint = ocr.date && ocr.date !== useDate ? '<span style="font-size:.55rem;color:var(--warning)">⚠️ OCR read: ' + ocr.date + ' (corrected)</span>' : (ocr.date ? '<span style="font-size:.55rem;color:var(--text-dim)">OCR read: ' + ocr.date + '</span>' : '');
+                    // Read month/year from batch override selectors
+                    var batchMonthEl = document.getElementById('batchMonth');
+                    var batchYearEl = document.getElementById('batchYear');
+                    var useMonth = batchMonthEl ? parseInt(batchMonthEl.value) : new Date().getMonth();
+                    var useYear = batchYearEl ? parseInt(batchYearEl.value) : new Date().getFullYear();
+                    var monthStr = String(useMonth+1).padStart(2,'0');
+                    // Build date: selected year + selected month + AI-read day
+                    var useDate = today;
+                    var dayHint = '';
+                    if (ocr.day_of_month && ocr.day_of_month >= 1 && ocr.day_of_month <= 31) {
+                        var dayStr = String(ocr.day_of_month).padStart(2,'0');
+                        useDate = useYear + '-' + monthStr + '-' + dayStr;
+                        dayHint = '<span style="font-size:.55rem;color:var(--text-dim)">AI read day: ' + ocr.day_of_month + '</span>';
+                    }
                     html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                         '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                         '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
@@ -4142,7 +4165,7 @@
                         '<div style="font-size:.65rem;color:var(--success);font-weight:700;margin-bottom:4px">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
                         '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
                         '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
-                        ocrDateHint +
+                        dayHint +
                         '<div style="display:flex;gap:4px">' +
                         '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
                         '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
