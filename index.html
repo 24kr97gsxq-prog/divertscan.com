@@ -4166,11 +4166,14 @@
                             }
                         }
                     }
-                    html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
+                    html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                         '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                         '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
                         '<div style="flex:1">' +
-                        '<div style="font-size:.65rem;color:var(--success);font-weight:700;margin-bottom:4px">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+                        '<div style="font-size:.65rem;color:var(--success);font-weight:700">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
+                        '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.55rem;padding:2px 8px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
+                        '</div>' +
                         '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
                         '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
                         dayHint +
@@ -4215,6 +4218,19 @@
             if (btn) { btn.disabled = false; btn.textContent = '🤖 Re-run AI Classification'; }
 
             this.showToast(scaleTickets.length + ' scale tickets + ' + debrisPhotos.length + ' debris detected');
+        },
+
+        _skipTicketRow(idx) {
+            // Hide the row and clear its ticket number so _confirmAllTickets skips it
+            var row = document.getElementById('ticketRow_' + idx);
+            if (row) {
+                row.style.display = 'none';
+            }
+            var numInput = document.getElementById('mt_num_' + idx);
+            if (numInput) {
+                numInput.value = '';
+            }
+            this.showToast('Skipped ticket row ' + (idx+1));
         },
 
         async _confirmAllTickets(bIdx) {
