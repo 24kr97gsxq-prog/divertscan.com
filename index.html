@@ -4174,6 +4174,28 @@
                 });
 
                 rowsEl.innerHTML = html;
+
+                // Check for duplicate ticket numbers within this batch and warn
+                var tktNums = {};
+                var dupeWarnings = [];
+                scaleTickets.forEach(function(item, i) {
+                    var num = item.ocr.ticket_number || '';
+                    if (num) {
+                        if (tktNums[num] !== undefined) {
+                            dupeWarnings.push('⚠️ Ticket #' + num + ' appears in rows ' + (tktNums[num]+1) + ' and ' + (i+1) + ' — same photo uploaded twice?');
+                            // Highlight both rows
+                            var el1 = document.getElementById('mt_num_'+tktNums[num]);
+                            var el2 = document.getElementById('mt_num_'+i);
+                            if (el1) el1.style.borderColor = 'var(--danger)';
+                            if (el2) el2.style.borderColor = 'var(--danger)';
+                        } else {
+                            tktNums[num] = i;
+                        }
+                    }
+                });
+                if (dupeWarnings.length > 0) {
+                    rowsEl.insertAdjacentHTML('afterbegin', '<div style="background:rgba(220,38,38,.15);border:1px solid var(--danger);border-radius:8px;padding:8px;margin-bottom:10px;font-size:.7rem;color:var(--danger);font-weight:600">' + dupeWarnings.join('<br>') + '<br><span style="font-weight:400;color:var(--text-muted)">Clear or change the duplicate ticket # before confirming, or it will update the same record twice.</span></div>');
+                }
             } else if (rowsEl && scaleTickets.length === 0) {
                 rowsEl.innerHTML = '<div style="color:var(--warning);font-size:.75rem;padding:8px">⚠️ No scale tickets detected — all photos will be saved as debris</div>';
             }
@@ -4229,12 +4251,13 @@
                     debris_images: []
                 };
 
-                var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum; });
+                var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
                 var ticketId = null;
 
                 if (existing) {
                     var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
                     ticketData.debris_images = existDebris;
+                    // Only update if new data is better (has weight when existing doesn't)
                     await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
                     ticketId = existing.id;
                     updated++;
@@ -4245,6 +4268,8 @@
                     if (result && result.length) {
                         ticketId = result[0].id;
                         this.state.tickets.unshift(result[0]);
+                        // Add to projectTickets so next iteration finds it (prevents batch dupes)
+                        projectTickets.push(result[0]);
                         created++;
                     } else { failed++; continue; }
                 }
