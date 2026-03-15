@@ -4396,8 +4396,25 @@
         },
 
         // ============================================================
-        // SAMSARA INTEGRATION (Client-Side Direct API)
+        // SAMSARA INTEGRATION (via Edge Function CORS Proxy)
         // ============================================================
+        async _samsaraFetch(path, token) {
+            // Route through Supabase Edge Function to avoid CORS
+            var proxyUrl = this.state.supabaseUrl + '/functions/v1/samsara-proxy';
+            var res = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.state.supabaseKey
+                },
+                body: JSON.stringify({
+                    url: 'https://api.samsara.com' + path,
+                    token: token
+                })
+            });
+            return res;
+        },
+
         async syncSamsara() {
             var statusEl = document.getElementById('samsaraStatus');
             var resultsEl = document.getElementById('samsaraResults');
@@ -4413,15 +4430,12 @@
             resultsEl.innerHTML = '';
             this.showLoading('Syncing Samsara...');
 
-            var SAMSARA = 'https://api.samsara.com';
             var synced = 0, skipped = 0, errors = 0;
 
             try {
                 // Step 1: Fetch document types to find scale ticket forms
                 statusEl.textContent = '⏳ Reading document types...';
-                var dtRes = await fetch(SAMSARA + '/v1/fleet/drivers/document_types', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
+                var dtRes = await this._samsaraFetch('/v1/fleet/drivers/document_types', token);
 
                 if (!dtRes.ok) {
                     var errTxt = await dtRes.text();
@@ -4461,9 +4475,7 @@
                 var startTime = new Date(Date.now() - 7 * 86400000).toISOString();
                 var endTime = new Date().toISOString();
 
-                var docsRes = await fetch(SAMSARA + '/fleet/documents?startTime=' + encodeURIComponent(startTime) + '&endTime=' + encodeURIComponent(endTime), {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
+                var docsRes = await this._samsaraFetch('/fleet/documents?startTime=' + encodeURIComponent(startTime) + '&endTime=' + encodeURIComponent(endTime), token);
 
                 if (!docsRes.ok) {
                     this.hideLoading();
@@ -4580,11 +4592,11 @@
                 // Step 6: Get fleet stats
                 var totalDrivers = 0, totalVehicles = 0;
                 try {
-                    var drRes = await fetch(SAMSARA + '/fleet/drivers', { headers: { 'Authorization': 'Bearer ' + token } });
+                    var drRes = await this._samsaraFetch('/fleet/drivers', token);
                     if (drRes.ok) { var drData = await drRes.json(); totalDrivers = (drData.data || []).length; }
                 } catch(e) {}
                 try {
-                    var vhRes = await fetch(SAMSARA + '/fleet/vehicles', { headers: { 'Authorization': 'Bearer ' + token } });
+                    var vhRes = await this._samsaraFetch('/fleet/vehicles', token);
                     if (vhRes.ok) { var vhData = await vhRes.json(); totalVehicles = (vhData.data || []).length; }
                 } catch(e) {}
 
