@@ -733,6 +733,10 @@
             <div class="modal-title" id="editTicketTitle">Edit Ticket</div>
             <input type="hidden" id="editTktId">
             <div class="form-group">
+                <label class="form-label">Project</label>
+                <select class="form-input" id="editTktProject" style="font-weight:600;color:var(--primary)"></select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Ticket Number</label>
                 <input type="text" class="form-input" id="editTktNum">
             </div>
@@ -1767,6 +1771,11 @@
 
             document.getElementById('editTktId').value = t.id;
             document.getElementById('editTicketTitle').textContent = `Edit Ticket ${t.ticket_number}`;
+            // Populate project dropdown
+            var projSel = document.getElementById('editTktProject');
+            projSel.innerHTML = this.state.projects.map(function(p) {
+                return '<option value="' + p.id + '"' + (p.id === t.project_id ? ' selected' : '') + '>' + DS.esc(p.name) + '</option>';
+            }).join('');
             document.getElementById('editTktNum').value = t.ticket_number || '';
             document.getElementById('editTktDate').value = t.ticket_date || '';
             document.getElementById('editTktGross').value = t.gross_lbs || 0;
@@ -1938,6 +1947,7 @@
             co2e = +co2e.toFixed(4);
 
             const updates = {
+                project_id: document.getElementById('editTktProject').value || null,
                 ticket_number: ticketNum,
                 ticket_date: document.getElementById('editTktDate').value || null,
                 gross_lbs: gross,
@@ -1959,14 +1969,28 @@
             this.hideLoading();
 
             if (result !== null) {
+                var newProjId = document.getElementById('editTktProject').value;
+                var oldProjId = null;
                 const idx = this.state.tickets.findIndex(t => t.id === id);
-                if (idx >= 0) Object.assign(this.state.tickets[idx], updates);
+                if (idx >= 0) {
+                    oldProjId = this.state.tickets[idx].project_id;
+                    Object.assign(this.state.tickets[idx], updates);
+                }
+
+                // If project changed, remove from current list and reload
+                var projChanged = oldProjId && newProjId && oldProjId !== newProjId;
+                if (projChanged) {
+                    this.state.tickets.splice(idx, 1);
+                    var newProj = this.state.projects.find(function(p) { return p.id === newProjId; });
+                    this.showToast('Ticket ' + ticketNum + ' moved to ' + (newProj ? newProj.name : 'another project') + ' ✓');
+                } else {
+                    this.showToast(`Ticket ${ticketNum} updated ✓`);
+                }
 
                 this.renderTickets();
                 this.renderReports();
                 this.closeModal('editTicketModal');
-                this.showToast(`Ticket ${ticketNum} updated ✓`);
-                this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div`);
+                this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div` + (projChanged ? ' | Moved project' : ''));
             } else {
                 this.showToast('Save failed');
             }
