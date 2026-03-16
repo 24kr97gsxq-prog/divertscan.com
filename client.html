@@ -209,7 +209,9 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 
 <!-- ═══ UPLOAD ═══ -->
 <div id="vUpload" class="hidden">
-<div class="c"><div class="ct">Upload Photos</div><div id="uProjList"></div></div>
+<div class="c"><div class="ct">Upload Photos</div>
+<input type="text" class="fi" id="uProjSearch" placeholder="Search projects..." oninput="P.filterUploadProjects(this.value)" style="margin-bottom:8px;padding:8px 10px;font-size:.8rem">
+<div id="uProjList"></div></div>
 <div id="uForm" class="hidden">
 <div id="uBanner" class="c" style="text-align:center;padding:10px;font-weight:700;background:var(--primary-glow);border-color:var(--primary);font-size:.85rem"></div>
 <div class="c">
@@ -227,6 +229,10 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 </div><div class="pr" id="dGrid"></div>
 </div>
 <div class="c">
+<div class="fg"><label class="fl">Hauler</label>
+<select class="fi" id="uHauler" style="font-size:.85rem">
+<option value="">Select hauler...</option>
+</select></div>
 <div class="fg"><label class="fl">Ticket # (debris only — scale tickets read by AI)</label><input type="text" class="fi" id="uTkt" placeholder="e.g. 83435" inputmode="numeric"></div>
 <div class="fg"><label class="fl">Notes (optional)</label><input type="text" class="fi" id="uNotes" placeholder="e.g. Container #3"></div>
 </div>
@@ -414,7 +420,7 @@ h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td>'+P.fd(t.tic
 '<td class="r m">'+P.f(t.net_tons)+'</td><td class="r m bld" style="'+dc+'">'+dp+'%</td><td class="ctr">'+pi+'</td></tr>';});
 h+='</tbody></table>';el.innerHTML=h;},
 searchTix(q){if(!q.trim()){P.renderTbl(P.tx);return;}var lq=q.toLowerCase();
-P.renderTbl(P.tx.filter(function(t){return(t.ticket_number||'').toLowerCase().indexOf(lq)>=0||(t.hauler||'').toLowerCase().indexOf(lq)>=0;}));},
+P.renderTbl(P.tx.filter(function(t){return(t.ticket_number||'').toLowerCase().indexOf(lq)>=0||(t.hauler||'').toLowerCase().indexOf(lq)>=0||(t.ticket_date||'').indexOf(lq)>=0;}));},
 
 // TICKET DETAIL
 showTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
@@ -593,7 +599,23 @@ w.document.close();},
 // UPLOAD
 showUForm(){var proj=P.pj.find(function(p){return p.id===P._up;});if(!proj)return;
 document.getElementById('uForm').classList.remove('hidden');document.getElementById('uBanner').textContent=proj.name;
-P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();P.renderPL('uProjList','upload');},
+P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();P.renderPL('uProjList','upload');
+// Populate hauler dropdown from known haulers across projects
+var haulers=[];P.pj.forEach(function(p){if(p.waste_hauler&&haulers.indexOf(p.waste_hauler)<0)haulers.push(p.waste_hauler);});
+var knownHaulers=['Jaguar Waste Management','Liberty Demolition','B&B Waste','Ranger Waste','Rob Van'];
+knownHaulers.forEach(function(h){if(haulers.indexOf(h)<0)haulers.push(h);});
+var sel=document.getElementById('uHauler');
+sel.innerHTML='<option value="">Select hauler...</option>'+haulers.map(function(h){
+return '<option value="'+P.esc(h)+'"'+(proj.waste_hauler&&proj.waste_hauler===h?' selected':'')+'>'+P.esc(h)+'</option>';
+}).join('')+'<option value="__other">Other (type below)</option>';
+sel.onchange=function(){if(sel.value==='__other'){var custom=prompt('Enter hauler name:');if(custom){var opt=document.createElement('option');opt.value=custom;opt.textContent=custom;sel.insertBefore(opt,sel.lastElementChild);sel.value=custom;}}};},
+filterUploadProjects(q){q=(q||'').toLowerCase();var el=document.getElementById('uProjList');
+if(!q){P.renderPL('uProjList','upload');return;}
+var filtered=P.pj.filter(function(p){return (p.name||'').toLowerCase().indexOf(q)>=0||(p.client||'').toLowerCase().indexOf(q)>=0||(p.location||'').toLowerCase().indexOf(q)>=0||(p.waste_hauler||'').toLowerCase().indexOf(q)>=0;});
+el.innerHTML=filtered.map(function(p){return '<div class="pp" onclick="P.pickPj(\'upload\',\''+p.id+'\')">'+
+'<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
+'<div class="pm">LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%</div></div>';}).join('');
+if(!filtered.length)el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-d);font-size:.75rem">No projects matching "'+P.esc(q)+'"</div>';},
 addP(type,input){var files=Array.from(input.files);var arr=P._u[type];
 files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.renderG(type);P.updBtn();};r.readAsDataURL(f);});input.value='';},
 renderG(type){var arr=P._u[type],el=document.getElementById(type==='s'?'sGrid':'dGrid'),b=document.getElementById(type==='s'?'sBadge':'dBadge');
@@ -612,16 +634,18 @@ async submit(){var all=[];P._u.s.forEach(function(p){all.push({file:p.file,type:
 P._u.d.forEach(function(p){all.push({file:p.file,type:'debris'});});if(!all.length||!P._up)return;
 var btn=document.getElementById('uBtn');btn.style.opacity='.5';btn.style.pointerEvents='none';
 var proj=P.pj.find(function(p){return p.id===P._up;});var tNum=document.getElementById('uTkt').value.trim()||null;
-var notes=document.getElementById('uNotes').value.trim()||null;var ok=0;
+var notes=document.getElementById('uNotes').value.trim()||null;
+var hauler=document.getElementById('uHauler').value||P.cl.name||'Client';
+var ok=0;
 for(var i=0;i<all.length;i++){btn.textContent='📤 '+(i+1)+'/'+all.length+'...';
 try{var blob=await P.compress(all[i].file,all[i].type==='scale_ticket'?1200:800);
 var path='queue/'+P._up+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
 var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
 if(!up.ok)continue;var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:P.cl.name||'Client',photo_type:all[i].type,photo_url:url,ticket_number:all[i].type==='scale_ticket'?null:tNum,notes:notes,status:'pending'});ok++;}catch(x){console.error(x);}}
+await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:all[i].type==='scale_ticket'?null:tNum,notes:notes,status:'pending'});ok++;}catch(x){console.error(x);}}
 P.toast(ok+' photo'+(ok>1?'s':'')+' submitted — pending admin review');P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uBtn').classList.add('hidden');document.getElementById('uOk').classList.remove('hidden');P.loadBadge();},
 resetUp(){document.getElementById('uOk').classList.add('hidden');document.getElementById('uBtn').classList.remove('hidden');
-P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';P.updBtn();},
+P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uHauler').selectedIndex=0;var srch=document.getElementById('uProjSearch');if(srch)srch.value='';P.updBtn();},
 
 // HISTORY with dates and delete
 async loadHist(){var el=document.getElementById('hList');var ids=P.pj.map(function(p){return p.id;});
