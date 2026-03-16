@@ -1359,11 +1359,8 @@
                 var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
                 var hasPhoto = t.scale_ticket_image;
                 var isComplete = hasWeight && hasMaterials && hasPhoto;
-                var projName = '';
-                if (this._showingAllProjects) {
-                    var proj = this.state.projects.find(p => p.id === t.project_id);
-                    projName = proj ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(proj.name) + '</span>' : '';
-                }
+                var proj = this.state.projects.find(p => p.id === t.project_id);
+                var projLabel = proj ? this.esc(proj.name) : '';
                 var uploadInfo = t.created_at ? '<span style="color:var(--info);" title="Uploaded: ' + new Date(t.created_at).toLocaleString() + '">📤 ' + this.timeAgo(t.created_at) + '</span>' : '';
                 var scanBadge = t.scan_type === 'batch_queue' ? '<span style="background:var(--info);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">BATCH</span> ' : '';
                 return `
@@ -1372,8 +1369,8 @@
                         ${isComplete ? '✅' : '⚠️'}
                     </div>
                     <div class="ticket-info">
-                        <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}</div>
-                        <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div${projName}</div>
+                        <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}${projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : ''}</div>
+                        <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
                         <div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">${uploadInfo}</div>
                     </div>
                     <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
@@ -1389,9 +1386,12 @@
             var q = query.trim().toLowerCase();
             var el = document.getElementById('ticketList');
             var tickets = this.state.tickets.filter(function(t) {
+                var proj = DS.state.projects.find(function(p) { return p.id === t.project_id; });
+                var projName = proj ? proj.name.toLowerCase() : '';
                 return (t.ticket_number && t.ticket_number.toLowerCase().indexOf(q) >= 0) ||
                     (t.hauler && t.hauler.toLowerCase().indexOf(q) >= 0) ||
-                    (t.ticket_date && t.ticket_date.indexOf(q) >= 0);
+                    (t.ticket_date && t.ticket_date.indexOf(q) >= 0) ||
+                    (projName && projName.indexOf(q) >= 0);
             });
             tickets.sort(function(a,b) { return (b.created_at||'').localeCompare(a.created_at||''); });
             if (tickets.length === 0) {
@@ -1403,12 +1403,14 @@
                 var hasMaterials = Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; });
                 var hasPhoto = t.scale_ticket_image;
                 var isComplete = hasWeight && hasMaterials && hasPhoto;
+                var proj = DS.state.projects.find(function(p) { return p.id === t.project_id; });
+                var projLabel = proj ? DS.esc(proj.name) : '';
                 var uploadInfo = t.created_at ? '<span style="color:var(--info);">📤 ' + DS.timeAgo(t.created_at) + '</span>' : '';
                 var scanBadge = t.scan_type === 'batch_queue' ? '<span style="background:var(--info);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">BATCH</span> ' : '';
                 return '<div class="ticket-item" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                     '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                         (isComplete ? '✅' : '⚠️') + '</div>' +
-                    '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + '</div>' +
+                    '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
                     '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
                     '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                     '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
