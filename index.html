@@ -4392,54 +4392,65 @@ const DS = {
             }
 
             // Step 3: Run AI material classification on debris photos for each ticket
-            if (this.state.apiKey) {
-                var matPrompt = 'You are a C&D waste material analyst for LEED compliance. ' +
-                    'Analyze these debris photos and estimate the percentage of each material stream. ' +
-                    'Return ONLY valid JSON:\n' +
-                    '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>}\n' +
-                    'wood=lumber/pallets/plywood, gypsum=drywall/sheetrock, plastic=film/containers/PVC, occ=cardboard/paper, metal=steel/aluminum, concrete=concrete/masonry, block=cinder block/brick, landfill=non-recyclable/mixed waste.\n' +
-                    'Percentages MUST total exactly 100. Be conservative — landfill is usually 25%+ for mixed loads.';
+            console.log('DEBRIS AI: Starting analysis for ' + createdTicketIds.length + ' tickets, apiKey=' + (this.state.apiKey ? 'yes' : 'NO'));
+            for (var ai = 0; ai < createdTicketIds.length; ai++) {
+                var aiInfo = createdTicketIds[ai];
+                var aiDebris = debrisMap[aiInfo.id];
+                console.log('DEBRIS AI: Ticket #' + aiInfo.num + ' has ' + (aiDebris ? aiDebris.length : 0) + ' debris photos');
+                if (!aiDebris || !aiDebris.length) continue;
 
-                for (var ai = 0; ai < createdTicketIds.length; ai++) {
-                    var aiInfo = createdTicketIds[ai];
-                    var aiDebris = debrisMap[aiInfo.id];
-                    if (!aiDebris || !aiDebris.length) continue;
+                this.showLoading('🤖 Analyzing debris for ticket #' + aiInfo.num + ' (' + (ai+1) + '/' + createdTicketIds.length + ')...');
 
-                    this.showLoading('🤖 Analyzing debris for ticket #' + aiInfo.num + ' (' + (ai+1) + '/' + createdTicketIds.length + ')...');
+                try {
+                    var matPrompt = 'You are a C&D waste material analyst for LEED compliance. ' +
+                        'Analyze these debris photos and estimate the percentage of each material stream. ' +
+                        'Return ONLY valid JSON:\n' +
+                        '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>}\n' +
+                        'wood=lumber/pallets/plywood, gypsum=drywall/sheetrock, plastic=film/containers/PVC, occ=cardboard/paper, metal=steel/aluminum, concrete=concrete/masonry, block=cinder block/brick, landfill=non-recyclable/mixed waste.\n' +
+                        'Percentages MUST total exactly 100. Be conservative — landfill is usually 25%+ for mixed loads.';
 
-                    try {
-                        var imgContent = aiDebris.map(function(url) {
-                            return { type: 'image_url', image_url: { url: url, detail: 'high' } };
-                        });
-                        var aiData = await this.callOpenAI({
-                            model: 'gpt-4o',
-                            messages: [{ role: 'user', content: [{ type: 'text', text: matPrompt }].concat(imgContent) }],
-                            max_tokens: 300, temperature: 0.1
-                        });
-                        var aiText = (aiData.choices&&aiData.choices[0]&&aiData.choices[0].message.content)||'{}';
-                        aiText = aiText.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-                        var aiMatch = aiText.match(/\{[\s\S]*\}/);
-                        if (aiMatch) {
-                            var mats = JSON.parse(aiMatch[0]);
-                            // Find the ticket's net_tons for tonnage calc
-                            var tkRecord = projectTickets.find(function(t){ return t.id === aiInfo.id; });
-                            var tkTons = tkRecord ? (+(tkRecord.net_tons)||0) : 0;
-                            var divPct = 100 - (mats.landfill||0);
-                            var matPatch = {
-                                wood_pct: mats.wood||0, gypsum_pct: mats.gypsum||0,
-                                plastic_pct: mats.plastic||0, occ_pct: mats.occ||0,
-                                metal_pct: mats.metal||0, concrete_pct: mats.concrete||0,
-                                block_pct: mats.block||0, landfill_pct: mats.landfill||0,
-                                diversion_pct: divPct,
-                                diverted_tons: +(tkTons * divPct / 100).toFixed(4),
-                                landfill_tons: +(tkTons * (mats.landfill||0) / 100).toFixed(4),
-                                ai_classified: true
-                            };
-                            await this.supabase('tickets?id=eq.' + aiInfo.id, 'PATCH', matPatch);
+                    var imgContent = aiDebris.map(function(url) {
+                        return { type: 'image_url', image_url: { url: url, detail: 'high' } };
+                    });
+                    var aiData = await this.callOpenAI({
+                        model: 'gpt-4o',
+                        messages: [{ role: 'user', content: [{ type: 'text', text: matPrompt }].concat(imgContent) }],
+                        max_tokens: 300, temperature: 0.1
+                    });
+                    var aiText = (aiData.choices&&aiData.choices[0]&&aiData.choices[0].message.content)||'{}';
+                    aiText = aiText.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+                    console.log('DEBRIS AI raw response:', aiText);
+                    var aiMatch = aiText.match(/\{[\s\S]*\}/);
+                    if (aiMatch) {
+                        var mats = JSON.parse(aiMatch[0]);
+                        // Get net_tons — try projectTickets first, fall back to form inputs
+                        var tkRecord = projectTickets.find(function(t){ return t.id === aiInfo.id; });
+                        var tkTons = tkRecord ? (+(tkRecord.net_tons)||0) : 0;
+                        if (!tkTons) {
+                            // Fall back: read from the form input that was used to create this ticket
+                            var gEl = document.getElementById('mt_gross_'+ai);
+                            var tEl = document.getElementById('mt_tare_'+ai);
+                            if (gEl && tEl) tkTons = (parseInt(gEl.value||0) - parseInt(tEl.value||0)) / 2000;
                         }
-                    } catch(aiErr) {
-                        console.error('Debris AI error for ticket #' + aiInfo.num + ':', aiErr);
+                        var divPct = 100 - (mats.landfill||0);
+                        var matPatch = {
+                            wood_pct: mats.wood||0, gypsum_pct: mats.gypsum||0,
+                            plastic_pct: mats.plastic||0, occ_pct: mats.occ||0,
+                            metal_pct: mats.metal||0, concrete_pct: mats.concrete||0,
+                            block_pct: mats.block||0, landfill_pct: mats.landfill||0,
+                            diversion_pct: divPct,
+                            diverted_tons: +(tkTons * divPct / 100).toFixed(4),
+                            landfill_tons: +(tkTons * (mats.landfill||0) / 100).toFixed(4),
+                            ai_classified: true
+                        };
+                        console.log('DEBRIS AI patching ticket #' + aiInfo.num + ':', JSON.stringify(matPatch));
+                        await this.supabase('tickets?id=eq.' + aiInfo.id, 'PATCH', matPatch);
+                        console.log('DEBRIS AI: Ticket #' + aiInfo.num + ' patched successfully');
+                    } else {
+                        console.error('DEBRIS AI: No JSON found in response');
                     }
+                } catch(aiErr) {
+                    console.error('DEBRIS AI error for ticket #' + aiInfo.num + ':', aiErr);
                 }
             }
         }
