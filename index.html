@@ -1351,7 +1351,7 @@
 
         async loadAllProjectTickets() {
             this.showLoading('Loading all tickets...');
-            var allTickets = await this.supabase('tickets?order=created_at.desc&limit=200');
+            var allTickets = await this.supabase('tickets?order=created_at.desc&limit=1000');
             this.hideLoading();
             if (allTickets) {
                 this.state.tickets = allTickets;
@@ -1431,12 +1431,43 @@
                     (t.ticket_date && t.ticket_date.indexOf(q) >= 0) ||
                     (projName && projName.indexOf(q) >= 0);
             });
+            if (tickets.length === 0 && q.length >= 3) {
+                el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">Searching database for "' + this.esc(query) + '"...</div>';
+                this._dbSearchTickets(q, el);
+                return;
+            }
             tickets.sort(function(a,b) { return (b.created_at||'').localeCompare(a.created_at||''); });
             if (tickets.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No tickets matching "' + this.esc(query) + '"</div>';
                 return;
             }
             el.innerHTML = tickets.map(function(t) {
+                var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
+                var hasMaterials = Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; });
+                var hasPhoto = t.scale_ticket_image;
+                var isComplete = hasWeight && hasMaterials && hasPhoto;
+                var proj = DS.state.projects.find(function(p) { return p.id === t.project_id; });
+                var projLabel = proj ? DS.esc(proj.name) : '';
+                var uploadInfo = t.created_at ? '<span style="color:var(--info);">📤 ' + DS.timeAgo(t.created_at) + '</span>' : '';
+                var scanBadge = t.scan_type === 'batch_queue' ? '<span style="background:var(--info);color:#fff;font-size:.5rem;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">BATCH</span> ' : '';
+                return '<div class="ticket-item" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
+                    '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
+                        (isComplete ? '✅' : '⚠️') + '</div>' +
+                    '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
+                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                    '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
+                    '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
+            }).join('');
+        },
+
+        async _dbSearchTickets(q, el) {
+            var results = await this.supabase('tickets?or=(ticket_number.ilike.*' + encodeURIComponent(q) + '*,hauler.ilike.*' + encodeURIComponent(q) + '*)&order=created_at.desc&limit=50');
+            if (!results || results.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No tickets found in database for "' + this.esc(q) + '"</div>';
+                return;
+            }
+            el.innerHTML = '<div style="font-size:.65rem;color:var(--info);padding:4px 8px;margin-bottom:4px;">🔍 ' + results.length + ' result(s) from full database search</div>' +
+            results.map(function(t) {
                 var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
                 var hasMaterials = Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; });
                 var hasPhoto = t.scale_ticket_image;
