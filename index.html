@@ -423,6 +423,11 @@
                     </div>
                 </div>
                 <div class="card">
+                    <div class="card-title"><span class="icon">🚛</span> Hauler Management</div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">View all hauler names in the database. Rename or merge duplicates so reports stay clean.</p>
+                    <div id="haulerMgmtContent"><button class="btn btn-sm btn-outline" onclick="DS.loadHaulerMgmt()">🔄 Load Haulers</button></div>
+                </div>
+                <div class="card">
                     <div class="card-title"><span class="icon">📲</span> Field Upload Links</div>
                     <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Share these links with hauler drivers. Each link only shows that hauler's projects. No login required.</p>
                     <div id="fieldUploadLinks" style="margin-bottom:10px;font-size:.7rem"></div>
@@ -5172,6 +5177,104 @@
             if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
             if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
             return Math.floor(diff / 86400) + 'd ago';
+        },
+
+        // ============================================================
+        // ============================================================
+        // HAULER MANAGEMENT
+        // ============================================================
+        async loadHaulerMgmt() {
+            var el = document.getElementById('haulerMgmtContent');
+            el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading haulers...</div>';
+            var tickets = await this.supabase('tickets?select=hauler');
+            if (!tickets) { el.innerHTML = '<div style="color:var(--danger)">Failed to load tickets.</div>'; return; }
+            var counts = {};
+            tickets.forEach(function(t) {
+                var h = t.hauler || '(empty)';
+                counts[h] = (counts[h] || 0) + 1;
+            });
+            var sorted = Object.entries(counts).sort(function(a, b) { return b[1] - a[1]; });
+            var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste'];
+            var html = '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">' + sorted.length + ' unique hauler names • ' + tickets.length + ' total tickets</div>';
+            html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+            sorted.forEach(function(pair) {
+                var name = pair[0];
+                var count = pair[1];
+                var isOk = approved.indexOf(name) >= 0;
+                var bg = isOk ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+                var border = isOk ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
+                var icon = isOk ? '✅' : '⚠️';
+                html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;">';
+                html += '<span style="font-size:.85rem;">' + icon + '</span>';
+                html += '<span style="flex:1;font-size:.8rem;font-weight:600;">' + name + '</span>';
+                html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets</span>';
+                if (!isOk) {
+                    html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            el.innerHTML = html;
+        },
+
+        async renameHauler(oldName) {
+            var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste'];
+            var m = document.createElement('div');
+            m.className = 'modal-overlay';
+            m.id = 'haulerRenameModal';
+            var opts = approved.map(function(a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+            m.innerHTML =
+                '<div class="modal-card">' +
+                '<div class="modal-title">Rename Hauler</div>' +
+                '<p style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px;">All tickets currently assigned to <strong>"' + oldName + '"</strong> will be reassigned.</p>' +
+                '<div class="form-group">' +
+                '<label class="form-label">Assign to existing hauler:</label>' +
+                '<select class="form-input" id="haulerRenameSelect">' +
+                '<option value="">-- Select --</option>' + opts +
+                '</select></div>' +
+                '<div class="form-group">' +
+                '<label class="form-label">Or enter new name:</label>' +
+                '<input type="text" class="form-input" id="haulerRenameCustom" placeholder="New hauler name"></div>' +
+                '<div class="btn-row">' +
+                '<button class="btn btn-sm btn-outline" style="flex:1" onclick="document.getElementById(\'haulerRenameModal\').remove()">Cancel</button>' +
+                '<button class="btn btn-sm btn-success" style="flex:1" onclick="DS.executeHaulerRename(\'' + oldName.replace(/'/g, "\\'") + '\')">Rename All</button>' +
+                '</div></div>';
+            document.body.appendChild(m);
+        },
+
+        async executeHaulerRename(oldName) {
+            var sel = document.getElementById('haulerRenameSelect').value;
+            var custom = document.getElementById('haulerRenameCustom').value.trim();
+            var newName = custom || sel;
+            if (!newName) { this.showToast('Select or enter a hauler name'); return; }
+            if (newName === oldName) { this.showToast('Name is the same'); return; }
+            if (!confirm('Rename all "' + oldName + '" tickets to "' + newName + '"?')) return;
+            var url = 'tickets?hauler=eq.' + encodeURIComponent(oldName);
+            var res = await this.supabaseUpdate(url, { hauler: newName });
+            if (res !== false) {
+                this.showToast('✅ Renamed to ' + newName);
+                document.getElementById('haulerRenameModal').remove();
+                this.loadHaulerMgmt();
+            } else {
+                this.showToast('❌ Rename failed');
+            }
+        },
+
+        async supabaseUpdate(path, body) {
+            try {
+                var r = await fetch(this.state.supabaseUrl + '/rest/v1/' + path, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': this.state.supabaseKey,
+                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) { var t = await r.text(); console.error('PATCH fail:', t); return false; }
+                return true;
+            } catch(e) { console.error('supabaseUpdate error:', e); return false; }
         },
 
         // ============================================================
