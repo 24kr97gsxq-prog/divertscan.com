@@ -5186,33 +5186,55 @@
         async loadHaulerMgmt() {
             var el = document.getElementById('haulerMgmtContent');
             el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading haulers...</div>';
-            var tickets = await this.supabase('tickets?select=hauler');
+            var tickets = await this.supabase('tickets?select=id,ticket_number,ticket_date,net_tons,hauler,project_id&order=ticket_date.desc');
             if (!tickets) { el.innerHTML = '<div style="color:var(--danger)">Failed to load tickets.</div>'; return; }
-            var counts = {};
+            this._haulerTickets = tickets;
+            var projects = await this.supabase('projects?select=id,name');
+            this._haulerProjects = {};
+            if (projects) projects.forEach(function(p) { this._haulerProjects[p.id] = p.name; }.bind(this));
+            var grouped = {};
             tickets.forEach(function(t) {
                 var h = t.hauler || '(empty)';
-                counts[h] = (counts[h] || 0) + 1;
+                if (!grouped[h]) grouped[h] = [];
+                grouped[h].push(t);
             });
-            var sorted = Object.entries(counts).sort(function(a, b) { return b[1] - a[1]; });
+            var sorted = Object.entries(grouped).sort(function(a, b) { return b[1].length - a[1].length; });
             var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste'];
             var html = '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">' + sorted.length + ' unique hauler names • ' + tickets.length + ' total tickets</div>';
             html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-            sorted.forEach(function(pair) {
+            sorted.forEach(function(pair, idx) {
                 var name = pair[0];
-                var count = pair[1];
+                var tix = pair[1];
+                var count = tix.length;
                 var isOk = approved.indexOf(name) >= 0;
                 var bg = isOk ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
                 var border = isOk ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
                 var icon = isOk ? '✅' : '⚠️';
-                html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;">';
+                var safeId = 'haulerDetail_' + idx;
+                html += '<div style="border:1px solid ' + border + ';border-radius:8px;overflow:hidden;">';
+                html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bg + ';cursor:pointer;" onclick="var d=document.getElementById(\'' + safeId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\';">';
                 html += '<span style="font-size:.85rem;">' + icon + '</span>';
                 html += '<span style="flex:1;font-size:.8rem;font-weight:600;">' + name + '</span>';
-                html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets</span>';
+                html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets ▼</span>';
                 if (!isOk) {
-                    html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
+                    html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="event.stopPropagation();DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
                 }
                 html += '</div>';
-            });
+                html += '<div id="' + safeId + '" style="display:none;padding:6px 10px;background:rgba(0,0,0,0.15);max-height:250px;overflow-y:auto;">';
+                html += '<table style="width:100%;font-size:.7rem;border-collapse:collapse;">';
+                html += '<tr style="color:var(--text-muted);border-bottom:1px solid var(--border);"><th style="text-align:left;padding:3px 4px;">Date</th><th style="text-align:left;padding:3px 4px;">Ticket#</th><th style="text-align:right;padding:3px 4px;">Tons</th><th style="text-align:left;padding:3px 4px;">Project</th></tr>';
+                tix.forEach(function(t) {
+                    var proj = this._haulerProjects[t.project_id] || '—';
+                    html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+                    html += '<td style="padding:3px 4px;">' + (t.ticket_date || '—') + '</td>';
+                    html += '<td style="padding:3px 4px;font-weight:600;">' + (t.ticket_number || '—') + '</td>';
+                    html += '<td style="padding:3px 4px;text-align:right;">' + (t.net_tons != null ? Number(t.net_tons).toFixed(2) : '—') + '</td>';
+                    html += '<td style="padding:3px 4px;font-size:.65rem;">' + proj + '</td>';
+                    html += '</tr>';
+                }.bind(this));
+                html += '</table></div>';
+                html += '</div>';
+            }.bind(this));
             html += '</div>';
             el.innerHTML = html;
         },
