@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html><head><title>Add Medline BTS Project</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:20px;max-width:600px;margin:0 auto}
+.card{background:#1e293b;border-radius:12px;padding:20px;margin:16px 0;border:1px solid #334155}
+h1{color:#10b981;font-size:20px}
+.field{margin:8px 0;font-size:13px}
+.label{color:#94a3b8;font-size:11px;text-transform:uppercase}
+.value{font-weight:600;margin-top:2px}
+button{width:100%;padding:16px;background:#10b981;color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-top:16px}
+button:disabled{background:#334155;color:#64748b}
+#result{margin-top:16px;padding:12px;border-radius:8px;font-size:13px;display:none}
+.success{background:#065f46;border:1px solid #10b981}
+.error{background:#7f1d1d;border:1px solid #ef4444}
+</style></head><body>
+<h1>Add Project to DivertScan</h1>
+
+<div class="card">
+<div class="field"><div class="label">Project Name</div><div class="value">Medline BTS</div></div>
+<div class="field"><div class="label">Location</div><div class="value">2931 Logistics Dr, Midlothian TX 76065</div></div>
+<div class="field"><div class="label">General Contractor</div><div class="value">Hillwood Construction Services</div></div>
+<div class="field"><div class="label">Client / VPA</div><div class="value">Medline / BranchPattern (VPA)</div></div>
+<div class="field"><div class="label">Waste Hauler</div><div class="value">Jaguar Waste Management LLC</div></div>
+<div class="field"><div class="label">LEED Version</div><div class="value">v4</div></div>
+<div class="field"><div class="label">Diversion Target</div><div class="value">50% (Option 1 — 1 point)</div></div>
+<div class="field"><div class="label">Exemplary Performance</div><div class="value">Targeted (50%+ with certified facility)</div></div>
+<div class="field"><div class="label">Construction Start</div><div class="value">2/16/2026</div></div>
+<div class="field"><div class="label">Material Streams (5)</div><div class="value">Cardboard/Paper, Metal, Wood, Concrete/Brick/Block, Plastic</div></div>
+<div class="field"><div class="label">Client Portal Code</div><div class="value">DS-MEDLN1</div></div>
+</div>
+
+<button id="addBtn" onclick="addProject()">✅ Add Medline BTS to Database</button>
+<div id="result"></div>
+
+<script>
+var SB_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+
+async function addProject() {
+    var btn = document.getElementById('addBtn');
+    var res = document.getElementById('result');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+
+    try {
+        // First check if project already exists
+        var checkResp = await fetch(SB_URL + '/rest/v1/projects?name=eq.Medline%20BTS&select=id,name', {
+            headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        });
+        var existing = await checkResp.json();
+        if (existing && existing.length > 0) {
+            res.style.display = 'block';
+            res.className = 'error';
+            res.innerHTML = '⚠️ Medline BTS already exists in the database (ID: ' + existing[0].id + '). No duplicate created. Open DivertScan and select it from your project list.';
+            btn.textContent = 'Already Exists';
+            return;
+        }
+
+        var resp = await fetch(SB_URL + '/rest/v1/projects', {
+            method: 'POST',
+            headers: {
+                'apikey': SB_KEY,
+                'Authorization': 'Bearer ' + SB_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                name: 'Medline BTS',
+                client: 'Medline / BranchPattern (VPA)',
+                general_contractor: 'Hillwood Construction Services',
+                location: '2931 Logistics Dr, Midlothian TX 76065',
+                waste_hauler: 'Jaguar Waste Management LLC',
+                leed_version: 'v4',
+                leed_target: 50,
+                access_code: 'DS-MEDLN1'
+            })
+        });
+
+        if (!resp.ok) {
+            var err = await resp.text();
+            throw new Error('HTTP ' + resp.status + ': ' + err);
+        }
+
+        var data = await resp.json();
+        res.style.display = 'block';
+        res.className = 'success';
+        res.innerHTML = '✅ <b>Medline BTS</b> added successfully!<br><br>' +
+            'Project ID: <code>' + (data[0] ? data[0].id : 'created') + '</code><br>' +
+            'Client Portal Code: <b>DS-MEDLN1</b><br><br>' +
+            'Open <a href="https://divertscan.com" style="color:#10b981">divertscan.com</a> and select Medline BTS from your project list. ' +
+            'When Jaguar starts hauling, their uploads will appear in your Pending Review queue.<br><br>' +
+            '<b>You can close this page now.</b>';
+        btn.textContent = '✅ Done';
+    } catch(e) {
+        res.style.display = 'block';
+        res.className = 'error';
+        res.innerHTML = '❌ Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    }
+}
+</script>
+</body></html>
