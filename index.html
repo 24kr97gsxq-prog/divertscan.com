@@ -1490,9 +1490,15 @@
             this.renderTickets(filter);
         },
 
-        showTicketDetail(id) {
-            const t = this.state.tickets.find(x => x.id === id);
-            if (!t) return;
+        async showTicketDetail(id) {
+            var t = this.state.tickets.find(x => x.id === id);
+            if (!t) {
+                var fetched = await this.supabase('tickets?id=eq.' + id);
+                if (fetched && fetched.length > 0) {
+                    t = fetched[0];
+                    this.state.tickets.push(t);
+                } else { this.showToast('Ticket not found'); return; }
+            }
             this._currentDetailTicketId = t.id;
             document.getElementById('ticketDetailTitle').textContent = `Ticket ${t.ticket_number}`;
             const mats = Object.keys(this.MATERIALS).map(k => {
