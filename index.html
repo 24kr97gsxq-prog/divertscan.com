@@ -3420,40 +3420,109 @@
         },
 
         exportMonthXLSX(monthKey) {
-            if (typeof XLSX === 'undefined') { this.showToast('SheetJS loading... try again'); return; }
+            if (typeof ExcelJS === 'undefined') { this.showToast('ExcelJS loading... try again'); return; }
 
             const tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
             if (tickets.length === 0) { this.showToast('No tickets'); return; }
 
             const proj = this.state.currentProject;
+            const F = DS.FACILITY;
             const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
             const [year, month] = monthKey.split('-');
             const monthName = monthNames[parseInt(month)];
             tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
 
-            var wb = XLSX.utils.book_new();
-            var wsData = [];
+            var wb = new ExcelJS.Workbook();
+            wb.creator = 'DivertScan';
+            var ws = wb.addWorksheet(monthName + ' ' + year);
 
-            // Header rows (matching template)
-            wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);wsData.push([]);
-            wsData.push(['Waste Diversion Report for ' + monthName + ' ' + year]);
-            wsData.push(['Company: ' + (proj?.general_contractor || proj?.client || 'N/A')]);
-            wsData.push(['Location: ' + (proj?.location || 'N/A')]);
-            wsData.push(['Project: ' + (proj?.name || 'N/A')]);
-            wsData.push(['Report by: Dalmex Recycling']);
-            wsData.push(['Contact: Robert Vandling']);
-            wsData.push(['Email: robert@dalmexrecycling.com']);
-            wsData.push([]);
+            // Colors
+            var dkGreen = '1B5E20';
+            var ltGreen = 'E8F5E9';
+            var medGreen = '059669';
+            var hdrBg = '18181B';
+            var hdrFont = 'FFFFFF';
+            var altRow = 'F9FAFB';
+            var borderClr = 'D4D4D8';
+            var redText = 'DC2626';
 
-            // Column headers - matching image 2 format + photo column
-            wsData.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+            // Column widths
+            ws.columns = [
+                {width:12},{width:10},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},
+                {width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},
+                {width:7},{width:7},{width:9},{width:7},{width:7},{width:7},{width:14}
+            ];
+
+            // Helper: style a row
+            function styleRow(row, opts) {
+                row.eachCell(function(cell) {
+                    if (opts.fill) cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:opts.fill}};
+                    if (opts.font) cell.font = opts.font;
+                    if (opts.border) cell.border = opts.border;
+                    if (opts.alignment) cell.alignment = opts.alignment;
+                });
+            }
+            var thinBorder = {
+                top:{style:'thin',color:{argb:borderClr}},
+                bottom:{style:'thin',color:{argb:borderClr}},
+                left:{style:'thin',color:{argb:borderClr}},
+                right:{style:'thin',color:{argb:borderClr}}
+            };
+
+            // Title block (rows 1-6)
+            ws.mergeCells('A1:Y1');
+            var titleCell = ws.getCell('A1');
+            titleCell.value = 'WASTE DIVERSION REPORT';
+            titleCell.font = {bold:true, size:16, color:{argb:hdrFont}};
+            titleCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:dkGreen}};
+            titleCell.alignment = {horizontal:'center',vertical:'middle'};
+            ws.getRow(1).height = 32;
+
+            ws.mergeCells('A2:Y2');
+            var subtitleCell = ws.getCell('A2');
+            subtitleCell.value = monthName + ' ' + year + ' — ' + (proj?.name||'');
+            subtitleCell.font = {bold:true, size:12, color:{argb:dkGreen}};
+            subtitleCell.alignment = {horizontal:'center'};
+            ws.getRow(2).height = 22;
+
+            // Project info block
+            var infoData = [
+                ['Project:', proj?.name||'', '', 'LEED:', (proj?.leed_version||'v4') + ' • Target ' + (proj?.leed_target||50) + '%'],
+                ['GC / Client:', proj?.general_contractor||proj?.client||'N/A', '', 'Hauler:', proj?.waste_hauler||'N/A'],
+                ['Location:', proj?.location||'N/A', '', 'Recycling Facility:', F.name + ', ' + F.address],
+                ['TCEQ:', F.tceq_rn + ' • SIC ' + F.tceq_sic, '', 'Contact:', F.email + ' • ' + F.phone]
+            ];
+            infoData.forEach(function(rowData, idx) {
+                var r = ws.addRow(rowData);
+                r.getCell(1).font = {bold:true, size:10, color:{argb:'52525B'}};
+                r.getCell(2).font = {size:10};
+                r.getCell(4).font = {bold:true, size:10, color:{argb:'52525B'}};
+                r.getCell(5).font = {size:10};
+                if (idx % 2 === 0) {
+                    r.eachCell(function(c){ c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'F4F4F5'}}; });
+                }
+            });
+
+            ws.addRow([]);
+
+            // Column headers
+            var headers = ['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
                 'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
-                'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
+                'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo'];
+            var hdrRow = ws.addRow(headers);
+            hdrRow.height = 20;
+            styleRow(hdrRow, {
+                fill: hdrBg,
+                font: {bold:true, size:9, color:{argb:hdrFont}},
+                alignment: {horizontal:'center', vertical:'middle'},
+                border: thinBorder
+            });
 
             // Data rows
             var sumGross=0, sumTare=0, sumNet=0, sumTons=0, sumDiverted=0;
             var sumMats = {wood:0,gypsum:0,plastic:0,occ:0,metal:0,concrete:0,block:0};
-            var photoLinks = []; // Track photo hyperlinks to add after
+            var photoLinks = [];
+            var dataStartRow = hdrRow.number + 1;
 
             tickets.forEach(function(t, rowIdx) {
                 var gross = parseInt(t.gross_lbs)||0;
@@ -3470,7 +3539,6 @@
                 sumMats.wood+=wt; sumMats.gypsum+=gt; sumMats.plastic+=pt;
                 sumMats.occ+=ot; sumMats.metal+=mt; sumMats.concrete+=ct; sumMats.block+=bt;
 
-                // Format date as M/D/YYYY
                 var dateFmt = t.ticket_date || '';
                 if (dateFmt.indexOf('-') > 0) {
                     var dp = dateFmt.split('-');
@@ -3478,20 +3546,40 @@
                 }
 
                 var photoUrl = t.scale_ticket_image || '';
-                if (photoUrl) photoLinks.push({row: 15 + rowIdx, col: 24, url: photoUrl});
-
-                wsData.push([
+                var r = ws.addRow([
                     dateFmt, parseInt(t.ticket_number)||t.ticket_number,
                     gross, gross/2000, tare, tare/2000, net, tons,
                     divPct, diverted,
                     wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt,
                     photoUrl ? 'View Photo' : ''
                 ]);
+
+                // Alternating row shading
+                if (rowIdx % 2 === 1) {
+                    r.eachCell(function(c){ c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:altRow}}; });
+                }
+                r.eachCell(function(c){ c.border = thinBorder; c.font = {size:10}; });
+
+                // Diversion % color coding
+                var divCell = r.getCell(9);
+                var pctVal = Math.round(divPct * 100);
+                divCell.font = {bold:true, size:10, color:{argb: pctVal >= 75 ? medGreen : pctVal >= 50 ? 'D97706' : redText}};
+
+                // Number formats
+                [9,11,13,15,17,19,21,23].forEach(function(c){ r.getCell(c).numFmt = '0%'; });
+                [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0.00'; });
+                [3,5,7].forEach(function(c){ r.getCell(c).numFmt = '#,##0'; });
+
+                // Photo hyperlink
+                if (photoUrl) {
+                    r.getCell(25).value = {text:'View Photo', hyperlink: photoUrl};
+                    r.getCell(25).font = {size:9, color:{argb:'3B82F6'}, underline:true};
+                }
             });
 
             // Totals row
             var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
-            wsData.push(['Totals','',
+            var totRow = ws.addRow(['TOTALS','',
                 sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
                 totalDivPct, sumDiverted,
                 sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
@@ -3502,61 +3590,53 @@
                 sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
                 sumTons>0?sumMats.block/sumTons:0, sumMats.block,
                 '']);
+            styleRow(totRow, {
+                fill: dkGreen,
+                font: {bold:true, size:10, color:{argb:hdrFont}},
+                border: thinBorder
+            });
+            [9,11,13,15,17,19,21,23].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
+            [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
+            [3,5,7].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
 
-            wsData.push([]);
-            wsData.push(['Total Tonnage', Math.round(sumTons*100)/100]);
-            wsData.push(['Diverted from landfill', Math.round(sumDiverted*100)/100]);
-            wsData.push(['Recycled Material %', totalDivPct]);
-
-            var ws = XLSX.utils.aoa_to_sheet(wsData);
-
-            // Column widths
-            ws['!cols'] = [
-                {wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},
-                {wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},
-                {wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6},{wch:12}
+            // Summary section
+            ws.addRow([]);
+            var summaryData = [
+                ['Total Tonnage', Math.round(sumTons*100)/100],
+                ['Diverted from landfill', Math.round(sumDiverted*100)/100],
+                ['Landfill', Math.round((sumTons-sumDiverted)*100)/100],
+                ['Recycled Material %', totalDivPct],
+                ['Material Streams', Object.keys(sumMats).filter(function(k){return sumMats[k]>0;}).length]
             ];
-
-            // Format cells
-            var dataStartRow = 15;
-            var dataEndRow = dataStartRow + tickets.length;
-            for (var r = dataStartRow; r <= dataEndRow; r++) {
-                // Percentage columns: I(8), K(10), M(12), O(14), Q(16), S(18), U(20), W(22)
-                [8,10,12,14,16,18,20,22].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r, c:c});
-                    if (ws[addr]) ws[addr].z = '0%';
-                });
-                // Tons columns: D(3), F(5), H(7), J(9), L(11), N(13), P(15), R(17), T(19), V(21), X(23)
-                [3,5,7,9,11,13,15,17,19,21,23].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r, c:c});
-                    if (ws[addr]) ws[addr].z = '0.00';
-                });
-                // Weight columns: C(2), E(4), G(6) — comma format
-                [2,4,6].forEach(function(c) {
-                    var addr = XLSX.utils.encode_cell({r:r, c:c});
-                    if (ws[addr]) ws[addr].z = '#,##0';
-                });
-            }
-
-            // Summary formatting
-            var summaryStart = dataEndRow + 2;
-            var addr1 = XLSX.utils.encode_cell({r:summaryStart, c:1});
-            if (ws[addr1]) ws[addr1].z = '0.00';
-            var addr2 = XLSX.utils.encode_cell({r:summaryStart+1, c:1});
-            if (ws[addr2]) ws[addr2].z = '0.00';
-            var addr3 = XLSX.utils.encode_cell({r:summaryStart+2, c:1});
-            if (ws[addr3]) ws[addr3].z = '0%';
-
-            // Add hyperlinks for photo column
-            photoLinks.forEach(function(link) {
-                var addr = XLSX.utils.encode_cell({r:link.row, c:link.col});
-                if (ws[addr]) {
-                    ws[addr].l = {Target: link.url, Tooltip: 'View scale ticket photo'};
-                }
+            summaryData.forEach(function(d) {
+                var r = ws.addRow(d);
+                r.getCell(1).font = {bold:true, size:10, color:{argb:'52525B'}};
+                r.getCell(2).font = {bold:true, size:11, color:{argb: d[0]==='Landfill' ? redText : dkGreen}};
+                if (d[0]==='Recycled Material %') r.getCell(2).numFmt = '0%';
+                else if (d[0]!=='Material Streams') r.getCell(2).numFmt = '0.00';
             });
 
-            XLSX.utils.book_append_sheet(wb, ws, monthName + ' ' + year);
-            XLSX.writeFile(wb, 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx');
+            // Footer
+            ws.addRow([]);
+            var footRow = ws.addRow([F.name + ' • TCEQ ' + F.tceq_rn + ' • ' + F.phone + ' • ' + F.email + ' • Powered by DivertScan']);
+            footRow.getCell(1).font = {size:9, italic:true, color:{argb:'A1A1AA'}};
+
+            // Freeze header row
+            ws.views = [{state:'frozen', ySplit: hdrRow.number}];
+
+            // Download
+            wb.xlsx.writeBuffer().then(function(buffer) {
+                var blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+            });
+
             this.showToast('Downloaded ' + monthName + ' ' + year + ' XLSX');
             this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + Math.round(totalDivPct*100) + '% diverted');
         },
