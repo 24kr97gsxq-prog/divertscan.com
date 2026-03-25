@@ -396,6 +396,7 @@
                     <div class="btn-row" style="flex-wrap:wrap">
                         <button class="btn btn-sm btn-info" onclick="DS.exportCombinedXLSX()">📥 All Projects XLSX</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.exportCombinedCSV()">📊 All Projects CSV</button>
+                        <button class="btn btn-sm btn-primary" onclick="DS.exportAllScaleTickets()">🎫 All Scale Tickets</button>
                     </div>
                 </div>
             </div>
@@ -2138,6 +2139,15 @@
             const ticketNum = document.getElementById('manualTicketNum').value.trim();
             if (!ticketNum) { this.showToast('Enter a ticket number'); return; }
 
+            // Duplicate check — search database for this ticket number in current project
+            var dupeCheck = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&project_id=eq.' + this.state.currentProject.id + '&select=id,ticket_number,ticket_date,net_tons');
+            if (dupeCheck && dupeCheck.length > 0) {
+                var d = dupeCheck[0];
+                if (!confirm('⚠️ Ticket #' + ticketNum + ' already exists for this project (' + (d.ticket_date || '') + ', ' + (d.net_tons || 0) + ' T). Create a duplicate anyway?')) {
+                    return;
+                }
+            }
+
             const gross = parseInt(document.getElementById('manualGross').value) || 0;
             const tare = parseInt(document.getElementById('manualTare').value) || 0;
             const net = gross - tare;
@@ -2244,7 +2254,14 @@
                 if (urls.length > 0) ticket.debris_images = urls;
             }
 
-            // Save to Supabase
+            // Save to Supabase — final duplicate safety check
+            var dupeGuard = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticket.ticket_number) + '&project_id=eq.' + ticket.project_id + '&select=id');
+            if (dupeGuard && dupeGuard.length > 0) {
+                this.hideLoading();
+                this.showToast('⚠️ Ticket #' + ticket.ticket_number + ' already exists — not saved');
+                this.state.pendingTicket = null;
+                return;
+            }
             const result = await this.supabase('tickets', 'POST', ticket);
             this.hideLoading();
 
@@ -2854,6 +2871,64 @@
                 a.download = 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.xlsx';
                 a.click();
                 DS.showToast('✅ All projects XLSX exported');
+            });
+        },
+
+        async exportAllScaleTickets() {
+            if (typeof ExcelJS === 'undefined') { this.showToast('ExcelJS loading... try again'); return; }
+            this.showLoading('Exporting all scale tickets...');
+            var projects = await this.supabase('projects?select=id,name&order=name.asc');
+            var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,diversion_pct,co2e_avoided,scale_ticket_image&order=ticket_date.asc&limit=5000');
+            this.hideLoading();
+            if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
+            var projMap = {};
+            projects.forEach(function(p) { projMap[p.id] = p.name; });
+            var wb = new ExcelJS.Workbook();
+            var ws = wb.addWorksheet('Scale Tickets');
+            var titleRow = ws.addRow(['DALMEX RECYCLING — ALL SCALE TICKETS']);
+            titleRow.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            ws.mergeCells('A1:I1');
+            titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } };
+            ws.addRow(['Generated: ' + new Date().toLocaleDateString() + '  |  ' + allTickets.length + ' tickets  |  ' + projects.length + ' projects']);
+            ws.addRow([]);
+            var hdr = ws.addRow(['Project', 'Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net Tons', 'Div %', 'Diverted T', 'CO2e', 'Scale Ticket Photo']);
+            hdr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            hdr.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
+            var grandTons = 0, grandDiv = 0;
+            allTickets.forEach(function(t, i) {
+                var nt = parseFloat(t.net_tons) || 0;
+                var dt = parseFloat(t.diverted_tons) || 0;
+                grandTons += nt;
+                grandDiv += dt;
+                var r = ws.addRow([
+                    projMap[t.project_id] || 'Unknown',
+                    t.ticket_date || '',
+                    t.ticket_number || '',
+                    t.hauler || '',
+                    t.gross_lbs || 0,
+                    t.tare_lbs || 0,
+                    t.net_lbs || 0,
+                    nt,
+                    (t.diversion_pct || 0) / 100,
+                    dt,
+                    parseFloat(t.co2e_avoided) || 0,
+                    t.scale_ticket_image || ''
+                ]);
+                r.getCell(9).numFmt = '0%';
+                if (t.scale_ticket_image) { r.getCell(12).font = { color: { argb: 'FF1565C0' }, underline: true }; }
+                if (i % 2 === 0) r.eachCell(function(c) { if (!c.fill || !c.fill.fgColor) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; });
+            });
+            var totRow = ws.addRow(['TOTALS', '', allTickets.length + ' tickets', '', '', '', '', grandTons.toFixed(2), '', grandDiv.toFixed(2)]);
+            totRow.font = { bold: true };
+            totRow.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } }; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; });
+            ws.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 25 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 8 }, { width: 10 }, { width: 8 }, { width: 50 }];
+            wb.xlsx.writeBuffer().then(function(buf) {
+                var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'DivertScan_All_Scale_Tickets_' + new Date().toISOString().split('T')[0] + '.xlsx';
+                a.click();
+                DS.showToast('✅ All scale tickets exported');
             });
         },
 
