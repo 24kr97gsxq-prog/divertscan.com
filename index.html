@@ -381,7 +381,7 @@
                 <div id="reportCombined" class="hidden"></div>
 
                 <!-- Export -->
-                <div class="card">
+                <div class="card" id="exportSingleProject">
                     <div class="card-title"><span class="icon">📤</span> Export</div>
                     <div class="btn-row" style="flex-wrap:wrap">
                         <button class="btn btn-sm btn-primary" onclick="DS.exportPDF()">📄 PDF Report</button>
@@ -389,6 +389,13 @@
                         <button class="btn btn-sm btn-outline" onclick="DS.exportCSV()">📊 CSV</button>
                         <button class="btn btn-sm btn-success" onclick="DS.exportQBOInvoice()">💰 QBO Invoice</button>
                                                 
+                    </div>
+                </div>
+                <div class="card hidden" id="exportCombined">
+                    <div class="card-title"><span class="icon">📤</span> Export — All Projects</div>
+                    <div class="btn-row" style="flex-wrap:wrap">
+                        <button class="btn btn-sm btn-info" onclick="DS.exportCombinedXLSX()">📥 All Projects XLSX</button>
+                        <button class="btn btn-sm btn-outline" onclick="DS.exportCombinedCSV()">📊 All Projects CSV</button>
                     </div>
                 </div>
             </div>
@@ -2601,6 +2608,8 @@
             document.getElementById('reportAllTime').classList.toggle('hidden', view !== 'all');
             document.getElementById('reportMonthly').classList.toggle('hidden', view !== 'monthly');
             document.getElementById('reportCombined').classList.toggle('hidden', view !== 'combined');
+            document.getElementById('exportSingleProject').classList.toggle('hidden', view === 'combined');
+            document.getElementById('exportCombined').classList.toggle('hidden', view !== 'combined');
             if (view === 'monthly') this.renderMonthlyReport();
         },
 
@@ -2735,6 +2744,117 @@
             }
 
             el.innerHTML = html;
+        },
+
+        async exportCombinedCSV() {
+            this.showLoading('Exporting all projects...');
+            var projects = await this.supabase('projects?select=id,name,leed_version&order=name.asc');
+            var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_pct,wood_tons,occ_pct,occ_tons,metal_pct,metal_tons,plastic_pct,plastic_tons,concrete_pct,concrete_tons,block_pct,block_tons,gypsum_pct,gypsum_tons,cardboard_pct,cardboard_tons,drywall_pct,drywall_tons,landfill_pct&order=ticket_date.asc&limit=5000');
+            this.hideLoading();
+            if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
+            var projMap = {};
+            projects.forEach(function(p) { projMap[p.id] = p.name; });
+            var matKeys = Object.keys(this.MATERIALS);
+            var header = ['Project','Date','Ticket No','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
+            matKeys.forEach(function(k) { header.push(DS.MATERIALS[k].name + ' %'); header.push(DS.MATERIALS[k].name + ' Tons'); });
+            header.push('Diverted Tons','Landfill Tons','Diversion %','CO2e (mt)');
+            var rows = [header.join(',')];
+            allTickets.forEach(function(t) {
+                var row = [
+                    '"' + (projMap[t.project_id] || 'Unknown') + '"',
+                    t.ticket_date || '',
+                    t.ticket_number || '',
+                    '"' + (t.hauler || '') + '"',
+                    t.gross_lbs || '',
+                    t.tare_lbs || '',
+                    t.net_lbs || '',
+                    t.net_tons || ''
+                ];
+                matKeys.forEach(function(k) {
+                    row.push((t[k + '_pct'] || 0) + '%');
+                    row.push(t[k + '_tons'] || 0);
+                });
+                row.push(t.diverted_tons || 0);
+                row.push(t.landfill_tons || 0);
+                row.push((t.diversion_pct || 0) + '%');
+                row.push(t.co2e_avoided || 0);
+                rows.push(row.join(','));
+            });
+            rows.push('');
+            var totTons = 0, divTons = 0, co2e = 0;
+            allTickets.forEach(function(t) { totTons += parseFloat(t.net_tons) || 0; divTons += parseFloat(t.diverted_tons) || 0; co2e += parseFloat(t.co2e_avoided) || 0; });
+            rows.push('TOTALS,,' + allTickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + (totTons - divTons).toFixed(2) + ',' + (totTons > 0 ? Math.round(divTons/totTons*100) : 0) + '%,' + co2e.toFixed(1));
+            this.downloadFile(rows.join('\n'), 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.csv', 'text/csv');
+            this.showToast('✅ All projects CSV exported');
+        },
+
+        async exportCombinedXLSX() {
+            if (typeof ExcelJS === 'undefined') { this.showToast('ExcelJS loading... try again'); return; }
+            this.showLoading('Building Excel report...');
+            var projects = await this.supabase('projects?select=id,name,leed_version,leed_target&order=name.asc');
+            var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,cardboard_tons,drywall_tons&order=ticket_date.asc&limit=5000');
+            this.hideLoading();
+            if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
+            var projMap = {};
+            projects.forEach(function(p) { projMap[p.id] = p; });
+            var matKeys = Object.keys(this.MATERIALS);
+            var wb = new ExcelJS.Workbook();
+
+            // Summary sheet
+            var ws1 = wb.addWorksheet('Summary');
+            var titleRow = ws1.addRow(['DALMEX RECYCLING — ALL PROJECTS SUMMARY']);
+            titleRow.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            ws1.mergeCells('A1:G1');
+            titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } };
+            ws1.addRow(['Report Date: ' + new Date().toLocaleDateString()]);
+            ws1.addRow([]);
+            var hdr = ws1.addRow(['Project', 'LEED', 'Tickets', 'Total Tons', 'Diverted', 'Landfill', 'Div %']);
+            hdr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            hdr.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
+            var grandT = 0, grandD = 0, grandTix = 0;
+            projects.forEach(function(p) {
+                var tix = allTickets.filter(function(t) { return t.project_id === p.id; });
+                if (tix.length === 0) return;
+                var tot = 0, div = 0;
+                tix.forEach(function(t) { tot += parseFloat(t.net_tons) || 0; div += parseFloat(t.diverted_tons) || 0; });
+                grandT += tot; grandD += div; grandTix += tix.length;
+                var r = ws1.addRow([p.name, p.leed_version || 'v4', tix.length, +tot.toFixed(2), +div.toFixed(2), +(tot - div).toFixed(2), tot > 0 ? Math.round(div / tot * 100) / 100 : 0]);
+                r.getCell(7).numFmt = '0%';
+            });
+            var totRow = ws1.addRow(['TOTALS', '', grandTix, +grandT.toFixed(2), +grandD.toFixed(2), +(grandT - grandD).toFixed(2), grandT > 0 ? Math.round(grandD / grandT * 100) / 100 : 0]);
+            totRow.font = { bold: true };
+            totRow.getCell(7).numFmt = '0%';
+            totRow.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } }; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; });
+            ws1.columns = [{ width: 40 }, { width: 8 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }];
+
+            // Detail sheet
+            var ws2 = wb.addWorksheet('All Tickets');
+            var h2 = ['Project', 'Date', 'Ticket #', 'Hauler', 'Net Tons'];
+            matKeys.forEach(function(k) { h2.push(DS.MATERIALS[k].name + ' T'); });
+            h2.push('Diverted T', 'Landfill T', 'Div %', 'CO2e');
+            var hdr2 = ws2.addRow(h2);
+            hdr2.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            hdr2.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
+            allTickets.forEach(function(t, i) {
+                var proj = projMap[t.project_id];
+                var row = [proj ? proj.name : 'Unknown', t.ticket_date || '', t.ticket_number || '', t.hauler || '', parseFloat(t.net_tons) || 0];
+                matKeys.forEach(function(k) { row.push(parseFloat(t[k + '_tons']) || 0); });
+                row.push(parseFloat(t.diverted_tons) || 0, parseFloat(t.landfill_tons) || 0, (t.diversion_pct || 0) / 100, parseFloat(t.co2e_avoided) || 0);
+                var r = ws2.addRow(row);
+                var divCol = h2.indexOf('Div %') + 1;
+                if (divCol > 0) r.getCell(divCol).numFmt = '0%';
+                if (i % 2 === 0) r.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; });
+            });
+            ws2.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 25 }, { width: 10 }].concat(matKeys.map(function() { return { width: 10 }; })).concat([{ width: 10 }, { width: 10 }, { width: 8 }, { width: 8 }]);
+
+            wb.xlsx.writeBuffer().then(function(buf) {
+                var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.xlsx';
+                a.click();
+                DS.showToast('✅ All projects XLSX exported');
+            });
         },
 
         // ============================================================
