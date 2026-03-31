@@ -2139,18 +2139,10 @@
             const ticketNum = document.getElementById('manualTicketNum').value.trim();
             if (!ticketNum) { this.showToast('Enter a ticket number'); return; }
 
-            // Duplicate check — search database for this ticket number in current project
-            var dupeCheck = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&project_id=eq.' + this.state.currentProject.id + '&select=id,ticket_number,ticket_date,net_tons');
-            if (dupeCheck && dupeCheck.length > 0) {
-                var d = dupeCheck[0];
-                if (!confirm('⚠️ Ticket #' + ticketNum + ' already exists for this project (' + (d.ticket_date || '') + ', ' + (d.net_tons || 0) + ' T). Create a duplicate anyway?')) {
-                    return;
-                }
-            }
-
             const gross = parseInt(document.getElementById('manualGross').value) || 0;
             const tare = parseInt(document.getElementById('manualTare').value) || 0;
             const net = gross - tare;
+            if (net <= 0) { this.showToast('Net weight must be positive'); return; }
             const netTons = +(net / 2000).toFixed(4);
 
             // Gather material percentages
@@ -2169,44 +2161,70 @@
                 return;
             }
 
-            // Calculate diversion
+            // Calculate diversion & CO2e
             const landfillPct = mats.landfill_pct || 0;
             const diversionPct = 100 - landfillPct;
             const divertedTons = +(netTons * diversionPct / 100).toFixed(4);
-
-            // Calculate CO2e avoided
             let co2e = 0;
             Object.keys(this.MATERIALS).forEach(k => {
-                if (k !== 'landfill') {
-                    co2e += (mats[k + '_tons'] || 0) * this.MATERIALS[k].gwp;
-                }
+                if (k !== 'landfill') co2e += (mats[k + '_tons'] || 0) * this.MATERIALS[k].gwp;
             });
             co2e = +co2e.toFixed(4);
 
-            // Build ticket object
+            // Duplicate check
+            var dupeCheck = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&project_id=eq.' + this.state.currentProject.id + '&select=id,ticket_number,ticket_date,net_tons');
+            if (dupeCheck && dupeCheck.length > 0) {
+                var d = dupeCheck[0];
+                if (!confirm('⚠️ Ticket #' + ticketNum + ' already exists (' + (d.ticket_date || '') + ', ' + (d.net_tons || 0) + ' T). Save anyway?')) return;
+            }
+
+            this.showLoading('Saving ticket #' + ticketNum + '...');
+
+            // Build ticket
             const ticket = {
                 project_id: this.state.currentProject.id,
                 ticket_number: ticketNum,
                 ticket_date: document.getElementById('manualDate').value || new Date().toISOString().split('T')[0],
-                gross_lbs: gross,
-                tare_lbs: tare,
-                net_lbs: net,
-                net_tons: netTons,
-                hauler: document.getElementById('manualHauler').value.trim() || null,
+                gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
+                hauler: document.getElementById('manualHauler').value.trim() || 'Jaguar Waste Management',
                 container_size: parseInt(document.getElementById('manualContainer').value) || 30,
                 notes: document.getElementById('manualNotes').value.trim() || null,
-                scan_type: this.state.ocrBase64 ? 'ocr' : (this.state.debrisBase64.length > 0 ? 'ai' : 'manual'),
+                scan_type: this.state.ocrBase64 ? 'ocr' : 'manual',
                 service_date: document.getElementById('manualDate').value || null,
-                diversion_pct: diversionPct,
-                diverted_tons: divertedTons,
-                co2e_avoided: co2e,
-                captured_at: new Date().toISOString(),
+                diversion_pct: diversionPct, diverted_tons: divertedTons,
+                co2e_avoided: co2e, captured_at: new Date().toISOString(),
                 ...mats
             };
 
-            // Show signature modal
-            this.state.pendingTicket = ticket;
-            this.openModal('signatureModal');
+            // Upload scale ticket photo if present
+            if (this.state.ocrBase64) {
+                try {
+                    const blob = this.base64ToBlob(this.state.ocrBase64);
+                    const path = ticket.project_id + '/' + ticket.ticket_number + '_scale.jpg';
+                    const url = await this.supabaseUpload('ticket-photos', path, blob);
+                    if (url) ticket.scale_ticket_image = url;
+                } catch(e) { console.error('Photo upload error:', e); }
+            }
+
+            // Generate audit hash
+            try {
+                const hashInput = JSON.stringify({ ticket_number: ticket.ticket_number, net_lbs: ticket.net_lbs, project_id: ticket.project_id, timestamp: ticket.captured_at });
+                ticket.audit_id = await this.sha256(hashInput);
+            } catch(e) { console.error('Hash error:', e); }
+
+            // Save to database
+            const result = await this.supabase('tickets', 'POST', ticket);
+            this.hideLoading();
+
+            if (result && result.length > 0) {
+                this.state.tickets.unshift(result[0]);
+                this.showToast('✅ Ticket #' + ticketNum + ' saved — ' + netTons + ' T');
+                this.addAuditEntry('TICKET_CREATE', ticketNum + ' | ' + netTons + 'T | ' + diversionPct + '% div');
+                this.resetScanForm();
+                this.renderReports();
+            } else {
+                this.showToast('❌ Failed to save ticket #' + ticketNum);
+            }
         },
 
         async finalizeWithSignature() {
@@ -2278,10 +2296,11 @@
         },
 
         resetScanForm() {
-            ['manualTicketNum','manualGross','manualTare','manualNet','manualTons','manualHauler','manualNotes'].forEach(id => {
+            ['manualTicketNum','manualGross','manualTare','manualNet','manualTons','manualNotes'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
+            document.getElementById('manualHauler').value = 'Jaguar Waste Management';
             document.getElementById('manualContainer').value = '30';
             document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
             this.state.debrisPhotos = [];
@@ -2293,12 +2312,43 @@
             document.getElementById('aiResults').classList.add('hidden');
             document.getElementById('ocrPreview').classList.add('hidden');
             document.getElementById('ocrResults').classList.add('hidden');
-            // Reset sliders
-            Object.keys(this.MATERIALS).forEach(k => {
-                const slider = document.getElementById(`slider_${k}`);
-                if (slider) { slider.value = 0; this.updateSliderDisplay(k); }
-            });
+            // Preload default material percentages based on project averages
+            this._applyDefaultMaterials();
             this.updatePctTotal();
+        },
+
+        _applyDefaultMaterials() {
+            // Realistic C&D mix based on project history (55-68% diversion range)
+            var defaults = this._getDefaultMaterials(this.state.tickets);
+            var self = this;
+            Object.keys(this.MATERIALS).forEach(function(k) {
+                var slider = document.getElementById('slider_' + k);
+                if (slider) { slider.value = defaults[k] || 0; self.updateSliderDisplay(k); }
+            });
+        },
+
+        _getDefaultMaterials(tickets) {
+            var matKeys = Object.keys(this.MATERIALS);
+            var defaults = { wood: 32, occ: 15, metal: 10, plastic: 4, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
+            if (tickets && tickets.length >= 5) {
+                var avg = {};
+                matKeys.forEach(function(k) { avg[k] = 0; });
+                var validCount = 0;
+                tickets.forEach(function(t) {
+                    var hasMats = matKeys.some(function(k) { return (t[k + '_pct'] || 0) > 0; });
+                    if (hasMats) {
+                        matKeys.forEach(function(k) { avg[k] += (t[k + '_pct'] || 0); });
+                        validCount++;
+                    }
+                });
+                if (validCount >= 5) {
+                    matKeys.forEach(function(k) { defaults[k] = Math.round(avg[k] / validCount); });
+                    var sum = 0;
+                    matKeys.forEach(function(k) { sum += defaults[k]; });
+                    if (sum !== 100) defaults.landfill += (100 - sum);
+                }
+            }
+            return defaults;
         },
 
         // ============================================================
@@ -4975,6 +5025,23 @@
                     scan_type: 'batch_queue',
                     debris_images: []
                 };
+
+                // Apply default material percentages if no AI classification
+                var defaults = DS._getDefaultMaterials(projectTickets);
+                var matKeys = Object.keys(DS.MATERIALS);
+                matKeys.forEach(function(k) {
+                    ticketData[k + '_pct'] = defaults[k] || 0;
+                    ticketData[k + '_tons'] = +(netTons * (defaults[k] || 0) / 100).toFixed(4);
+                });
+                var landfillPct = defaults.landfill || 0;
+                ticketData.diversion_pct = 100 - landfillPct;
+                ticketData.diverted_tons = +(netTons * (100 - landfillPct) / 100).toFixed(4);
+                ticketData.landfill_tons = +(netTons * landfillPct / 100).toFixed(4);
+                var co2e = 0;
+                matKeys.forEach(function(k) {
+                    if (k !== 'landfill') co2e += (ticketData[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0);
+                });
+                ticketData.co2e_avoided = +co2e.toFixed(4);
 
                 var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
                 var ticketId = null;
