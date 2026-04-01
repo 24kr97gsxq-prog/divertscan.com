@@ -2187,16 +2187,23 @@
             this.showLoading('Saving ticket #' + ticketNum + '...');
 
             // Build ticket
+            // Force year to 2026 on any date
+            var rawDate = document.getElementById('manualDate').value || new Date().toISOString().split('T')[0];
+            if (rawDate && rawDate.length >= 4 && rawDate.substring(0,4) !== '2026') {
+                rawDate = '2026' + rawDate.substring(4);
+                document.getElementById('manualDate').value = rawDate;
+            }
+
             const ticket = {
                 project_id: this.state.currentProject.id,
                 ticket_number: ticketNum,
-                ticket_date: document.getElementById('manualDate').value || new Date().toISOString().split('T')[0],
+                ticket_date: rawDate,
                 gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
-                hauler: document.getElementById('manualHauler').value.trim() || 'Jaguar Waste Management',
+                hauler: document.getElementById('manualHauler').value || 'Jaguar Waste Management',
                 container_size: parseInt(document.getElementById('manualContainer').value) || 30,
                 notes: document.getElementById('manualNotes').value.trim() || null,
                 scan_type: this.state.ocrBase64 ? 'ocr' : 'manual',
-                service_date: document.getElementById('manualDate').value || null,
+                service_date: rawDate,
                 diversion_pct: diversionPct, diverted_tons: divertedTons,
                 co2e_avoided: co2e, captured_at: new Date().toISOString(),
                 ...mats
@@ -2660,7 +2667,14 @@
             if (ocr.ticket_number) document.getElementById('manualTicketNum').value = ocr.ticket_number;
             if (ocr.gross_lbs) document.getElementById('manualGross').value = ocr.gross_lbs;
             if (ocr.tare_lbs) document.getElementById('manualTare').value = ocr.tare_lbs;
-            if (ocr.date) document.getElementById('manualDate').value = ocr.date;
+            if (ocr.date) {
+                // Force year to 2026 — OCR frequently misreads the year
+                var d = ocr.date;
+                if (d && d.length >= 4 && d.substring(0,4) !== '2026') {
+                    d = '2026' + d.substring(4);
+                }
+                document.getElementById('manualDate').value = d;
+            }
             if (ocr.hauler) document.getElementById('manualHauler').value = ocr.hauler;
             this.calcNet();
 
@@ -4925,11 +4939,10 @@
                 scaleTickets.forEach(function(item, i) {
                     var ocr = item.ocr;
                     var today = new Date().toISOString().split('T')[0];
-                    // Read month/year from batch override selectors
+                    // Read month/year from batch override selectors — ALWAYS force 2026
                     var batchMonthEl = document.getElementById('batchMonth');
-                    var batchYearEl = document.getElementById('batchYear');
                     var useMonth = batchMonthEl ? parseInt(batchMonthEl.value) : new Date().getMonth();
-                    var useYear = batchYearEl ? parseInt(batchYearEl.value) : new Date().getFullYear();
+                    var useYear = 2026;
                     var monthStr = String(useMonth+1).padStart(2,'0');
                     // Parse the raw printed date ourselves — AI returns it as "MM/DD/YY" or "M/D/YY"
                     var useDate = today;
