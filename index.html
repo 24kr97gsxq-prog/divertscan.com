@@ -2335,7 +2335,7 @@
 
         _getDefaultMaterials(tickets) {
             var matKeys = Object.keys(this.MATERIALS);
-            var defaults = { wood: 32, occ: 15, metal: 10, plastic: 4, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
+            var base = { wood: 32, occ: 15, metal: 10, plastic: 4, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
             if (tickets && tickets.length >= 5) {
                 var avg = {};
                 matKeys.forEach(function(k) { avg[k] = 0; });
@@ -2348,11 +2348,35 @@
                     }
                 });
                 if (validCount >= 5) {
-                    matKeys.forEach(function(k) { defaults[k] = Math.round(avg[k] / validCount); });
-                    var sum = 0;
-                    matKeys.forEach(function(k) { sum += defaults[k]; });
-                    if (sum !== 100) defaults.landfill += (100 - sum);
+                    matKeys.forEach(function(k) { base[k] = Math.round(avg[k] / validCount); });
                 }
+            }
+            // Randomize: vary each material by ±3-5 points within realistic bounds
+            var defaults = {};
+            var nonLandfill = matKeys.filter(function(k) { return k !== 'landfill'; });
+            nonLandfill.forEach(function(k) {
+                var val = base[k] || 0;
+                if (val > 0) {
+                    var swing = Math.max(3, Math.round(val * 0.2));
+                    val = val + Math.floor(Math.random() * (swing * 2 + 1)) - swing;
+                    val = Math.max(0, val);
+                }
+                defaults[k] = val;
+            });
+            // Landfill = whatever is left to make 100
+            var used = 0;
+            nonLandfill.forEach(function(k) { used += defaults[k]; });
+            defaults.landfill = Math.max(0, 100 - used);
+            // If landfill ended up too high or too low, redistribute
+            if (defaults.landfill > 50) {
+                var extra = defaults.landfill - 35;
+                defaults.wood += Math.round(extra * 0.4);
+                defaults.occ += Math.round(extra * 0.25);
+                defaults.metal += Math.round(extra * 0.2);
+                defaults.plastic += Math.round(extra * 0.15);
+                used = 0;
+                nonLandfill.forEach(function(k) { used += defaults[k]; });
+                defaults.landfill = 100 - used;
             }
             return defaults;
         },
