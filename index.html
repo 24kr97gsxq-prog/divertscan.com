@@ -3215,6 +3215,7 @@
                         <button class="btn btn-sm btn-primary" onclick="DS.exportMonthPDF('${key}')" style="flex:1;">📄 PDF</button>
                         <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')" style="flex:1;">📥 XLSX</button>
                         <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')" style="flex:1;">📊 CSV</button>
+                        <button class="btn btn-sm btn-success" onclick="DS.exportMonthQBO('${key}')" style="flex:1;">💰 QBO</button>
                     </div>
                 </div>`;
             });
@@ -4222,6 +4223,66 @@
 
             XLSX.writeFile(wb, 'DivertScan_' + (proj.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_Full_Report.xlsx');
             this.showToast('Downloaded full report XLSX');
+        },
+
+        exportMonthQBO(monthKey) {
+            var proj = this.state.currentProject;
+            if (!proj) { this.showToast('Select a project first'); return; }
+            var tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
+            tickets = tickets.filter(function(t) { return (parseFloat(t.net_tons) || 0) > 0; });
+            if (!tickets.length) { this.showToast('No tickets for ' + monthKey); return; }
+
+            var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+            var parts = monthKey.split('-');
+            var year = parts[0];
+            var monthNum = parseInt(parts[1]);
+            var monthName = monthNames[monthNum] || monthKey;
+
+            // QBO Invoice CSV format
+            var customer = (proj.client || proj.general_contractor || proj.name || 'Client').trim();
+            var invoiceNo = 'DS-' + year + String(monthNum).padStart(2,'0');
+            // Invoice date = last day of the month
+            var lastDay = new Date(parseInt(year), monthNum, 0).getDate();
+            var invoiceDate = monthNum + '/' + lastDay + '/' + year;
+            // Due date = 15 days after invoice date
+            var dueDate = new Date(parseInt(year), monthNum - 1, lastDay + 15);
+            var dueDateStr = (dueDate.getMonth()+1) + '/' + dueDate.getDate() + '/' + dueDate.getFullYear();
+
+            var PRODUCT = 'LEED Landfill diversion:Roll Off Service Sorting';
+            var RATE = 125.00; // per load rate
+
+            var headers = ['InvoiceNo','Customer','InvoiceDate','DueDate','ServiceDate','Product/Service','Description','Qty','Rate','Amount','Class'];
+            var rows = [];
+            var totalTons = 0;
+
+            tickets.sort(function(a,b) { return (a.ticket_date || '').localeCompare(b.ticket_date || ''); });
+
+            tickets.forEach(function(t) {
+                var tons = Math.round((parseFloat(t.net_tons) || 0) * 100) / 100;
+                if (tons <= 0) return;
+                totalTons += tons;
+                var amount = Math.round(tons * RATE * 100) / 100;
+                var svcDate = t.ticket_date || t.service_date || '';
+                if (svcDate.indexOf('-') >= 0) {
+                    var p = svcDate.split('-');
+                    svcDate = parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
+                }
+                var divPct = t.diversion_pct || 0;
+                var gross = t.gross_lbs || 0;
+                var tare = t.tare_lbs || 0;
+                var netLbs = t.net_lbs || 0;
+                var desc = 'Ticket #' + (t.ticket_number || '') + ' | ' + svcDate + ' | ' + (t.hauler || 'Jaguar Waste Management') + ' | Gross: ' + gross.toLocaleString() + ' lbs | Tare: ' + tare.toLocaleString() + ' lbs | Net: ' + netLbs.toLocaleString() + ' lbs (' + tons + ' T) | ' + divPct + '% diverted';
+                rows.push([invoiceNo, customer, invoiceDate, dueDateStr, svcDate, PRODUCT, desc, tons.toFixed(2), RATE.toFixed(2), amount.toFixed(2), 'Recycling']);
+            });
+
+            if (!rows.length) { this.showToast('No valid tickets'); return; }
+
+            var esc = function(v) { var s = String(v == null ? '' : v); return (s.indexOf(',') >= 0 || s.indexOf('"') >= 0) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+            var csv = [headers.map(esc).join(',')].concat(rows.map(function(r) { return r.map(esc).join(','); })).join('\n');
+
+            var fname = 'QBO_Invoice_' + (proj.name || 'Project').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthKey + '.csv';
+            this.downloadFile(csv, fname, 'text/csv');
+            this.showToast('✅ QBO invoice — ' + rows.length + ' tickets, ' + totalTons.toFixed(2) + ' T, $' + (totalTons * RATE).toFixed(2));
         },
 
         exportQBOInvoice() {
