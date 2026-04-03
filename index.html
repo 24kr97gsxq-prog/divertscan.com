@@ -3401,7 +3401,6 @@ const DS = {
 
     openBatchUpload(type) {
         if (!this.state.currentProject) { this.showToast('Select a project first'); return; }
-        if (this.state.tickets.length === 0) { this.showToast('No tickets loaded'); return; }
 
         this._batchType = type;
         this._batchFiles = [];
@@ -3605,7 +3604,18 @@ const DS = {
                             if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
                         }
                     } else {
-                        // Ticket not found — auto-create it from OCR data
+                        // Ticket not found locally — check database before creating
+                        var dupeDb = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&project_id=eq.' + this.state.currentProject.id + '&select=id,ticket_number,ticket_date,net_tons');
+                        if (dupeDb && dupeDb.length > 0) {
+                            var dd = dupeDb[0];
+                            matched++;
+                            if (statusEl) {
+                                statusEl.innerHTML = '⚠️ <strong>#' + ticketNum + '</strong> — already exists (' + (dd.ticket_date || '') + ', ' + (dd.net_tons || 0) + ' T) — skipped';
+                                statusEl.style.color = 'var(--warning)';
+                            }
+                            if (rowEl) { rowEl.style.background = 'var(--warning-light)'; }
+                        } else {
+                        // Auto-create from OCR data
                         var photoGross2 = parseInt(parsed.gross_lbs || parsed.gross) || 0;
                         var photoTare2 = parseInt(parsed.tare_lbs || parsed.tare) || 0;
                         var photoNet2 = photoGross2 - photoTare2;
@@ -3698,6 +3708,7 @@ const DS = {
                             }
                             if (rowEl) { rowEl.style.background = 'var(--warning-light)'; }
                         }
+                        } // end dupe check else
                     }
                 } else {
                     if (statusEl) {
