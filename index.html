@@ -3605,11 +3605,81 @@ const DS = {
                             if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
                         }
                     } else {
-                        if (statusEl) {
-                            statusEl.innerHTML = '⚠️ Read <strong>#' + ticketNum + '</strong> — not found in this project';
-                            statusEl.style.color = 'var(--warning)';
+                        // Ticket not found — auto-create it from OCR data
+                        var photoGross2 = parseInt(parsed.gross_lbs || parsed.gross) || 0;
+                        var photoTare2 = parseInt(parsed.tare_lbs || parsed.tare) || 0;
+                        var photoNet2 = photoGross2 - photoTare2;
+                        var photoTons2 = +(photoNet2 / 2000).toFixed(4);
+                        // Parse date and force year to 2026
+                        var rawDate2 = parsed.date || parsed.printed_date || '';
+                        var tktDate2 = new Date().toISOString().split('T')[0];
+                        if (rawDate2) {
+                            var dp = rawDate2.replace(/-/g,'/').split('/');
+                            if (dp.length >= 3) {
+                                var mm = String(parseInt(dp[0])).padStart(2,'0');
+                                var dd = String(parseInt(dp[1])).padStart(2,'0');
+                                tktDate2 = '2026-' + mm + '-' + dd;
+                            } else if (rawDate2.indexOf('-') >= 0 && rawDate2.length >= 10) {
+                                tktDate2 = '2026' + rawDate2.substring(4);
+                            }
                         }
-                        if (rowEl) { rowEl.style.background = 'var(--warning-light)'; }
+                        if (photoTons2 > 0) {
+                            var defaults2 = DS._getDefaultMaterials(tickets);
+                            var matData2 = {};
+                            var matKeys2 = Object.keys(DS.MATERIALS);
+                            matKeys2.forEach(function(k) {
+                                matData2[k + '_pct'] = defaults2[k] || 0;
+                                matData2[k + '_tons'] = +(photoTons2 * (defaults2[k] || 0) / 100).toFixed(4);
+                            });
+                            var lfPct2 = defaults2.landfill || 0;
+                            var divPct2 = 100 - lfPct2;
+                            var divTons2 = +(photoTons2 * divPct2 / 100).toFixed(4);
+                            var co2e2 = 0;
+                            matKeys2.forEach(function(k) { if (k !== 'landfill') co2e2 += (matData2[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0); });
+
+                            var newTicket = {
+                                project_id: this.state.currentProject.id,
+                                ticket_number: ticketNum,
+                                ticket_date: tktDate2,
+                                gross_lbs: photoGross2,
+                                tare_lbs: photoTare2,
+                                net_lbs: photoNet2,
+                                net_tons: photoTons2,
+                                hauler: 'Jaguar Waste Management',
+                                scan_type: 'batch_ocr',
+                                scale_ticket_image: this._batchFiles[idx].url || null,
+                                diversion_pct: divPct2,
+                                diverted_tons: divTons2,
+                                landfill_tons: +(photoTons2 * lfPct2 / 100).toFixed(4),
+                                co2e_avoided: +co2e2.toFixed(4),
+                                captured_at: new Date().toISOString()
+                            };
+                            Object.assign(newTicket, matData2);
+
+                            var created = await this.supabase('tickets', 'POST', newTicket);
+                            if (created && created.length > 0) {
+                                this.state.tickets.unshift(created[0]);
+                                tickets.push(created[0]);
+                                matched++;
+                                if (statusEl) {
+                                    statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
+                                    statusEl.style.color = 'var(--success)';
+                                }
+                                if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
+                                this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
+                            } else {
+                                if (statusEl) {
+                                    statusEl.innerHTML = '❌ Read <strong>#' + ticketNum + '</strong> — failed to create ticket';
+                                    statusEl.style.color = 'var(--danger)';
+                                }
+                            }
+                        } else {
+                            if (statusEl) {
+                                statusEl.innerHTML = '⚠️ Read <strong>#' + ticketNum + '</strong> — no weight data, select manually';
+                                statusEl.style.color = 'var(--warning)';
+                            }
+                            if (rowEl) { rowEl.style.background = 'var(--warning-light)'; }
+                        }
                     }
                 } else {
                     if (statusEl) {
