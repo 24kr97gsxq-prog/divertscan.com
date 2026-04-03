@@ -3623,53 +3623,71 @@ const DS = {
                                 tktDate2 = '2026' + rawDate2.substring(4);
                             }
                         }
+                        if (tktDate2.substring(0,4) !== '2026') tktDate2 = '2026' + tktDate2.substring(4);
                         if (photoTons2 > 0) {
-                            var defaults2 = DS._getDefaultMaterials(tickets);
-                            var matData2 = {};
-                            var matKeys2 = Object.keys(DS.MATERIALS);
-                            matKeys2.forEach(function(k) {
-                                matData2[k + '_pct'] = defaults2[k] || 0;
-                                matData2[k + '_tons'] = +(photoTons2 * (defaults2[k] || 0) / 100).toFixed(4);
-                            });
-                            var lfPct2 = defaults2.landfill || 0;
-                            var divPct2 = 100 - lfPct2;
-                            var divTons2 = +(photoTons2 * divPct2 / 100).toFixed(4);
-                            var co2e2 = 0;
-                            matKeys2.forEach(function(k) { if (k !== 'landfill') co2e2 += (matData2[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0); });
-
-                            var newTicket = {
-                                project_id: this.state.currentProject.id,
-                                ticket_number: ticketNum,
-                                ticket_date: tktDate2,
-                                gross_lbs: photoGross2,
-                                tare_lbs: photoTare2,
-                                net_lbs: photoNet2,
-                                net_tons: photoTons2,
-                                hauler: 'Jaguar Waste Management',
-                                scan_type: 'batch_ocr',
-                                scale_ticket_image: this._batchFiles[idx].url || null,
-                                diversion_pct: divPct2,
-                                diverted_tons: divTons2,
-                                landfill_tons: +(photoTons2 * lfPct2 / 100).toFixed(4),
-                                co2e_avoided: +co2e2.toFixed(4),
-                                captured_at: new Date().toISOString()
-                            };
-                            Object.assign(newTicket, matData2);
-
-                            var created = await this.supabase('tickets', 'POST', newTicket);
-                            if (created && created.length > 0) {
-                                this.state.tickets.unshift(created[0]);
-                                tickets.push(created[0]);
-                                matched++;
-                                if (statusEl) {
-                                    statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
-                                    statusEl.style.color = 'var(--success)';
+                            try {
+                                // Upload photo to storage first
+                                var scaleUrl = null;
+                                var projId = this.state.currentProject.id;
+                                if (this._batchBase64[idx]) {
+                                    var photoBlob = this.base64ToBlob(this._batchBase64[idx]);
+                                    var photoPath = projId + '/' + ticketNum + '_scale_' + Date.now() + '.jpg';
+                                    scaleUrl = await this.supabaseUpload('ticket-photos', photoPath, photoBlob);
                                 }
-                                if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
-                                this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
-                            } else {
+
+                                var defaults2 = DS._getDefaultMaterials(tickets);
+                                var matData2 = {};
+                                var matKeys2 = Object.keys(DS.MATERIALS);
+                                matKeys2.forEach(function(k) {
+                                    matData2[k + '_pct'] = defaults2[k] || 0;
+                                    matData2[k + '_tons'] = +(photoTons2 * (defaults2[k] || 0) / 100).toFixed(4);
+                                });
+                                var lfPct2 = defaults2.landfill || 0;
+                                var divPct2 = 100 - lfPct2;
+                                var divTons2 = +(photoTons2 * divPct2 / 100).toFixed(4);
+                                var co2e2 = 0;
+                                matKeys2.forEach(function(k) { if (k !== 'landfill') co2e2 += (matData2[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0); });
+
+                                var newTicket = {
+                                    project_id: projId,
+                                    ticket_number: ticketNum,
+                                    ticket_date: tktDate2,
+                                    gross_lbs: photoGross2,
+                                    tare_lbs: photoTare2,
+                                    net_lbs: photoNet2,
+                                    net_tons: photoTons2,
+                                    hauler: 'Jaguar Waste Management',
+                                    scan_type: 'batch_ocr',
+                                    diversion_pct: divPct2,
+                                    diverted_tons: divTons2,
+                                    landfill_tons: +(photoTons2 * lfPct2 / 100).toFixed(4),
+                                    co2e_avoided: +co2e2.toFixed(4),
+                                    captured_at: new Date().toISOString()
+                                };
+                                if (scaleUrl) newTicket.scale_ticket_image = scaleUrl;
+                                Object.assign(newTicket, matData2);
+
+                                var created = await this.supabase('tickets', 'POST', newTicket);
+                                if (created && created.length > 0) {
+                                    this.state.tickets.unshift(created[0]);
+                                    tickets.push(created[0]);
+                                    matched++;
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
+                                        statusEl.style.color = 'var(--success)';
+                                    }
+                                    if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
+                                    this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
+                                } else {
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '❌ <strong>#' + ticketNum + '</strong> — DB insert failed (check console)';
+                                        statusEl.style.color = 'var(--danger)';
+                                    }
+                                }
+                            } catch(createErr) {
+                                console.error('Auto-create ticket error:', createErr);
                                 if (statusEl) {
-                                    statusEl.innerHTML = '❌ Read <strong>#' + ticketNum + '</strong> — failed to create ticket';
+                                    statusEl.innerHTML = '❌ <strong>#' + ticketNum + '</strong> — ' + createErr.message;
                                     statusEl.style.color = 'var(--danger)';
                                 }
                             }
