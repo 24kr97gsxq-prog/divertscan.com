@@ -3624,16 +3624,32 @@ const DS = {
                         var rawDate2 = parsed.date || parsed.printed_date || '';
                         var tktDate2 = new Date().toISOString().split('T')[0];
                         if (rawDate2) {
-                            var dp = rawDate2.replace(/-/g,'/').split('/');
+                            // Handle multiple formats: MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD, M-D-YY
+                            var clean = rawDate2.replace(/-/g,'/').trim();
+                            var dp = clean.split('/');
                             if (dp.length >= 3) {
-                                var mm = String(parseInt(dp[0])).padStart(2,'0');
-                                var dd = String(parseInt(dp[1])).padStart(2,'0');
-                                tktDate2 = '2026-' + mm + '-' + dd;
-                            } else if (rawDate2.indexOf('-') >= 0 && rawDate2.length >= 10) {
-                                tktDate2 = '2026' + rawDate2.substring(4);
+                                var p0 = parseInt(dp[0]) || 0;
+                                var p1 = parseInt(dp[1]) || 0;
+                                var p2 = parseInt(dp[2]) || 0;
+                                var mm2, dd2;
+                                if (p0 > 31) {
+                                    // YYYY/MM/DD format
+                                    mm2 = p1; dd2 = p2;
+                                } else {
+                                    // MM/DD/YY or MM/DD/YYYY format
+                                    mm2 = p0; dd2 = p1;
+                                }
+                                if (mm2 >= 1 && mm2 <= 12 && dd2 >= 1 && dd2 <= 31) {
+                                    tktDate2 = '2026-' + String(mm2).padStart(2,'0') + '-' + String(dd2).padStart(2,'0');
+                                }
                             }
                         }
-                        if (tktDate2.substring(0,4) !== '2026') tktDate2 = '2026' + tktDate2.substring(4);
+                        // Final validation — if date is still bad, use today
+                        var testDate = new Date(tktDate2);
+                        if (isNaN(testDate.getTime()) || tktDate2.substring(0,4) !== '2026') {
+                            tktDate2 = new Date().toISOString().split('T')[0];
+                            if (tktDate2.substring(0,4) !== '2026') tktDate2 = '2026' + tktDate2.substring(4);
+                        }
                         if (photoTons2 > 0) {
                             try {
                                 // Upload photo to storage first
