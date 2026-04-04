@@ -3677,20 +3677,35 @@ const DS = {
                                 if (scaleUrl) newTicket.scale_ticket_image = scaleUrl;
                                 Object.assign(newTicket, matData2);
 
-                                var created = await this.supabase('tickets', 'POST', newTicket);
-                                if (created && created.length > 0) {
-                                    this.state.tickets.unshift(created[0]);
-                                    tickets.push(created[0]);
-                                    matched++;
-                                    if (statusEl) {
-                                        statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
-                                        statusEl.style.color = 'var(--success)';
+                                // Direct POST with error capture
+                                var postRes = await fetch(this.state.supabaseUrl + '/rest/v1/tickets', {
+                                    method: 'POST',
+                                    headers: {
+                                        'apikey': this.state.supabaseKey,
+                                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                                        'Content-Type': 'application/json',
+                                        'Prefer': 'return=representation'
+                                    },
+                                    body: JSON.stringify(newTicket)
+                                });
+                                if (postRes.ok) {
+                                    var created = await postRes.json();
+                                    if (created && created.length > 0) {
+                                        this.state.tickets.unshift(created[0]);
+                                        tickets.push(created[0]);
+                                        matched++;
+                                        if (statusEl) {
+                                            statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
+                                            statusEl.style.color = 'var(--success)';
+                                        }
+                                        if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
+                                        this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
                                     }
-                                    if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
-                                    this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
                                 } else {
+                                    var errText = await postRes.text();
+                                    console.error('Ticket insert error:', postRes.status, errText);
                                     if (statusEl) {
-                                        statusEl.innerHTML = '❌ <strong>#' + ticketNum + '</strong> — DB insert failed (check console)';
+                                        statusEl.innerHTML = '❌ <strong>#' + ticketNum + '</strong> — ' + postRes.status + ': ' + errText.substring(0, 120);
                                         statusEl.style.color = 'var(--danger)';
                                     }
                                 }
