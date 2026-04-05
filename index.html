@@ -851,7 +851,10 @@
                 <div class="upload-icon" id="batchUploadIcon">📄</div>
                 <div class="upload-text">Select photos from camera roll or files</div>
                 <div class="upload-hint">You can select multiple photos at once</div>
-                <input type="file" accept="image/*,.jpg,.jpeg,.png,.heic" multiple id="batchFileInput" onchange="DS.handleBatchFiles(this)">
+                <input type="file" accept="image/*" multiple id="batchFileInput" onchange="DS.handleBatchFiles(this)">
+            </div>
+            <div style="text-align:center;margin-bottom:8px">
+                <button class="btn btn-sm btn-outline" onclick="document.getElementById('batchFileInput').click()" style="font-size:.75rem">＋ Add More Photos</button>
             </div>
             <div id="batchPhotoList"></div>
             <div id="batchActions" class="hidden">
@@ -3404,6 +3407,7 @@
             this._batchFiles = [];
             this._batchMatches = [];
             this._batchBase64 = [];
+            this._batchLoaded = 0;
 
             const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
             document.getElementById('batchUploadTitle').textContent = title;
@@ -3416,26 +3420,30 @@
         },
 
         handleBatchFiles(input) {
-            const files = Array.from(input.files);
-            if (files.length === 0) return;
+            const newFiles = Array.from(input.files);
+            if (newFiles.length === 0) return;
 
-            this._batchFiles = files;
-            this._batchMatches = new Array(files.length).fill(null);
-            this._batchBase64 = new Array(files.length).fill(null);
-            this._batchLoaded = 0;
+            // Append to existing files if any
+            const startIdx = this._batchFiles.length;
+            this._batchFiles = this._batchFiles.concat(newFiles);
+            this._batchMatches = this._batchMatches.concat(new Array(newFiles.length).fill(null));
+            this._batchBase64 = this._batchBase64.concat(new Array(newFiles.length).fill(null));
+            if (!this._batchLoaded) this._batchLoaded = 0;
+
+            const allFiles = this._batchFiles;
 
             // Build ticket options dropdown
             const tickets = this.state.tickets.sort((a,b) => (a.ticket_number || '').localeCompare(b.ticket_number || ''));
             const optionsHtml = `<option value="">— Select ticket —</option>` +
                 tickets.map(t => `<option value="${t.id}">${t.ticket_number} (${(t.ticket_date||'').substring(5)} • ${this.fmt(t.net_tons)}T)</option>`).join('');
 
-            let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">${files.length} photo${files.length > 1 ? 's' : ''} selected</div>`;
+            let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">${allFiles.length} photo${allFiles.length > 1 ? 's' : ''} selected</div>`;
 
             if (this._batchType === 'scale') {
                 html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" disabled onclick="DS.aiBatchOCR()">🤖 Loading photos...</button>`;
             }
 
-            files.forEach((file, idx) => {
+            allFiles.forEach((file, idx) => {
                 // Read file to base64
                 const reader = new FileReader();
                 reader.onload = (e) => {
