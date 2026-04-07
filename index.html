@@ -3411,6 +3411,7 @@
             this._batchMatches = [];
             this._batchBase64 = [];
             this._batchLoaded = 0;
+            this._batchProcessed = {};
 
             const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
             document.getElementById('batchUploadTitle').textContent = title;
@@ -3505,10 +3506,17 @@
             const btn = document.getElementById('batchAiBtn');
             if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
 
+            // Initialize processed tracker if not exists
+            if (!this._batchProcessed) this._batchProcessed = {};
+
             let matched = 0, flagged = 0;
             const tickets = this.state.tickets;
 
             for (let idx = 0; idx < this._batchFiles.length; idx++) {
+                // Skip already-processed photos
+                if (this._batchProcessed[idx]) {
+                    continue;
+                }
                 const statusEl = document.getElementById(`batchStatus_${idx}`);
                 const selectEl = document.getElementById(`batchSelect_${idx}`);
                 const rowEl = document.getElementById(`batchRow_${idx}`);
@@ -3595,6 +3603,7 @@
                             // Auto-select in dropdown
                             if (selectEl) { selectEl.value = matchedTicket.id; }
                             this._batchMatches[idx] = matchedTicket.id;
+                            this._batchProcessed[idx] = true;
                             matched++;
 
                             if (discrepancies.length > 0) {
@@ -3618,6 +3627,7 @@
                             if (dupeDb && dupeDb.length > 0) {
                                 var dd = dupeDb[0];
                                 matched++;
+                                this._batchProcessed[idx] = true;
                                 if (statusEl) {
                                     statusEl.innerHTML = '⚠️ <strong>#' + ticketNum + '</strong> — already exists (' + (dd.ticket_date || '') + ', ' + (dd.net_tons || 0) + ' T) — skipped';
                                     statusEl.style.color = 'var(--warning)';
@@ -3718,6 +3728,7 @@
                                         if (created && created.length > 0) {
                                             this.state.tickets.unshift(created[0]);
                                             tickets.push(created[0]);
+                                            this._batchProcessed[idx] = true;
                                             matched++;
                                             if (statusEl) {
                                                 statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
