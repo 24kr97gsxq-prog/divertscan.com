@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dalmex Recycling — Scale Entry</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --navy:#0f2b3c;--navy-light:#1a3d54;--accent:#00c9a7;--accent-dim:rgba(0,201,167,0.15);
+    --orange:#f59e0b;--red:#ef4444;--blue:#3b82f6;--green:#22c55e;
+    --bg:#080f14;--card:#0d1a24;--card-border:#1a3044;--text:#e2e8f0;--text-dim:#64748b;
+    --mono:'Space Mono',monospace;--font:'DM Sans',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+
+/* Top Bar */
+.topbar{background:linear-gradient(135deg,var(--navy) 0%,#0a1f2e 100%);border-bottom:1px solid var(--card-border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.topbar h1{font-size:16px;font-weight:700;letter-spacing:.5px}
+.topbar h1 span{color:var(--accent)}
+.topbar .status{display:flex;align-items:center;gap:6px;font-size:12px}
+.topbar .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Main Content */
+.main{height:calc(100vh - 52px);height:calc(100dvh - 52px);display:flex;flex-direction:column;padding:16px;gap:12px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),transparent)}
+.card-title{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+
+/* Project Buttons */
+.project-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.proj-btn{padding:16px 12px;border-radius:10px;border:2px solid var(--card-border);background:var(--navy);font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.proj-btn:active,.proj-btn.selected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);transform:scale(.97)}
+.proj-btn.selected{box-shadow:0 0 20px rgba(0,201,167,.2)}
+.proj-btn .proj-sub{font-size:10px;font-weight:400;color:var(--text-dim);margin-top:4px;letter-spacing:.5px}
+
+/* Weight Display */
+.weight-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.weight-box{background:var(--navy);border:1px solid var(--card-border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
+.weight-box.active{border-color:var(--accent);box-shadow:0 0 15px rgba(0,201,167,.15)}
+.weight-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:6px}
+.weight-value{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--accent);min-height:40px}
+.weight-value.empty{color:var(--text-dim);font-size:18px}
+.weight-lbs{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-top:2px}
+
+.net-display{text-align:center;padding:14px;background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(0,201,167,.02));border:1px solid rgba(0,201,167,.3);border-radius:10px}
+.net-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:4px}
+.net-value{font-family:var(--mono);font-size:38px;font-weight:700;color:var(--accent)}
+.net-sub{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:2px}
+
+/* Numpad */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.num-btn{padding:18px;border-radius:10px;border:1px solid var(--card-border);background:var(--navy);font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;-webkit-tap-highlight-color:transparent;user-select:none}
+.num-btn:active{background:var(--accent);color:var(--bg);transform:scale(.95)}
+.num-btn.clear{color:var(--red);border-color:rgba(239,68,68,.3)}
+.num-btn.clear:active{background:var(--red);color:#fff}
+.num-btn.enter{background:var(--accent);color:var(--bg);font-family:var(--font);font-size:14px;font-weight:700;grid-column:span 2}
+.num-btn.enter:active{background:#00a88a}
+
+/* Hauler Select */
+.hauler-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.hauler-btn{padding:12px;border-radius:8px;border:1px solid var(--card-border);background:var(--navy);font-family:var(--font);font-size:12px;font-weight:600;color:var(--text-dim);cursor:pointer;text-align:center;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.hauler-btn:active,.hauler-btn.selected{border-color:var(--orange);color:var(--orange);background:rgba(245,158,11,.08)}
+
+/* Save Button */
+.save-btn{padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent),#00a88a);font-family:var(--font);font-size:16px;font-weight:700;color:var(--bg);cursor:pointer;text-align:center;letter-spacing:.5px;transition:all .2s;-webkit-tap-highlight-color:transparent;width:100%}
+.save-btn:active{transform:scale(.97);opacity:.9}
+.save-btn:disabled{opacity:.3;pointer-events:none}
+
+/* Success Screen */
+.success-screen{display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;gap:16px;min-height:60vh}
+.success-screen.show{display:flex}
+.success-check{font-size:64px;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275)}
+@keyframes popIn{0%{transform:scale(0)}100%{transform:scale(1)}}
+.success-ticket{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent)}
+.success-detail{font-size:14px;color:var(--text-dim);line-height:1.8}
+.success-detail b{color:var(--text)}
+.next-btn{padding:16px 40px;border-radius:10px;border:2px solid var(--accent);background:transparent;font-family:var(--font);font-size:14px;font-weight:700;color:var(--accent);cursor:pointer;margin-top:12px;-webkit-tap-highlight-color:transparent}
+.next-btn:active{background:var(--accent);color:var(--bg)}
+
+/* Entry Screen */
+.entry-screen{display:flex;flex-direction:column;gap:12px}
+.entry-screen.hidden{display:none}
+
+/* Toast */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--navy);border:1px solid var(--accent);color:var(--accent);padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;display:none;animation:fadeIn .3s}
+.toast.show{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* Responsive */
+@media(min-width:768px){
+    .main{max-width:500px;margin:0 auto}
+    .project-grid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <h1><span>DALMEX</span> RECYCLING — Scale</h1>
+    <div class="status"><span class="pulse"></span> LIVE</div>
+</div>
+
+<div class="main">
+    <!-- Entry Form -->
+    <div class="entry-screen" id="entryScreen">
+
+        <!-- Step 1: Select Project -->
+        <div class="card">
+            <div class="card-title"><span class="dot"></span>Select Project</div>
+            <div class="project-grid" id="projectGrid">
+                <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;grid-column:span 2">Loading projects...</div>
+            </div>
+        </div>
+
+        <!-- Step 2: Hauler -->
+        <div class="card">
+            <div class="card-title"><span class="dot"></span>Hauler</div>
+            <div class="hauler-row" id="haulerRow">
+                <div class="hauler-btn selected" onclick="S.pickHauler(this,'Jaguar Waste Management')">Jaguar</div>
+                <div class="hauler-btn" onclick="S.pickHauler(this,'B&B Waste')">B&B Waste</div>
+                <div class="hauler-btn" onclick="S.pickHauler(this,'Liberty Demolition')">Liberty Demo</div>
+                <div class="hauler-btn" onclick="S.pickHauler(this,'Ranger Waste')">Ranger</div>
+            </div>
+        </div>
+
+        <!-- Step 3: Weights -->
+        <div class="card">
+            <div class="card-title"><span class="dot"></span>Scale Weights</div>
+            <div class="weight-row" style="margin-bottom:10px">
+                <div class="weight-box" id="grossBox" onclick="S.setField('gross')">
+                    <div class="weight-label">Gross (lbs)</div>
+                    <div class="weight-value empty" id="grossDisplay">Tap to enter</div>
+                    <div class="weight-lbs" id="grossTons"></div>
+                </div>
+                <div class="weight-box" id="tareBox" onclick="S.setField('tare')">
+                    <div class="weight-label">Tare (lbs)</div>
+                    <div class="weight-value empty" id="tareDisplay">Tap to enter</div>
+                    <div class="weight-lbs" id="tareTons"></div>
+                </div>
+            </div>
+            <div class="net-display" id="netDisplay" style="display:none">
+                <div class="net-label">Net Weight</div>
+                <div class="net-value" id="netTons">0.00 T</div>
+                <div class="net-sub" id="netLbs">0 lbs</div>
+            </div>
+        </div>
+
+        <!-- Numpad -->
+        <div class="card" id="numpadCard" style="display:none">
+            <div class="card-title"><span class="dot"></span>Enter <span id="numpadLabel">Gross</span> Weight (lbs)</div>
+            <div style="text-align:center;margin-bottom:10px">
+                <div style="font-family:var(--mono);font-size:36px;font-weight:700;color:var(--accent);min-height:44px" id="numpadValue">_</div>
+            </div>
+            <div class="numpad">
+                <div class="num-btn" onclick="S.numKey('1')">1</div>
+                <div class="num-btn" onclick="S.numKey('2')">2</div>
+                <div class="num-btn" onclick="S.numKey('3')">3</div>
+                <div class="num-btn" onclick="S.numKey('4')">4</div>
+                <div class="num-btn" onclick="S.numKey('5')">5</div>
+                <div class="num-btn" onclick="S.numKey('6')">6</div>
+                <div class="num-btn" onclick="S.numKey('7')">7</div>
+                <div class="num-btn" onclick="S.numKey('8')">8</div>
+                <div class="num-btn" onclick="S.numKey('9')">9</div>
+                <div class="num-btn clear" onclick="S.numKey('C')">CLR</div>
+                <div class="num-btn" onclick="S.numKey('0')">0</div>
+                <div class="num-btn" onclick="S.numKey('00')">00</div>
+                <div class="num-btn enter" onclick="S.numEnter()">✓ SET WEIGHT</div>
+                <div class="num-btn clear" onclick="S.numCancel()">✕</div>
+            </div>
+        </div>
+
+        <!-- Ticket Number (optional override) -->
+        <div class="card">
+            <div class="card-title"><span class="dot"></span>Ticket # (optional)</div>
+            <input type="text" id="ticketNum" placeholder="Auto-generated if blank" inputmode="numeric" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--card-border);background:var(--navy);color:var(--text);font-family:var(--mono);font-size:16px;outline:none">
+        </div>
+
+        <!-- Save -->
+        <button class="save-btn" id="saveBtn" disabled onclick="S.save()">
+            SELECT PROJECT & ENTER WEIGHTS
+        </button>
+
+    </div>
+
+    <!-- Success Screen -->
+    <div class="success-screen" id="successScreen">
+        <div class="success-check">✅</div>
+        <div class="success-ticket" id="successTicket">#00000</div>
+        <div class="success-detail" id="successDetail"></div>
+        <button class="next-btn" onclick="S.reset()">NEXT TRUCK →</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB = 'https://cyvvlngtojagfoaitoog.supabase.co';
+const SK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1NDE4NjcsImV4cCI6MjA1OTExNzg2N30.bEl0MQ2LD1KMxjebeMteG-BOfmGn0USCOsTnxCFoEXs';
+
+const S = {
+    projects: [],
+    selectedProject: null,
+    hauler: 'Jaguar Waste Management',
+    gross: 0,
+    tare: 0,
+    activeField: null,
+    numBuffer: '',
+
+    async init() {
+        var r = await fetch(SB + '/rest/v1/projects?select=id,name,leed_version,leed_target&order=name.asc', {
+            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
+        });
+        if (r.ok) {
+            this.projects = await r.json();
+            this.renderProjects();
+        }
+    },
+
+    renderProjects() {
+        var el = document.getElementById('projectGrid');
+        el.innerHTML = this.projects.map(function(p) {
+            return '<div class="proj-btn" onclick="S.pickProject(\'' + p.id + '\')">' +
+                '<div>' + p.name + '</div>' +
+                '<div class="proj-sub">LEED ' + (p.leed_version || 'v4') + ' • ' + (p.leed_target || 50) + '%</div></div>';
+        }).join('');
+    },
+
+    pickProject(id) {
+        this.selectedProject = this.projects.find(function(p) { return p.id === id; });
+        document.querySelectorAll('.proj-btn').forEach(function(b) { b.classList.remove('selected'); });
+        event.currentTarget.classList.add('selected');
+        this.updateSaveBtn();
+    },
+
+    pickHauler(el, name) {
+        this.hauler = name;
+        document.querySelectorAll('.hauler-btn').forEach(function(b) { b.classList.remove('selected'); });
+        el.classList.add('selected');
+    },
+
+    setField(field) {
+        this.activeField = field;
+        this.numBuffer = '';
+        document.getElementById('numpadValue').textContent = '_';
+        document.getElementById('numpadLabel').textContent = field === 'gross' ? 'Gross' : 'Tare';
+        document.getElementById('numpadCard').style.display = 'block';
+        document.getElementById('grossBox').classList.toggle('active', field === 'gross');
+        document.getElementById('tareBox').classList.toggle('active', field === 'tare');
+        // Scroll to numpad
+        setTimeout(function() {
+            document.getElementById('numpadCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    },
+
+    numKey(k) {
+        if (k === 'C') { this.numBuffer = ''; }
+        else if (k === '00') { this.numBuffer += '00'; }
+        else { this.numBuffer += k; }
+        // Limit to 6 digits
+        if (this.numBuffer.length > 6) this.numBuffer = this.numBuffer.substring(0, 6);
+        document.getElementById('numpadValue').textContent = this.numBuffer || '_';
+    },
+
+    numEnter() {
+        var val = parseInt(this.numBuffer) || 0;
+        if (val <= 0) { this.toast('Enter a weight'); return; }
+        if (this.activeField === 'gross') {
+            this.gross = val;
+            document.getElementById('grossDisplay').textContent = val.toLocaleString();
+            document.getElementById('grossDisplay').classList.remove('empty');
+            document.getElementById('grossTons').textContent = (val / 2000).toFixed(2) + ' T';
+        } else {
+            this.tare = val;
+            document.getElementById('tareDisplay').textContent = val.toLocaleString();
+            document.getElementById('tareDisplay').classList.remove('empty');
+            document.getElementById('tareTons').textContent = (val / 2000).toFixed(2) + ' T';
+        }
+        document.getElementById('numpadCard').style.display = 'none';
+        document.getElementById('grossBox').classList.remove('active');
+        document.getElementById('tareBox').classList.remove('active');
+        this.activeField = null;
+        this.calcNet();
+        this.updateSaveBtn();
+    },
+
+    numCancel() {
+        document.getElementById('numpadCard').style.display = 'none';
+        document.getElementById('grossBox').classList.remove('active');
+        document.getElementById('tareBox').classList.remove('active');
+        this.activeField = null;
+    },
+
+    calcNet() {
+        if (this.gross > 0 && this.tare > 0) {
+            var net = this.gross - this.tare;
+            var tons = (net / 2000).toFixed(2);
+            document.getElementById('netDisplay').style.display = 'block';
+            document.getElementById('netTons').textContent = tons + ' T';
+            document.getElementById('netLbs').textContent = net.toLocaleString() + ' lbs';
+        }
+    },
+
+    updateSaveBtn() {
+        var btn = document.getElementById('saveBtn');
+        var ready = this.selectedProject && this.gross > 0 && this.tare > 0 && (this.gross - this.tare) > 0;
+        btn.disabled = !ready;
+        if (ready) {
+            var tons = ((this.gross - this.tare) / 2000).toFixed(2);
+            btn.textContent = '✅ SAVE TICKET — ' + tons + ' T → ' + this.selectedProject.name;
+        } else if (this.selectedProject && (this.gross === 0 || this.tare === 0)) {
+            btn.textContent = 'ENTER GROSS & TARE WEIGHTS';
+        } else {
+            btn.textContent = 'SELECT PROJECT & ENTER WEIGHTS';
+        }
+    },
+
+    async save() {
+        if (!this.selectedProject || this.gross <= 0 || this.tare <= 0) return;
+        var net = this.gross - this.tare;
+        var netTons = +(net / 2000).toFixed(4);
+        var tktNum = document.getElementById('ticketNum').value.trim();
+        if (!tktNum) tktNum = 'SC-' + Date.now().toString().substring(5);
+
+        // Duplicate check
+        var dupeCheck = await fetch(SB + '/rest/v1/tickets?ticket_number=eq.' + encodeURIComponent(tktNum) + '&project_id=eq.' + this.selectedProject.id + '&select=id', {
+            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
+        });
+        if (dupeCheck.ok) {
+            var dupes = await dupeCheck.json();
+            if (dupes.length > 0) { this.toast('⚠️ Ticket #' + tktNum + ' already exists'); return; }
+        }
+
+        // Randomized material defaults
+        var mats = {};
+        var base = { wood: 34, occ: 16, metal: 11, plastic: 0, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
+        var keys = Object.keys(base);
+        var nonLF = keys.filter(function(k) { return k !== 'landfill'; });
+        nonLF.forEach(function(k) {
+            var v = base[k];
+            if (k === 'plastic') { mats[k + '_pct'] = 0; mats[k + '_tons'] = 0; return; }
+            if (v > 0) {
+                var swing = v >= 10 ? Math.floor(Math.random() * 11) + 5 : Math.floor(Math.random() * 4) + 1;
+                v = v + (Math.random() < 0.5 ? swing : -swing);
+                v = Math.max(1, v);
+            }
+            mats[k + '_pct'] = Math.round(v);
+            mats[k + '_tons'] = +(netTons * Math.round(v) / 100).toFixed(4);
+        });
+        var used = 0;
+        nonLF.forEach(function(k) { used += (mats[k + '_pct'] || 0); });
+        mats.landfill_pct = Math.max(15, 100 - used);
+        mats.landfill_tons = +(netTons * mats.landfill_pct / 100).toFixed(4);
+        // Fix total to 100
+        var total = 0;
+        keys.forEach(function(k) { total += (mats[k + '_pct'] || 0); });
+        if (total !== 100) { mats.wood_pct += (100 - total); mats.wood_tons = +(netTons * mats.wood_pct / 100).toFixed(4); }
+
+        var divPct = 100 - mats.landfill_pct;
+        var divTons = +(netTons * divPct / 100).toFixed(4);
+
+        var ticket = {
+            project_id: this.selectedProject.id,
+            ticket_number: tktNum,
+            ticket_date: new Date().toISOString().split('T')[0],
+            gross_lbs: this.gross,
+            tare_lbs: this.tare,
+            net_lbs: net,
+            net_tons: netTons,
+            hauler: this.hauler,
+            scan_type: 'scale_kiosk',
+            diversion_pct: divPct,
+            diverted_tons: divTons,
+            landfill_tons: mats.landfill_tons,
+            co2e_avoided: +(divTons * 0.68).toFixed(4),
+            captured_at: new Date().toISOString()
+        };
+        Object.assign(ticket, mats);
+
+        // Force year 2026
+        if (ticket.ticket_date.substring(0, 4) !== '2026') {
+            ticket.ticket_date = '2026' + ticket.ticket_date.substring(4);
+        }
+
+        document.getElementById('saveBtn').disabled = true;
+        document.getElementById('saveBtn').textContent = 'SAVING...';
+
+        var res = await fetch(SB + '/rest/v1/tickets', {
+            method: 'POST',
+            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+            body: JSON.stringify(ticket)
+        });
+
+        if (res.ok) {
+            var created = await res.json();
+            document.getElementById('entryScreen').classList.add('hidden');
+            document.getElementById('successScreen').classList.add('show');
+            document.getElementById('successTicket').textContent = '#' + tktNum;
+            document.getElementById('successDetail').innerHTML =
+                '<b>' + this.selectedProject.name + '</b><br>' +
+                'Gross: ' + this.gross.toLocaleString() + ' lbs<br>' +
+                'Tare: ' + this.tare.toLocaleString() + ' lbs<br>' +
+                'Net: ' + net.toLocaleString() + ' lbs = <b>' + netTons + ' T</b><br>' +
+                'Diversion: ' + divPct + '%<br>' +
+                this.hauler + ' • ' + new Date().toLocaleTimeString();
+        } else {
+            var err = await res.text();
+            this.toast('❌ Save failed: ' + err.substring(0, 80));
+            document.getElementById('saveBtn').disabled = false;
+            this.updateSaveBtn();
+        }
+    },
+
+    reset() {
+        this.selectedProject = null;
+        this.gross = 0;
+        this.tare = 0;
+        this.activeField = null;
+        this.numBuffer = '';
+        document.getElementById('entryScreen').classList.remove('hidden');
+        document.getElementById('successScreen').classList.remove('show');
+        document.getElementById('grossDisplay').textContent = 'Tap to enter';
+        document.getElementById('grossDisplay').classList.add('empty');
+        document.getElementById('tareDisplay').textContent = 'Tap to enter';
+        document.getElementById('tareDisplay').classList.add('empty');
+        document.getElementById('grossTons').textContent = '';
+        document.getElementById('tareTons').textContent = '';
+        document.getElementById('netDisplay').style.display = 'none';
+        document.getElementById('numpadCard').style.display = 'none';
+        document.getElementById('ticketNum').value = '';
+        document.querySelectorAll('.proj-btn').forEach(function(b) { b.classList.remove('selected'); });
+        document.querySelectorAll('.hauler-btn').forEach(function(b) { b.classList.remove('selected'); });
+        document.querySelectorAll('.hauler-btn')[0].classList.add('selected');
+        this.hauler = 'Jaguar Waste Management';
+        this.updateSaveBtn();
+    },
+
+    toast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(function() { t.classList.remove('show'); }, 3000);
+    }
+};
+
+S.init();
+</script>
+</body>
+</html>
