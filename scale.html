@@ -214,12 +214,24 @@ const S = {
     numBuffer: '',
 
     async init() {
-        var r = await fetch(SB + '/rest/v1/projects?select=id,name,leed_version,leed_target&order=name.asc', {
-            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
-        });
-        if (r.ok) {
-            this.projects = await r.json();
-            this.renderProjects();
+        var el = document.getElementById('projectGrid');
+        try {
+            var r = await fetch(SB + '/rest/v1/projects?select=id,name,leed_version,leed_target&order=name.asc', {
+                headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
+            });
+            if (r.ok) {
+                this.projects = await r.json();
+                if (this.projects.length > 0) {
+                    this.renderProjects();
+                } else {
+                    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;grid-column:span 2">No projects found. Projects may require RLS policy for anon access.</div>';
+                }
+            } else {
+                var err = await r.text();
+                el.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:12px;grid-column:span 2">Error ' + r.status + ': ' + err.substring(0, 100) + '</div>';
+            }
+        } catch(e) {
+            el.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:12px;grid-column:span 2">Connection failed: ' + e.message + '</div>';
         }
     },
 
