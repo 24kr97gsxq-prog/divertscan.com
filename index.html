@@ -4408,7 +4408,11 @@
             var monthNum = parseInt(parts[1]);
 
             // QBO Invoice CSV — match exact QuickBooks import format
-            var customer = (proj.client || proj.general_contractor || proj.name || 'Client').trim();
+            // Customer = hauler (who we bill), project goes in memo
+            var haulerName = '';
+            tickets.forEach(function(t) { if (!haulerName && t.hauler) haulerName = t.hauler; });
+            var customer = (haulerName || 'Client').trim();
+            var projectName = (proj.name || 'Project').trim();
             var invoiceNo = 'DS-' + year + String(monthNum).padStart(2,'0');
             // Invoice date = last day of the month (DD/MM/YYYY format for QBO)
             var lastDay = new Date(parseInt(year), monthNum, 0).getDate();
@@ -4417,7 +4421,7 @@
             var dueDate = new Date(parseInt(year), monthNum - 1, lastDay + 15);
             var dueDateStr = String(dueDate.getDate()).padStart(2,'0') + '/' + String(dueDate.getMonth()+1).padStart(2,'0') + '/' + dueDate.getFullYear();
             var terms = 'Net 15';
-            var memo = 'LEED MRp2 Waste Diversion — ' + monthNames[monthNum] + ' ' + year;
+            var memo = projectName + ' — LEED MRp2 Waste Diversion — ' + monthNames[monthNum] + ' ' + year;
 
             var PRODUCT = 'LEED Landfill diversion:Roll Off Service Sorting';
             var RATE = 125.00;
