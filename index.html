@@ -3412,6 +3412,7 @@
             this._batchBase64 = [];
             this._batchLoaded = 0;
             this._batchProcessed = {};
+            this._batchOCRRunning = false;
 
             const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
             document.getElementById('batchUploadTitle').textContent = title;
@@ -3463,8 +3464,8 @@
                             btn.disabled = false;
                             btn.textContent = '🤖 AI Read All Ticket Numbers';
                         }
-                        // Auto-trigger for scale tickets
-                        if (this._batchType === 'scale' && this.state.apiKey) {
+                        // Auto-trigger for scale tickets (only once)
+                        if (this._batchType === 'scale' && this.state.apiKey && !this._batchOCRRunning) {
                             this.aiBatchOCR();
                         }
                     }
@@ -3502,6 +3503,13 @@
                 this.showToast('Set OpenAI API key in Audit > Settings');
                 return;
             }
+
+            // Prevent double-run
+            if (this._batchOCRRunning) {
+                console.log('OCR already running, skipping');
+                return;
+            }
+            this._batchOCRRunning = true;
 
             const btn = document.getElementById('batchAiBtn');
             if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
@@ -3777,10 +3785,11 @@
             }
 
             if (btn) {
-                btn.disabled = false;
+                btn.disabled = true;
                 const summary = flagged > 0 ? matched + ' matched, ' + flagged + ' flagged ⚠️' : matched + '/' + this._batchFiles.length + ' verified ✓';
-                btn.textContent = '🤖 Done — ' + summary;
+                btn.textContent = '✅ ' + summary;
             }
+            this._batchOCRRunning = false;
             this.addAuditEntry('AI_BATCH_OCR', 'Read ' + this._batchFiles.length + ' photos, ' + matched + ' matched, ' + flagged + ' flagged');
         },
 
