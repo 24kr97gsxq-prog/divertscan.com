@@ -4408,10 +4408,18 @@
             var monthNum = parseInt(parts[1]);
 
             // QBO Invoice CSV — match exact QuickBooks import format
-            // Customer = hauler (who we bill), project goes in memo
+            // Customer = mapped to QBO display name
             var haulerName = '';
             tickets.forEach(function(t) { if (!haulerName && t.hauler) haulerName = t.hauler; });
-            var customer = (haulerName || 'Client').trim();
+            // Map hauler names to QBO customer display names
+            var QBO_CUSTOMER_MAP = {
+                'Ranger Waste Management LLC': 'Ranger Waste',
+                'Ranger Waste Management': 'Ranger Waste',
+                'Jaguar Waste Management': 'Jaguar Waste Management',
+                'B&B Waste': 'B&B Materials and Services',
+                'Liberty Demolition': 'Liberty Demolition'
+            };
+            var customer = QBO_CUSTOMER_MAP[haulerName] || (haulerName || 'Client').trim();
             var projectName = (proj.name || 'Project').trim();
             var invoiceNo = 'DS-' + year + String(monthNum).padStart(2,'0');
             // Invoice date = last day of the month (M/D/YYYY for QBO)
