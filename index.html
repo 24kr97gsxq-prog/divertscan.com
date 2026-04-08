@@ -4406,24 +4406,27 @@
             var parts = monthKey.split('-');
             var year = parts[0];
             var monthNum = parseInt(parts[1]);
-            var monthName = monthNames[monthNum] || monthKey;
 
-            // QBO Invoice CSV format
+            // QBO Invoice CSV — match exact QuickBooks import format
             var customer = (proj.client || proj.general_contractor || proj.name || 'Client').trim();
             var invoiceNo = 'DS-' + year + String(monthNum).padStart(2,'0');
-            // Invoice date = last day of the month
+            // Invoice date = last day of the month (DD/MM/YYYY format for QBO)
             var lastDay = new Date(parseInt(year), monthNum, 0).getDate();
-            var invoiceDate = monthNum + '/' + lastDay + '/' + year;
+            var invoiceDate = String(lastDay).padStart(2,'0') + '/' + String(monthNum).padStart(2,'0') + '/' + year;
             // Due date = 15 days after invoice date
             var dueDate = new Date(parseInt(year), monthNum - 1, lastDay + 15);
-            var dueDateStr = (dueDate.getMonth()+1) + '/' + dueDate.getDate() + '/' + dueDate.getFullYear();
+            var dueDateStr = String(dueDate.getDate()).padStart(2,'0') + '/' + String(dueDate.getMonth()+1).padStart(2,'0') + '/' + dueDate.getFullYear();
+            var terms = 'Net 15';
+            var memo = 'LEED MRp2 Waste Diversion — ' + monthNames[monthNum] + ' ' + year;
 
             var PRODUCT = 'LEED Landfill diversion:Roll Off Service Sorting';
-            var RATE = 125.00; // per load rate
+            var RATE = 125.00;
 
-            var headers = ['InvoiceNo','Customer','InvoiceDate','DueDate','ServiceDate','Product/Service','Description','Qty','Rate','Amount','Class'];
+            // QBO required headers
+            var headers = ['*InvoiceNo','*Customer','*InvoiceDate','*DueDate','Terms','Location','Memo','Item(Product/Service)','ItemDescription','ItemQuantity','ItemRate','*ItemAmount','Shipping address','Ship via','Shipping date','Tracking no.','Shipping Charge','Service Date'];
             var rows = [];
             var totalTons = 0;
+            var isFirst = true;
 
             tickets.sort(function(a,b) { return (a.ticket_date || '').localeCompare(b.ticket_date || ''); });
 
@@ -4432,17 +4435,28 @@
                 if (tons <= 0) return;
                 totalTons += tons;
                 var amount = Math.round(tons * RATE * 100) / 100;
-                var svcDate = t.ticket_date || t.service_date || '';
+
+                // Service date in DD/MM/YYYY
+                var svcDate = t.ticket_date || '';
                 if (svcDate.indexOf('-') >= 0) {
                     var p = svcDate.split('-');
-                    svcDate = parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
+                    svcDate = String(parseInt(p[2])).padStart(2,'0') + '/' + String(parseInt(p[1])).padStart(2,'0') + '/' + p[0];
                 }
+
                 var divPct = t.diversion_pct || 0;
                 var gross = t.gross_lbs || 0;
                 var tare = t.tare_lbs || 0;
                 var netLbs = t.net_lbs || 0;
-                var desc = 'Ticket #' + (t.ticket_number || '') + ' | ' + svcDate + ' | ' + (t.hauler || 'Jaguar Waste Management') + ' | Gross: ' + gross.toLocaleString() + ' lbs | Tare: ' + tare.toLocaleString() + ' lbs | Net: ' + netLbs.toLocaleString() + ' lbs (' + tons + ' T) | ' + divPct + '% diverted';
-                rows.push([invoiceNo, customer, invoiceDate, dueDateStr, svcDate, PRODUCT, desc, tons.toFixed(2), RATE.toFixed(2), amount.toFixed(2), 'Recycling']);
+                var desc = 'Ticket #' + (t.ticket_number || '') + ' | ' + svcDate + ' | ' + (t.hauler || 'Jaguar') + ' | Gross: ' + Number(gross).toLocaleString() + ' | Tare: ' + Number(tare).toLocaleString() + ' | Net: ' + Number(netLbs).toLocaleString() + ' lbs (' + tons + ' T) | ' + divPct + '% div';
+
+                if (isFirst) {
+                    // First line includes invoice header fields
+                    rows.push([invoiceNo, customer, invoiceDate, dueDateStr, terms, '', memo, PRODUCT, desc, tons.toFixed(2), RATE.toFixed(2), amount.toFixed(2), '', '', '', '', '', svcDate]);
+                    isFirst = false;
+                } else {
+                    // Subsequent lines: only item fields, invoice fields blank
+                    rows.push(['', '', '', '', '', '', '', PRODUCT, desc, tons.toFixed(2), RATE.toFixed(2), amount.toFixed(2), '', '', '', '', '', svcDate]);
+                }
             });
 
             if (!rows.length) { this.showToast('No valid tickets'); return; }
