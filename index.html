@@ -6064,11 +6064,11 @@
             document.getElementById('dedupDeleteBtn').classList.add('hidden');
 
             // Get all tickets for current project or all projects
-            var url = 'tickets?select=id,ticket_number,created_at,net_tons,ticket_date,project_id';
-            if (this.state.currentProject) url += '&project_id=eq.' + this.state.currentProject;
+            var url = 'tickets?select=id,ticket_number,created_at,net_tons,ticket_date,project_id&limit=5000';
+            if (this.state.currentProject && this.state.currentProject.id) url += '&project_id=eq.' + this.state.currentProject.id;
             url += '&order=ticket_number.asc,created_at.asc';
             var tickets = await this.supabase(url);
-            if (!tickets) { el.innerHTML = '<div style="color:var(--danger)">Failed to load tickets.</div>'; return; }
+            if (!tickets || !Array.isArray(tickets)) { el.innerHTML = '<div style="color:var(--danger)">Failed to load tickets. Make sure a project is selected.</div>'; return; }
 
             // Group by ticket_number and find dupes
             var groups = {};
@@ -6116,11 +6116,10 @@
 
             var deleted = 0;
             var errors = 0;
-            // Delete in batches of 10
             for (var i = 0; i < this._dupeIds.length; i++) {
-                var res = await fetch(this.SB + '/rest/v1/tickets?id=eq.' + this._dupeIds[i], {
+                var res = await fetch(this.state.supabaseUrl + '/rest/v1/tickets?id=eq.' + this._dupeIds[i], {
                     method: 'DELETE',
-                    headers: { 'apikey': this.SK, 'Authorization': 'Bearer ' + this.SK }
+                    headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
                 });
                 if (res.ok) { deleted++; } else { errors++; }
             }
