@@ -488,6 +488,7 @@
                     <div class="btn-row">
                         <button class="btn btn-sm btn-primary" onclick="DS.openBatchUpload('scale')">📄 Scale Tickets</button>
                         <button class="btn btn-sm btn-success" onclick="DS.openBatchUpload('debris')">📸 Debris Photos</button>
+                        <button class="btn btn-sm btn-warning" onclick="DS.openTimeMatchUpload()">⏱️ Match Debris by Time</button>
                     </div>
                 </div>
 
@@ -921,6 +922,41 @@
             <button class="btn btn-outline mt-12" onclick="DS.closeModal('photoViewerModal')">Close</button>
         </div>
     </div>
+
+    
+    <!-- Time-Match Debris Upload Modal -->
+    <div class="modal-overlay" id="timeMatchModal">
+        <div class="modal">
+            <div class="modal-handle"></div>
+            <div class="modal-title">⏱️ Match Debris Photos by Time</div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">Select debris photos from your camera roll. DivertScan reads each photo's timestamp and matches it to the closest scale ticket from today.</p>
+
+            <div class="form-group">
+                <label class="form-label">Match to tickets from:</label>
+                <input type="date" class="form-input" id="timeMatchDate" onchange="DS.refreshTimeMatchTickets()">
+            </div>
+
+            <div id="timeMatchTicketCount" style="font-size:.7rem;color:var(--text-dim);margin-bottom:10px;"></div>
+
+            <div class="photo-upload" style="padding:20px; margin-bottom:12px;">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">Select debris photos from camera roll</div>
+                <div class="upload-hint">EXIF timestamps will be used for matching</div>
+                <input type="file" accept="image/*" multiple id="timeMatchInput" onchange="DS.handleTimeMatchFiles(this)">
+            </div>
+
+            <div id="timeMatchResults"></div>
+
+            <div id="timeMatchActions" class="hidden">
+                <div class="divider"></div>
+                <div id="timeMatchSummary" style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;"></div>
+                <button class="btn btn-success mb-8" onclick="DS.executeTimeMatch()">✅ Attach Photos & Run AI Classification</button>
+            </div>
+
+            <button class="btn btn-outline mt-8" onclick="DS.closeModal('timeMatchModal')">Cancel</button>
+        </div>
+    </div>
+
 
     <!-- Toast & Loading -->
     <div class="toast" id="toast"></div>
@@ -6116,7 +6152,393 @@
 
         // ============================================================
 
+
         // ============================================================
+        // TIME-MATCH DEBRIS PHOTOS TO SCALE TICKETS
+        // ============================================================
+        _timeMatchFiles: [],
+        _timeMatchTimestamps: [],
+        _timeMatchTickets: [],
+        _timeMatchPairs: [],
+
+        openTimeMatchUpload() {
+            this._timeMatchFiles = [];
+            this._timeMatchTimestamps = [];
+            this._timeMatchPairs = [];
+
+            // Default to today's date
+            var today = new Date().toISOString().split('T')[0];
+            document.getElementById('timeMatchDate').value = today;
+            document.getElementById('timeMatchResults').innerHTML = '';
+            document.getElementById('timeMatchActions').classList.add('hidden');
+            document.getElementById('timeMatchInput').value = '';
+
+            this.refreshTimeMatchTickets();
+            this.openModal('timeMatchModal');
+        },
+
+        async refreshTimeMatchTickets() {
+            var dateStr = document.getElementById('timeMatchDate').value;
+            if (!dateStr) return;
+
+            // Pull all tickets for that date across all projects (DX- tickets from Pi scale)
+            var tickets = await this.supabase(
+                'tickets?ticket_date=eq.' + dateStr + '&order=captured_at.asc&limit=200'
+            );
+            this._timeMatchTickets = tickets || [];
+
+            var el = document.getElementById('timeMatchTicketCount');
+            if (!tickets || tickets.length === 0) {
+                el.innerHTML = '<span style="color:var(--warning);">⚠️ No tickets found for ' + dateStr + '</span>';
+            } else {
+                var piTickets = tickets.filter(function(t) { return (t.ticket_number || '').indexOf('DX-') === 0; });
+                el.innerHTML = tickets.length + ' tickets on ' + dateStr + (piTickets.length ? ' (' + piTickets.length + ' from Pi scale)' : '');
+            }
+        },
+
+        handleTimeMatchFiles(input) {
+            var newFiles = Array.from(input.files);
+            if (newFiles.length === 0) return;
+
+            this._timeMatchFiles = this._timeMatchFiles.concat(newFiles);
+            this._timeMatchTimestamps = this._timeMatchTimestamps.concat(new Array(newFiles.length).fill(null));
+
+            var el = document.getElementById('timeMatchResults');
+            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-muted);"><span class="spinner"></span> Reading ' + this._timeMatchFiles.length + ' photo timestamps...</div>';
+
+            // Read EXIF timestamps from all files
+            var self = this;
+            var processed = 0;
+            var total = this._timeMatchFiles.length;
+
+            this._timeMatchFiles.forEach(function(file, idx) {
+                if (self._timeMatchTimestamps[idx]) { processed++; return; } // Already read
+
+                // Method 1: Use file.lastModified as fallback
+                var fallbackTime = new Date(file.lastModified);
+
+                // Method 2: Read EXIF from JPEG
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var exifTime = self._readExifDate(e.target.result);
+                    self._timeMatchTimestamps[idx] = exifTime || fallbackTime;
+                    processed++;
+
+                    if (processed >= total) {
+                        self._buildTimeMatches();
+                    }
+                };
+                reader.readAsArrayBuffer(file.slice(0, 65536)); // Only read first 64KB for EXIF
+            });
+        },
+
+        // Lightweight EXIF date reader — extracts DateTimeOriginal from JPEG
+        _readExifDate(buffer) {
+            try {
+                var view = new DataView(buffer);
+                // Check JPEG SOI marker
+                if (view.getUint16(0) !== 0xFFD8) return null;
+
+                var offset = 2;
+                while (offset < view.byteLength - 2) {
+                    var marker = view.getUint16(offset);
+                    if (marker === 0xFFE1) { // APP1 (EXIF)
+                        var exifOffset = offset + 4;
+                        // Check "Exif\0\0"
+                        if (view.getUint32(exifOffset) === 0x45786966 && view.getUint16(exifOffset + 4) === 0x0000) {
+                            var tiffStart = exifOffset + 6;
+                            var isLE = view.getUint16(tiffStart) === 0x4949;
+                            var g16 = function(o) { return isLE ? view.getUint16(tiffStart + o, true) : view.getUint16(tiffStart + o, false); };
+                            var g32 = function(o) { return isLE ? view.getUint32(tiffStart + o, true) : view.getUint32(tiffStart + o, false); };
+
+                            // Read IFD0 to find ExifIFD pointer
+                            var ifdCount = g16(8);
+                            var exifIFDOffset = 0;
+                            for (var i = 0; i < ifdCount; i++) {
+                                var entryOffset = 10 + i * 12;
+                                var tag = g16(entryOffset);
+                                if (tag === 0x8769) { // ExifIFD
+                                    exifIFDOffset = g32(entryOffset + 8);
+                                    break;
+                                }
+                            }
+
+                            if (exifIFDOffset) {
+                                var exifCount = g16(exifIFDOffset);
+                                for (var j = 0; j < exifCount; j++) {
+                                    var eOffset = exifIFDOffset + 2 + j * 12;
+                                    var eTag = g16(eOffset);
+                                    if (eTag === 0x9003 || eTag === 0x9004) { // DateTimeOriginal or DateTimeDigitized
+                                        var strOffset = g32(eOffset + 8);
+                                        var str = '';
+                                        for (var c = 0; c < 19; c++) {
+                                            str += String.fromCharCode(view.getUint8(tiffStart + strOffset + c));
+                                        }
+                                        // Format: "2026:04:09 14:23:45"
+                                        var parts = str.split(' ');
+                                        if (parts.length === 2) {
+                                            var dateParts = parts[0].replace(/:/g, '-');
+                                            return new Date(dateParts + 'T' + parts[1]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    }
+
+                    // Skip to next marker
+                    var len = view.getUint16(offset + 2);
+                    offset += 2 + len;
+                }
+            } catch (e) {
+                console.log('EXIF read error:', e);
+            }
+            return null;
+        },
+
+        _buildTimeMatches() {
+            var tickets = this._timeMatchTickets;
+            var files = this._timeMatchFiles;
+            var timestamps = this._timeMatchTimestamps;
+
+            if (!tickets.length) {
+                document.getElementById('timeMatchResults').innerHTML =
+                    '<div style="color:var(--warning);font-size:.8rem;padding:12px;text-align:center;">No tickets found for this date. Check the date picker above.</div>';
+                return;
+            }
+
+            // Sort tickets by captured_at time
+            tickets.sort(function(a, b) {
+                var ta = new Date(a.captured_at || a.ticket_date || 0).getTime();
+                var tb = new Date(b.captured_at || b.ticket_date || 0).getTime();
+                return ta - tb;
+            });
+
+            // Match each photo to nearest ticket by time
+            this._timeMatchPairs = [];
+            var self = this;
+
+            var html = '<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;">' +
+                files.length + ' photos → ' + tickets.length + ' tickets</div>';
+
+            files.forEach(function(file, idx) {
+                var photoTime = timestamps[idx];
+                var photoMs = photoTime ? photoTime.getTime() : 0;
+
+                // Find closest ticket
+                var bestTicket = null;
+                var bestGap = Infinity;
+                tickets.forEach(function(t) {
+                    var tMs = new Date(t.captured_at || t.ticket_date || 0).getTime();
+                    var gap = Math.abs(photoMs - tMs);
+                    if (gap < bestGap) { bestGap = gap; bestTicket = t; }
+                });
+
+                var gapMinutes = Math.round(bestGap / 60000);
+                var gapHours = (bestGap / 3600000).toFixed(1);
+                var gapColor = gapMinutes <= 120 ? 'var(--success)' : gapMinutes <= 1440 ? 'var(--warning)' : 'var(--danger)';
+                var gapLabel = gapMinutes < 60 ? gapMinutes + ' min' : gapHours + ' hrs';
+                var gapFlag = gapMinutes > 1440 ? ' ⛔ >24h' : gapMinutes > 120 ? ' ⚠️ >2h' : ' ✓';
+
+                // Chain of custody compliance note
+                var cocStatus = gapMinutes <= 120 ? 'LEED compliant' : gapMinutes <= 1440 ? 'Review recommended' : 'Documentation gap — may not pass audit';
+
+                self._timeMatchPairs.push({
+                    fileIdx: idx,
+                    ticketId: bestTicket ? bestTicket.id : null,
+                    ticketNum: bestTicket ? bestTicket.ticket_number : null,
+                    gapMinutes: gapMinutes,
+                    photoTime: photoTime
+                });
+
+                // Build ticket dropdown for manual override
+                var optionsHtml = '<option value="">— Manual select —</option>';
+                tickets.forEach(function(t) {
+                    var sel = (bestTicket && t.id === bestTicket.id) ? ' selected' : '';
+                    var tTime = t.captured_at ? new Date(t.captured_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+                    optionsHtml += '<option value="' + t.id + '"' + sel + '>' + DS.esc(t.ticket_number) + ' (' + tTime + ' • ' + DS.fmt(t.net_tons) + 'T)</option>';
+                });
+
+                html += '<div style="display:flex;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start">' +
+                    '<div style="flex-shrink:0;width:70px;text-align:center">' +
+                        '<div style="font-size:.6rem;color:var(--text-dim);margin-bottom:2px">Photo ' + (idx+1) + '</div>' +
+                        '<div style="font-family:var(--mono);font-size:.7rem;font-weight:700;color:var(--text)">' +
+                            (photoTime ? photoTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '??:??') + '</div>' +
+                        '<div style="font-size:.55rem;color:var(--text-dim)">' + file.name.substring(0,12) + '</div>' +
+                    '</div>' +
+                    '<div style="flex:1">' +
+                        '<select class="form-select" id="tmSelect_' + idx + '" style="font-size:.8rem;padding:8px;margin-bottom:4px" ' +
+                            'onchange="DS._updateTimeMatchPair(' + idx + ',this.value)">' + optionsHtml + '</select>' +
+                        '<div style="display:flex;justify-content:space-between;font-size:.6rem">' +
+                            '<span style="color:' + gapColor + ';font-weight:700">⏱️ ' + gapLabel + gapFlag + '</span>' +
+                            '<span style="color:var(--text-dim)">' + cocStatus + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            });
+
+            document.getElementById('timeMatchResults').innerHTML = html;
+            document.getElementById('timeMatchActions').classList.remove('hidden');
+
+            // Summary
+            var withinWindow = this._timeMatchPairs.filter(function(p) { return p.gapMinutes <= 120; }).length;
+            var warnings = this._timeMatchPairs.filter(function(p) { return p.gapMinutes > 120 && p.gapMinutes <= 1440; }).length;
+            var flags = this._timeMatchPairs.filter(function(p) { return p.gapMinutes > 1440; }).length;
+
+            document.getElementById('timeMatchSummary').innerHTML =
+                '✅ ' + withinWindow + ' within 2hrs' +
+                (warnings ? ' • ⚠️ ' + warnings + ' review needed' : '') +
+                (flags ? ' • ⛔ ' + flags + ' documentation gap' : '');
+        },
+
+        _updateTimeMatchPair(idx, ticketId) {
+            if (this._timeMatchPairs[idx]) {
+                this._timeMatchPairs[idx].ticketId = ticketId;
+                var t = this._timeMatchTickets.find(function(x) { return x.id === ticketId; });
+                this._timeMatchPairs[idx].ticketNum = t ? t.ticket_number : null;
+            }
+        },
+
+        async executeTimeMatch() {
+            var pairs = this._timeMatchPairs.filter(function(p) { return p.ticketId; });
+            if (pairs.length === 0) { this.showToast('No matches to process'); return; }
+
+            this.showLoading('Uploading ' + pairs.length + ' debris photos...');
+
+            var uploaded = 0;
+            var aiQueue = []; // Tickets that need AI classification after upload
+
+            for (var i = 0; i < pairs.length; i++) {
+                var pair = pairs[i];
+                var file = this._timeMatchFiles[pair.fileIdx];
+                var ticket = this._timeMatchTickets.find(function(t) { return t.id === pair.ticketId; });
+                if (!ticket) continue;
+
+                // Upload photo to Supabase storage
+                var ext = file.name.split('.').pop() || 'jpg';
+                var path = (ticket.project_id || 'unassigned') + '/' + ticket.ticket_number + '_debris_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.' + ext;
+                var url = await this.supabaseUpload('ticket-photos', path, file);
+
+                if (url) {
+                    // Attach to ticket's debris_images
+                    var imgs = Array.isArray(ticket.debris_images) ? ticket.debris_images.slice() : [];
+                    imgs.push(url);
+
+                    // Chain of custody metadata
+                    var cocNote = 'Photo taken ' + (pair.photoTime ? pair.photoTime.toLocaleString() : 'unknown time') +
+                        ' — matched to ticket at ' + new Date().toLocaleString() +
+                        ' — gap: ' + pair.gapMinutes + ' min' +
+                        (pair.gapMinutes > 120 ? ' [REVIEW]' : ' [OK]');
+
+                    var existingNotes = ticket.notes || '';
+                    var updatedNotes = existingNotes + (existingNotes ? ' | ' : '') + cocNote;
+
+                    await this.supabase('tickets?id=eq.' + ticket.id, 'PATCH', {
+                        debris_images: imgs,
+                        notes: updatedNotes
+                    });
+                    ticket.debris_images = imgs;
+                    uploaded++;
+
+                    // Queue for AI classification if not already queued
+                    if (!aiQueue.find(function(q) { return q.id === ticket.id; })) {
+                        aiQueue.push(ticket);
+                    }
+                }
+            }
+
+            // Run AI material classification on each ticket with new debris photos
+            if (this.state.apiKey && aiQueue.length > 0) {
+                for (var ai = 0; ai < aiQueue.length; ai++) {
+                    var t = aiQueue[ai];
+                    var debrisUrls = Array.isArray(t.debris_images) ? t.debris_images : [];
+                    if (debrisUrls.length === 0) continue;
+
+                    this.showLoading('🤖 AI classifying debris for ' + t.ticket_number + ' (' + (ai+1) + '/' + aiQueue.length + ')...');
+
+                    try {
+                        var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
+                            'Analyze these debris photos and estimate the percentage of each material stream. ' +
+                            'Return ONLY valid JSON:\n' +
+                            '{"wood":<0-100>,"gypsum":<0-100>,"plastic":<0-100>,"occ":<0-100>,"metal":<0-100>,"concrete":<0-100>,"block":<0-100>,"landfill":<0-100>,"confidence":<0-100>,"notes":"<brief description>"}\n' +
+                            'Percentages MUST total exactly 100. Be conservative — landfill is usually 25%+ for mixed loads.';
+
+                        var imgContent = debrisUrls.slice(-3).map(function(u) {
+                            return { type: 'image_url', image_url: { url: u, detail: 'high' } };
+                        });
+
+                        var data = await this.callOpenAI({
+                            model: 'gpt-4o',
+                            messages: [{ role: 'user', content: [{ type: 'text', text: prompt }].concat(imgContent) }],
+                            max_tokens: 300, temperature: 0.1
+                        });
+
+                        var text = (data.choices && data.choices[0] && data.choices[0].message.content) || '{}';
+                        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                        var match = text.match(/\{[\s\S]*\}/);
+                        if (match) {
+                            var mats = JSON.parse(match[0]);
+                            var conf = mats.confidence || 0;
+
+                            // Only auto-apply if confidence >= 60%
+                            if (conf >= 60) {
+                                var tons = parseFloat(t.net_tons) || 0;
+                                var divPct = 100 - (mats.landfill || 0);
+                                var matPatch = {
+                                    wood_pct: mats.wood || 0, gypsum_pct: mats.gypsum || 0,
+                                    plastic_pct: mats.plastic || 0, occ_pct: mats.occ || 0,
+                                    metal_pct: mats.metal || 0, concrete_pct: mats.concrete || 0,
+                                    block_pct: mats.block || 0, landfill_pct: mats.landfill || 0,
+                                    diversion_pct: divPct,
+                                    diverted_tons: +(tons * divPct / 100).toFixed(4),
+                                    landfill_tons: +(tons * (mats.landfill || 0) / 100).toFixed(4),
+                                    ai_notes: (mats.notes || '') + ' (conf: ' + conf + '%, time-matched)'
+                                };
+
+                                // Recalculate CO2e
+                                var GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240 };
+                                var co2e = 0;
+                                ['wood','occ','metal','plastic','concrete','block'].forEach(function(k) {
+                                    co2e += (tons * (mats[k] || 0) / 100) * (GWP[k] || 0);
+                                });
+                                matPatch.co2e_avoided = +co2e.toFixed(4);
+
+                                await this.supabase('tickets?id=eq.' + t.id, 'PATCH', matPatch);
+                                this.addAuditEntry('TIME_MATCH_AI', t.ticket_number + ' → ' + divPct + '% div, conf ' + conf + '% — ' + (mats.notes || ''));
+                            } else {
+                                // Low confidence — flag for manual review
+                                await this.supabase('tickets?id=eq.' + t.id, 'PATCH', {
+                                    ai_notes: 'LOW CONFIDENCE (' + conf + '%) — needs manual review. AI suggestion: ' + JSON.stringify(mats)
+                                });
+                                this.addAuditEntry('TIME_MATCH_AI', t.ticket_number + ' → LOW CONFIDENCE ' + conf + '% — flagged for review');
+                            }
+                        }
+                    } catch (aiErr) {
+                        console.error('AI classification error for ' + t.ticket_number + ':', aiErr);
+                        this.addAuditEntry('TIME_MATCH_AI', t.ticket_number + ' → AI error: ' + aiErr.message);
+                    }
+                }
+            }
+
+            this.hideLoading();
+            this.closeModal('timeMatchModal');
+
+            var msg = uploaded + ' debris photo' + (uploaded !== 1 ? 's' : '') + ' attached';
+            if (aiQueue.length > 0) msg += ' • AI classified ' + aiQueue.length + ' ticket' + (aiQueue.length !== 1 ? 's' : '');
+            this.showToast('✅ ' + msg);
+
+            this.addAuditEntry('TIME_MATCH', uploaded + ' photos time-matched to ' + aiQueue.length + ' tickets');
+
+            // Refresh data
+            if (this.state.currentProject) {
+                await this.loadTickets(this.state.currentProject.id);
+            }
+            this.renderReports();
+        },
+
+
+                // ============================================================
         // PENDING TICKET REVIEW
         // ============================================================
         async loadPendingReview() {
