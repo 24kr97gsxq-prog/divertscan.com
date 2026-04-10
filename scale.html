@@ -1,467 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Dalmex Recycling — Scale Entry</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-:root {
-    --navy:#0f2b3c;--navy-light:#1a3d54;--accent:#00c9a7;--accent-dim:rgba(0,201,167,0.15);
-    --orange:#f59e0b;--red:#ef4444;--blue:#3b82f6;--green:#22c55e;
-    --bg:#080f14;--card:#0d1a24;--card-border:#1a3044;--text:#e2e8f0;--text-dim:#64748b;
-    --mono:'Space Mono',monospace;--font:'DM Sans',sans-serif;
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;overflow:hidden}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
-
-/* Top Bar */
-.topbar{background:linear-gradient(135deg,var(--navy) 0%,#0a1f2e 100%);border-bottom:1px solid var(--card-border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
-.topbar h1{font-size:16px;font-weight:700;letter-spacing:.5px}
-.topbar h1 span{color:var(--accent)}
-.topbar .status{display:flex;align-items:center;gap:6px;font-size:12px}
-.topbar .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-/* Main Content */
-.main{height:calc(100vh - 52px);height:calc(100dvh - 52px);display:flex;flex-direction:column;padding:16px;gap:12px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-
-/* Cards */
-.card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:16px;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),transparent)}
-.card-title{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
-
-/* Project Buttons */
-.project-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.proj-btn{padding:16px 12px;border-radius:10px;border:2px solid var(--card-border);background:var(--navy);font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .2s;-webkit-tap-highlight-color:transparent}
-.proj-btn:active,.proj-btn.selected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);transform:scale(.97)}
-.proj-btn.selected{box-shadow:0 0 20px rgba(0,201,167,.2)}
-.proj-btn .proj-sub{font-size:10px;font-weight:400;color:var(--text-dim);margin-top:4px;letter-spacing:.5px}
-
-/* Weight Display */
-.weight-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.weight-box{background:var(--navy);border:1px solid var(--card-border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
-.weight-box.active{border-color:var(--accent);box-shadow:0 0 15px rgba(0,201,167,.15)}
-.weight-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:6px}
-.weight-value{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--accent);min-height:40px}
-.weight-value.empty{color:var(--text-dim);font-size:18px}
-.weight-lbs{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-top:2px}
-
-.net-display{text-align:center;padding:14px;background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(0,201,167,.02));border:1px solid rgba(0,201,167,.3);border-radius:10px}
-.net-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:4px}
-.net-value{font-family:var(--mono);font-size:38px;font-weight:700;color:var(--accent)}
-.net-sub{font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:2px}
-
-/* Numpad */
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.num-btn{padding:18px;border-radius:10px;border:1px solid var(--card-border);background:var(--navy);font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;-webkit-tap-highlight-color:transparent;user-select:none}
-.num-btn:active{background:var(--accent);color:var(--bg);transform:scale(.95)}
-.num-btn.clear{color:var(--red);border-color:rgba(239,68,68,.3)}
-.num-btn.clear:active{background:var(--red);color:#fff}
-.num-btn.enter{background:var(--accent);color:var(--bg);font-family:var(--font);font-size:14px;font-weight:700;grid-column:span 2}
-.num-btn.enter:active{background:#00a88a}
-
-/* Hauler Select */
-.hauler-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.hauler-btn{padding:12px;border-radius:8px;border:1px solid var(--card-border);background:var(--navy);font-family:var(--font);font-size:12px;font-weight:600;color:var(--text-dim);cursor:pointer;text-align:center;transition:all .2s;-webkit-tap-highlight-color:transparent}
-.hauler-btn:active,.hauler-btn.selected{border-color:var(--orange);color:var(--orange);background:rgba(245,158,11,.08)}
-
-/* Save Button */
-.save-btn{padding:18px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent),#00a88a);font-family:var(--font);font-size:16px;font-weight:700;color:var(--bg);cursor:pointer;text-align:center;letter-spacing:.5px;transition:all .2s;-webkit-tap-highlight-color:transparent;width:100%}
-.save-btn:active{transform:scale(.97);opacity:.9}
-.save-btn:disabled{opacity:.3;pointer-events:none}
-
-/* Success Screen */
-.success-screen{display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;gap:16px;min-height:60vh}
-.success-screen.show{display:flex}
-.success-check{font-size:64px;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275)}
-@keyframes popIn{0%{transform:scale(0)}100%{transform:scale(1)}}
-.success-ticket{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent)}
-.success-detail{font-size:14px;color:var(--text-dim);line-height:1.8}
-.success-detail b{color:var(--text)}
-.next-btn{padding:16px 40px;border-radius:10px;border:2px solid var(--accent);background:transparent;font-family:var(--font);font-size:14px;font-weight:700;color:var(--accent);cursor:pointer;margin-top:12px;-webkit-tap-highlight-color:transparent}
-.next-btn:active{background:var(--accent);color:var(--bg)}
-
-/* Entry Screen */
-.entry-screen{display:flex;flex-direction:column;gap:12px}
-.entry-screen.hidden{display:none}
-
-/* Toast */
-.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--navy);border:1px solid var(--accent);color:var(--accent);padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;display:none;animation:fadeIn .3s}
-.toast.show{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-
-/* Responsive */
-@media(min-width:768px){
-    .main{max-width:500px;margin:0 auto}
-    .project-grid{grid-template-columns:repeat(3,1fr)}
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DivertScan Scale</title>
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="DivertScan">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --green: #0d7a3e; --green-light: #e8f5ee;
+            --blue: #1a5fa8; --blue-light: #e6f0fa;
+            --red: #c0392b;
+            --gray-50: #f8f9fa; --gray-200: #dcdee2; --gray-500: #6b7280; --gray-900: #111827;
+            --radius: 12px;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--gray-50); color: var(--gray-900); min-height: 100vh; padding-bottom: 100px; }
+        .header { background: var(--gray-900); color: white; padding: 16px 20px; text-align: center; }
+        .header h1 { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+        .header .sub { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+        .status { padding: 10px 20px; font-size: 13px; text-align: center; font-weight: 500; }
+        .status.ok { background: var(--green-light); color: var(--green); }
+        .status.err { background: #fde8e8; color: var(--red); }
+        .status.wait { background: var(--blue-light); color: var(--blue); }
+        .weights { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .card { background: white; border-radius: var(--radius); padding: 20px; border: 1px solid var(--gray-200); }
+        .card .lbl { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 6px; }
+        .card .val { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .card.net { background: var(--green-light); border-color: var(--green); }
+        .card.net .lbl { color: var(--green); }
+        .card.net .val { color: var(--green); font-size: 36px; }
+        .unit { font-size: 16px; font-weight: 400; color: var(--gray-500); margin-left: 4px; }
+        .section { padding: 0 20px; margin-bottom: 16px; }
+        .section .lbl { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 8px; }
+        select {
+            width: 100%; padding: 16px; font-size: 18px; font-weight: 500;
+            border: 2px solid var(--gray-200); border-radius: var(--radius);
+            background: white; color: var(--gray-900); appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center; background-size: 20px;
+        }
+        select:focus { outline: none; border-color: var(--blue); }
+        .btn {
+            display: block; width: calc(100% - 40px); margin: 20px auto; padding: 18px;
+            font-size: 20px; font-weight: 700; color: white; background: var(--green);
+            border: none; border-radius: var(--radius); cursor: pointer;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn:active { opacity: 0.85; }
+        .btn:disabled { background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; }
+        .done {
+            display: none; position: fixed; inset: 0; background: var(--green); color: white;
+            flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+            text-align: center; padding: 40px;
+        }
+        .done.show { display: flex; }
+        .done .chk { width: 80px; height: 80px; border: 4px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 24px; }
+        .done h2 { font-size: 28px; margin-bottom: 8px; }
+        .done p { font-size: 16px; opacity: 0.85; }
+        .done .tnum { font-size: 22px; font-weight: 700; margin-top: 12px; }
+        .time { text-align: center; font-size: 12px; color: var(--gray-500); padding: 8px 20px; }
+    </style>
 </head>
 <body>
-
-<div class="topbar">
-    <h1><span>DALMEX</span> RECYCLING — Scale</h1>
-    <div class="status"><span class="pulse"></span> LIVE</div>
-</div>
-
-<div class="main">
-    <!-- Entry Form -->
-    <div class="entry-screen" id="entryScreen">
-
-        <!-- Step 1: Select Project -->
-        <div class="card">
-            <div class="card-title"><span class="dot"></span>Select Project</div>
-            <div class="project-grid" id="projectGrid">
-                <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;grid-column:span 2">Loading projects...</div>
-            </div>
-        </div>
-
-        <!-- Step 2: Hauler -->
-        <div class="card">
-            <div class="card-title"><span class="dot"></span>Hauler</div>
-            <div class="hauler-row" id="haulerRow">
-                <div class="hauler-btn selected" onclick="S.pickHauler(this,'Jaguar Waste Management')">Jaguar</div>
-                <div class="hauler-btn" onclick="S.pickHauler(this,'B&B Waste')">B&B Waste</div>
-                <div class="hauler-btn" onclick="S.pickHauler(this,'Liberty Demolition')">Liberty Demo</div>
-                <div class="hauler-btn" onclick="S.pickHauler(this,'Ranger Waste')">Ranger</div>
-            </div>
-        </div>
-
-        <!-- Step 3: Weights -->
-        <div class="card">
-            <div class="card-title"><span class="dot"></span>Scale Weights</div>
-            <div class="weight-row" style="margin-bottom:10px">
-                <div class="weight-box" id="grossBox" onclick="S.setField('gross')">
-                    <div class="weight-label">Gross (lbs)</div>
-                    <div class="weight-value empty" id="grossDisplay">Tap to enter</div>
-                    <div class="weight-lbs" id="grossTons"></div>
-                </div>
-                <div class="weight-box" id="tareBox" onclick="S.setField('tare')">
-                    <div class="weight-label">Tare (lbs)</div>
-                    <div class="weight-value empty" id="tareDisplay">Tap to enter</div>
-                    <div class="weight-lbs" id="tareTons"></div>
-                </div>
-            </div>
-            <div class="net-display" id="netDisplay" style="display:none">
-                <div class="net-label">Net Weight</div>
-                <div class="net-value" id="netTons">0.00 T</div>
-                <div class="net-sub" id="netLbs">0 lbs</div>
-            </div>
-        </div>
-
-        <!-- Numpad -->
-        <div class="card" id="numpadCard" style="display:none">
-            <div class="card-title"><span class="dot"></span>Enter <span id="numpadLabel">Gross</span> Weight (lbs)</div>
-            <div style="text-align:center;margin-bottom:10px">
-                <div style="font-family:var(--mono);font-size:36px;font-weight:700;color:var(--accent);min-height:44px" id="numpadValue">_</div>
-            </div>
-            <div class="numpad">
-                <div class="num-btn" onclick="S.numKey('1')">1</div>
-                <div class="num-btn" onclick="S.numKey('2')">2</div>
-                <div class="num-btn" onclick="S.numKey('3')">3</div>
-                <div class="num-btn" onclick="S.numKey('4')">4</div>
-                <div class="num-btn" onclick="S.numKey('5')">5</div>
-                <div class="num-btn" onclick="S.numKey('6')">6</div>
-                <div class="num-btn" onclick="S.numKey('7')">7</div>
-                <div class="num-btn" onclick="S.numKey('8')">8</div>
-                <div class="num-btn" onclick="S.numKey('9')">9</div>
-                <div class="num-btn clear" onclick="S.numKey('C')">CLR</div>
-                <div class="num-btn" onclick="S.numKey('0')">0</div>
-                <div class="num-btn" onclick="S.numKey('00')">00</div>
-                <div class="num-btn enter" onclick="S.numEnter()">✓ SET WEIGHT</div>
-                <div class="num-btn clear" onclick="S.numCancel()">✕</div>
-            </div>
-        </div>
-
-        <!-- Ticket Number (optional override) -->
-        <div class="card">
-            <div class="card-title"><span class="dot"></span>Ticket # (optional)</div>
-            <input type="text" id="ticketNum" placeholder="Auto-generated if blank" inputmode="numeric" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--card-border);background:var(--navy);color:var(--text);font-family:var(--mono);font-size:16px;outline:none">
-        </div>
-
-        <!-- Save -->
-        <button class="save-btn" id="saveBtn" disabled onclick="S.save()">
-            SELECT PROJECT & ENTER WEIGHTS
-        </button>
-
+    <div class="header">
+        <h1>DIVERTSCAN</h1>
+        <div class="sub" id="fac">Dalmex Recycling</div>
     </div>
-
-    <!-- Success Screen -->
-    <div class="success-screen" id="successScreen">
-        <div class="success-check">✅</div>
-        <div class="success-ticket" id="successTicket">#00000</div>
-        <div class="success-detail" id="successDetail"></div>
-        <button class="next-btn" onclick="S.reset()">NEXT TRUCK →</button>
+    <div class="status wait" id="st">Loading...</div>
+    <div class="weights">
+        <div class="row">
+            <div class="card"><div class="lbl">Gross</div><div class="val" id="gw">--</div></div>
+            <div class="card"><div class="lbl">Tare</div><div class="val" id="tw">--</div></div>
+        </div>
+        <div class="card net" id="nc" style="display:none;">
+            <div class="lbl">Net Weight</div>
+            <div class="val"><span id="nw">--</span><span class="unit">lbs</span></div>
+        </div>
     </div>
-</div>
+    <div class="time" id="tm"></div>
+    <div class="section">
+        <div class="lbl">Select Project</div>
+        <select id="proj"><option value="">-- Pick a project --</option></select>
+    </div>
+    <button class="btn" id="cbtn" disabled>Confirm Ticket</button>
+    <div class="done" id="doneOv">
+        <div class="chk">&#10003;</div>
+        <h2>Ticket Confirmed</h2>
+        <p id="doneMsg"></p>
+        <div class="tnum" id="doneTk"></div>
+        <p style="margin-top:24px;opacity:0.7">Resets in 10 seconds</p>
+    </div>
+    <script>
+        var SB = "https://cyvvlngtojagfoaitoog.supabase.co";
+        var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+        var DEV = "dalmex-scale-01";
+        var FAC = "Dalmex Recycling";
+        var HAUL = "Dalmex Recycling";
+        var POLL = 2000;
+        var gr = null, tr = null, pt = null;
 
-<div class="toast" id="toast"></div>
-
-<script>
-const SB = 'https://cyvvlngtojagfoaitoog.supabase.co';
-const SK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1NDE4NjcsImV4cCI6MjA1OTExNzg2N30.bEl0MQ2LD1KMxjebeMteG-BOfmGn0USCOsTnxCFoEXs';
-
-const S = {
-    projects: [],
-    selectedProject: null,
-    hauler: 'Jaguar Waste Management',
-    gross: 0,
-    tare: 0,
-    activeField: null,
-    numBuffer: '',
-
-    async init() {
-        var el = document.getElementById('projectGrid');
-        try {
-            var r = await fetch(SB + '/rest/v1/projects?select=id,name,leed_version,leed_target&order=name.asc', {
-                headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
+        function sf(path, opt) {
+            opt = opt || {};
+            return fetch(SB + "/rest/v1/" + path, {
+                method: opt.method || "GET",
+                headers: { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": opt.prefer || "return=representation" },
+                body: opt.body || undefined
+            }).then(function(r) {
+                if (!r.ok) return r.text().then(function(e) { throw new Error(r.status + ": " + e); });
+                return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
             });
-            if (r.ok) {
-                this.projects = await r.json();
-                if (this.projects.length > 0) {
-                    this.renderProjects();
-                } else {
-                    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;grid-column:span 2">No projects found. Projects may require RLS policy for anon access.</div>';
+        }
+
+        function init() {
+            sf("projects?select=id,name&order=name.asc").then(function(d) {
+                var s = document.getElementById("proj");
+                d.forEach(function(p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.name; s.appendChild(o); });
+            }).catch(function() {
+                var s = document.getElementById("proj");
+                var o = document.createElement("option"); o.value = "general"; o.textContent = "General"; s.appendChild(o);
+            });
+            document.getElementById("proj").addEventListener("change", ck);
+            document.getElementById("cbtn").addEventListener("click", confirm);
+            poll();
+            pt = setInterval(poll, POLL);
+        }
+
+        function poll() {
+            sf("scale_weights?device_id=eq." + DEV + "&status=eq.pending&order=captured_at.desc&limit=2")
+            .then(function(w) {
+                ss("ok", "Connected - " + new Date().toLocaleTimeString());
+                if (w.length === 0) { if (!gr) ss("ok", "Waiting for truck on scale..."); return; }
+                if (w.length >= 2) {
+                    var sorted = w.slice().sort(function(a, b) { return b.weight_lbs - a.weight_lbs; });
+                    if (!gr || gr.id !== sorted[0].id) setG(sorted[0]);
+                    if (!tr || tr.id !== sorted[1].id) setT(sorted[1]);
+                } else if (w.length === 1 && !gr) {
+                    setG(w[0]);
+                    ss("ok", "Gross captured - dump load, return to scale");
                 }
-            } else {
-                var err = await r.text();
-                el.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:12px;grid-column:span 2">Error ' + r.status + ': ' + err.substring(0, 100) + '</div>';
+            }).catch(function() { ss("err", "Connection lost - retrying..."); });
+        }
+
+        function setG(r) { gr = r; document.getElementById("gw").textContent = Number(r.weight_lbs).toLocaleString(); document.getElementById("tm").textContent = "Captured: " + new Date(r.captured_at).toLocaleString(); }
+        function setT(r) {
+            tr = r; document.getElementById("tw").textContent = Number(r.weight_lbs).toLocaleString();
+            if (gr) {
+                var n = Math.abs(gr.weight_lbs - tr.weight_lbs);
+                document.getElementById("nw").textContent = Number(n).toLocaleString();
+                document.getElementById("nc").style.display = "block";
+                ss("ok", "Both weights captured - confirm below");
             }
-        } catch(e) {
-            el.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;font-size:12px;grid-column:span 2">Connection failed: ' + e.message + '</div>';
+            ck();
         }
-    },
+        function ss(t, m) { var b = document.getElementById("st"); b.className = "status " + t; b.textContent = m; }
+        function ck() { document.getElementById("cbtn").disabled = !(document.getElementById("proj").value && gr && tr); }
 
-    renderProjects() {
-        var el = document.getElementById('projectGrid');
-        el.innerHTML = this.projects.map(function(p) {
-            return '<div class="proj-btn" onclick="S.pickProject(\'' + p.id + '\')">' +
-                '<div>' + p.name + '</div>' +
-                '<div class="proj-sub">LEED ' + (p.leed_version || 'v4') + ' • ' + (p.leed_target || 50) + '%</div></div>';
-        }).join('');
-    },
+        function confirm() {
+            var btn = document.getElementById("cbtn");
+            btn.disabled = true; btn.textContent = "Creating ticket...";
+            var pid = document.getElementById("proj").value;
+            var gl = Number(gr.weight_lbs), tl = Number(tr.weight_lbs);
+            var nl = Math.abs(gl - tl), nt = nl / 2000;
+            var now = new Date().toISOString(), today = now.split("T")[0];
 
-    pickProject(id) {
-        this.selectedProject = this.projects.find(function(p) { return p.id === id; });
-        document.querySelectorAll('.proj-btn').forEach(function(b) { b.classList.remove('selected'); });
-        event.currentTarget.classList.add('selected');
-        this.updateSaveBtn();
-    },
-
-    pickHauler(el, name) {
-        this.hauler = name;
-        document.querySelectorAll('.hauler-btn').forEach(function(b) { b.classList.remove('selected'); });
-        el.classList.add('selected');
-    },
-
-    setField(field) {
-        this.activeField = field;
-        this.numBuffer = '';
-        document.getElementById('numpadValue').textContent = '_';
-        document.getElementById('numpadLabel').textContent = field === 'gross' ? 'Gross' : 'Tare';
-        document.getElementById('numpadCard').style.display = 'block';
-        document.getElementById('grossBox').classList.toggle('active', field === 'gross');
-        document.getElementById('tareBox').classList.toggle('active', field === 'tare');
-        // Scroll to numpad
-        setTimeout(function() {
-            document.getElementById('numpadCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
-    },
-
-    numKey(k) {
-        if (k === 'C') { this.numBuffer = ''; }
-        else if (k === '00') { this.numBuffer += '00'; }
-        else { this.numBuffer += k; }
-        // Limit to 6 digits
-        if (this.numBuffer.length > 6) this.numBuffer = this.numBuffer.substring(0, 6);
-        document.getElementById('numpadValue').textContent = this.numBuffer || '_';
-    },
-
-    numEnter() {
-        var val = parseInt(this.numBuffer) || 0;
-        if (val <= 0) { this.toast('Enter a weight'); return; }
-        if (this.activeField === 'gross') {
-            this.gross = val;
-            document.getElementById('grossDisplay').textContent = val.toLocaleString();
-            document.getElementById('grossDisplay').classList.remove('empty');
-            document.getElementById('grossTons').textContent = (val / 2000).toFixed(2) + ' T';
-        } else {
-            this.tare = val;
-            document.getElementById('tareDisplay').textContent = val.toLocaleString();
-            document.getElementById('tareDisplay').classList.remove('empty');
-            document.getElementById('tareTons').textContent = (val / 2000).toFixed(2) + ' T';
-        }
-        document.getElementById('numpadCard').style.display = 'none';
-        document.getElementById('grossBox').classList.remove('active');
-        document.getElementById('tareBox').classList.remove('active');
-        this.activeField = null;
-        this.calcNet();
-        this.updateSaveBtn();
-    },
-
-    numCancel() {
-        document.getElementById('numpadCard').style.display = 'none';
-        document.getElementById('grossBox').classList.remove('active');
-        document.getElementById('tareBox').classList.remove('active');
-        this.activeField = null;
-    },
-
-    calcNet() {
-        if (this.gross > 0 && this.tare > 0) {
-            var net = this.gross - this.tare;
-            var tons = (net / 2000).toFixed(2);
-            document.getElementById('netDisplay').style.display = 'block';
-            document.getElementById('netTons').textContent = tons + ' T';
-            document.getElementById('netLbs').textContent = net.toLocaleString() + ' lbs';
-        }
-    },
-
-    updateSaveBtn() {
-        var btn = document.getElementById('saveBtn');
-        var ready = this.selectedProject && this.gross > 0 && this.tare > 0 && (this.gross - this.tare) > 0;
-        btn.disabled = !ready;
-        if (ready) {
-            var tons = ((this.gross - this.tare) / 2000).toFixed(2);
-            btn.textContent = '✅ SAVE TICKET — ' + tons + ' T → ' + this.selectedProject.name;
-        } else if (this.selectedProject && (this.gross === 0 || this.tare === 0)) {
-            btn.textContent = 'ENTER GROSS & TARE WEIGHTS';
-        } else {
-            btn.textContent = 'SELECT PROJECT & ENTER WEIGHTS';
-        }
-    },
-
-    async save() {
-        if (!this.selectedProject || this.gross <= 0 || this.tare <= 0) return;
-        var net = this.gross - this.tare;
-        var netTons = +(net / 2000).toFixed(4);
-        var tktNum = document.getElementById('ticketNum').value.trim();
-        if (!tktNum) tktNum = 'SC-' + Date.now().toString().substring(5);
-
-        // Duplicate check
-        var dupeCheck = await fetch(SB + '/rest/v1/tickets?ticket_number=eq.' + encodeURIComponent(tktNum) + '&project_id=eq.' + this.selectedProject.id + '&select=id', {
-            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK }
-        });
-        if (dupeCheck.ok) {
-            var dupes = await dupeCheck.json();
-            if (dupes.length > 0) { this.toast('⚠️ Ticket #' + tktNum + ' already exists'); return; }
+            sf("tickets?select=ticket_number&order=ticket_number.desc&limit=1").then(function(r) {
+                var tn = "SC" + Date.now().toString().slice(-8);
+                if (r && r.length > 0 && r[0].ticket_number) { var ln = parseInt(r[0].ticket_number); if (!isNaN(ln)) tn = String(ln + 1); }
+                return sf("tickets", { method: "POST", body: JSON.stringify({
+                    project_id: pid, ticket_number: tn, ticket_date: today,
+                    gross_lbs: gl, tare_lbs: tl, net_lbs: nl, net_tons: parseFloat(nt.toFixed(2)),
+                    hauler: HAUL, scan_type: "scale_capture", material_breakdown: {}, diversion_rate: 0, created_at: now
+                }), prefer: "return=representation" }).then(function(tk) {
+                    var tid = (tk && tk[0]) ? tk[0].id : null;
+                    return Promise.all([
+                        sf("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", project_id: pid, confirmed_at: now, weight_type: "gross", paired_with: tr.id, ticket_id: tid }), prefer: "return=minimal" }),
+                        sf("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", project_id: pid, confirmed_at: now, weight_type: "tare", paired_with: gr.id, ticket_id: tid }), prefer: "return=minimal" })
+                    ]).then(function() { return { tn: tn, nl: nl, nt: nt }; });
+                });
+            }).then(function(res) {
+                clearInterval(pt);
+                document.getElementById("doneMsg").textContent = "Net: " + Number(res.nl).toLocaleString() + " lbs (" + res.nt.toFixed(2) + " tons)";
+                document.getElementById("doneTk").textContent = "Ticket #" + res.tn;
+                document.getElementById("doneOv").classList.add("show");
+                setTimeout(reset, 10000);
+            }).catch(function(e) {
+                console.error(e); btn.disabled = false; btn.textContent = "CONFIRM TICKET";
+                ss("err", "Error - try again");
+            });
         }
 
-        // Randomized material defaults
-        var mats = {};
-        var base = { wood: 34, occ: 16, metal: 11, plastic: 0, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
-        var keys = Object.keys(base);
-        var nonLF = keys.filter(function(k) { return k !== 'landfill'; });
-        nonLF.forEach(function(k) {
-            var v = base[k];
-            if (k === 'plastic') { mats[k + '_pct'] = 0; mats[k + '_tons'] = 0; return; }
-            if (v > 0) {
-                var swing = v >= 10 ? Math.floor(Math.random() * 11) + 5 : Math.floor(Math.random() * 4) + 1;
-                v = v + (Math.random() < 0.5 ? swing : -swing);
-                v = Math.max(1, v);
-            }
-            mats[k + '_pct'] = Math.round(v);
-            mats[k + '_tons'] = +(netTons * Math.round(v) / 100).toFixed(4);
-        });
-        var used = 0;
-        nonLF.forEach(function(k) { used += (mats[k + '_pct'] || 0); });
-        mats.landfill_pct = Math.max(15, 100 - used);
-        mats.landfill_tons = +(netTons * mats.landfill_pct / 100).toFixed(4);
-        // Fix total to 100
-        var total = 0;
-        keys.forEach(function(k) { total += (mats[k + '_pct'] || 0); });
-        if (total !== 100) { mats.wood_pct += (100 - total); mats.wood_tons = +(netTons * mats.wood_pct / 100).toFixed(4); }
-
-        var divPct = 100 - mats.landfill_pct;
-        var divTons = +(netTons * divPct / 100).toFixed(4);
-
-        var ticket = {
-            project_id: this.selectedProject.id,
-            ticket_number: tktNum,
-            ticket_date: new Date().toISOString().split('T')[0],
-            gross_lbs: this.gross,
-            tare_lbs: this.tare,
-            net_lbs: net,
-            net_tons: netTons,
-            hauler: this.hauler,
-            scan_type: 'scale_kiosk',
-            diversion_pct: divPct,
-            diverted_tons: divTons,
-            landfill_tons: mats.landfill_tons,
-            co2e_avoided: +(divTons * 0.68).toFixed(4),
-            captured_at: new Date().toISOString()
-        };
-        Object.assign(ticket, mats);
-
-        // Force year 2026
-        if (ticket.ticket_date.substring(0, 4) !== '2026') {
-            ticket.ticket_date = '2026' + ticket.ticket_date.substring(4);
+        function reset() {
+            gr = null; tr = null;
+            document.getElementById("gw").textContent = "--";
+            document.getElementById("tw").textContent = "--";
+            document.getElementById("nw").textContent = "--";
+            document.getElementById("nc").style.display = "none";
+            document.getElementById("proj").value = "";
+            document.getElementById("cbtn").disabled = true;
+            document.getElementById("cbtn").textContent = "CONFIRM TICKET";
+            document.getElementById("doneOv").classList.remove("show");
+            document.getElementById("doneTk").textContent = "";
+            document.getElementById("tm").textContent = "";
+            ss("ok", "Waiting for truck on scale...");
+            pt = setInterval(poll, POLL);
         }
 
-        document.getElementById('saveBtn').disabled = true;
-        document.getElementById('saveBtn').textContent = 'SAVING...';
-
-        var res = await fetch(SB + '/rest/v1/tickets', {
-            method: 'POST',
-            headers: { 'apikey': SK, 'Authorization': 'Bearer ' + SK, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-            body: JSON.stringify(ticket)
-        });
-
-        if (res.ok) {
-            var created = await res.json();
-            document.getElementById('entryScreen').classList.add('hidden');
-            document.getElementById('successScreen').classList.add('show');
-            document.getElementById('successTicket').textContent = '#' + tktNum;
-            document.getElementById('successDetail').innerHTML =
-                '<b>' + this.selectedProject.name + '</b><br>' +
-                'Gross: ' + this.gross.toLocaleString() + ' lbs<br>' +
-                'Tare: ' + this.tare.toLocaleString() + ' lbs<br>' +
-                'Net: ' + net.toLocaleString() + ' lbs = <b>' + netTons + ' T</b><br>' +
-                'Diversion: ' + divPct + '%<br>' +
-                this.hauler + ' • ' + new Date().toLocaleTimeString();
-        } else {
-            var err = await res.text();
-            this.toast('❌ Save failed: ' + err.substring(0, 80));
-            document.getElementById('saveBtn').disabled = false;
-            this.updateSaveBtn();
-        }
-    },
-
-    reset() {
-        this.selectedProject = null;
-        this.gross = 0;
-        this.tare = 0;
-        this.activeField = null;
-        this.numBuffer = '';
-        document.getElementById('entryScreen').classList.remove('hidden');
-        document.getElementById('successScreen').classList.remove('show');
-        document.getElementById('grossDisplay').textContent = 'Tap to enter';
-        document.getElementById('grossDisplay').classList.add('empty');
-        document.getElementById('tareDisplay').textContent = 'Tap to enter';
-        document.getElementById('tareDisplay').classList.add('empty');
-        document.getElementById('grossTons').textContent = '';
-        document.getElementById('tareTons').textContent = '';
-        document.getElementById('netDisplay').style.display = 'none';
-        document.getElementById('numpadCard').style.display = 'none';
-        document.getElementById('ticketNum').value = '';
-        document.querySelectorAll('.proj-btn').forEach(function(b) { b.classList.remove('selected'); });
-        document.querySelectorAll('.hauler-btn').forEach(function(b) { b.classList.remove('selected'); });
-        document.querySelectorAll('.hauler-btn')[0].classList.add('selected');
-        this.hauler = 'Jaguar Waste Management';
-        this.updateSaveBtn();
-    },
-
-    toast(msg) {
-        var t = document.getElementById('toast');
-        t.textContent = msg;
-        t.classList.add('show');
-        setTimeout(function() { t.classList.remove('show'); }, 3000);
-    }
-};
-
-S.init();
-</script>
+        document.addEventListener("DOMContentLoaded", init);
+    </script>
 </body>
 </html>
