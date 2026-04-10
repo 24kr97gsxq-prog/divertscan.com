@@ -2,471 +2,538 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DivertScan - Confirm Ticket</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0f14">
+    <title>Dalmex Scale</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         :root {
-            --green: #0d7a3e;
-            --green-light: #e8f5ee;
-            --blue: #1a5fa8;
-            --blue-light: #e6f0fa;
-            --red: #c0392b;
-            --orange: #e67e22;
-            --orange-light: #fef3e2;
-            --gray-50: #f8f9fa;
-            --gray-100: #f0f1f3;
-            --gray-200: #dcdee2;
-            --gray-500: #6b7280;
-            --gray-700: #374151;
-            --gray-900: #111827;
-            --radius: 12px;
+            --bg:#0a0f14;--card:#0d1a24;--border:#1a3044;
+            --text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;
+            --green:#22c55e;--green-glow:rgba(34,197,94,.12);
+            --amber:#f59e0b;--amber-glow:rgba(245,158,11,.12);
+            --red:#ef4444;--cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.08);
+            --blue:#3b82f6;
+            --mono:'JetBrains Mono',monospace;
+            --sans:'DM Sans',system-ui,sans-serif;
         }
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+        html,body{height:100%;overflow:hidden}
+        body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: var(--gray-50);
-            color: var(--gray-900);
-            min-height: 100vh;
-            padding: 0 0 100px 0;
-        }
+        /* Header */
+        .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+        .hdr h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
+        .hdr h1 span{color:var(--cyan)}
+        .hdr-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted)}
+        .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s ease infinite}
+        .dot.on{background:var(--green)}.dot.off{background:var(--red)}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-        .header {
-            background: var(--gray-900);
-            color: white;
-            padding: 16px 20px;
-            text-align: center;
-        }
-        .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        .header .facility { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+        /* Main content */
+        .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:120px}
 
-        .test-banner {
-            display: none;
-            padding: 8px 20px;
-            background: var(--orange-light);
-            color: var(--orange);
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .test-banner.show { display: block; }
+        /* Weight display cards */
+        .weight-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
+        .weight-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);opacity:.5}
+        .weight-card.captured{border-color:var(--green)}
+        .weight-card.captured::before{background:linear-gradient(90deg,var(--green),transparent);opacity:.8}
+        .weight-card.waiting{border-color:var(--amber);border-style:dashed}
+        .wc-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+        .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+        .wc-value.empty{color:var(--dim);font-size:1.2rem;font-weight:500}
+        .wc-sub{font-size:.7rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
 
-        .status-bar { padding: 10px 20px; font-size: 13px; text-align: center; font-weight: 500; }
-        .status-bar.connected { background: var(--green-light); color: var(--green); }
-        .status-bar.disconnected { background: #fde8e8; color: var(--red); }
-        .status-bar.loading { background: var(--blue-light); color: var(--blue); }
+        /* Net result */
+        .net-card{background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(34,197,94,.06));border:2px solid var(--cyan);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px}
+        .net-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-weight:700;margin-bottom:6px}
+        .net-value{font-family:var(--mono);font-size:3rem;font-weight:800;color:var(--green);letter-spacing:-.03em}
+        .net-tons{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--cyan);margin-top:2px}
+        .net-ticket{font-family:var(--mono);font-size:.8rem;color:var(--amber);margin-top:6px;font-weight:700}
 
-        .weights { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        /* Project selector */
+        .proj-select{width:100%;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:600;-webkit-appearance:none;margin-bottom:12px}
+        .proj-select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
 
-        .weight-card { background: white; border-radius: var(--radius); padding: 20px; border: 1px solid var(--gray-200); }
-        .weight-card .label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 6px; }
-        .weight-card .value { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .weight-card .unit { font-size: 16px; font-weight: 400; color: var(--gray-500); margin-left: 4px; }
+        /* Confirm button */
+        .confirm-btn{width:100%;padding:18px;border:none;border-radius:12px;font-family:var(--sans);font-size:1.1rem;font-weight:800;cursor:pointer;letter-spacing:.02em;transition:all .15s}
+        .confirm-btn:active{transform:scale(.97)}
+        .confirm-btn.ready{background:var(--green);color:#080f14}
+        .confirm-btn.disabled{background:var(--border);color:var(--dim);cursor:not-allowed}
 
-        .weight-card.net { background: var(--green-light); border-color: var(--green); }
-        .weight-card.net .label { color: var(--green); }
-        .weight-card.net .value { color: var(--green); }
+        /* Success overlay */
+        .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+        .success-overlay.show{display:flex}
+        .success-check{font-size:4rem;margin-bottom:12px;animation:pop .4s ease}
+        .success-ticket{font-family:var(--mono);font-size:1.8rem;font-weight:800;color:var(--cyan);margin-bottom:6px}
+        .success-weight{font-family:var(--mono);font-size:1.2rem;color:var(--green);margin-bottom:4px}
+        .success-msg{font-size:.85rem;color:var(--muted);text-align:center;margin-top:8px}
+        .success-countdown{font-family:var(--mono);font-size:.75rem;color:var(--dim);margin-top:16px}
+        @keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
 
-        .weight-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .weight-row .weight-card .value { font-size: 24px; }
+        /* Status bar */
+        .status-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#0f2b3c,#0a1f2e);border-top:1px solid var(--border);padding:8px 16px;padding-bottom:max(8px,env(safe-area-inset-bottom));font-size:.65rem;color:var(--dim);display:flex;justify-content:space-between;z-index:50}
 
-        .section { padding: 0 20px; margin-bottom: 16px; }
-        .section-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 8px; }
-
-        .project-select {
-            width: 100%; padding: 16px; font-size: 18px; font-weight: 500;
-            border: 2px solid var(--gray-200); border-radius: var(--radius);
-            background: white; color: var(--gray-900); appearance: none; -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 12px center; background-size: 20px;
-        }
-        .project-select:focus { outline: none; border-color: var(--blue); }
-
-        .hauler-info { padding: 0 20px; margin-bottom: 16px; }
-        .hauler-badge { display: inline-block; padding: 8px 16px; background: var(--blue-light); color: var(--blue); border-radius: 8px; font-size: 14px; font-weight: 600; }
-
-        .confirm-btn {
-            display: block; width: calc(100% - 40px); margin: 20px auto; padding: 18px;
-            font-size: 20px; font-weight: 700; color: white; background: var(--green);
-            border: none; border-radius: var(--radius); cursor: pointer;
-            text-transform: uppercase; letter-spacing: 1px; transition: opacity 0.2s;
-        }
-        .confirm-btn:active { opacity: 0.85; }
-        .confirm-btn:disabled { background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; }
-
-        .test-btn {
-            display: block; width: calc(100% - 40px); margin: 10px auto; padding: 12px;
-            font-size: 14px; font-weight: 600; color: var(--orange); background: var(--orange-light);
-            border: 2px solid var(--orange); border-radius: var(--radius); cursor: pointer; text-align: center;
-        }
-
-        .success-overlay {
-            display: none; position: fixed; inset: 0; background: var(--green); color: white;
-            flex-direction: column; align-items: center; justify-content: center; z-index: 100;
-            text-align: center; padding: 40px;
-        }
-        .success-overlay.show { display: flex; }
-        .success-overlay .check { width: 80px; height: 80px; border: 4px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 24px; }
-        .success-overlay h2 { font-size: 28px; margin-bottom: 8px; }
-        .success-overlay p { font-size: 16px; opacity: 0.85; }
-        .success-overlay .ticket-num { font-size: 22px; font-weight: 700; margin-top: 12px; opacity: 1; }
-
-        .timestamp { text-align: center; font-size: 12px; color: var(--gray-500); padding: 8px 20px; }
+        /* Loading */
+        .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+        @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>DIVERTSCAN</h1>
-        <div class="facility" id="facilityName">Dalmex Recycling</div>
+<header class="hdr">
+    <div>
+        <h1><span>Dalmex</span> Scale</h1>
+    </div>
+    <div class="hdr-status">
+        <span class="dot off" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+    </div>
+</header>
+
+<div class="main">
+    <!-- Gross Weight -->
+    <div class="weight-card" id="grossCard">
+        <div class="wc-label">⚖️ Gross Weight (loaded truck)</div>
+        <div class="wc-value empty" id="grossValue">Waiting for truck...</div>
+        <div class="wc-sub" id="grossTime"></div>
     </div>
 
-    <div class="test-banner" id="testBanner">Test Mode - Simulated Weights</div>
-
-    <div class="status-bar loading" id="statusBar">Loading recent weights...</div>
-
-    <div class="weights">
-        <div class="weight-row">
-            <div class="weight-card" id="grossCard">
-                <div class="label">Gross</div>
-                <div class="value" id="grossWeight">--</div>
-            </div>
-            <div class="weight-card" id="tareCard">
-                <div class="label">Tare</div>
-                <div class="value" id="tareWeight">--</div>
-            </div>
-        </div>
-        <div class="weight-card net" id="netCard" style="display:none;">
-            <div class="label">Net Weight</div>
-            <div class="value"><span id="netWeight">--</span><span class="unit">lbs</span></div>
-        </div>
+    <!-- Tare Weight -->
+    <div class="weight-card" id="tareCard">
+        <div class="wc-label">🚛 Tare Weight (empty truck)</div>
+        <div class="wc-value empty" id="tareValue">Drive to dump, then return</div>
+        <div class="wc-sub" id="tareTime"></div>
     </div>
 
-    <div class="timestamp" id="timestamp"></div>
-
-    <div class="section">
-        <div class="section-label">Select Project</div>
-        <select class="project-select" id="projectSelect">
-            <option value="">-- Pick a project --</option>
-        </select>
+    <!-- Net Result -->
+    <div class="net-card" id="netCard" style="display:none">
+        <div class="net-label">Net Weight</div>
+        <div class="net-value" id="netLbs">0</div>
+        <div style="font-size:.7rem;color:var(--muted)">lbs</div>
+        <div class="net-tons" id="netTons">0 tons</div>
+        <div class="net-ticket" id="netTicket"></div>
     </div>
 
-    <div class="hauler-info" id="haulerInfo" style="display:none;">
-        <div class="section-label">Hauler</div>
-        <div class="hauler-badge" id="haulerName">Dalmex Recycling</div>
-    </div>
+    <!-- Project Selector -->
+    <select class="proj-select" id="projectSelect" onchange="checkReady()">
+        <option value="">— Select Project —</option>
+    </select>
 
-    <button class="confirm-btn" id="confirmBtn" disabled>Confirm Ticket</button>
+    <!-- Confirm Button -->
+    <button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
+        SELECT PROJECT & CAPTURE WEIGHTS
+    </button>
+</div>
 
-    <button class="test-btn" id="testBtn" style="display:none;" onclick="simulateWeights()">Simulate Weight Readings (Test)</button>
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+    <div class="success-check">✅</div>
+    <div class="success-ticket" id="successTicket">DX-00001</div>
+    <div class="success-weight" id="successWeight">Net: 31,800 lbs (15.90 T)</div>
+    <div class="success-msg">Ticket created in DivertScan<br>Ready for next truck</div>
+    <div class="success-countdown" id="successCountdown">Resetting in 8s...</div>
+</div>
 
-    <div class="success-overlay" id="successOverlay">
-        <div class="check">&#10003;</div>
-        <h2>Ticket Confirmed</h2>
-        <p id="successMsg">Net: 31,800 lbs</p>
-        <div class="ticket-num" id="successTicket"></div>
-        <p style="margin-top: 24px; opacity: 0.7;">This screen will reset in 10 seconds</p>
-    </div>
+<!-- Status Bar -->
+<div class="status-bar">
+    <span id="deviceLabel">Dalmex Scale 01</span>
+    <span id="lastSync">—</span>
+</div>
 
-    <script>
-        var SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
-        var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
-        var DEVICE_ID = "dalmex-scale-01";
-        var FACILITY = "Dalmex Recycling";
-        var HAULER = "Dalmex Recycling";
-        var POLL_INTERVAL = 5000;
+<script>
+// ─────────────────────────────────────────────
+// CONFIG — update these for your setup
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY  = localStorage.getItem('ds_supabase_key') || "YOUR_SUPABASE_ANON_KEY";
+const DEVICE_ID     = "dalmex-scale-01";
+const TICKET_PREFIX = "DX";
+const POLL_INTERVAL = 3000;  // Check for new weights every 3 seconds
 
-        var grossReading = null;
-        var tareReading = null;
-        var pollTimer = null;
-        var projects = [];
-        var isTestMode = window.location.search.indexOf("test") !== -1;
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let grossReading = null;
+let tareReading  = null;
+let projects     = [];
+let nextTicketNum = null;
+let pollTimer    = null;
 
-        function supaFetch(path, options) {
-            options = options || {};
-            return fetch(SUPABASE_URL + "/rest/v1/" + path, {
-                method: options.method || "GET",
-                headers: {
-                    "apikey": SUPABASE_ANON_KEY,
-                    "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                    "Content-Type": "application/json",
-                    "Prefer": options.prefer || "return=representation"
-                },
-                body: options.body || undefined
-            }).then(function(resp) {
-                if (!resp.ok) {
-                    return resp.text().then(function(err) {
-                        throw new Error("Supabase error " + resp.status + ": " + err);
-                    });
-                }
-                return resp.text().then(function(text) {
-                    return text ? JSON.parse(text) : null;
-                });
-            });
-        }
+// ─────────────────────────────────────────────
+// SUPABASE HELPER
+// ─────────────────────────────────────────────
+async function sb(endpoint, method = 'GET', body = null) {
+    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+    };
+    if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    if (!res.ok) { console.error('SB error:', res.status, await res.text()); return null; }
+    if (res.status === 204) return [];
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
+}
 
-        function init() {
-            if (isTestMode) {
-                document.getElementById("testBanner").classList.add("show");
-                document.getElementById("testBtn").style.display = "block";
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+async function init() {
+    // Load projects
+    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
+    const sel = document.getElementById('projectSelect');
+    projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+    });
+
+    // Get next ticket number
+    await refreshNextTicketNum();
+
+    // Start polling for weights
+    updateStatus('on', 'Listening...');
+    pollWeights();
+    pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+}
+
+// ─────────────────────────────────────────────
+// TICKET NUMBERING — DX-XXXXX
+// ─────────────────────────────────────────────
+async function refreshNextTicketNum() {
+    // Query the highest existing DX- ticket number
+    const existing = await sb(
+        `tickets?ticket_number=like.${TICKET_PREFIX}-*&select=ticket_number&order=ticket_number.desc&limit=1`
+    );
+
+    let highest = 0;
+    if (existing && existing.length > 0) {
+        const num = existing[0].ticket_number.replace(TICKET_PREFIX + '-', '');
+        highest = parseInt(num) || 0;
+    }
+
+    // Also check scale_weights for any confirmed but not yet ticketed
+    nextTicketNum = highest + 1;
+    document.getElementById('netTicket').textContent = 
+        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+}
+
+function getTicketNumber() {
+    const num = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+    nextTicketNum++;
+    return num;
+}
+
+// ─────────────────────────────────────────────
+// POLL FOR NEW WEIGHT READINGS
+// ─────────────────────────────────────────────
+async function pollWeights() {
+    try {
+        // Get recent pending weights from Pi (last 30 minutes)
+        const since = new Date(Date.now() - 30 * 60000).toISOString();
+        const weights = await sb(
+            `scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`
+        );
+
+        if (!weights || weights.length === 0) return;
+
+        // Logic: highest pending weight = gross, lowest = tare
+        // Only pair if there are at least 2 readings
+        const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
+
+        // First reading (heaviest) is gross
+        if (!grossReading || sorted[0].id !== grossReading.id) {
+            if (sorted[0].weight_lbs > 5000) {  // Reasonable gross threshold
+                grossReading = sorted[0];
+                showGross(grossReading);
             }
-
-            supaFetch("projects?select=id,name&order=name.asc").then(function(data) {
-                projects = data;
-                var select = document.getElementById("projectSelect");
-                data.forEach(function(p) {
-                    var opt = document.createElement("option");
-                    opt.value = p.id;
-                    opt.textContent = p.name;
-                    select.appendChild(opt);
-                });
-            }).catch(function(err) {
-                console.error("Failed to load projects:", err);
-                var select = document.getElementById("projectSelect");
-                var opt = document.createElement("option");
-                opt.value = "general";
-                opt.textContent = "General / Unassigned";
-                select.appendChild(opt);
-            });
-
-            document.getElementById("projectSelect").addEventListener("change", checkReady);
-            document.getElementById("confirmBtn").addEventListener("click", confirmTicket);
-            document.getElementById("haulerName").textContent = HAULER;
-            document.getElementById("haulerInfo").style.display = "block";
-
-            pollWeights();
-            pollTimer = setInterval(pollWeights, POLL_INTERVAL);
         }
 
-        function pollWeights() {
-            supaFetch("scale_weights?device_id=eq." + DEVICE_ID + "&status=eq.pending&order=captured_at.desc&limit=2")
-            .then(function(weights) {
-                updateStatus("connected", "Connected - " + new Date().toLocaleTimeString());
-
-                if (weights.length === 0) {
-                    if (!grossReading) {
-                        updateStatus("connected", "Waiting for truck on scale...");
-                    }
-                    return;
+        // If we have 2+ readings and the lightest is significantly less, it's tare
+        if (sorted.length >= 2 && grossReading) {
+            const candidate = sorted[sorted.length - 1];
+            // Tare must be less than gross and reasonably different (at least 2000 lbs net)
+            if (candidate.weight_lbs < grossReading.weight_lbs - 2000 &&
+                candidate.id !== grossReading.id) {
+                if (!tareReading || candidate.id !== tareReading.id) {
+                    tareReading = candidate;
+                    showTare(tareReading);
+                    showNet();
                 }
-
-                if (weights.length >= 2) {
-                    var sorted = weights.slice().sort(function(a, b) { return b.weight_lbs - a.weight_lbs; });
-                    if (!grossReading || grossReading.id !== sorted[0].id) {
-                        setGross(sorted[0]);
-                    }
-                    if (!tareReading || tareReading.id !== sorted[1].id) {
-                        setTare(sorted[1]);
-                    }
-                } else if (weights.length === 1 && !grossReading) {
-                    setGross(weights[0]);
-                    updateStatus("connected", "Gross captured - dump load, return to scale");
-                }
-            })
-            .catch(function(err) {
-                updateStatus("disconnected", "Connection lost - retrying...");
-                console.error("Poll error:", err);
-            });
-        }
-
-        function setGross(reading) {
-            grossReading = reading;
-            document.getElementById("grossWeight").textContent = Number(reading.weight_lbs).toLocaleString();
-            document.getElementById("grossCard").classList.remove("waiting");
-            document.getElementById("timestamp").textContent = "Captured: " + new Date(reading.captured_at).toLocaleString();
-        }
-
-        function setTare(reading) {
-            tareReading = reading;
-            document.getElementById("tareWeight").textContent = Number(reading.weight_lbs).toLocaleString();
-            document.getElementById("tareCard").classList.remove("waiting");
-            if (grossReading) {
-                var net = Math.abs(grossReading.weight_lbs - tareReading.weight_lbs);
-                document.getElementById("netWeight").textContent = Number(net).toLocaleString();
-                document.getElementById("netCard").style.display = "block";
-                updateStatus("connected", "Both weights captured - confirm below");
             }
-            checkReady();
         }
 
-        function updateStatus(type, message) {
-            var bar = document.getElementById("statusBar");
-            bar.className = "status-bar " + type;
-            bar.textContent = message;
+        updateStatus('on', 'Connected');
+        document.getElementById('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
+
+    } catch (err) {
+        console.error('Poll error:', err);
+        updateStatus('off', 'Connection lost');
+    }
+}
+
+// ─────────────────────────────────────────────
+// DISPLAY FUNCTIONS
+// ─────────────────────────────────────────────
+function showGross(reading) {
+    const card = document.getElementById('grossCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('grossValue').textContent = 
+        Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    document.getElementById('grossValue').classList.remove('empty');
+    document.getElementById('grossTime').textContent = 
+        new Date(reading.captured_at).toLocaleTimeString();
+
+    // Update tare card to show waiting
+    const tareCard = document.getElementById('tareCard');
+    tareCard.classList.add('waiting');
+    document.getElementById('tareValue').textContent = 'Waiting...';
+    document.getElementById('tareValue').classList.add('empty');
+
+    checkReady();
+}
+
+function showTare(reading) {
+    const card = document.getElementById('tareCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('tareValue').textContent = 
+        Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    document.getElementById('tareValue').classList.remove('empty');
+    document.getElementById('tareTime').textContent = 
+        new Date(reading.captured_at).toLocaleTimeString();
+
+    checkReady();
+}
+
+function showNet() {
+    if (!grossReading || !tareReading) return;
+
+    const netLbs = grossReading.weight_lbs - tareReading.weight_lbs;
+    const netTons = (netLbs / 2000).toFixed(2);
+
+    document.getElementById('netCard').style.display = 'block';
+    document.getElementById('netLbs').textContent = Number(netLbs).toLocaleString();
+    document.getElementById('netTons').textContent = netTons + ' tons';
+    document.getElementById('netTicket').textContent = 
+        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+
+    checkReady();
+}
+
+function checkReady() {
+    const btn = document.getElementById('confirmBtn');
+    const projectId = document.getElementById('projectSelect').value;
+    const ready = grossReading && tareReading && projectId;
+
+    if (ready) {
+        btn.classList.remove('disabled');
+        btn.classList.add('ready');
+        btn.disabled = false;
+        btn.textContent = '✅ CONFIRM TICKET';
+    } else {
+        btn.classList.add('disabled');
+        btn.classList.remove('ready');
+        btn.disabled = true;
+        if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
+        else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
+        else btn.textContent = 'SELECT A PROJECT';
+    }
+}
+
+// ─────────────────────────────────────────────
+// CONFIRM — Creates ticket in DivertScan
+// ─────────────────────────────────────────────
+async function confirmTicket() {
+    const btn = document.getElementById('confirmBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Creating ticket...';
+
+    const projectId = document.getElementById('projectSelect').value;
+    const proj = projects.find(p => p.id === projectId);
+    const grossLbs = grossReading.weight_lbs;
+    const tareLbs = tareReading.weight_lbs;
+    const netLbs = grossLbs - tareLbs;
+    const netTons = +(netLbs / 2000).toFixed(4);
+
+    // Generate ticket number
+    const ticketNum = getTicketNumber();
+
+    // Today's date forced to 2026
+    let today = new Date().toISOString().split('T')[0];
+    if (today.substring(0, 4) !== '2026') today = '2026' + today.substring(4);
+
+    // Default material percentages (C&D mix)
+    const defaults = {
+        wood_pct: 34, occ_pct: 16, metal_pct: 11, plastic_pct: 0,
+        concrete_pct: 2, block_pct: 1, landfill_pct: 36
+    };
+
+    // Calculate tons per material
+    const matData = {};
+    let divertedTons = 0;
+    let co2e = 0;
+
+    const GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240, landfill: 0.520 };
+
+    Object.keys(defaults).forEach(k => {
+        const pct = defaults[k];
+        const mat = k.replace('_pct', '');
+        const tons = +(netTons * pct / 100).toFixed(4);
+        matData[k] = pct;
+        matData[mat + '_tons'] = tons;
+        if (mat !== 'landfill') {
+            divertedTons += tons;
+            co2e += tons * (GWP[mat] || 0);
+        }
+    });
+
+    const diversionPct = 100 - defaults.landfill_pct;
+
+    // Generate SHA-256 audit hash
+    let auditHash = '';
+    try {
+        const hashInput = JSON.stringify({
+            ticket_number: ticketNum,
+            net_lbs: netLbs,
+            project_id: projectId,
+            timestamp: new Date().toISOString()
+        });
+        const msgBuffer = new TextEncoder().encode(hashInput);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        auditHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) { console.error('Hash error:', e); }
+
+    try {
+        // 1. Create ticket in DivertScan tickets table
+        const ticket = {
+            project_id: projectId,
+            ticket_number: ticketNum,
+            ticket_date: today,
+            service_date: today,
+            gross_lbs: grossLbs,
+            tare_lbs: tareLbs,
+            net_lbs: netLbs,
+            net_tons: netTons,
+            hauler: proj?.waste_hauler || 'Dalmex Scale',
+            container_size: 30,
+            scan_type: 'pi_scale',
+            diversion_pct: diversionPct,
+            diverted_tons: +divertedTons.toFixed(4),
+            landfill_tons: +(netTons * defaults.landfill_pct / 100).toFixed(4),
+            co2e_avoided: +co2e.toFixed(4),
+            captured_at: new Date().toISOString(),
+            audit_id: auditHash,
+            notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ')',
+            ...matData
+        };
+
+        const result = await sb('tickets', 'POST', ticket);
+
+        if (!result || result.length === 0) {
+            throw new Error('Failed to insert ticket');
         }
 
-        function checkReady() {
-            var projectSelected = document.getElementById("projectSelect").value !== "";
-            var hasWeights = grossReading && tareReading;
-            document.getElementById("confirmBtn").disabled = !(projectSelected && hasWeights);
-        }
+        const createdTicket = result[0];
 
-        function getNextTicketNumber() {
-            return supaFetch("tickets?select=ticket_number&order=ticket_number.desc&limit=1").then(function(result) {
-                if (result && result.length > 0 && result[0].ticket_number) {
-                    var lastNum = parseInt(result[0].ticket_number);
-                    if (!isNaN(lastNum)) {
-                        return String(lastNum + 1);
-                    }
-                }
-                return "SC" + Date.now().toString().slice(-8);
-            }).catch(function() {
-                return "SC" + Date.now().toString().slice(-8);
-            });
-        }
+        // 2. Update scale_weights to link to this ticket
+        await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
+            status: 'confirmed',
+            weight_type: 'gross',
+            project_id: projectId,
+            ticket_id: createdTicket.id,
+            paired_with: tareReading.id,
+            confirmed_at: new Date().toISOString()
+        });
 
-        function confirmTicket() {
-            var btn = document.getElementById("confirmBtn");
-            btn.disabled = true;
-            btn.textContent = "Creating ticket...";
+        await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
+            status: 'confirmed',
+            weight_type: 'tare',
+            project_id: projectId,
+            ticket_id: createdTicket.id,
+            paired_with: grossReading.id,
+            confirmed_at: new Date().toISOString()
+        });
 
-            var projectId = document.getElementById("projectSelect").value;
-            var grossLbs = Number(grossReading.weight_lbs);
-            var tareLbs = Number(tareReading.weight_lbs);
-            var netLbs = Math.abs(grossLbs - tareLbs);
-            var netTons = netLbs / 2000;
-            var now = new Date().toISOString();
-            var today = now.split("T")[0];
+        // 3. Show success
+        document.getElementById('successTicket').textContent = ticketNum;
+        document.getElementById('successWeight').textContent = 
+            'Net: ' + Number(netLbs).toLocaleString() + ' lbs (' + netTons.toFixed(2) + ' T)';
+        document.getElementById('successOverlay').classList.add('show');
 
-            getNextTicketNumber().then(function(ticketNumber) {
-                var ticketData = {
-                    project_id: projectId,
-                    ticket_number: ticketNumber,
-                    ticket_date: today,
-                    gross_lbs: grossLbs,
-                    tare_lbs: tareLbs,
-                    net_lbs: netLbs,
-                    net_tons: parseFloat(netTons.toFixed(2)),
-                    hauler: HAULER,
-                    scan_type: "scale_capture",
-                    material_breakdown: {},
-                    diversion_rate: 0,
-                    created_at: now
-                };
+        // Countdown and reset
+        let countdown = 8;
+        const cdEl = document.getElementById('successCountdown');
+        const cdTimer = setInterval(() => {
+            countdown--;
+            cdEl.textContent = 'Resetting in ' + countdown + 's...';
+            if (countdown <= 0) {
+                clearInterval(cdTimer);
+                resetPage();
+            }
+        }, 1000);
 
-                return supaFetch("tickets", {
-                    method: "POST",
-                    body: JSON.stringify(ticketData),
-                    prefer: "return=representation"
-                }).then(function(newTicket) {
-                    var ticketId = (newTicket && newTicket[0]) ? newTicket[0].id : null;
+    } catch (err) {
+        console.error('Confirm error:', err);
+        btn.disabled = false;
+        btn.classList.add('ready');
+        btn.textContent = '❌ ERROR — TAP TO RETRY';
+        updateStatus('off', 'Error: ' + err.message);
+    }
+}
 
-                    return Promise.all([
-                        supaFetch("scale_weights?id=eq." + grossReading.id, {
-                            method: "PATCH",
-                            body: JSON.stringify({
-                                status: "confirmed",
-                                project_id: projectId,
-                                confirmed_at: now,
-                                weight_type: "gross",
-                                paired_with: tareReading.id,
-                                ticket_id: ticketId
-                            }),
-                            prefer: "return=minimal"
-                        }),
-                        supaFetch("scale_weights?id=eq." + tareReading.id, {
-                            method: "PATCH",
-                            body: JSON.stringify({
-                                status: "confirmed",
-                                project_id: projectId,
-                                confirmed_at: now,
-                                weight_type: "tare",
-                                paired_with: grossReading.id,
-                                ticket_id: ticketId
-                            }),
-                            prefer: "return=minimal"
-                        })
-                    ]).then(function() {
-                        return { ticketNumber: ticketNumber, netLbs: netLbs, netTons: netTons };
-                    });
-                });
-            }).then(function(result) {
-                clearInterval(pollTimer);
+// ─────────────────────────────────────────────
+// RESET FOR NEXT TRUCK
+// ─────────────────────────────────────────────
+function resetPage() {
+    grossReading = null;
+    tareReading = null;
 
-                document.getElementById("successMsg").textContent = "Net: " + Number(result.netLbs).toLocaleString() + " lbs (" + result.netTons.toFixed(2) + " tons)";
-                document.getElementById("successTicket").textContent = "Ticket #" + result.ticketNumber;
-                document.getElementById("successOverlay").classList.add("show");
+    document.getElementById('successOverlay').classList.remove('show');
 
-                setTimeout(resetPage, 10000);
-            }).catch(function(err) {
-                console.error("Confirm error:", err);
-                btn.disabled = false;
-                btn.textContent = "CONFIRM TICKET";
-                updateStatus("disconnected", "Error creating ticket - try again");
-            });
-        }
+    // Reset cards
+    document.getElementById('grossCard').classList.remove('captured', 'waiting');
+    document.getElementById('grossValue').textContent = 'Waiting for truck...';
+    document.getElementById('grossValue').classList.add('empty');
+    document.getElementById('grossTime').textContent = '';
 
-        function simulateWeights() {
-            var btn = document.getElementById("testBtn");
-            btn.textContent = "Inserting test data...";
-            btn.disabled = true;
+    document.getElementById('tareCard').classList.remove('captured', 'waiting');
+    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
+    document.getElementById('tareValue').classList.add('empty');
+    document.getElementById('tareTime').textContent = '';
 
-            var now = new Date().toISOString();
-            var fiveMinAgo = new Date(Date.now() - 5 * 60000).toISOString();
+    document.getElementById('netCard').style.display = 'none';
+    document.getElementById('projectSelect').value = '';
 
-            Promise.all([
-                supaFetch("scale_weights", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        captured_at: fiveMinAgo,
-                        weight_lbs: 48200,
-                        weight_type: "unknown",
-                        device_id: DEVICE_ID,
-                        facility: FACILITY,
-                        sha256_hash: "sim_gross_" + Date.now(),
-                        status: "pending",
-                        source: "test_simulation"
-                    }),
-                    prefer: "return=minimal"
-                }),
-                supaFetch("scale_weights", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        captured_at: now,
-                        weight_lbs: 16400,
-                        weight_type: "unknown",
-                        device_id: DEVICE_ID,
-                        facility: FACILITY,
-                        sha256_hash: "sim_tare_" + Date.now(),
-                        status: "pending",
-                        source: "test_simulation"
-                    }),
-                    prefer: "return=minimal"
-                })
-            ]).then(function() {
-                btn.textContent = "Test data inserted! Waiting for poll...";
-                setTimeout(function() {
-                    btn.textContent = "Simulate Weight Readings (Test)";
-                    btn.disabled = false;
-                }, 3000);
-            }).catch(function(err) {
-                console.error("Simulation error:", err);
-                btn.textContent = "Error - check console";
-                btn.disabled = false;
-            });
-        }
+    // Refresh ticket number for next one
+    refreshNextTicketNum();
 
-        function resetPage() {
-            grossReading = null;
-            tareReading = null;
-            document.getElementById("grossWeight").textContent = "--";
-            document.getElementById("tareWeight").textContent = "--";
-            document.getElementById("netWeight").textContent = "--";
-            document.getElementById("netCard").style.display = "none";
-            document.getElementById("projectSelect").value = "";
-            document.getElementById("confirmBtn").disabled = true;
-            document.getElementById("confirmBtn").textContent = "CONFIRM TICKET";
-            document.getElementById("successOverlay").classList.remove("show");
-            document.getElementById("successTicket").textContent = "";
-            document.getElementById("timestamp").textContent = "";
-            updateStatus("connected", "Waiting for truck on scale...");
-            pollTimer = setInterval(pollWeights, POLL_INTERVAL);
-        }
+    checkReady();
+}
 
-        document.addEventListener("DOMContentLoaded", init);
-    </script>
+// ─────────────────────────────────────────────
+// STATUS DISPLAY
+// ─────────────────────────────────────────────
+function updateStatus(state, text) {
+    const dot = document.getElementById('statusDot');
+    dot.classList.remove('on', 'off');
+    dot.classList.add(state === 'on' ? 'on' : 'off');
+    document.getElementById('statusText').textContent = text;
+}
+
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
+</script>
 </body>
 </html>
