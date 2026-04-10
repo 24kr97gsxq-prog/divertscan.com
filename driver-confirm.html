@@ -117,6 +117,11 @@
         <div class="net-ticket" id="netTicket"></div>
     </div>
 
+    <!-- Driver Name -->
+    <input type="text" class="proj-select" id="driverName" placeholder="Driver name" autocomplete="name"
+           oninput="localStorage.setItem('ds_driver_name',this.value);checkReady()"
+           style="margin-bottom:8px">
+
     <!-- Project Selector -->
     <select class="proj-select" id="projectSelect" onchange="checkReady()">
         <option value="">— Select Project —</option>
@@ -195,6 +200,10 @@ async function init() {
         opt.textContent = p.name;
         sel.appendChild(opt);
     });
+
+    // Restore last driver name
+    const savedDriver = localStorage.getItem('ds_driver_name');
+    if (savedDriver) document.getElementById('driverName').value = savedDriver;
 
     // Get next ticket number
     await refreshNextTicketNum();
@@ -360,6 +369,7 @@ async function confirmTicket() {
 
     const projectId = document.getElementById('projectSelect').value;
     const proj = projects.find(p => p.id === projectId);
+    const driverName = document.getElementById('driverName').value.trim() || 'Unknown';
     const grossLbs = grossReading.weight_lbs;
     const tareLbs = tareReading.weight_lbs;
     const netLbs = grossLbs - tareLbs;
@@ -433,7 +443,7 @@ async function confirmTicket() {
             co2e_avoided: +co2e.toFixed(4),
             captured_at: new Date().toISOString(),
             audit_id: auditHash,
-            notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ')',
+            notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ') — Driver: ' + driverName,
             ...matData
         };
 
@@ -452,7 +462,8 @@ async function confirmTicket() {
             project_id: projectId,
             ticket_id: createdTicket.id,
             paired_with: tareReading.id,
-            confirmed_at: new Date().toISOString()
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: driverName
         });
 
         await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
@@ -461,7 +472,8 @@ async function confirmTicket() {
             project_id: projectId,
             ticket_id: createdTicket.id,
             paired_with: grossReading.id,
-            confirmed_at: new Date().toISOString()
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: driverName
         });
 
         // 3. Show success
