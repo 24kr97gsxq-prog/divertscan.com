@@ -13,6 +13,8 @@
             --blue: #1a5fa8;
             --blue-light: #e6f0fa;
             --red: #c0392b;
+            --orange: #e67e22;
+            --orange-light: #fef3e2;
             --gray-50: #f8f9fa;
             --gray-100: #f0f1f3;
             --gray-200: #dcdee2;
@@ -47,6 +49,20 @@
             opacity: 0.7;
             margin-top: 2px;
         }
+
+        /* Test mode banner */
+        .test-banner {
+            display: none;
+            padding: 8px 20px;
+            background: var(--orange-light);
+            color: var(--orange);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .test-banner.show { display: block; }
 
         /* Status bar */
         .status-bar {
@@ -150,6 +166,21 @@
             border-color: var(--blue);
         }
 
+        /* Hauler display */
+        .hauler-info {
+            padding: 0 20px;
+            margin-bottom: 16px;
+        }
+        .hauler-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--blue-light);
+            color: var(--blue);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
         /* Confirm button */
         .confirm-btn {
             display: block;
@@ -172,6 +203,22 @@
             background: var(--gray-200);
             color: var(--gray-500);
             cursor: not-allowed;
+        }
+
+        /* Test button */
+        .test-btn {
+            display: block;
+            width: calc(100% - 40px);
+            margin: 10px auto;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--orange);
+            background: var(--orange-light);
+            border: 2px solid var(--orange);
+            border-radius: var(--radius);
+            cursor: pointer;
+            text-align: center;
         }
 
         /* Success state */
@@ -208,6 +255,12 @@
             font-size: 16px;
             opacity: 0.85;
         }
+        .success-overlay .ticket-num {
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 12px;
+            opacity: 1;
+        }
 
         /* Timestamp */
         .timestamp {
@@ -231,6 +284,10 @@
     <div class="header">
         <h1>DIVERTSCAN</h1>
         <div class="facility" id="facilityName">Dalmex Recycling</div>
+    </div>
+
+    <div class="test-banner" id="testBanner">
+        Test Mode - Simulated Weights
     </div>
 
     <div class="status-bar loading" id="statusBar">
@@ -266,9 +323,20 @@
         </select>
     </div>
 
+    <!-- Hauler info -->
+    <div class="hauler-info" id="haulerInfo" style="display:none;">
+        <div class="section-label">Hauler</div>
+        <div class="hauler-badge" id="haulerName">Dalmex Recycling</div>
+    </div>
+
     <!-- Confirm Button -->
     <button class="confirm-btn" id="confirmBtn" disabled>
         Confirm Ticket
+    </button>
+
+    <!-- Test Mode Button - only shows with ?test in URL -->
+    <button class="test-btn" id="testBtn" style="display:none;" onclick="simulateWeights()">
+        Simulate Weight Readings (Test)
     </button>
 
     <!-- Success Overlay -->
@@ -276,6 +344,7 @@
         <div class="check">&#10003;</div>
         <h2>Ticket Confirmed</h2>
         <p id="successMsg">Net: 31,800 lbs</p>
+        <div class="ticket-num" id="successTicket"></div>
         <p style="margin-top: 24px; opacity: 0.7;">This screen will reset in 10 seconds</p>
     </div>
 
@@ -284,17 +353,11 @@
         // CONFIGURATION
         // ─────────────────────────────────────────
         const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g"; // Replace
+        const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"; // Replace with actual key
         const DEVICE_ID = "dalmex-scale-01";
-        const POLL_INTERVAL = 5000; // Check for new weights every 5 seconds
-
-        // Active projects - fetched from Supabase or hardcoded
-        const PROJECTS = [
-            { id: "childrens-hospital", name: "Children's Hospital" },
-            { id: "medline-bts", name: "Medline BTS" },
-            { id: "project-aero", name: "Project AERO" },
-            { id: "general", name: "General / Unassigned" }
-        ];
+        const FACILITY = "Dalmex Recycling";
+        const HAULER = "Dalmex Recycling";
+        const POLL_INTERVAL = 5000;
 
         // ─────────────────────────────────────────
         // STATE
@@ -302,23 +365,73 @@
         let grossReading = null;
         let tareReading = null;
         let pollTimer = null;
+        let projects = [];
+        let isTestMode = window.location.search.includes('test');
+
+        // ─────────────────────────────────────────
+        // SUPABASE HELPER
+        // ─────────────────────────────────────────
+        async function supaFetch(path, options = {}) {
+            const resp = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+                ...options,
+                headers: {
+                    "apikey": SUPABASE_ANON_KEY,
+                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": options.prefer || "return=representation",
+                    ...(options.headers || {})
+                }
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(`Supabase error ${resp.status}: ${err}`);
+            }
+            const text = await resp.text();
+            return text ? JSON.parse(text) : null;
+        }
 
         // ─────────────────────────────────────────
         // INIT
         // ─────────────────────────────────────────
-        function init() {
-            // Populate project dropdown
-            const select = document.getElementById("projectSelect");
-            PROJECTS.forEach(p => {
-                const opt = document.createElement("option");
-                opt.value = p.id;
-                opt.textContent = p.name;
-                select.appendChild(opt);
-            });
+        async function init() {
+            // Show test mode UI
+            if (isTestMode) {
+                document.getElementById("testBanner").classList.add("show");
+                document.getElementById("testBtn").style.display = "block";
+            }
+
+            // Load projects from Supabase
+            try {
+                projects = await supaFetch("projects?select=id,name&order=name.asc");
+                const select = document.getElementById("projectSelect");
+                projects.forEach(p => {
+                    const opt = document.createElement("option");
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load projects:", err);
+                // Fallback to hardcoded projects
+                const fallback = [
+                    { id: "general", name: "General / Unassigned" }
+                ];
+                const select = document.getElementById("projectSelect");
+                fallback.forEach(p => {
+                    const opt = document.createElement("option");
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            }
 
             // Event listeners
-            select.addEventListener("change", checkReady);
+            document.getElementById("projectSelect").addEventListener("change", checkReady);
             document.getElementById("confirmBtn").addEventListener("click", confirmTicket);
+
+            // Show hauler
+            document.getElementById("haulerName").textContent = HAULER;
+            document.getElementById("haulerInfo").style.display = "block";
 
             // Start polling for weights
             pollWeights();
@@ -330,45 +443,34 @@
         // ─────────────────────────────────────────
         async function pollWeights() {
             try {
-                // Fetch the 2 most recent pending weights from this device
-                const resp = await fetch(
-                    `${SUPABASE_URL}/rest/v1/scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&order=captured_at.desc&limit=2`,
-                    {
-                        headers: {
-                            "apikey": SUPABASE_ANON_KEY,
-                            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-                        }
-                    }
+                const weights = await supaFetch(
+                    `scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&order=captured_at.desc&limit=2`
                 );
 
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-                const weights = await resp.json();
                 updateStatus("connected", `Connected - ${new Date().toLocaleTimeString()}`);
 
                 if (weights.length === 0) {
-                    updateStatus("connected", "Waiting for truck on scale...");
+                    if (!grossReading) {
+                        updateStatus("connected", "Waiting for truck on scale...");
+            pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+                    }
                     return;
                 }
 
-                if (weights.length >= 1 && !grossReading) {
-                    // First weight = gross (heavier, truck loaded)
-                    // We take the heavier of the two as gross
-                    if (weights.length >= 2) {
-                        const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
+                if (weights.length >= 2) {
+                    // Two weights available - heavier is gross, lighter is tare
+                    const sorted = [...weights].sort((a, b) => b.weight_lbs - a.weight_lbs);
+                    if (!grossReading || grossReading.id !== sorted[0].id) {
                         setGross(sorted[0]);
+                    }
+                    if (!tareReading || tareReading.id !== sorted[1].id) {
                         setTare(sorted[1]);
-                    } else {
-                        setGross(weights[0]);
-                        updateStatus("connected", "Gross captured - drive to dump, then return to scale");
                     }
-                } else if (weights.length >= 2 && grossReading && !tareReading) {
-                    // Second weight arrived
-                    const newWeight = weights.find(w => w.id !== grossReading.id);
-                    if (newWeight) {
-                        setTare(newWeight);
-                    }
+                } else if (weights.length === 1 && !grossReading) {
+                    setGross(weights[0]);
+                    updateStatus("connected", "Gross captured - dump load, return to scale");
                 }
+
             } catch (err) {
                 updateStatus("disconnected", "Connection lost - retrying...");
                 console.error("Poll error:", err);
@@ -393,7 +495,6 @@
                 Number(reading.weight_lbs).toLocaleString();
             document.getElementById("tareCard").classList.remove("waiting");
 
-            // Calculate and show net
             if (grossReading) {
                 const net = Math.abs(grossReading.weight_lbs - tareReading.weight_lbs);
                 document.getElementById("netWeight").textContent = 
@@ -401,7 +502,6 @@
                 document.getElementById("netCard").style.display = "block";
                 updateStatus("connected", "Both weights captured - confirm below");
             }
-
             checkReady();
         }
 
@@ -418,62 +518,136 @@
         }
 
         // ─────────────────────────────────────────
+        // GENERATE TICKET NUMBER
+        // ─────────────────────────────────────────
+        async function getNextTicketNumber() {
+            try {
+                const result = await supaFetch(
+                    "tickets?select=ticket_number&order=ticket_number.desc&limit=1"
+                );
+                if (result && result.length > 0 && result[0].ticket_number) {
+                    const lastNum = parseInt(result[0].ticket_number);
+                    if (!isNaN(lastNum)) {
+                        return String(lastNum + 1);
+                    }
+                }
+            } catch (err) {
+                console.error("Error getting ticket number:", err);
+            }
+            // Fallback: timestamp-based number
+            return "SC" + Date.now().toString().slice(-8);
+        }
+
+        // ─────────────────────────────────────────
         // CONFIRM TICKET
         // ─────────────────────────────────────────
         async function confirmTicket() {
             const btn = document.getElementById("confirmBtn");
             btn.disabled = true;
-            btn.textContent = "Sending...";
+            btn.textContent = "Creating ticket...";
 
             const projectId = document.getElementById("projectSelect").value;
-            const net = Math.abs(grossReading.weight_lbs - tareReading.weight_lbs);
+            const grossLbs = Number(grossReading.weight_lbs);
+            const tareLbs = Number(tareReading.weight_lbs);
+            const netLbs = Math.abs(grossLbs - tareLbs);
+            const netTons = netLbs / 2000;
+            const now = new Date().toISOString();
+            const today = new Date().toISOString().split('T')[0];
 
             try {
-                // Update gross reading
-                await fetch(
-                    `${SUPABASE_URL}/rest/v1/scale_weights?id=eq.${grossReading.id}`,
-                    {
+                // 1. Get next ticket number
+                const ticketNumber = await getNextTicketNumber();
+
+                // 2. Create ticket in the tickets table
+                const ticketData = {
+                    project_id: projectId,
+                    ticket_number: ticketNumber,
+                    ticket_date: today,
+                    gross_lbs: grossLbs,
+                    tare_lbs: tareLbs,
+                    net_lbs: netLbs,
+                    net_tons: parseFloat(netTons.toFixed(2)),
+                    hauler: HAULER,
+                    scan_type: "scale_capture",
+                    material_breakdown: {},
+                    diversion_rate: 0,
+                    created_at: now
+                };
+
+                const newTicket = await supaFetch("tickets", {
+                    method: "POST",
+                    body: JSON.stringify(ticketData),
+                    prefer: "return=representation"
+                });
+
+                const ticketId = newTicket && newTicket[0] ? newTicket[0].id : null;
+
+                // 3. Update gross weight record
+                await supaFetch(
+                    `scale_weights?id=eq.${grossReading.id}`, {
                         method: "PATCH",
-                        headers: {
-                            "apikey": SUPABASE_ANON_KEY,
-                            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                            "Content-Type": "application/json",
-                            "Prefer": "return=minimal"
-                        },
                         body: JSON.stringify({
                             status: "confirmed",
                             project_id: projectId,
-                            confirmed_at: new Date().toISOString(),
+                            confirmed_at: now,
                             weight_type: "gross",
-                            paired_with: tareReading.id
-                        })
+                            paired_with: tareReading.id,
+                            ticket_id: ticketId
+                        }),
+                        prefer: "return=minimal"
                     }
                 );
 
-                // Update tare reading
-                await fetch(
-                    `${SUPABASE_URL}/rest/v1/scale_weights?id=eq.${tareReading.id}`,
-                    {
+                // 4. Update tare weight record
+                await supaFetch(
+                    `scale_weights?id=eq.${tareReading.id}`, {
                         method: "PATCH",
-                        headers: {
-                            "apikey": SUPABASE_ANON_KEY,
-                            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                            "Content-Type": "application/json",
-                            "Prefer": "return=minimal"
-                        },
                         body: JSON.stringify({
                             status: "confirmed",
                             project_id: projectId,
-                            confirmed_at: new Date().toISOString(),
+                            confirmed_at: now,
                             weight_type: "tare",
-                            paired_with: grossReading.id
-                        })
+                            paired_with: grossReading.id,
+                            ticket_id: ticketId
+                        }),
+                        prefer: "return=minimal"
                     }
                 );
 
-                // Show success
+                // 5. Create LEED audit log entry for the confirmation
+                try {
+                    await supaFetch("leed_audit_log", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            event_type: "ticket_confirm",
+                            event_data: {
+                                ticket_id: ticketId,
+                                ticket_number: ticketNumber,
+                                gross_lbs: grossLbs,
+                                tare_lbs: tareLbs,
+                                net_lbs: netLbs,
+                                project_id: projectId,
+                                gross_hash: grossReading.sha256_hash,
+                                tare_hash: tareReading.sha256_hash
+                            },
+                            sha256_hash: grossReading.sha256_hash + ":" + tareReading.sha256_hash,
+                            device_id: DEVICE_ID,
+                            facility: FACILITY
+                        }),
+                        prefer: "return=minimal"
+                    });
+                } catch (auditErr) {
+                    console.error("Audit log error (non-blocking):", auditErr);
+                }
+
+                // 6. Stop polling so confirmed weights dont reappear
+                clearInterval(pollTimer);
+
+                // 7. Show success
                 document.getElementById("successMsg").textContent = 
-                    `Net: ${Number(net).toLocaleString()} lbs`;
+                    `Net: ${Number(netLbs).toLocaleString()} lbs (${netTons.toFixed(2)} tons)`;
+                document.getElementById("successTicket").textContent = 
+                    `Ticket #${ticketNumber}`;
                 document.getElementById("successOverlay").classList.add("show");
 
                 // Reset after 10 seconds
@@ -483,7 +657,64 @@
                 console.error("Confirm error:", err);
                 btn.disabled = false;
                 btn.textContent = "CONFIRM TICKET";
-                updateStatus("disconnected", "Error confirming - try again");
+                updateStatus("disconnected", "Error creating ticket - try again");
+            }
+        }
+
+        // ─────────────────────────────────────────
+        // SIMULATE WEIGHTS (Test Mode)
+        // ─────────────────────────────────────────
+        async function simulateWeights() {
+            const btn = document.getElementById("testBtn");
+            btn.textContent = "Inserting test data...";
+            btn.disabled = true;
+
+            try {
+                const now = new Date().toISOString();
+                const fiveMinAgo = new Date(Date.now() - 5 * 60000).toISOString();
+
+                // Insert simulated gross weight
+                await supaFetch("scale_weights", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        captured_at: fiveMinAgo,
+                        weight_lbs: 48200,
+                        weight_type: "unknown",
+                        device_id: DEVICE_ID,
+                        facility: FACILITY,
+                        sha256_hash: "sim_gross_" + Date.now(),
+                        status: "pending",
+                        source: "test_simulation"
+                    }),
+                    prefer: "return=minimal"
+                });
+
+                // Insert simulated tare weight
+                await supaFetch("scale_weights", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        captured_at: now,
+                        weight_lbs: 16400,
+                        weight_type: "unknown",
+                        device_id: DEVICE_ID,
+                        facility: FACILITY,
+                        sha256_hash: "sim_tare_" + Date.now(),
+                        status: "pending",
+                        source: "test_simulation"
+                    }),
+                    prefer: "return=minimal"
+                });
+
+                btn.textContent = "Test data inserted! Waiting for poll...";
+                setTimeout(() => {
+                    btn.textContent = "Simulate Weight Readings (Test)";
+                    btn.disabled = false;
+                }, 3000);
+
+            } catch (err) {
+                console.error("Simulation error:", err);
+                btn.textContent = "Error - check console";
+                btn.disabled = false;
             }
         }
 
@@ -501,8 +732,10 @@
             document.getElementById("confirmBtn").disabled = true;
             document.getElementById("confirmBtn").textContent = "CONFIRM TICKET";
             document.getElementById("successOverlay").classList.remove("show");
+            document.getElementById("successTicket").textContent = "";
             document.getElementById("timestamp").textContent = "";
             updateStatus("connected", "Waiting for truck on scale...");
+            pollTimer = setInterval(pollWeights, POLL_INTERVAL);
         }
 
         // Start
