@@ -131,6 +131,12 @@
     <button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
         SELECT PROJECT & CAPTURE WEIGHTS
     </button>
+
+    <!-- Recent Loads History -->
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Recent Loads Today</div>
+        <div id="recentLoads" style="font-size:.75rem;color:var(--muted);">Loading...</div>
+    </div>
 </div>
 
 <!-- Success Overlay -->
@@ -212,6 +218,9 @@ async function init() {
     updateStatus('on', 'Listening...');
     pollWeights();
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+
+    // Load recent loads history
+    loadRecentLoads();
 }
 
 // ─────────────────────────────────────────────
@@ -299,8 +308,10 @@ function showGross(reading) {
     document.getElementById('grossValue').textContent = 
         Number(reading.weight_lbs).toLocaleString() + ' lbs';
     document.getElementById('grossValue').classList.remove('empty');
-    document.getElementById('grossTime').textContent = 
-        new Date(reading.captured_at).toLocaleTimeString();
+    const grossAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
+    const freshLabel = grossAge <= 5 ? '🟢 Just now' : grossAge <= 15 ? '🟡 ' + grossAge + ' min ago' : '🔴 ' + grossAge + ' min ago — verify this is your truck';
+    document.getElementById('grossTime').innerHTML = 
+        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (grossAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + freshLabel + '</span>';
 
     // Update tare card to show waiting
     const tareCard = document.getElementById('tareCard');
@@ -318,8 +329,10 @@ function showTare(reading) {
     document.getElementById('tareValue').textContent = 
         Number(reading.weight_lbs).toLocaleString() + ' lbs';
     document.getElementById('tareValue').classList.remove('empty');
-    document.getElementById('tareTime').textContent = 
-        new Date(reading.captured_at).toLocaleTimeString();
+    const tareAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
+    const tareFresh = tareAge <= 5 ? '🟢 Just now' : tareAge <= 15 ? '🟡 ' + tareAge + ' min ago' : '🔴 ' + tareAge + ' min ago';
+    document.getElementById('tareTime').innerHTML = 
+        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (tareAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + tareFresh + '</span>';
 
     checkReady();
 }
@@ -529,7 +542,58 @@ function resetPage() {
     // Refresh ticket number for next one
     refreshNextTicketNum();
 
+    // Refresh history
+    loadRecentLoads();
+
     checkReady();
+}
+
+// ─────────────────────────────────────────────
+// RECENT LOADS HISTORY
+// ─────────────────────────────────────────────
+async function loadRecentLoads() {
+    const el = document.getElementById('recentLoads');
+    
+    // Get today's confirmed tickets from Pi scale
+    const today = new Date().toISOString().split('T')[0];
+    const tickets = await sb(
+        `tickets?ticket_date=eq.${today}&scan_type=eq.pi_scale&select=ticket_number,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
+    );
+
+    // If no pi_scale tickets today, show all DX tickets recent
+    let data = tickets;
+    if (!data || data.length === 0) {
+        data = await sb(
+            `tickets?ticket_number=like.DX-*&select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
+        );
+    }
+
+    if (!data || data.length === 0) {
+        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet today</div>';
+        return;
+    }
+
+    el.innerHTML = data.map((t, i) => {
+        const net = Number(t.net_lbs || 0).toLocaleString();
+        const tons = Number(t.net_tons || 0).toFixed(2);
+        const time = t.captured_at ? new Date(t.captured_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+        const driver = (t.notes || '').match(/Driver:\s*(.+)/);
+        const driverName = driver ? driver[1].trim() : '';
+        const divPct = t.diversion_pct || 0;
+        const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}">
+            <div style="flex-shrink:0;text-align:center;min-width:50px;">
+                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:var(--cyan);">${t.ticket_number}</div>
+                <div style="font-size:.55rem;color:var(--dim);">${time}</div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-family:var(--mono);font-weight:700;font-size:.8rem;">${net} lbs <span style="color:var(--muted);font-weight:400;">(${tons} T)</span></div>
+                <div style="font-size:.6rem;color:var(--dim);">${Number(t.gross_lbs||0).toLocaleString()} gross / ${Number(t.tare_lbs||0).toLocaleString()} tare${driverName ? ' • ' + driverName : ''}</div>
+            </div>
+            <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:${divColor};flex-shrink:0;">${divPct}%</div>
+        </div>`;
+    }).join('');
 }
 
 // ─────────────────────────────────────────────
