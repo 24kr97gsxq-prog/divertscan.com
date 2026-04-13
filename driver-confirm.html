@@ -117,25 +117,42 @@
         <div class="net-ticket" id="netTicket"></div>
     </div>
 
+    <!-- Hauler Selector (persists — driver picks once) -->
+    <div id="haulerSetup" style="display:none;">
+        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Select your company</div>
+        <div id="haulerButtons" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+    </div>
+
+    <!-- Active hauler badge (tap to change) -->
+    <div id="haulerBadge" style="display:none;margin-bottom:8px;padding:10px 14px;background:var(--cyan-glow);border:1px solid rgba(0,201,167,.25);border-radius:8px;display:none;cursor:pointer" onclick="changeHauler()">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--cyan);font-weight:600;">Hauler</div>
+                <div style="font-size:.9rem;font-weight:700;" id="haulerBadgeName"></div>
+            </div>
+            <div style="font-size:.6rem;color:var(--muted);">tap to change</div>
+        </div>
+    </div>
+
     <!-- Driver Name -->
     <input type="text" class="proj-select" id="driverName" placeholder="Driver name" autocomplete="name"
            oninput="localStorage.setItem('ds_driver_name',this.value);checkReady()"
-           style="margin-bottom:8px">
+           style="margin-bottom:8px;display:none">
 
-    <!-- Project Selector -->
-    <select class="proj-select" id="projectSelect" onchange="checkReady()">
+    <!-- Project Selector (filtered by hauler) -->
+    <select class="proj-select" id="projectSelect" onchange="checkReady()" style="display:none">
         <option value="">— Select Project —</option>
     </select>
 
     <!-- Confirm Button -->
     <button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
-        SELECT PROJECT & CAPTURE WEIGHTS
+        SELECT YOUR COMPANY FIRST
     </button>
 
-    <!-- Recent Loads History -->
+    <!-- Recent Loads History (filtered to this hauler) -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
-        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Recent Loads Today</div>
-        <div id="recentLoads" style="font-size:.75rem;color:var(--muted);">Loading...</div>
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Your Recent Loads</div>
+        <div id="recentLoads" style="font-size:.75rem;color:var(--muted);">Select your company to see loads</div>
     </div>
 </div>
 
@@ -196,18 +213,35 @@ async function sb(endpoint, method = 'GET', body = null) {
 // ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
-async function init() {
-    // Load projects
-    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
-    const sel = document.getElementById('projectSelect');
-    projects.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = p.name;
-        sel.appendChild(opt);
-    });
+let selectedHauler = null;
 
-    // Restore last driver name
+async function init() {
+    // Load all projects
+    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
+
+    // Build hauler list from projects (unique waste_hauler values)
+    const haulerSet = {};
+    projects.forEach(p => {
+        if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
+    });
+    const haulers = Object.keys(haulerSet).sort();
+
+    // Build hauler selection buttons
+    const btnContainer = document.getElementById('haulerButtons');
+    btnContainer.innerHTML = haulers.map(h => 
+        `<button onclick="selectHauler('${h.replace(/'/g, "\\'")}')" style="padding:16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:700;cursor:pointer;text-align:left;">🚛 ${h}</button>`
+    ).join('');
+
+    // Check for saved hauler
+    const savedHauler = localStorage.getItem('ds_driver_hauler');
+    if (savedHauler && haulers.includes(savedHauler)) {
+        selectHauler(savedHauler);
+    } else {
+        // Show hauler setup
+        document.getElementById('haulerSetup').style.display = 'block';
+    }
+
+    // Restore driver name
     const savedDriver = localStorage.getItem('ds_driver_name');
     if (savedDriver) document.getElementById('driverName').value = savedDriver;
 
@@ -218,9 +252,52 @@ async function init() {
     updateStatus('on', 'Listening...');
     pollWeights();
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+}
 
-    // Load recent loads history
+function selectHauler(haulerName) {
+    selectedHauler = haulerName;
+    localStorage.setItem('ds_driver_hauler', haulerName);
+
+    // Hide setup, show badge
+    document.getElementById('haulerSetup').style.display = 'none';
+    document.getElementById('haulerBadge').style.display = 'block';
+    document.getElementById('haulerBadgeName').textContent = haulerName;
+
+    // Show driver name and project fields
+    document.getElementById('driverName').style.display = 'block';
+    document.getElementById('projectSelect').style.display = 'block';
+
+    // Filter projects to this hauler
+    const sel = document.getElementById('projectSelect');
+    sel.innerHTML = '<option value="">— Select Project —</option>';
+    const filtered = projects.filter(p => p.waste_hauler === haulerName);
+    filtered.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+    });
+
+    // If only one project, auto-select it
+    if (filtered.length === 1) {
+        sel.value = filtered[0].id;
+    }
+
+    checkReady();
     loadRecentLoads();
+}
+
+function changeHauler() {
+    selectedHauler = null;
+    localStorage.removeItem('ds_driver_hauler');
+    document.getElementById('haulerSetup').style.display = 'block';
+    document.getElementById('haulerBadge').style.display = 'none';
+    document.getElementById('driverName').style.display = 'none';
+    document.getElementById('projectSelect').style.display = 'none';
+    document.getElementById('projectSelect').value = '';
+    document.getElementById('confirmBtn').className = 'confirm-btn disabled';
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('confirmBtn').textContent = 'SELECT YOUR COMPANY FIRST';
 }
 
 // ─────────────────────────────────────────────
@@ -355,7 +432,7 @@ function showNet() {
 function checkReady() {
     const btn = document.getElementById('confirmBtn');
     const projectId = document.getElementById('projectSelect').value;
-    const ready = grossReading && tareReading && projectId;
+    const ready = grossReading && tareReading && projectId && selectedHauler;
 
     if (ready) {
         btn.classList.remove('disabled');
@@ -366,7 +443,8 @@ function checkReady() {
         btn.classList.add('disabled');
         btn.classList.remove('ready');
         btn.disabled = true;
-        if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
+        if (!selectedHauler) btn.textContent = 'SELECT YOUR COMPANY FIRST';
+        else if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
         else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
         else btn.textContent = 'SELECT A PROJECT';
     }
@@ -447,7 +525,7 @@ async function confirmTicket() {
             tare_lbs: tareLbs,
             net_lbs: netLbs,
             net_tons: netTons,
-            hauler: proj?.waste_hauler || 'Dalmex Scale',
+            hauler: selectedHauler || proj?.waste_hauler || 'Dalmex Scale',
             container_size: 30,
             scan_type: 'pi_scale',
             diversion_pct: diversionPct,
@@ -554,22 +632,19 @@ function resetPage() {
 async function loadRecentLoads() {
     const el = document.getElementById('recentLoads');
     
-    // Get today's confirmed tickets from Pi scale
-    const today = new Date().toISOString().split('T')[0];
-    const tickets = await sb(
-        `tickets?ticket_date=eq.${today}&scan_type=eq.pi_scale&select=ticket_number,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
-    );
-
-    // If no pi_scale tickets today, show all DX tickets recent
-    let data = tickets;
-    if (!data || data.length === 0) {
-        data = await sb(
-            `tickets?ticket_number=like.DX-*&select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
-        );
+    if (!selectedHauler) {
+        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">Select your company to see loads</div>';
+        return;
     }
 
+    // Get recent tickets for this hauler
+    const haulerFilter = encodeURIComponent(selectedHauler);
+    let data = await sb(
+        `tickets?hauler=eq.${haulerFilter}&select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
+    );
+
     if (!data || data.length === 0) {
-        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet today</div>';
+        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedHauler + '</div>';
         return;
     }
 
