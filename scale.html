@@ -75,7 +75,7 @@
         .fi-weight{font-family:var(--mono);font-weight:700;font-size:.8rem}
         .fi-meta{font-size:.6rem;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .fi-div{font-family:var(--mono);font-weight:800;font-size:.75rem;flex-shrink:0;min-width:36px;text-align:right}
-        .fi-time{font-size:.55rem;color:var(--dim);flex-shrink:0;text-align:right;min-width:50px}
+        .fi-time{font-size:.6rem;color:var(--dim);flex-shrink:0;text-align:right;min-width:58px;line-height:1.4}
 
         /* Success overlay */
         .done-overlay{display:none;position:fixed;inset:0;background:var(--green);color:#fff;z-index:100;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
@@ -121,7 +121,10 @@
 <body>
     <div class="topbar">
         <h1>DivertScan Scale Board</h1>
-        <div class="topbar-right"><div class="live-dot"></div> <span id="statusText">LIVE</span></div>
+        <div class="topbar-right">
+            <div class="live-dot"></div> <span id="statusText">LIVE</span>
+            <span onclick="openSettings()" style="cursor:pointer;font-size:1.1rem;margin-left:8px">⚙️</span>
+        </div>
     </div>
     <div class="facility-bar">
         <span>Dalmex Recycling</span>
@@ -182,6 +185,64 @@
         <div class="done-countdown" id="doneCountdown">Resetting in 8s...</div>
     </div>
 
+    <!-- Settings / Management Modal -->
+    <div class="modal-bg" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+        <div class="modal-panel">
+            <div class="modal-handle"></div>
+            <div class="modal-title">⚙️ Settings & Management</div>
+
+            <!-- Tab buttons -->
+            <div style="display:flex;gap:6px;margin-bottom:14px">
+                <button onclick="showSettingsTab('projects')" id="stProj" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--green);color:#fff;font-family:var(--sans);font-size:.75rem;font-weight:700;cursor:pointer">🏗️ Projects</button>
+                <button onclick="showSettingsTab('haulers')" id="stHaul" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;font-weight:700;cursor:pointer">🚛 Haulers</button>
+            </div>
+
+            <!-- Projects Tab -->
+            <div id="settingsProjects">
+                <button onclick="showNewProject()" style="width:100%;padding:12px;border:2px dashed var(--border);border-radius:8px;background:transparent;color:var(--cyan);font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:12px">+ New Project</button>
+                <div id="settingsProjectList"></div>
+            </div>
+
+            <!-- Haulers Tab -->
+            <div id="settingsHaulers" style="display:none">
+                <div style="display:flex;gap:6px;margin-bottom:12px">
+                    <input type="text" class="edit-field" id="newHaulerName" placeholder="New hauler name..." style="flex:1">
+                    <button onclick="addHauler()" style="padding:10px 16px;border:none;border-radius:8px;background:var(--green);color:#fff;font-family:var(--sans);font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">+ Add</button>
+                </div>
+                <div id="settingsHaulerList"></div>
+                <div style="font-size:.6rem;color:var(--dim);margin-top:10px">Haulers are derived from the "Waste Hauler" field on each project. Adding a hauler here creates a placeholder project.</div>
+            </div>
+
+            <!-- New/Edit Project Form -->
+            <div id="projectForm" style="display:none">
+                <div style="font-size:.85rem;font-weight:700;margin-bottom:12px" id="projectFormTitle">New Project</div>
+                <input type="hidden" id="pf_id">
+                <div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Project Name *</label><input class="edit-field" id="pf_name" placeholder="e.g. Children's Hospital Dallas"></div>
+                <div class="edit-row">
+                    <div class="edit-group"><label class="edit-label">Client / GC</label><input class="edit-field" id="pf_client" placeholder="e.g. McCarthy Building"></div>
+                    <div class="edit-group"><label class="edit-label">Waste Hauler</label>
+                        <select class="edit-field" id="pf_hauler"><option value="">Select...</option></select>
+                    </div>
+                </div>
+                <div class="edit-row">
+                    <div class="edit-group"><label class="edit-label">Location</label><input class="edit-field" id="pf_location" placeholder="Dallas, TX"></div>
+                    <div class="edit-group"><label class="edit-label">LEED Version</label>
+                        <select class="edit-field" id="pf_leed">
+                            <option value="v4">LEED v4</option>
+                            <option value="v5">LEED v5</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Diversion Target %</label><input type="number" class="edit-field" id="pf_target" value="50"></div>
+                <button class="modal-btn save" onclick="saveProject()">💾 Save Project</button>
+                <button class="modal-btn cancel" onclick="cancelProjectForm()">Cancel</button>
+                <button class="modal-btn delete" id="pf_deleteBtn" style="display:none" onclick="deleteProject()">🗑️ Delete Project</button>
+            </div>
+
+            <button class="modal-btn cancel" style="margin-top:14px" onclick="closeSettings()">Close</button>
+        </div>
+    </div>
+
     <!-- Ticket Detail / Edit Modal -->
     <div class="modal-bg" id="ticketModal" onclick="if(event.target===this)closeTicketModal()">
         <div class="modal-panel">
@@ -232,7 +293,7 @@ function init() {
     document.getElementById("projSel").addEventListener("change", checkReady);
 
     // Load projects
-    sb("projects?select=id,name,waste_hauler&order=name.asc").then(function(d) {
+    sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc").then(function(d) {
         projects = d || [];
         var sel = document.getElementById("projSel");
         projects.forEach(function(p) {
@@ -534,10 +595,16 @@ function renderFeed(tickets, append) {
             if (m) driver = m[1].trim();
         }
         var time = "";
+        var dateStr = "";
         if (t.captured_at) {
             var d = new Date(t.captured_at);
-            var isToday = d.toDateString() === new Date().toDateString();
-            time = isToday ? d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : (d.getMonth()+1) + "/" + d.getDate() + " " + d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+            var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            dateStr = months[d.getMonth()] + " " + d.getDate();
+            time = d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+        } else if (t.ticket_date) {
+            var p = t.ticket_date.split("-");
+            var months2 = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            dateStr = months2[parseInt(p[1])] + " " + parseInt(p[2]);
         }
         var scanIcon = t.scan_type === "pi_scale" ? "⚖️" : t.scan_type === "batch_ocr" ? "📸" : t.scan_type === "ocr" ? "🔍" : "📝";
 
@@ -548,7 +615,7 @@ function renderFeed(tickets, append) {
                 '<div class="fi-meta">' + scanIcon + ' ' + (driver || t.hauler || "") + (projName ? " • " + projName : "") + '</div>' +
             '</div>' +
             '<div class="fi-div" style="color:' + divColor + '">' + divPct + '%</div>' +
-            '<div class="fi-time">' + time + '</div>' +
+            '<div class="fi-time"><div>' + dateStr + '</div><div>' + time + '</div></div>' +
         '</div>';
     }).join("");
 
@@ -557,6 +624,281 @@ function renderFeed(tickets, append) {
         el.innerHTML += html;
     } else {
         el.innerHTML = html;
+    }
+}
+
+// ─── SETTINGS & MANAGEMENT ───
+function openSettings() {
+    renderSettingsProjects();
+    renderSettingsHaulers();
+    populateHaulerDropdown();
+    showSettingsTab("projects");
+    document.getElementById("settingsModal").classList.add("show");
+}
+
+function closeSettings() {
+    document.getElementById("settingsModal").classList.remove("show");
+    // Refresh projects in case changes were made
+    sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc").then(function(d) {
+        projects = d || [];
+        // Refresh project dropdown on main page
+        var sel = document.getElementById("projSel");
+        var curVal = sel.value;
+        sel.innerHTML = '<option value="">Project...</option>';
+        projects.forEach(function(p) {
+            var o = document.createElement("option");
+            o.value = p.id;
+            o.textContent = p.name;
+            sel.appendChild(o);
+        });
+        if (curVal) sel.value = curVal;
+        // Refresh feed
+        loadFeed();
+    });
+}
+
+function showSettingsTab(tab) {
+    document.getElementById("settingsProjects").style.display = tab === "projects" ? "block" : "none";
+    document.getElementById("settingsHaulers").style.display = tab === "haulers" ? "block" : "none";
+    document.getElementById("projectForm").style.display = "none";
+    document.getElementById("stProj").style.background = tab === "projects" ? "var(--green)" : "transparent";
+    document.getElementById("stProj").style.color = tab === "projects" ? "#fff" : "var(--muted)";
+    document.getElementById("stHaul").style.background = tab === "haulers" ? "var(--green)" : "transparent";
+    document.getElementById("stHaul").style.color = tab === "haulers" ? "#fff" : "var(--muted)";
+}
+
+// ─── PROJECT MANAGEMENT ───
+function renderSettingsProjects() {
+    var el = document.getElementById("settingsProjectList");
+    if (projects.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--dim);font-size:.75rem">No projects yet</div>';
+        return;
+    }
+    el.innerHTML = projects.map(function(p) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
+            '<div style="flex:1">' +
+                '<div style="font-weight:700;font-size:.8rem">' + (p.name || "") + '</div>' +
+                '<div style="font-size:.6rem;color:var(--dim)">' + [p.waste_hauler, p.location].filter(Boolean).join(" • ") + ' • LEED ' + (p.leed_version || "v4") + '</div>' +
+            '</div>' +
+            '<button onclick="editProject(\'' + p.id + '\')" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);font-size:.65rem;font-weight:600;cursor:pointer">✏️ Edit</button>' +
+        '</div>';
+    }).join("");
+}
+
+function showNewProject() {
+    document.getElementById("settingsProjects").style.display = "none";
+    document.getElementById("projectForm").style.display = "block";
+    document.getElementById("projectFormTitle").textContent = "New Project";
+    document.getElementById("pf_id").value = "";
+    document.getElementById("pf_name").value = "";
+    document.getElementById("pf_client").value = "";
+    document.getElementById("pf_hauler").value = "";
+    document.getElementById("pf_location").value = "";
+    document.getElementById("pf_leed").value = "v4";
+    document.getElementById("pf_target").value = "50";
+    document.getElementById("pf_deleteBtn").style.display = "none";
+    populateHaulerDropdown();
+}
+
+function editProject(id) {
+    var p = projects.find(function(x) { return x.id === id; });
+    if (!p) return;
+    document.getElementById("settingsProjects").style.display = "none";
+    document.getElementById("projectForm").style.display = "block";
+    document.getElementById("projectFormTitle").textContent = "Edit Project";
+    document.getElementById("pf_id").value = p.id;
+    document.getElementById("pf_name").value = p.name || "";
+    document.getElementById("pf_client").value = p.client || p.general_contractor || "";
+    document.getElementById("pf_location").value = p.location || "";
+    document.getElementById("pf_leed").value = p.leed_version || "v4";
+    document.getElementById("pf_target").value = p.leed_target || 50;
+    document.getElementById("pf_deleteBtn").style.display = "block";
+    populateHaulerDropdown();
+    document.getElementById("pf_hauler").value = p.waste_hauler || "";
+}
+
+function populateHaulerDropdown() {
+    var sel = document.getElementById("pf_hauler");
+    var curVal = sel.value;
+    var haulerSet = {};
+    projects.forEach(function(p) { if (p.waste_hauler) haulerSet[p.waste_hauler] = true; });
+    sel.innerHTML = '<option value="">Select hauler...</option>';
+    Object.keys(haulerSet).sort().forEach(function(h) {
+        sel.innerHTML += '<option value="' + h + '">' + h + '</option>';
+    });
+    sel.innerHTML += '<option value="__new">+ New hauler...</option>';
+    if (curVal) sel.value = curVal;
+    sel.onchange = function() {
+        if (this.value === "__new") {
+            var name = prompt("Enter new hauler name:");
+            if (name && name.trim()) {
+                var opt = document.createElement("option");
+                opt.value = name.trim();
+                opt.textContent = name.trim();
+                this.insertBefore(opt, this.lastElementChild);
+                this.value = name.trim();
+            } else {
+                this.value = "";
+            }
+        }
+    };
+}
+
+function saveProject() {
+    var name = document.getElementById("pf_name").value.trim();
+    if (!name) { alert("Project name is required"); return; }
+    var id = document.getElementById("pf_id").value;
+    var haulerVal = document.getElementById("pf_hauler").value;
+    if (haulerVal === "__new") haulerVal = "";
+
+    var data = {
+        name: name,
+        client: document.getElementById("pf_client").value.trim() || null,
+        general_contractor: document.getElementById("pf_client").value.trim() || null,
+        waste_hauler: haulerVal || null,
+        location: document.getElementById("pf_location").value.trim() || null,
+        leed_version: document.getElementById("pf_leed").value || "v4",
+        leed_target: parseInt(document.getElementById("pf_target").value) || 50
+    };
+
+    if (id) {
+        // Update existing
+        data.updated_at = new Date().toISOString();
+        sb("projects?id=eq." + id, { method: "PATCH", body: JSON.stringify(data), prefer: "return=representation" })
+        .then(function(result) {
+            if (result && result.length) {
+                var idx = projects.findIndex(function(p) { return p.id === id; });
+                if (idx >= 0) Object.assign(projects[idx], result[0]);
+            }
+            cancelProjectForm();
+            renderSettingsProjects();
+        }).catch(function(e) { alert("Save failed: " + e.message); });
+    } else {
+        // Create new
+        data.access_code = "DS-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+        sb("projects", { method: "POST", body: JSON.stringify(data) })
+        .then(function(result) {
+            if (result && result.length) projects.unshift(result[0]);
+            cancelProjectForm();
+            renderSettingsProjects();
+        }).catch(function(e) { alert("Create failed: " + e.message); });
+    }
+}
+
+function deleteProject() {
+    var id = document.getElementById("pf_id").value;
+    var p = projects.find(function(x) { return x.id === id; });
+    if (!p) return;
+    if (!confirm('Delete "' + p.name + '"? All tickets in this project will be orphaned.')) return;
+
+    // Check for tickets
+    sb("tickets?project_id=eq." + id + "&select=id&limit=1").then(function(tix) {
+        if (tix && tix.length > 0) {
+            if (!confirm("This project has tickets. Delete the project AND all its tickets? This cannot be undone.")) return;
+            sb("tickets?project_id=eq." + id, { method: "DELETE", prefer: "return=minimal" }).then(function() {
+                return sb("projects?id=eq." + id, { method: "DELETE", prefer: "return=minimal" });
+            }).then(function() {
+                projects = projects.filter(function(x) { return x.id !== id; });
+                cancelProjectForm();
+                renderSettingsProjects();
+            });
+        } else {
+            sb("projects?id=eq." + id, { method: "DELETE", prefer: "return=minimal" }).then(function() {
+                projects = projects.filter(function(x) { return x.id !== id; });
+                cancelProjectForm();
+                renderSettingsProjects();
+            });
+        }
+    });
+}
+
+function cancelProjectForm() {
+    document.getElementById("projectForm").style.display = "none";
+    document.getElementById("settingsProjects").style.display = "block";
+}
+
+// ─── HAULER MANAGEMENT ───
+function renderSettingsHaulers() {
+    var el = document.getElementById("settingsHaulerList");
+    var haulerMap = {};
+    projects.forEach(function(p) {
+        var h = p.waste_hauler || "(no hauler)";
+        if (!haulerMap[h]) haulerMap[h] = [];
+        haulerMap[h].push(p);
+    });
+
+    var haulers = Object.keys(haulerMap).sort();
+    if (haulers.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--dim);font-size:.75rem">No haulers yet — add one above or assign haulers to projects</div>';
+        return;
+    }
+
+    el.innerHTML = haulers.map(function(h) {
+        var projs = haulerMap[h];
+        return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+                '<div style="font-weight:700;font-size:.85rem">🚛 ' + h + '</div>' +
+                '<div style="display:flex;gap:4px">' +
+                    '<button onclick="renameHauler(\'' + h.replace(/'/g, "\\'") + '\')" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:.6rem;cursor:pointer">✏️ Rename</button>' +
+                    '<button onclick="removeHauler(\'' + h.replace(/'/g, "\\'") + '\')" style="padding:4px 8px;border:1px solid var(--red);border-radius:4px;background:transparent;color:var(--red);font-size:.6rem;cursor:pointer">✕</button>' +
+                '</div>' +
+            '</div>' +
+            '<div style="font-size:.65rem;color:var(--dim)">' + projs.length + ' project' + (projs.length !== 1 ? 's' : '') + ': ' + projs.map(function(p) { return p.name; }).join(", ") + '</div>' +
+        '</div>';
+    }).join("");
+}
+
+function addHauler() {
+    var name = document.getElementById("newHaulerName").value.trim();
+    if (!name) { alert("Enter a hauler name"); return; }
+
+    // Check if already exists
+    var exists = projects.some(function(p) { return p.waste_hauler === name; });
+    if (exists) { alert(name + " already exists"); return; }
+
+    // Create a placeholder project for this hauler so it shows up in dropdowns
+    // Or just let them assign it to a project later
+    // For now, just inform and clear
+    document.getElementById("newHaulerName").value = "";
+    alert('Hauler "' + name + '" noted. Assign it to a project using the Projects tab → Edit → Waste Hauler field.');
+    renderSettingsHaulers();
+}
+
+function renameHauler(oldName) {
+    var newName = prompt("Rename '" + oldName + "' to:", oldName);
+    if (!newName || newName.trim() === oldName) return;
+    newName = newName.trim();
+
+    if (!confirm("Rename all projects and tickets from '" + oldName + "' to '" + newName + "'?")) return;
+
+    // Update all projects with this hauler
+    sb("projects?waste_hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ waste_hauler: newName }), prefer: "return=minimal" })
+    .then(function() {
+        // Update all tickets with this hauler
+        return sb("tickets?hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ hauler: newName }), prefer: "return=minimal" });
+    }).then(function() {
+        // Update local data
+        projects.forEach(function(p) { if (p.waste_hauler === oldName) p.waste_hauler = newName; });
+        renderSettingsHaulers();
+        renderSettingsProjects();
+        populateHaulerDropdown();
+        alert("Renamed to '" + newName + "'");
+    }).catch(function(e) { alert("Rename failed: " + e.message); });
+}
+
+function removeHauler(haulerName) {
+    var projs = projects.filter(function(p) { return p.waste_hauler === haulerName; });
+    if (projs.length > 0) {
+        if (!confirm("'" + haulerName + "' is assigned to " + projs.length + " project(s). Clear the hauler field from those projects?")) return;
+        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ waste_hauler: null }), prefer: "return=minimal" })
+        .then(function() {
+            projects.forEach(function(p) { if (p.waste_hauler === haulerName) p.waste_hauler = null; });
+            renderSettingsHaulers();
+            renderSettingsProjects();
+            populateHaulerDropdown();
+        }).catch(function(e) { alert("Failed: " + e.message); });
+    } else {
+        alert("No projects assigned to this hauler — nothing to remove.");
     }
 }
 
