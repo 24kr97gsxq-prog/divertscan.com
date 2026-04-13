@@ -542,7 +542,7 @@ function resetPage() {
 function loadFeed() {
     var limit = FEED_SIZE;
     var offset = 0;
-    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=captured_at.desc&limit=" + limit + "&offset=" + offset)
+    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=" + limit + "&offset=" + offset)
     .then(function(tickets) {
         if (!tickets || tickets.length === 0) {
             document.getElementById("feedList").innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:.75rem;">No tickets yet</div>';
@@ -562,7 +562,7 @@ function loadFeed() {
 function loadMore() {
     feedPage++;
     var offset = feedPage * FEED_SIZE;
-    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
+    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
     .then(function(tickets) {
         if (!tickets || tickets.length === 0) {
             document.getElementById("moreBtn").style.display = "none";
@@ -598,15 +598,17 @@ function renderFeed(tickets, append) {
         }
         var time = "";
         var dateStr = "";
+        var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        // Date from ticket_date (the actual service date)
+        if (t.ticket_date) {
+            var p = t.ticket_date.split("-");
+            dateStr = months[parseInt(p[1]) - 1] + " " + parseInt(p[2]);
+        }
+        // Time from captured_at (when it was entered)
         if (t.captured_at) {
             var d = new Date(t.captured_at);
-            var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            dateStr = months[d.getMonth()] + " " + d.getDate();
             time = d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-        } else if (t.ticket_date) {
-            var p = t.ticket_date.split("-");
-            var months2 = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            dateStr = months2[parseInt(p[1])] + " " + parseInt(p[2]);
+            if (!dateStr) dateStr = months[d.getMonth()] + " " + d.getDate();
         }
         var scanIcon = t.scan_type === "pi_scale" ? "⚖️" : t.scan_type === "batch_ocr" ? "📸" : t.scan_type === "ocr" ? "🔍" : "📝";
 
