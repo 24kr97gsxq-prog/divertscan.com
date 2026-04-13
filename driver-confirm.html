@@ -648,7 +648,7 @@ async function loadRecentLoads() {
     // Get recent tickets for this hauler
     const haulerFilter = encodeURIComponent(selectedHauler);
     let data = await sb(
-        `tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=captured_at.desc&limit=5`
+        `tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=ticket_date.desc,captured_at.desc&limit=5`
     );
 
     if (!data || data.length === 0) {
@@ -661,18 +661,31 @@ async function loadRecentLoads() {
     el.innerHTML = data.map((t, i) => {
         const net = Number(t.net_lbs || 0).toLocaleString();
         const tons = Number(t.net_tons || 0).toFixed(2);
-        const time = t.captured_at ? new Date(t.captured_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let dateStr = '';
+        let time = '';
+        if (t.ticket_date) {
+            const p = t.ticket_date.split('-');
+            dateStr = months[parseInt(p[1]) - 1] + ' ' + parseInt(p[2]);
+        }
+        if (t.captured_at) {
+            const d = new Date(t.captured_at);
+            time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            if (!dateStr) dateStr = months[d.getMonth()] + ' ' + d.getDate();
+        }
         const driver = (t.notes || '').match(/Driver:\s*(.+)/);
         const driverName = driver ? driver[1].trim() : '';
         const divPct = t.diversion_pct || 0;
         const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
         const debrisCount = Array.isArray(t.debris_images) ? t.debris_images.length : 0;
-        const hasPhoto = t.scale_ticket_image || debrisCount > 0;
 
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}cursor:pointer;" onclick="viewDriverTicket('${t.id}')">
+            <div style="flex-shrink:0;text-align:left;min-width:46px;line-height:1.4;">
+                <div style="font-size:.65rem;font-weight:600;color:var(--muted);">${dateStr}</div>
+                <div style="font-size:.55rem;color:var(--dim);">${time}</div>
+            </div>
             <div style="flex-shrink:0;text-align:center;min-width:50px;">
                 <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:var(--cyan);">${t.ticket_number}</div>
-                <div style="font-size:.55rem;color:var(--dim);">${time}</div>
             </div>
             <div style="flex:1;">
                 <div style="font-family:var(--mono);font-weight:700;font-size:.8rem;">${net} lbs <span style="color:var(--muted);font-weight:400;">(${tons} T)</span></div>
