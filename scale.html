@@ -89,6 +89,32 @@
         /* Show more button */
         .more-btn{width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;font-weight:600;cursor:pointer;margin-top:8px}
 
+        /* Ticket Detail Modal */
+        .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center}
+        .modal-bg.show{display:flex}
+        .modal-panel{width:100%;max-width:600px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--card);border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;padding-bottom:40px}
+        .modal-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+        .modal-title{font-size:1rem;font-weight:800;margin-bottom:14px;letter-spacing:-.02em}
+        .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem}
+        .detail-label{color:var(--dim);font-weight:500}
+        .detail-value{font-weight:700;font-family:var(--mono);text-align:right}
+        .mat-bar{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem}
+        .mat-name{width:70px;color:var(--muted);font-weight:500}
+        .mat-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+        .mat-fill{height:100%;border-radius:2px}
+        .mat-pct{width:32px;text-align:right;font-family:var(--mono);font-weight:700}
+        .edit-field{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:.85rem;-webkit-appearance:none}
+        .edit-field:focus{outline:none;border-color:var(--cyan)}
+        .edit-row{display:flex;gap:8px;margin-bottom:8px}
+        .edit-group{flex:1}
+        .edit-label{display:block;font-size:.6rem;font-weight:600;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em}
+        .modal-btn{display:block;width:100%;padding:14px;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer;margin-top:8px}
+        .modal-btn:active{opacity:.85}
+        .modal-btn.save{background:var(--green);color:#fff}
+        .modal-btn.cancel{background:transparent;color:var(--muted);border:1px solid var(--border)}
+        .modal-btn.delete{background:transparent;color:var(--red);border:1px solid var(--red);margin-top:16px;font-size:.75rem}
+        .photo-thumb-sm{width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer}
+
         @media(max-width:400px){.weight-row{grid-template-columns:1fr 1fr}.weight-box.net{grid-column:1/-1}}
     </style>
 </head>
@@ -154,6 +180,14 @@
         <div class="done-weight" id="doneWeight">Net: 31,800 lbs (15.90 T)</div>
         <div class="done-driver" id="doneDriver"></div>
         <div class="done-countdown" id="doneCountdown">Resetting in 8s...</div>
+    </div>
+
+    <!-- Ticket Detail / Edit Modal -->
+    <div class="modal-bg" id="ticketModal" onclick="if(event.target===this)closeTicketModal()">
+        <div class="modal-panel">
+            <div class="modal-handle"></div>
+            <div id="ticketModalContent"></div>
+        </div>
     </div>
 
 <script>
@@ -445,7 +479,7 @@ function resetPage() {
 function loadFeed() {
     var limit = FEED_SIZE;
     var offset = 0;
-    sb("tickets?select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,hauler,scan_type,captured_at,notes,project_id&order=captured_at.desc&limit=" + limit + "&offset=" + offset)
+    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=captured_at.desc&limit=" + limit + "&offset=" + offset)
     .then(function(tickets) {
         if (!tickets || tickets.length === 0) {
             document.getElementById("feedList").innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:.75rem;">No tickets yet</div>';
@@ -465,7 +499,7 @@ function loadFeed() {
 function loadMore() {
     feedPage++;
     var offset = feedPage * FEED_SIZE;
-    sb("tickets?select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,hauler,scan_type,captured_at,notes,project_id&order=captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
+    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
     .then(function(tickets) {
         if (!tickets || tickets.length === 0) {
             document.getElementById("moreBtn").style.display = "none";
@@ -476,7 +510,15 @@ function loadMore() {
     });
 }
 
+var feedTickets = [];
+
 function renderFeed(tickets, append) {
+    if (append) {
+        feedTickets = feedTickets.concat(tickets);
+    } else {
+        feedTickets = tickets;
+    }
+
     var projMap = {};
     projects.forEach(function(p) { projMap[p.id] = p.name; });
 
@@ -499,7 +541,7 @@ function renderFeed(tickets, append) {
         }
         var scanIcon = t.scan_type === "pi_scale" ? "⚖️" : t.scan_type === "batch_ocr" ? "📸" : t.scan_type === "ocr" ? "🔍" : "📝";
 
-        return '<div class="feed-item">' +
+        return '<div class="feed-item" onclick="viewTicket(\'' + t.id + '\')" style="cursor:pointer">' +
             '<div class="fi-ticket">' + (t.ticket_number || "?") + '</div>' +
             '<div class="fi-detail">' +
                 '<div class="fi-weight">' + net + ' lbs <span style="color:var(--muted);font-weight:400;font-size:.7rem">(' + tons + ' T)</span></div>' +
@@ -516,6 +558,269 @@ function renderFeed(tickets, append) {
     } else {
         el.innerHTML = html;
     }
+}
+
+// ─── TICKET DETAIL & EDIT ───
+var currentTicket = null;
+var editMode = false;
+
+function viewTicket(id) {
+    var t = feedTickets.find(function(x) { return x.id === id; });
+    if (!t) {
+        // Fetch from DB if not in feed
+        sb("tickets?id=eq." + id).then(function(d) {
+            if (d && d.length) { currentTicket = d[0]; renderTicketDetail(d[0]); }
+        });
+        return;
+    }
+    currentTicket = t;
+    renderTicketDetail(t);
+}
+
+function renderTicketDetail(t) {
+    editMode = false;
+    var projMap = {};
+    projects.forEach(function(p) { projMap[p.id] = p.name; });
+    var projName = projMap[t.project_id] || "Unknown";
+    var driver = "";
+    if (t.notes) { var m = t.notes.match(/Driver:\s*(.+)/); if (m) driver = m[1].trim(); }
+    var divPct = t.diversion_pct || 0;
+    var divColor = divPct >= 75 ? "var(--green)" : divPct >= 50 ? "var(--amber)" : "var(--red)";
+    var time = t.captured_at ? new Date(t.captured_at).toLocaleString() : "";
+    var scanIcon = t.scan_type === "pi_scale" ? "⚖️ Pi Scale" : t.scan_type === "batch_ocr" ? "📸 Batch OCR" : t.scan_type === "ocr" ? "🔍 OCR" : "📝 Manual";
+
+    var MATS = [
+        {key:"wood",name:"Wood",color:"#92400e"},
+        {key:"occ",name:"Cardboard",color:"#d97706"},
+        {key:"metal",name:"Metal",color:"#6b7280"},
+        {key:"plastic",name:"Plastic",color:"#fbbf24"},
+        {key:"concrete",name:"Concrete",color:"#78716c"},
+        {key:"block",name:"Block",color:"#a16207"},
+        {key:"landfill",name:"Landfill",color:"#e84040"}
+    ];
+
+    var matHtml = MATS.filter(function(m) { return (t[m.key + "_pct"] || 0) > 0; }).map(function(m) {
+        var pct = t[m.key + "_pct"] || 0;
+        return '<div class="mat-bar"><span class="mat-name">' + m.name + '</span>' +
+            '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + m.color + '"></div></div>' +
+            '<span class="mat-pct">' + pct + '%</span></div>';
+    }).join("");
+
+    // Photos
+    var photoHtml = "";
+    if (t.scale_ticket_image) {
+        photoHtml += '<div style="margin-top:12px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Scale Ticket Photo</div>' +
+            '<img src="' + t.scale_ticket_image + '" onclick="window.open(\'' + t.scale_ticket_image + '\')" class="photo-thumb-sm" style="width:100%;height:auto;max-height:200px;object-fit:contain;"></div>';
+    }
+    var debris = Array.isArray(t.debris_images) ? t.debris_images : [];
+    if (debris.length > 0) {
+        photoHtml += '<div style="margin-top:10px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Debris Photos (' + debris.length + ')</div>' +
+            '<div style="display:flex;gap:6px;overflow-x:auto">' + debris.map(function(u) { return '<img src="' + u + '" onclick="window.open(\'' + u + '\')" class="photo-thumb-sm">'; }).join("") + '</div></div>';
+    }
+
+    var html = '<div class="modal-title">Ticket ' + (t.ticket_number || "") + '</div>' +
+        '<div style="text-align:center;padding:12px 0;margin-bottom:12px;background:' + (divPct >= 75 ? 'rgba(15,186,106,.08)' : divPct >= 50 ? 'rgba(232,160,32,.08)' : 'rgba(232,64,64,.08)') + ';border-radius:var(--radius);">' +
+            '<div style="font-size:2.2rem;font-weight:800;font-family:var(--mono);color:' + divColor + '">' + divPct + '%</div>' +
+            '<div style="font-size:.65rem;color:var(--muted)">Diversion Rate</div>' +
+        '</div>' +
+        '<div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">' + (t.ticket_date || "") + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Project</span><span class="detail-value" style="font-family:var(--sans)">' + projName + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Hauler</span><span class="detail-value" style="font-family:var(--sans)">' + (t.hauler || "") + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Driver</span><span class="detail-value" style="font-family:var(--sans)">' + driver + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Scan Type</span><span class="detail-value" style="font-family:var(--sans)">' + scanIcon + '</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Gross</span><span class="detail-value">' + Number(t.gross_lbs || 0).toLocaleString() + ' lbs</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Tare</span><span class="detail-value">' + Number(t.tare_lbs || 0).toLocaleString() + ' lbs</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Net</span><span class="detail-value" style="color:var(--green)">' + Number(t.net_lbs || 0).toLocaleString() + ' lbs (' + Number(t.net_tons || 0).toFixed(2) + ' T)</span></div>' +
+        '<div class="detail-row"><span class="detail-label">CO₂e Avoided</span><span class="detail-value">' + Number(t.co2e_avoided || 0).toFixed(2) + ' mt</span></div>' +
+        '<div class="detail-row"><span class="detail-label">Captured</span><span class="detail-value" style="font-size:.7rem">' + time + '</span></div>' +
+        (matHtml ? '<div style="margin-top:14px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Material Breakdown</div>' + matHtml + '</div>' : '') +
+        photoHtml +
+        (t.audit_id ? '<div style="margin-top:12px;font-family:var(--mono);font-size:.55rem;color:var(--dim);word-break:break-all;">🔐 ' + t.audit_id + '</div>' : '') +
+        (t.notes ? '<div style="margin-top:10px;font-size:.75rem;color:var(--muted);">📝 ' + t.notes + '</div>' : '') +
+        '<button class="modal-btn save" onclick="showEditMode()">✏️ Edit Ticket</button>' +
+        '<button class="modal-btn cancel" onclick="closeTicketModal()">Done</button>';
+
+    document.getElementById("ticketModalContent").innerHTML = html;
+    document.getElementById("ticketModal").classList.add("show");
+}
+
+function showEditMode() {
+    if (!currentTicket) return;
+    editMode = true;
+    var t = currentTicket;
+    var projMap = {};
+    projects.forEach(function(p) { projMap[p.id] = p.name; });
+
+    var projOptions = projects.map(function(p) {
+        return '<option value="' + p.id + '"' + (p.id === t.project_id ? ' selected' : '') + '>' + p.name + '</option>';
+    }).join("");
+
+    var haulerOptions = ["Jaguar Waste Management","B&B Waste","Liberty Demolition","Ranger Waste Management LLC","Dalmex Scale"].map(function(h) {
+        return '<option value="' + h + '"' + (h === t.hauler ? ' selected' : '') + '>' + h + '</option>';
+    }).join("") + '<option value="__other">Other...</option>';
+
+    var MATS = [
+        {key:"wood",name:"Wood",icon:"🪵"},{key:"occ",name:"OCC",icon:"📦"},
+        {key:"metal",name:"Metal",icon:"🔩"},{key:"plastic",name:"Plastic",icon:"♻️"},
+        {key:"concrete",name:"Concrete",icon:"🧱"},{key:"block",name:"Block",icon:"🧱"},
+        {key:"landfill",name:"Landfill",icon:"🗑️"}
+    ];
+
+    var matSliders = MATS.map(function(m) {
+        var pct = t[m.key + "_pct"] || 0;
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+            '<span style="width:60px;font-size:.7rem;color:var(--muted)">' + m.icon + ' ' + m.name + '</span>' +
+            '<input type="range" id="es_' + m.key + '" min="0" max="100" value="' + pct + '" oninput="updateEditPct()" style="flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none">' +
+            '<span id="ep_' + m.key + '" style="width:30px;text-align:right;font-family:var(--mono);font-weight:700;font-size:.7rem">' + pct + '%</span></div>';
+    }).join("");
+
+    var html = '<div class="modal-title">Edit ' + (t.ticket_number || "") + '</div>' +
+        '<div class="edit-row">' +
+            '<div class="edit-group"><label class="edit-label">Ticket #</label><input class="edit-field" id="ed_num" value="' + (t.ticket_number || "") + '"></div>' +
+            '<div class="edit-group"><label class="edit-label">Date</label><input type="date" class="edit-field" id="ed_date" value="' + (t.ticket_date || "") + '"></div>' +
+        '</div>' +
+        '<div class="edit-row">' +
+            '<div class="edit-group"><label class="edit-label">Project</label><select class="edit-field" id="ed_proj">' + projOptions + '</select></div>' +
+        '</div>' +
+        '<div class="edit-row">' +
+            '<div class="edit-group"><label class="edit-label">Hauler</label><select class="edit-field" id="ed_hauler">' + haulerOptions + '</select></div>' +
+        '</div>' +
+        '<div class="edit-row">' +
+            '<div class="edit-group"><label class="edit-label">Gross (lbs)</label><input type="number" class="edit-field" id="ed_gross" value="' + (t.gross_lbs || 0) + '" oninput="calcEditNet()"></div>' +
+            '<div class="edit-group"><label class="edit-label">Tare (lbs)</label><input type="number" class="edit-field" id="ed_tare" value="' + (t.tare_lbs || 0) + '" oninput="calcEditNet()"></div>' +
+        '</div>' +
+        '<div class="edit-row">' +
+            '<div class="edit-group"><label class="edit-label">Net (lbs)</label><input type="number" class="edit-field" id="ed_net" value="' + (t.net_lbs || 0) + '" readonly style="color:var(--green);font-weight:700"></div>' +
+            '<div class="edit-group"><label class="edit-label">Net (tons)</label><input type="number" class="edit-field" id="ed_tons" value="' + (t.net_tons || 0) + '" readonly style="color:var(--green);font-weight:700"></div>' +
+        '</div>' +
+        '<div style="margin:12px 0"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Material Breakdown</div>' + matSliders +
+        '<div id="editPctTotal" style="font-family:var(--mono);font-size:.75rem;font-weight:700;text-align:right;margin-top:4px"></div></div>' +
+        '<div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Notes</label><textarea class="edit-field" id="ed_notes" rows="2" style="resize:vertical">' + (t.notes || "") + '</textarea></div>' +
+        '<button class="modal-btn save" onclick="saveTicket()">💾 Save Changes</button>' +
+        '<button class="modal-btn cancel" onclick="renderTicketDetail(currentTicket)">Cancel</button>' +
+        '<button class="modal-btn delete" onclick="deleteTicket()">🗑️ Delete Ticket</button>';
+
+    document.getElementById("ticketModalContent").innerHTML = html;
+    updateEditPct();
+
+    // Style range thumbs
+    document.querySelectorAll('#ticketModalContent input[type=range]').forEach(function(r) {
+        r.style.cssText += ';-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none';
+    });
+}
+
+function calcEditNet() {
+    var g = parseInt(document.getElementById("ed_gross").value) || 0;
+    var t = parseInt(document.getElementById("ed_tare").value) || 0;
+    var n = g - t;
+    document.getElementById("ed_net").value = n;
+    document.getElementById("ed_tons").value = (n / 2000).toFixed(2);
+    updateEditPct();
+}
+
+function updateEditPct() {
+    var keys = ["wood","occ","metal","plastic","concrete","block","landfill"];
+    var total = 0;
+    keys.forEach(function(k) {
+        var slider = document.getElementById("es_" + k);
+        if (!slider) return;
+        var pct = parseInt(slider.value);
+        document.getElementById("ep_" + k).textContent = pct + "%";
+        total += pct;
+    });
+    var el = document.getElementById("editPctTotal");
+    if (el) {
+        el.textContent = "Total: " + total + "%";
+        el.style.color = total === 100 ? "var(--green)" : "var(--red)";
+    }
+}
+
+function saveTicket() {
+    if (!currentTicket) return;
+    var id = currentTicket.id;
+    var gross = parseInt(document.getElementById("ed_gross").value) || 0;
+    var tare = parseInt(document.getElementById("ed_tare").value) || 0;
+    var net = gross - tare;
+    var netTons = parseFloat((net / 2000).toFixed(4));
+
+    var keys = ["wood","occ","metal","plastic","concrete","block","landfill"];
+    var mats = {};
+    var totalPct = 0;
+    keys.forEach(function(k) {
+        var pct = parseInt(document.getElementById("es_" + k).value) || 0;
+        mats[k + "_pct"] = pct;
+        mats[k + "_tons"] = parseFloat((netTons * pct / 100).toFixed(4));
+        totalPct += pct;
+    });
+
+    if (totalPct !== 100 && net > 0) {
+        alert("Material percentages must total 100% (currently " + totalPct + "%)");
+        return;
+    }
+
+    var divPct = 100 - (mats.landfill_pct || 0);
+    var divTons = parseFloat((netTons * divPct / 100).toFixed(4));
+    var GWP = {wood:0.310,occ:0.940,metal:1.850,plastic:3.100,concrete:0.130,block:0.240};
+    var co2e = 0;
+    keys.forEach(function(k) { if (k !== "landfill" && GWP[k]) co2e += (mats[k + "_tons"] || 0) * GWP[k]; });
+
+    var haulerSel = document.getElementById("ed_hauler");
+    var haulerVal = haulerSel.value;
+    if (haulerVal === "__other") {
+        haulerVal = prompt("Enter hauler name:");
+        if (!haulerVal) return;
+    }
+
+    var updates = {
+        ticket_number: document.getElementById("ed_num").value.trim(),
+        ticket_date: document.getElementById("ed_date").value,
+        project_id: document.getElementById("ed_proj").value,
+        hauler: haulerVal,
+        gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
+        diversion_pct: divPct, diverted_tons: divTons, co2e_avoided: parseFloat(co2e.toFixed(4)),
+        notes: document.getElementById("ed_notes").value.trim() || null,
+        last_modified: new Date().toISOString()
+    };
+    Object.keys(mats).forEach(function(k) { updates[k] = mats[k]; });
+
+    sb("tickets?id=eq." + id, { method: "PATCH", body: JSON.stringify(updates), prefer: "return=representation" })
+    .then(function(result) {
+        if (result && result.length) {
+            // Update local data
+            Object.assign(currentTicket, result[0]);
+            var idx = feedTickets.findIndex(function(x) { return x.id === id; });
+            if (idx >= 0) Object.assign(feedTickets[idx], result[0]);
+        } else {
+            Object.assign(currentTicket, updates);
+        }
+        renderTicketDetail(currentTicket);
+        loadFeed();
+        // Flash save confirmation
+        var panel = document.querySelector(".modal-panel");
+        if (panel) { panel.style.borderColor = "var(--green)"; setTimeout(function() { panel.style.borderColor = ""; }, 1500); }
+    }).catch(function(err) {
+        alert("Save failed: " + err.message);
+    });
+}
+
+function deleteTicket() {
+    if (!currentTicket) return;
+    if (!confirm("Delete ticket " + currentTicket.ticket_number + "? This cannot be undone.")) return;
+
+    sb("tickets?id=eq." + currentTicket.id, { method: "DELETE", prefer: "return=minimal" })
+    .then(function() {
+        feedTickets = feedTickets.filter(function(x) { return x.id !== currentTicket.id; });
+        closeTicketModal();
+        loadFeed();
+    }).catch(function(err) {
+        alert("Delete failed: " + err.message);
+    });
+}
+
+function closeTicketModal() {
+    document.getElementById("ticketModal").classList.remove("show");
+    currentTicket = null;
+    editMode = false;
 }
 
 // ─── BOOT ───
