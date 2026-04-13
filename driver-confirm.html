@@ -165,6 +165,14 @@
     <div class="success-countdown" id="successCountdown">Resetting in 8s...</div>
 </div>
 
+<!-- Driver Ticket Detail Modal (view-only + add photos) -->
+<div id="driverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeDM()">
+    <div style="width:100%;max-width:600px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#131f2e;border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;padding-bottom:40px" id="driverModalInner">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px"></div>
+        <div id="driverModalContent"></div>
+    </div>
+</div>
+
 <!-- Status Bar -->
 <div class="status-bar">
     <span id="deviceLabel">Dalmex Scale 01</span>
@@ -640,13 +648,15 @@ async function loadRecentLoads() {
     // Get recent tickets for this hauler
     const haulerFilter = encodeURIComponent(selectedHauler);
     let data = await sb(
-        `tickets?hauler=eq.${haulerFilter}&select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,captured_at,notes&order=captured_at.desc&limit=5`
+        `tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=captured_at.desc&limit=5`
     );
 
     if (!data || data.length === 0) {
         el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedHauler + '</div>';
         return;
     }
+
+    driverTickets = data;
 
     el.innerHTML = data.map((t, i) => {
         const net = Number(t.net_lbs || 0).toLocaleString();
@@ -656,8 +666,10 @@ async function loadRecentLoads() {
         const driverName = driver ? driver[1].trim() : '';
         const divPct = t.diversion_pct || 0;
         const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+        const debrisCount = Array.isArray(t.debris_images) ? t.debris_images.length : 0;
+        const hasPhoto = t.scale_ticket_image || debrisCount > 0;
 
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}">
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}cursor:pointer;" onclick="viewDriverTicket('${t.id}')">
             <div style="flex-shrink:0;text-align:center;min-width:50px;">
                 <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:var(--cyan);">${t.ticket_number}</div>
                 <div style="font-size:.55rem;color:var(--dim);">${time}</div>
@@ -666,9 +678,161 @@ async function loadRecentLoads() {
                 <div style="font-family:var(--mono);font-weight:700;font-size:.8rem;">${net} lbs <span style="color:var(--muted);font-weight:400;">(${tons} T)</span></div>
                 <div style="font-size:.6rem;color:var(--dim);">${Number(t.gross_lbs||0).toLocaleString()} gross / ${Number(t.tare_lbs||0).toLocaleString()} tare${driverName ? ' • ' + driverName : ''}</div>
             </div>
-            <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:${divColor};flex-shrink:0;">${divPct}%</div>
+            <div style="flex-shrink:0;text-align:right;">
+                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:${divColor};">${divPct}%</div>
+                <div style="font-size:.55rem;color:var(--dim);">${debrisCount > 0 ? '📸' + debrisCount : '📷 add'}</div>
+            </div>
         </div>`;
     }).join('');
+}
+
+// ─────────────────────────────────────────────
+// DRIVER TICKET DETAIL (view + add photos)
+// ─────────────────────────────────────────────
+let driverTickets = [];
+
+function viewDriverTicket(id) {
+    const t = driverTickets.find(x => x.id === id);
+    if (!t) return;
+
+    const projMap = {};
+    projects.forEach(p => { projMap[p.id] = p.name; });
+    const projName = projMap[t.project_id] || '';
+    const divPct = t.diversion_pct || 0;
+    const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+    const time = t.captured_at ? new Date(t.captured_at).toLocaleString() : '';
+    const debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
+
+    // Material bars
+    const MATS = [
+        {key:'wood',name:'Wood',color:'#92400e'},{key:'occ',name:'Cardboard',color:'#d97706'},
+        {key:'metal',name:'Metal',color:'#6b7280'},{key:'concrete',name:'Concrete',color:'#78716c'},
+        {key:'block',name:'Block',color:'#a16207'},{key:'landfill',name:'Landfill',color:'#e84040'}
+    ];
+    const matHtml = MATS.filter(m => (t[m.key + '_pct'] || 0) > 0).map(m => {
+        const pct = t[m.key + '_pct'] || 0;
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem">
+            <span style="width:65px;color:var(--muted)">${m.name}</span>
+            <div style="flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${m.color};border-radius:2px"></div>
+            </div>
+            <span style="width:30px;text-align:right;font-family:var(--mono);font-weight:700">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    // Photos section
+    let photoHtml = '';
+    if (t.scale_ticket_image) {
+        photoHtml += `<div style="margin-top:12px">
+            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Scale Ticket</div>
+            <img src="${t.scale_ticket_image}" onclick="window.open('${t.scale_ticket_image}')" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+        </div>`;
+    }
+    if (debrisArr.length > 0) {
+        photoHtml += `<div style="margin-top:10px">
+            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Debris Photos (${debrisArr.length})</div>
+            <div style="display:flex;gap:6px;overflow-x:auto">
+                ${debrisArr.map(u => `<img src="${u}" onclick="window.open('${u}')" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">`).join('')}
+            </div>
+        </div>`;
+    }
+
+    const html = `
+        <div style="font-size:1rem;font-weight:800;margin-bottom:12px;letter-spacing:-.02em">${t.ticket_number}</div>
+        <div style="text-align:center;padding:14px 0;margin-bottom:14px;background:${divPct >= 75 ? 'rgba(15,186,106,.08)' : divPct >= 50 ? 'rgba(232,160,32,.08)' : 'rgba(232,64,64,.08)'};border-radius:10px;">
+            <div style="font-size:2.4rem;font-weight:800;font-family:var(--mono);color:${divColor}">${divPct}%</div>
+            <div style="font-size:.65rem;color:var(--muted)">Diversion Rate</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Gross</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.gross_lbs||0).toLocaleString()}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Tare</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.tare_lbs||0).toLocaleString()}</div>
+            </div>
+            <div style="background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--cyan);text-transform:uppercase;font-weight:600">Net</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem;color:var(--green)">${Number(t.net_lbs||0).toLocaleString()}</div>
+                <div style="font-size:.6rem;color:var(--muted)">${Number(t.net_tons||0).toFixed(2)} T</div>
+            </div>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">${projName}${t.ticket_date ? ' • ' + t.ticket_date : ''}</div>
+        <div style="font-size:.65rem;color:var(--dim);margin-bottom:12px">${time}</div>
+        ${matHtml ? '<div style="margin-bottom:12px">' + matHtml + '</div>' : ''}
+        ${photoHtml}
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:.65rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:8px">📸 Add Debris Photo</div>
+            <div style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;position:relative" onclick="document.getElementById('driverPhotoInput').click()">
+                <div style="font-size:1.5rem;margin-bottom:4px">📸</div>
+                <div style="font-size:.8rem;color:var(--muted);font-weight:500">Tap to take photo or choose from gallery</div>
+                <input type="file" id="driverPhotoInput" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="uploadDriverDebris('${t.id}', this)">
+            </div>
+            <div id="driverUploadStatus" style="font-size:.75rem;margin-top:8px;text-align:center"></div>
+        </div>
+        <button onclick="closeDM()" style="display:block;width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;margin-top:12px">Done</button>
+    `;
+
+    document.getElementById('driverModalContent').innerHTML = html;
+    document.getElementById('driverModal').style.display = 'flex';
+}
+
+async function uploadDriverDebris(ticketId, input) {
+    const files = Array.from(input.files);
+    if (files.length === 0) return;
+
+    const statusEl = document.getElementById('driverUploadStatus');
+    statusEl.innerHTML = '<span style="color:var(--cyan)">⏳ Uploading ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '...</span>';
+
+    const t = driverTickets.find(x => x.id === ticketId);
+    if (!t) { statusEl.innerHTML = '<span style="color:var(--red)">Ticket not found</span>'; return; }
+
+    const urls = Array.isArray(t.debris_images) ? [...t.debris_images] : [];
+    let uploaded = 0;
+
+    for (const file of files) {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = (t.project_id || 'unassigned') + '/' + t.ticket_number + '_debris_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.' + ext;
+
+        const uploadUrl = SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path;
+        try {
+            const res = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_KEY,
+                    'Content-Type': file.type || 'image/jpeg',
+                    'x-upsert': 'true'
+                },
+                body: file
+            });
+            if (res.ok) {
+                const publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
+                urls.push(publicUrl);
+                uploaded++;
+            }
+        } catch(e) { console.error('Upload error:', e); }
+    }
+
+    if (uploaded > 0) {
+        // Update ticket with new debris images
+        await sb('tickets?id=eq.' + ticketId, 'PATCH', { debris_images: urls });
+        t.debris_images = urls;
+        statusEl.innerHTML = '<span style="color:var(--green)">✅ ' + uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' added!</span>';
+
+        // Refresh the modal to show new photos
+        setTimeout(function() { viewDriverTicket(ticketId); }, 1000);
+    } else {
+        statusEl.innerHTML = '<span style="color:var(--red)">Upload failed — check storage permissions</span>';
+    }
+
+    input.value = '';
+}
+
+function closeDM() {
+    document.getElementById('driverModal').style.display = 'none';
+    loadRecentLoads(); // Refresh to show updated photo counts
 }
 
 // ─────────────────────────────────────────────
