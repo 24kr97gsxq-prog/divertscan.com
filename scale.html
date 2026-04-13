@@ -859,13 +859,32 @@ function addHauler() {
     var name = document.getElementById("newHaulerName").value.trim();
     if (!name) { alert("Enter a hauler name"); return; }
 
-    // Check if already exists
     var exists = projects.some(function(p) { return p.waste_hauler === name; });
-    if (exists) { alert(name + " already exists"); return; }
+    if (exists) { alert(name + " already exists as a hauler"); return; }
 
-    document.getElementById("newHaulerName").value = "";
-    alert('Hauler "' + name + '" noted. Assign it to a project using the Projects tab → Edit → Waste Hauler field.');
-    renderSettingsHaulers();
+    // Show project picker - which project(s) should this hauler be assigned to?
+    var options = projects.map(function(p, i) {
+        return i + ": " + p.name + " (current: " + (p.waste_hauler || "none") + ")";
+    }).join("\n");
+    var pick = prompt('Assign "' + name + '" to which project?\n\nEnter the number:\n' + options);
+    if (pick === null) return;
+    var idx = parseInt(pick);
+    if (isNaN(idx) || idx < 0 || idx >= projects.length) { alert("Invalid selection"); return; }
+
+    var proj = projects[idx];
+    if (!confirm('Assign "' + name + '" as the hauler for "' + proj.name + '"?')) return;
+
+    sb("projects?id=eq." + proj.id, { method: "PATCH", body: JSON.stringify({ waste_hauler: name }) })
+    .then(function() {
+        return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
+    }).then(function(fresh) {
+        projects = fresh || [];
+        document.getElementById("newHaulerName").value = "";
+        renderSettingsHaulers();
+        renderSettingsProjects();
+        populateHaulerDropdown();
+        alert('✅ "' + name + '" assigned to ' + proj.name);
+    }).catch(function(e) { alert("Failed: " + e.message); });
 }
 
 function doRename(idx) {
@@ -910,8 +929,54 @@ function renameHauler(oldName) {
 function removeHauler(haulerName) {
     if (!haulerName || haulerName === "(no hauler)") return;
     var projs = projects.filter(function(p) { return p.waste_hauler === haulerName; });
-    if (projs.length > 0) {
-        if (!confirm("'" + haulerName + "' is assigned to " + projs.length + " project(s). Clear the hauler field from those projects?")) return;
+    if (projs.length === 0) {
+        alert("No projects assigned to this hauler.");
+        return;
+    }
+
+    // Get other hauler names for reassignment
+    var otherHaulers = [];
+    projects.forEach(function(p) {
+        if (p.waste_hauler && p.waste_hauler !== haulerName && otherHaulers.indexOf(p.waste_hauler) === -1) {
+            otherHaulers.push(p.waste_hauler);
+        }
+    });
+
+    var msg = '"' + haulerName + '" has ' + projs.length + ' project(s):\n' +
+        projs.map(function(p) { return '  • ' + p.name; }).join('\n') + '\n\n';
+
+    if (otherHaulers.length > 0) {
+        msg += 'Reassign to another hauler? Enter number:\n' +
+            otherHaulers.map(function(h, i) { return i + ': ' + h; }).join('\n') +
+            '\n\nOr press Cancel to just clear the hauler field.';
+        var pick = prompt(msg);
+        if (pick === null) return;
+
+        var reassignTo = null;
+        var pickIdx = parseInt(pick);
+        if (!isNaN(pickIdx) && pickIdx >= 0 && pickIdx < otherHaulers.length) {
+            reassignTo = otherHaulers[pickIdx];
+        }
+
+        var newVal = reassignTo || null;
+        var updateBody = reassignTo ? { waste_hauler: reassignTo } : { waste_hauler: null };
+
+        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify(updateBody) })
+        .then(function() {
+            if (reassignTo) {
+                return sb("tickets?hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ hauler: reassignTo }) });
+            }
+        }).then(function() {
+            return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
+        }).then(function(fresh) {
+            projects = fresh || [];
+            renderSettingsHaulers();
+            renderSettingsProjects();
+            populateHaulerDropdown();
+            alert(reassignTo ? '✅ Reassigned to "' + reassignTo + '"' : '✅ Hauler cleared from projects');
+        }).catch(function(e) { alert("Failed: " + e.message); });
+    } else {
+        if (!confirm('Clear "' + haulerName + '" from ' + projs.length + ' project(s)?')) return;
         sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ waste_hauler: null }) })
         .then(function() {
             return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
@@ -921,8 +986,6 @@ function removeHauler(haulerName) {
             renderSettingsProjects();
             populateHaulerDropdown();
         }).catch(function(e) { alert("Failed: " + e.message); });
-    } else {
-        alert("No projects assigned to this hauler — nothing to remove.");
     }
 }
 
