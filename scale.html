@@ -3,212 +3,523 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DivertScan Scale</title>
+    <title>DivertScan - Scale Board</title>
     <link rel="icon" type="image/png" href="icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="DivertScan">
+    <meta name="apple-mobile-web-app-title" content="Scale Board">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --green: #0d7a3e; --green-light: #e8f5ee;
-            --blue: #1a5fa8; --blue-light: #e6f0fa;
-            --red: #c0392b;
-            --gray-50: #f8f9fa; --gray-200: #dcdee2; --gray-500: #6b7280; --gray-900: #111827;
-            --radius: 12px;
+        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        :root{
+            --bg:#0c1520;--card:#131f2e;--card2:#182636;--border:#1e3348;
+            --text:#e8edf2;--muted:#8899aa;--dim:#5a6a7a;
+            --green:#0fba6a;--green-bg:rgba(15,186,106,.08);--green-border:rgba(15,186,106,.25);
+            --amber:#e8a020;--amber-bg:rgba(232,160,32,.08);--amber-border:rgba(232,160,32,.25);
+            --red:#e84040;--red-bg:rgba(232,64,64,.08);
+            --blue:#3088e8;--blue-bg:rgba(48,136,232,.06);
+            --cyan:#00c9a7;
+            --mono:'SF Mono',SFMono-Regular,'Cascadia Code',Consolas,monospace;
+            --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+            --radius:10px;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--gray-50); color: var(--gray-900); min-height: 100vh; padding-bottom: 100px; }
-        .header { background: var(--gray-900); color: white; padding: 16px 20px; text-align: center; }
-        .header h1 { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
-        .header .sub { font-size: 13px; opacity: 0.7; margin-top: 2px; }
-        .status { padding: 10px 20px; font-size: 13px; text-align: center; font-weight: 500; }
-        .status.ok { background: var(--green-light); color: var(--green); }
-        .status.err { background: #fde8e8; color: var(--red); }
-        .status.wait { background: var(--blue-light); color: var(--blue); }
-        .weights { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .card { background: white; border-radius: var(--radius); padding: 20px; border: 1px solid var(--gray-200); }
-        .card .lbl { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 6px; }
-        .card .val { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .card.net { background: var(--green-light); border-color: var(--green); }
-        .card.net .lbl { color: var(--green); }
-        .card.net .val { color: var(--green); font-size: 36px; }
-        .unit { font-size: 16px; font-weight: 400; color: var(--gray-500); margin-left: 4px; }
-        .section { padding: 0 20px; margin-bottom: 16px; }
-        .section .lbl { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-500); margin-bottom: 8px; }
-        select {
-            width: 100%; padding: 16px; font-size: 18px; font-weight: 500;
-            border: 2px solid var(--gray-200); border-radius: var(--radius);
-            background: white; color: var(--gray-900); appearance: none; -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 12px center; background-size: 20px;
-        }
-        select:focus { outline: none; border-color: var(--blue); }
-        .btn {
-            display: block; width: calc(100% - 40px); margin: 20px auto; padding: 18px;
-            font-size: 20px; font-weight: 700; color: white; background: var(--green);
-            border: none; border-radius: var(--radius); cursor: pointer;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-        .btn:active { opacity: 0.85; }
-        .btn:disabled { background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; }
-        .done {
-            display: none; position: fixed; inset: 0; background: var(--green); color: white;
-            flex-direction: column; align-items: center; justify-content: center; z-index: 100;
-            text-align: center; padding: 40px;
-        }
-        .done.show { display: flex; }
-        .done .chk { width: 80px; height: 80px; border: 4px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 24px; }
-        .done h2 { font-size: 28px; margin-bottom: 8px; }
-        .done p { font-size: 16px; opacity: 0.85; }
-        .done .tnum { font-size: 22px; font-weight: 700; margin-top: 12px; }
-        .time { text-align: center; font-size: 12px; color: var(--gray-500); padding: 8px 20px; }
+        html,body{height:100%;overflow:hidden}
+        body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+        /* Top bar */
+        .topbar{background:linear-gradient(135deg,#0f2438,#162d44);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
+        .topbar h1{font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+        .topbar-right{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--muted)}
+        .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 2s ease infinite}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+        .facility-bar{padding:4px 16px;font-size:.65rem;color:var(--dim);display:flex;justify-content:space-between;background:rgba(0,0,0,.2);flex-shrink:0}
+
+        /* Main scrollable area */
+        .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;padding-bottom:100px}
+
+        /* Current reading card */
+        .reading-card{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:16px;text-align:center;margin-bottom:10px}
+        .reading-card.idle{background:var(--blue-bg);border-color:var(--border)}
+        .reading-card.ready{background:var(--green-bg);border-color:var(--green-border)}
+        .reading-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--amber);font-weight:600;margin-bottom:6px}
+        .reading-card.idle .reading-label{color:var(--blue)}
+        .reading-card.ready .reading-label{color:var(--green)}
+        .reading-value{font-family:var(--mono);font-size:2.8rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+        .reading-sub{font-size:.7rem;color:var(--muted);margin-top:4px}
+        .reading-fresh{font-size:.6rem;margin-top:2px}
+
+        /* Gross/Tare/Net row */
+        .weight-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+        .weight-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center}
+        .weight-box.net{background:var(--green-bg);border-color:var(--green-border)}
+        .wb-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:3px}
+        .wb-value{font-family:var(--mono);font-size:1.1rem;font-weight:800}
+        .wb-unit{font-size:.6rem;color:var(--dim);font-weight:400}
+        .weight-box.net .wb-value{color:var(--green)}
+        .wb-time{font-size:.5rem;color:var(--dim);margin-top:2px}
+
+        /* Driver + Project + Confirm */
+        .input-row{display:flex;gap:8px;margin-bottom:8px}
+        .field{flex:1;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:500;-webkit-appearance:none}
+        .field:focus{outline:none;border-color:var(--cyan)}
+        .confirm-btn{width:100%;padding:14px;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:1rem;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;transition:all .12s}
+        .confirm-btn:active{transform:scale(.98)}
+        .confirm-btn.go{background:var(--green);color:#fff}
+        .confirm-btn.wait{background:var(--card);color:var(--dim);border:1px solid var(--border);cursor:default}
+
+        /* Activity feed */
+        .feed-header{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin:14px 0 8px;display:flex;justify-content:space-between;align-items:center}
+        .feed-count{background:var(--card2);padding:2px 8px;border-radius:10px;font-family:var(--mono);font-size:.6rem;color:var(--muted)}
+        .feed-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);align-items:center}
+        .feed-item:last-child{border-bottom:none}
+        .fi-ticket{font-family:var(--mono);font-weight:800;font-size:.75rem;color:var(--cyan);min-width:64px}
+        .fi-detail{flex:1;min-width:0}
+        .fi-weight{font-family:var(--mono);font-weight:700;font-size:.8rem}
+        .fi-meta{font-size:.6rem;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .fi-div{font-family:var(--mono);font-weight:800;font-size:.75rem;flex-shrink:0;min-width:36px;text-align:right}
+        .fi-time{font-size:.55rem;color:var(--dim);flex-shrink:0;text-align:right;min-width:50px}
+
+        /* Success overlay */
+        .done-overlay{display:none;position:fixed;inset:0;background:var(--green);color:#fff;z-index:100;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+        .done-overlay.show{display:flex}
+        .done-check{font-size:4rem;margin-bottom:16px}
+        .done-ticket{font-family:var(--mono);font-size:2rem;font-weight:800;margin-bottom:4px}
+        .done-weight{font-size:1.1rem;opacity:.9}
+        .done-driver{font-size:.85rem;opacity:.7;margin-top:8px}
+        .done-countdown{font-size:.75rem;opacity:.5;margin-top:20px}
+
+        /* Show more button */
+        .more-btn{width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;font-weight:600;cursor:pointer;margin-top:8px}
+
+        @media(max-width:400px){.weight-row{grid-template-columns:1fr 1fr}.weight-box.net{grid-column:1/-1}}
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>DIVERTSCAN</h1>
-        <div class="sub" id="fac">Dalmex Recycling</div>
+    <div class="topbar">
+        <h1>DivertScan Scale Board</h1>
+        <div class="topbar-right"><div class="live-dot"></div> <span id="statusText">LIVE</span></div>
     </div>
-    <div class="status wait" id="st">Loading...</div>
-    <div class="weights">
-        <div class="row">
-            <div class="card"><div class="lbl">Gross</div><div class="val" id="gw">--</div></div>
-            <div class="card"><div class="lbl">Tare</div><div class="val" id="tw">--</div></div>
+    <div class="facility-bar">
+        <span>Dalmex Recycling</span>
+        <span id="clock"></span>
+    </div>
+
+    <div class="main">
+        <!-- Current Scale Reading -->
+        <div class="reading-card idle" id="readingCard">
+            <div class="reading-label" id="readingLabel">Waiting for truck</div>
+            <div class="reading-value" id="readingValue">--</div>
+            <div class="reading-sub" id="readingSub"></div>
+            <div class="reading-fresh" id="readingFresh"></div>
         </div>
-        <div class="card net" id="nc" style="display:none;">
-            <div class="lbl">Net Weight</div>
-            <div class="val"><span id="nw">--</span><span class="unit">lbs</span></div>
+
+        <!-- Gross / Tare / Net -->
+        <div class="weight-row">
+            <div class="weight-box">
+                <div class="wb-label">Gross</div>
+                <div class="wb-value" id="gwVal">--</div>
+                <div class="wb-time" id="gwTime"></div>
+            </div>
+            <div class="weight-box">
+                <div class="wb-label">Tare</div>
+                <div class="wb-value" id="twVal">--</div>
+                <div class="wb-time" id="twTime"></div>
+            </div>
+            <div class="weight-box net" id="netBox" style="opacity:.3">
+                <div class="wb-label">Net</div>
+                <div class="wb-value" id="nwVal">--</div>
+                <div class="wb-unit" id="nwTons"></div>
+            </div>
         </div>
+
+        <!-- Driver + Project -->
+        <div class="input-row">
+            <input type="text" class="field" id="driverName" placeholder="Driver name" autocomplete="name">
+            <select class="field" id="projSel"><option value="">Project...</option></select>
+        </div>
+
+        <!-- Confirm -->
+        <button class="confirm-btn wait" id="confirmBtn" disabled>Waiting for weights...</button>
+
+        <!-- Activity Feed -->
+        <div class="feed-header">
+            All Scale Activity <span class="feed-count" id="feedCount">0</span>
+        </div>
+        <div id="feedList"></div>
+        <button class="more-btn" id="moreBtn" style="display:none" onclick="loadMore()">Show more</button>
     </div>
-    <div class="time" id="tm"></div>
-    <div class="section">
-        <div class="lbl">Select Project</div>
-        <select id="proj"><option value="">-- Pick a project --</option></select>
+
+    <!-- Success Overlay -->
+    <div class="done-overlay" id="doneOverlay">
+        <div class="done-check">✅</div>
+        <div class="done-ticket" id="doneTicket">DX-00001</div>
+        <div class="done-weight" id="doneWeight">Net: 31,800 lbs (15.90 T)</div>
+        <div class="done-driver" id="doneDriver"></div>
+        <div class="done-countdown" id="doneCountdown">Resetting in 8s...</div>
     </div>
-    <button class="btn" id="cbtn" disabled>Confirm Ticket</button>
-    <div class="done" id="doneOv">
-        <div class="chk">&#10003;</div>
-        <h2>Ticket Confirmed</h2>
-        <p id="doneMsg"></p>
-        <div class="tnum" id="doneTk"></div>
-        <p style="margin-top:24px;opacity:0.7">Resets in 10 seconds</p>
-    </div>
-    <script>
-        var SB = "https://cyvvlngtojagfoaitoog.supabase.co";
-        var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
-        var DEV = "dalmex-scale-01";
-        var FAC = "Dalmex Recycling";
-        var HAUL = "Dalmex Recycling";
-        var POLL = 2000;
-        var gr = null, tr = null, pt = null;
 
-        function sf(path, opt) {
-            opt = opt || {};
-            return fetch(SB + "/rest/v1/" + path, {
-                method: opt.method || "GET",
-                headers: { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": opt.prefer || "return=representation" },
-                body: opt.body || undefined
-            }).then(function(r) {
-                if (!r.ok) return r.text().then(function(e) { throw new Error(r.status + ": " + e); });
-                return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
-            });
-        }
+<script>
+// ─── CONFIG ───
+var SB = "https://cyvvlngtojagfoaitoog.supabase.co";
+var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+var DEV = "dalmex-scale-01";
+var POLL = 3000;
+var PREFIX = "DX";
 
-        function init() {
-            sf("projects?select=id,name&order=name.asc").then(function(d) {
-                var s = document.getElementById("proj");
-                d.forEach(function(p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.name; s.appendChild(o); });
-            }).catch(function() {
-                var s = document.getElementById("proj");
-                var o = document.createElement("option"); o.value = "general"; o.textContent = "General"; s.appendChild(o);
-            });
-            document.getElementById("proj").addEventListener("change", ck);
-            document.getElementById("cbtn").addEventListener("click", confirm);
-            poll();
-            pt = setInterval(poll, POLL);
-        }
+var gr = null, tr = null, pollTimer = null;
+var projects = [];
+var feedPage = 0;
+var FEED_SIZE = 20;
 
-        function poll() {
-            sf("scale_weights?device_id=eq." + DEV + "&status=eq.pending&order=captured_at.desc&limit=2")
-            .then(function(w) {
-                ss("ok", "Connected - " + new Date().toLocaleTimeString());
-                if (w.length === 0) { if (!gr) ss("ok", "Waiting for truck on scale..."); return; }
-                if (w.length >= 2) {
-                    var sorted = w.slice().sort(function(a, b) { return b.weight_lbs - a.weight_lbs; });
-                    if (!gr || gr.id !== sorted[0].id) setG(sorted[0]);
-                    if (!tr || tr.id !== sorted[1].id) setT(sorted[1]);
-                } else if (w.length === 1 && !gr) {
-                    setG(w[0]);
-                    ss("ok", "Gross captured - dump load, return to scale");
-                }
-            }).catch(function() { ss("err", "Connection lost - retrying..."); });
-        }
+// ─── SUPABASE HELPER ───
+function sb(path, opts) {
+    opts = opts || {};
+    return fetch(SB + "/rest/v1/" + path, {
+        method: opts.method || "GET",
+        headers: { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": opts.prefer || "return=representation" },
+        body: opts.body || undefined
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(e) { throw new Error(r.status + ": " + e); });
+        return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
+    });
+}
 
-        function setG(r) { gr = r; document.getElementById("gw").textContent = Number(r.weight_lbs).toLocaleString(); document.getElementById("tm").textContent = "Captured: " + new Date(r.captured_at).toLocaleString(); }
-        function setT(r) {
-            tr = r; document.getElementById("tw").textContent = Number(r.weight_lbs).toLocaleString();
-            if (gr) {
-                var n = Math.abs(gr.weight_lbs - tr.weight_lbs);
-                document.getElementById("nw").textContent = Number(n).toLocaleString();
-                document.getElementById("nc").style.display = "block";
-                ss("ok", "Both weights captured - confirm below");
+// ─── INIT ───
+function init() {
+    // Clock
+    setInterval(function() { document.getElementById("clock").textContent = new Date().toLocaleTimeString(); }, 1000);
+    document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+
+    // Restore driver name
+    var saved = localStorage.getItem("ds_driver_name");
+    if (saved) document.getElementById("driverName").value = saved;
+    document.getElementById("driverName").addEventListener("input", function() {
+        localStorage.setItem("ds_driver_name", this.value);
+        checkReady();
+    });
+    document.getElementById("projSel").addEventListener("change", checkReady);
+
+    // Load projects
+    sb("projects?select=id,name,waste_hauler&order=name.asc").then(function(d) {
+        projects = d || [];
+        var sel = document.getElementById("projSel");
+        projects.forEach(function(p) {
+            var o = document.createElement("option");
+            o.value = p.id;
+            o.textContent = p.name;
+            sel.appendChild(o);
+        });
+    });
+
+    // Start polling
+    poll();
+    pollTimer = setInterval(poll, POLL);
+
+    // Load activity feed
+    loadFeed();
+}
+
+// ─── POLL FOR WEIGHTS ───
+function poll() {
+    var since = new Date(Date.now() - 30 * 60000).toISOString();
+    sb("scale_weights?device_id=eq." + DEV + "&status=eq.pending&captured_at=gte." + since + "&order=captured_at.desc&limit=10")
+    .then(function(w) {
+        if (!w || w.length === 0) {
+            if (!gr) {
+                setReading("idle", "Waiting for truck", "--", "");
             }
-            ck();
-        }
-        function ss(t, m) { var b = document.getElementById("st"); b.className = "status " + t; b.textContent = m; }
-        function ck() { document.getElementById("cbtn").disabled = !(document.getElementById("proj").value && gr && tr); }
-
-        function confirm() {
-            var btn = document.getElementById("cbtn");
-            btn.disabled = true; btn.textContent = "Creating ticket...";
-            var pid = document.getElementById("proj").value;
-            var gl = Number(gr.weight_lbs), tl = Number(tr.weight_lbs);
-            var nl = Math.abs(gl - tl), nt = nl / 2000;
-            var now = new Date().toISOString(), today = now.split("T")[0];
-
-            sf("tickets?select=ticket_number&order=ticket_number.desc&limit=1").then(function(r) {
-                var tn = "SC" + Date.now().toString().slice(-8);
-                if (r && r.length > 0 && r[0].ticket_number) { var ln = parseInt(r[0].ticket_number); if (!isNaN(ln)) tn = String(ln + 1); }
-                return sf("tickets", { method: "POST", body: JSON.stringify({
-                    project_id: pid, ticket_number: tn, ticket_date: today,
-                    gross_lbs: gl, tare_lbs: tl, net_lbs: nl, net_tons: parseFloat(nt.toFixed(2)),
-                    hauler: HAUL, scan_type: "scale_capture", material_breakdown: {}, diversion_rate: 0, created_at: now
-                }), prefer: "return=representation" }).then(function(tk) {
-                    var tid = (tk && tk[0]) ? tk[0].id : null;
-                    return Promise.all([
-                        sf("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", project_id: pid, confirmed_at: now, weight_type: "gross", paired_with: tr.id, ticket_id: tid }), prefer: "return=minimal" }),
-                        sf("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", project_id: pid, confirmed_at: now, weight_type: "tare", paired_with: gr.id, ticket_id: tid }), prefer: "return=minimal" })
-                    ]).then(function() { return { tn: tn, nl: nl, nt: nt }; });
-                });
-            }).then(function(res) {
-                clearInterval(pt);
-                document.getElementById("doneMsg").textContent = "Net: " + Number(res.nl).toLocaleString() + " lbs (" + res.nt.toFixed(2) + " tons)";
-                document.getElementById("doneTk").textContent = "Ticket #" + res.tn;
-                document.getElementById("doneOv").classList.add("show");
-                setTimeout(reset, 10000);
-            }).catch(function(e) {
-                console.error(e); btn.disabled = false; btn.textContent = "CONFIRM TICKET";
-                ss("err", "Error - try again");
-            });
+            return;
         }
 
-        function reset() {
-            gr = null; tr = null;
-            document.getElementById("gw").textContent = "--";
-            document.getElementById("tw").textContent = "--";
-            document.getElementById("nw").textContent = "--";
-            document.getElementById("nc").style.display = "none";
-            document.getElementById("proj").value = "";
-            document.getElementById("cbtn").disabled = true;
-            document.getElementById("cbtn").textContent = "CONFIRM TICKET";
-            document.getElementById("doneOv").classList.remove("show");
-            document.getElementById("doneTk").textContent = "";
-            document.getElementById("tm").textContent = "";
-            ss("ok", "Waiting for truck on scale...");
-            pt = setInterval(poll, POLL);
+        var sorted = w.slice().sort(function(a, b) { return b.weight_lbs - a.weight_lbs; });
+
+        // Heaviest = gross candidate
+        if (sorted[0].weight_lbs > 5000) {
+            if (!gr || gr.id !== sorted[0].id) {
+                gr = sorted[0];
+                showGross(gr);
+            }
         }
 
-        document.addEventListener("DOMContentLoaded", init);
-    </script>
+        // If 2+ readings and lightest is significantly less, it's tare
+        if (sorted.length >= 2 && gr) {
+            var candidate = sorted[sorted.length - 1];
+            if (candidate.weight_lbs < gr.weight_lbs - 2000 && candidate.id !== gr.id) {
+                if (!tr || tr.id !== candidate.id) {
+                    tr = candidate;
+                    showTare(tr);
+                    showNet();
+                }
+            }
+        }
+    }).catch(function() {
+        document.getElementById("statusText").textContent = "OFFLINE";
+    });
+}
+
+// ─── DISPLAY ───
+function setReading(state, label, value, sub) {
+    var card = document.getElementById("readingCard");
+    card.className = "reading-card " + state;
+    document.getElementById("readingLabel").textContent = label;
+    document.getElementById("readingValue").textContent = value;
+    document.getElementById("readingSub").textContent = sub;
+}
+
+function showGross(r) {
+    var age = Math.round((Date.now() - new Date(r.captured_at).getTime()) / 60000);
+    var fresh = age <= 3 ? "🟢 Just now" : age <= 10 ? "🟡 " + age + " min ago" : "🔴 " + age + " min ago";
+    setReading("", "Gross captured", Number(r.weight_lbs).toLocaleString() + " lbs", "Truck on scale — dump load, return for tare");
+    document.getElementById("readingFresh").innerHTML = '<span style="color:' + (age <= 10 ? 'var(--green)' : 'var(--amber)') + '">' + fresh + '</span>';
+
+    document.getElementById("gwVal").textContent = Number(r.weight_lbs).toLocaleString();
+    document.getElementById("gwTime").textContent = new Date(r.captured_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+}
+
+function showTare(r) {
+    var age = Math.round((Date.now() - new Date(r.captured_at).getTime()) / 60000);
+    var fresh = age <= 3 ? "🟢 Just now" : age <= 10 ? "🟡 " + age + " min ago" : "🔴 " + age + " min ago";
+    setReading("ready", "Ready to confirm", Number(tr.weight_lbs).toLocaleString() + " lbs", "Gross + Tare captured — confirm below");
+    document.getElementById("readingFresh").innerHTML = '<span style="color:var(--green)">' + fresh + '</span>';
+
+    document.getElementById("twVal").textContent = Number(r.weight_lbs).toLocaleString();
+    document.getElementById("twTime").textContent = new Date(r.captured_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+
+    checkReady();
+}
+
+function showNet() {
+    if (!gr || !tr) return;
+    var net = gr.weight_lbs - tr.weight_lbs;
+    var tons = (net / 2000).toFixed(2);
+    document.getElementById("nwVal").textContent = Number(net).toLocaleString();
+    document.getElementById("nwTons").textContent = tons + " tons";
+    document.getElementById("netBox").style.opacity = "1";
+}
+
+function checkReady() {
+    var btn = document.getElementById("confirmBtn");
+    var proj = document.getElementById("projSel").value;
+    var driver = document.getElementById("driverName").value.trim();
+    var ready = gr && tr && proj;
+
+    if (ready) {
+        btn.className = "confirm-btn go";
+        btn.disabled = false;
+        btn.textContent = "✅ CONFIRM TICKET";
+        btn.onclick = confirmTicket;
+    } else {
+        btn.className = "confirm-btn wait";
+        btn.disabled = true;
+        if (!gr) btn.textContent = "Waiting for gross weight...";
+        else if (!tr) btn.textContent = "Waiting for tare weight...";
+        else btn.textContent = "Select a project";
+    }
+}
+
+// ─── CONFIRM TICKET ───
+function confirmTicket() {
+    var btn = document.getElementById("confirmBtn");
+    btn.disabled = true;
+    btn.textContent = "Creating ticket...";
+
+    var pid = document.getElementById("projSel").value;
+    var proj = projects.find(function(p) { return p.id === pid; });
+    var driver = document.getElementById("driverName").value.trim() || "Unknown";
+    var grossLbs = Number(gr.weight_lbs);
+    var tareLbs = Number(tr.weight_lbs);
+    var netLbs = grossLbs - tareLbs;
+    var netTons = parseFloat((netLbs / 2000).toFixed(4));
+    var now = new Date().toISOString();
+    var today = now.split("T")[0];
+
+    // Get next DX number
+    sb("tickets?ticket_number=like." + PREFIX + "-*&select=ticket_number&order=ticket_number.desc&limit=1").then(function(existing) {
+        var highest = 0;
+        if (existing && existing.length > 0) {
+            var num = existing[0].ticket_number.replace(PREFIX + "-", "");
+            highest = parseInt(num) || 0;
+        }
+        var ticketNum = PREFIX + "-" + String(highest + 1).padStart(5, "0");
+
+        // Default material mix
+        var defaults = { wood_pct: 34, occ_pct: 16, metal_pct: 11, plastic_pct: 0, concrete_pct: 2, block_pct: 2, landfill_pct: 35 };
+        var matData = {};
+        var co2e = 0;
+        var GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240 };
+        Object.keys(defaults).forEach(function(k) {
+            matData[k] = defaults[k];
+            var mat = k.replace("_pct", "");
+            var tons = parseFloat((netTons * defaults[k] / 100).toFixed(4));
+            matData[mat + "_tons"] = tons;
+            if (mat !== "landfill" && GWP[mat]) co2e += tons * GWP[mat];
+        });
+
+        var divPct = 100 - defaults.landfill_pct;
+
+        // SHA-256 hash
+        var hashInput = ticketNum + "|" + netLbs + "|" + pid + "|" + now;
+        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(hashInput)).then(function(buf) {
+            var hash = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+
+            var ticket = {
+                project_id: pid,
+                ticket_number: ticketNum,
+                ticket_date: today,
+                service_date: today,
+                gross_lbs: grossLbs,
+                tare_lbs: tareLbs,
+                net_lbs: netLbs,
+                net_tons: netTons,
+                hauler: (proj && proj.waste_hauler) || "Dalmex Scale",
+                container_size: 30,
+                scan_type: "pi_scale",
+                diversion_pct: divPct,
+                diverted_tons: parseFloat((netTons * divPct / 100).toFixed(4)),
+                landfill_tons: parseFloat((netTons * defaults.landfill_pct / 100).toFixed(4)),
+                co2e_avoided: parseFloat(co2e.toFixed(4)),
+                audit_id: hash,
+                captured_at: now,
+                notes: "Scale Board — Driver: " + driver
+            };
+            Object.keys(matData).forEach(function(k) { ticket[k] = matData[k]; });
+
+            return sb("tickets", { method: "POST", body: JSON.stringify(ticket) });
+        }).then(function(result) {
+            if (!result || !result.length) throw new Error("Insert failed");
+            var created = result[0];
+
+            // Link scale weights
+            return Promise.all([
+                sb("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: tr.id, confirmed_at: now, confirmed_by: driver, weight_type: "gross", project_id: pid }), prefer: "return=minimal" }),
+                sb("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: gr.id, confirmed_at: now, confirmed_by: driver, weight_type: "tare", project_id: pid }), prefer: "return=minimal" })
+            ]).then(function() { return { ticketNum: ticketNum, netLbs: netLbs, netTons: netTons, driver: driver }; });
+        });
+    }).then(function(res) {
+        // Show success
+        document.getElementById("doneTicket").textContent = res.ticketNum;
+        document.getElementById("doneWeight").textContent = "Net: " + Number(res.netLbs).toLocaleString() + " lbs (" + res.netTons.toFixed(2) + " T)";
+        document.getElementById("doneDriver").textContent = "Driver: " + res.driver;
+        document.getElementById("doneOverlay").classList.add("show");
+
+        var cd = 8;
+        var cdEl = document.getElementById("doneCountdown");
+        var timer = setInterval(function() {
+            cd--;
+            cdEl.textContent = "Resetting in " + cd + "s...";
+            if (cd <= 0) { clearInterval(timer); resetPage(); }
+        }, 1000);
+
+    }).catch(function(err) {
+        console.error("Confirm error:", err);
+        btn.disabled = false;
+        btn.className = "confirm-btn go";
+        btn.textContent = "❌ ERROR — TAP TO RETRY";
+    });
+}
+
+// ─── RESET ───
+function resetPage() {
+    gr = null;
+    tr = null;
+    document.getElementById("doneOverlay").classList.remove("show");
+    document.getElementById("readingCard").className = "reading-card idle";
+    document.getElementById("readingLabel").textContent = "Waiting for truck";
+    document.getElementById("readingValue").textContent = "--";
+    document.getElementById("readingSub").textContent = "";
+    document.getElementById("readingFresh").textContent = "";
+    document.getElementById("gwVal").textContent = "--";
+    document.getElementById("gwTime").textContent = "";
+    document.getElementById("twVal").textContent = "--";
+    document.getElementById("twTime").textContent = "";
+    document.getElementById("nwVal").textContent = "--";
+    document.getElementById("nwTons").textContent = "";
+    document.getElementById("netBox").style.opacity = ".3";
+    document.getElementById("projSel").value = "";
+    document.getElementById("confirmBtn").className = "confirm-btn wait";
+    document.getElementById("confirmBtn").disabled = true;
+    document.getElementById("confirmBtn").textContent = "Waiting for weights...";
+    feedPage = 0;
+    loadFeed();
+}
+
+// ─── ACTIVITY FEED ───
+function loadFeed() {
+    var limit = FEED_SIZE;
+    var offset = 0;
+    sb("tickets?select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,hauler,scan_type,captured_at,notes,project_id&order=captured_at.desc&limit=" + limit + "&offset=" + offset)
+    .then(function(tickets) {
+        if (!tickets || tickets.length === 0) {
+            document.getElementById("feedList").innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:.75rem;">No tickets yet</div>';
+            document.getElementById("feedCount").textContent = "0";
+            return;
+        }
+
+        // Also get total count
+        sb("tickets?select=id&limit=1&head=true").catch(function() {});
+
+        renderFeed(tickets, false);
+        document.getElementById("feedCount").textContent = tickets.length + "+";
+        document.getElementById("moreBtn").style.display = tickets.length >= FEED_SIZE ? "block" : "none";
+    });
+}
+
+function loadMore() {
+    feedPage++;
+    var offset = feedPage * FEED_SIZE;
+    sb("tickets?select=ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,hauler,scan_type,captured_at,notes,project_id&order=captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
+    .then(function(tickets) {
+        if (!tickets || tickets.length === 0) {
+            document.getElementById("moreBtn").style.display = "none";
+            return;
+        }
+        renderFeed(tickets, true);
+        if (tickets.length < FEED_SIZE) document.getElementById("moreBtn").style.display = "none";
+    });
+}
+
+function renderFeed(tickets, append) {
+    var projMap = {};
+    projects.forEach(function(p) { projMap[p.id] = p.name; });
+
+    var html = tickets.map(function(t) {
+        var net = Number(t.net_lbs || 0).toLocaleString();
+        var tons = Number(t.net_tons || 0).toFixed(2);
+        var divPct = t.diversion_pct || 0;
+        var divColor = divPct >= 75 ? "var(--green)" : divPct >= 50 ? "var(--amber)" : "var(--red)";
+        var projName = projMap[t.project_id] || "";
+        var driver = "";
+        if (t.notes) {
+            var m = t.notes.match(/Driver:\s*(.+)/);
+            if (m) driver = m[1].trim();
+        }
+        var time = "";
+        if (t.captured_at) {
+            var d = new Date(t.captured_at);
+            var isToday = d.toDateString() === new Date().toDateString();
+            time = isToday ? d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : (d.getMonth()+1) + "/" + d.getDate() + " " + d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+        }
+        var scanIcon = t.scan_type === "pi_scale" ? "⚖️" : t.scan_type === "batch_ocr" ? "📸" : t.scan_type === "ocr" ? "🔍" : "📝";
+
+        return '<div class="feed-item">' +
+            '<div class="fi-ticket">' + (t.ticket_number || "?") + '</div>' +
+            '<div class="fi-detail">' +
+                '<div class="fi-weight">' + net + ' lbs <span style="color:var(--muted);font-weight:400;font-size:.7rem">(' + tons + ' T)</span></div>' +
+                '<div class="fi-meta">' + scanIcon + ' ' + (driver || t.hauler || "") + (projName ? " • " + projName : "") + '</div>' +
+            '</div>' +
+            '<div class="fi-div" style="color:' + divColor + '">' + divPct + '%</div>' +
+            '<div class="fi-time">' + time + '</div>' +
+        '</div>';
+    }).join("");
+
+    var el = document.getElementById("feedList");
+    if (append) {
+        el.innerHTML += html;
+    } else {
+        el.innerHTML = html;
+    }
+}
+
+// ─── BOOT ───
+document.addEventListener("DOMContentLoaded", init);
+</script>
 </body>
 </html>
