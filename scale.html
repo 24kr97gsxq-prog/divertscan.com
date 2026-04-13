@@ -267,13 +267,15 @@ var FEED_SIZE = 20;
 // ─── SUPABASE HELPER ───
 function sb(path, opts) {
     opts = opts || {};
+    var headers = { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": "return=representation" };
     return fetch(SB + "/rest/v1/" + path, {
         method: opts.method || "GET",
-        headers: { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": opts.prefer || "return=representation" },
+        headers: headers,
         body: opts.body || undefined
     }).then(function(r) {
         if (!r.ok) return r.text().then(function(e) { throw new Error(r.status + ": " + e); });
-        return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
+        if (r.status === 204) return [];
+        return r.text().then(function(t) { return t ? JSON.parse(t) : []; });
     });
 }
 
@@ -484,8 +486,8 @@ function confirmTicket() {
 
             // Link scale weights
             return Promise.all([
-                sb("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: tr.id, confirmed_at: now, confirmed_by: driver, weight_type: "gross", project_id: pid }), prefer: "return=minimal" }),
-                sb("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: gr.id, confirmed_at: now, confirmed_by: driver, weight_type: "tare", project_id: pid }), prefer: "return=minimal" })
+                sb("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: tr.id, confirmed_at: now, confirmed_by: driver, weight_type: "gross", project_id: pid }) }),
+                sb("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: gr.id, confirmed_at: now, confirmed_by: driver, weight_type: "tare", project_id: pid }) })
             ]).then(function() { return { ticketNum: ticketNum, netLbs: netLbs, netTons: netTons, driver: driver }; });
         });
     }).then(function(res) {
@@ -764,7 +766,7 @@ function saveProject() {
     if (id) {
         // Update existing
         data.updated_at = new Date().toISOString();
-        sb("projects?id=eq." + id, { method: "PATCH", body: JSON.stringify(data), prefer: "return=representation" })
+        sb("projects?id=eq." + id, { method: "PATCH", body: JSON.stringify(data) })
         .then(function(result) {
             if (result && result.length) {
                 var idx = projects.findIndex(function(p) { return p.id === id; });
@@ -795,15 +797,15 @@ function deleteProject() {
     sb("tickets?project_id=eq." + id + "&select=id&limit=1").then(function(tix) {
         if (tix && tix.length > 0) {
             if (!confirm("This project has tickets. Delete the project AND all its tickets? This cannot be undone.")) return;
-            sb("tickets?project_id=eq." + id, { method: "DELETE", prefer: "return=minimal" }).then(function() {
-                return sb("projects?id=eq." + id, { method: "DELETE", prefer: "return=minimal" });
+            sb("tickets?project_id=eq." + id, { method: "DELETE" }).then(function() {
+                return sb("projects?id=eq." + id, { method: "DELETE" });
             }).then(function() {
                 projects = projects.filter(function(x) { return x.id !== id; });
                 cancelProjectForm();
                 renderSettingsProjects();
             });
         } else {
-            sb("projects?id=eq." + id, { method: "DELETE", prefer: "return=minimal" }).then(function() {
+            sb("projects?id=eq." + id, { method: "DELETE" }).then(function() {
                 projects = projects.filter(function(x) { return x.id !== id; });
                 cancelProjectForm();
                 renderSettingsProjects();
@@ -835,13 +837,15 @@ function renderSettingsHaulers() {
 
     el.innerHTML = haulers.map(function(h, idx) {
         var projs = haulerMap[h];
+        var isNull = (h === "(no hauler)");
         return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-                '<div style="font-weight:700;font-size:.85rem">🚛 ' + h + '</div>' +
+                '<div style="font-weight:700;font-size:.85rem">' + (isNull ? '⚠️ ' : '🚛 ') + h + '</div>' +
+                (isNull ? '<div style="font-size:.6rem;color:var(--amber)">Assign haulers via Projects tab</div>' :
                 '<div style="display:flex;gap:4px">' +
                     '<button data-hauler="' + idx + '" onclick="renameHaulerByIdx(this.dataset.hauler)" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:.6rem;cursor:pointer">✏️ Rename</button>' +
                     '<button data-hauler="' + idx + '" onclick="removeHaulerByIdx(this.dataset.hauler)" style="padding:4px 8px;border:1px solid var(--red);border-radius:4px;background:transparent;color:var(--red);font-size:.6rem;cursor:pointer">✕</button>' +
-                '</div>' +
+                '</div>') +
             '</div>' +
             '<div style="font-size:.65rem;color:var(--dim)">' + projs.length + ' project' + (projs.length !== 1 ? 's' : '') + ': ' + projs.map(function(p) { return p.name; }).join(", ") + '</div>' +
         '</div>';
@@ -879,9 +883,9 @@ function renameHauler(oldName) {
     if (!confirm("Rename '" + oldName + "' → '" + newName + "' across all projects and tickets?")) return;
 
     // Update projects first, then tickets, then refresh from DB
-    sb("projects?waste_hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ waste_hauler: newName }), prefer: "return=minimal" })
+    sb("projects?waste_hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ waste_hauler: newName }) })
     .then(function() {
-        return sb("tickets?hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ hauler: newName }), prefer: "return=minimal" });
+        return sb("tickets?hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ hauler: newName }) });
     }).then(function() {
         // Refresh projects from DB to get clean data
         return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
@@ -899,7 +903,7 @@ function removeHauler(haulerName) {
     var projs = projects.filter(function(p) { return p.waste_hauler === haulerName; });
     if (projs.length > 0) {
         if (!confirm("'" + haulerName + "' is assigned to " + projs.length + " project(s). Clear the hauler field from those projects?")) return;
-        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ waste_hauler: null }), prefer: "return=minimal" })
+        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ waste_hauler: null }) })
         .then(function() {
             return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
         }).then(function(fresh) {
@@ -1136,7 +1140,7 @@ function saveTicket() {
     };
     Object.keys(mats).forEach(function(k) { updates[k] = mats[k]; });
 
-    sb("tickets?id=eq." + id, { method: "PATCH", body: JSON.stringify(updates), prefer: "return=representation" })
+    sb("tickets?id=eq." + id, { method: "PATCH", body: JSON.stringify(updates) })
     .then(function(result) {
         if (result && result.length) {
             // Update local data
@@ -1160,7 +1164,7 @@ function deleteTicket() {
     if (!currentTicket) return;
     if (!confirm("Delete ticket " + currentTicket.ticket_number + "? This cannot be undone.")) return;
 
-    sb("tickets?id=eq." + currentTicket.id, { method: "DELETE", prefer: "return=minimal" })
+    sb("tickets?id=eq." + currentTicket.id, { method: "DELETE" })
     .then(function() {
         feedTickets = feedTickets.filter(function(x) { return x.id !== currentTicket.id; });
         closeTicketModal();
