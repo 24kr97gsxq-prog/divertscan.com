@@ -2408,32 +2408,29 @@ const DS = {
         const result = await this.supabase(`tickets?id=eq.${id}`, 'PATCH', updates);
         this.hideLoading();
 
-        if (result !== null) {
-            var newProjId = document.getElementById('editTktProject').value;
-            var oldProjId = null;
-            const idx = this.state.tickets.findIndex(t => t.id === id);
-            if (idx >= 0) {
-                oldProjId = this.state.tickets[idx].project_id;
-                Object.assign(this.state.tickets[idx], updates);
-            }
-
-            // If project changed, remove from current list and reload
-            var projChanged = oldProjId && newProjId && oldProjId !== newProjId;
-            if (projChanged) {
-                this.state.tickets.splice(idx, 1);
-                var newProj = this.state.projects.find(function(p) { return p.id === newProjId; });
-                this.showToast('Ticket ' + ticketNum + ' moved to ' + (newProj ? newProj.name : 'another project') + ' ✓');
-            } else {
-                this.showToast(`Ticket ${ticketNum} updated ✓`);
-            }
-
-            this.renderTickets();
-            this.renderReports();
-            this.closeModal('editTicketModal');
-            this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div` + (projChanged ? ' | Moved project' : ''));
-        } else {
-            this.showToast('Save failed');
+        if (result === null) {
+            this.showToast('❌ Save failed — check connection');
+            return;
         }
+
+        // Always reload tickets from database to ensure clean state
+        if (this.state.currentProject) {
+            await this.loadTickets(this.state.currentProject.id);
+        }
+
+        var newProjId = document.getElementById('editTktProject').value;
+        var projChanged = this.state.currentProject && newProjId !== this.state.currentProject.id;
+        if (projChanged) {
+            var newProj = this.state.projects.find(function(p) { return p.id === newProjId; });
+            this.showToast('Ticket ' + ticketNum + ' moved to ' + (newProj ? newProj.name : 'another project') + ' ✓');
+        } else {
+            this.showToast(`Ticket ${ticketNum} updated ✓`);
+        }
+
+        this.renderTickets();
+        this.renderReports();
+        this.closeModal('editTicketModal');
+        this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div` + (projChanged ? ' | Moved project' : ''));
     },
 
     async deleteTicket() {
@@ -5491,9 +5488,10 @@ const DS = {
                     '- printed_date: Read the COMPLETE date string EXACTLY as printed on the ticket, character by character. It will look like MM/DD/YY with slashes. Return it exactly as printed (e.g. "03/06/26" or "3/6/26"). Do NOT interpret or convert it — just copy the exact characters you see.\n' +
                     '- gross_lbs: the GROSS weight in pounds (larger number)\n' +
                     '- tare_lbs: the TARE weight in pounds (smaller number, weight of empty truck)\n' +
-                    '- net_lbs: NET weight (gross minus tare)\n\n' +
+                    '- net_lbs: NET weight (gross minus tare)\n' +
+                    '- job_name: the job site name, project name, customer name, or delivery location printed on the ticket. Look for fields labeled "Job", "Project", "Customer", "Deliver To", "Job Site", or "Location". Return the text exactly as printed, or null if not found.\n\n' +
                     'Return ONLY valid JSON:\n' +
-                    '{"type":"scale_ticket","ticket_number":"XXXXX or null","printed_date":"MM/DD/YY as printed or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"confidence":0-100}';
+                    '{"type":"scale_ticket","ticket_number":"XXXXX or null","printed_date":"MM/DD/YY as printed or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"job_name":"string or null","confidence":0-100}';
 
                 var data = await this.callOpenAI({
                     model: 'gpt-4o',
@@ -5560,6 +5558,46 @@ const DS = {
                         }
                     }
                 }
+
+                // Match job_name from OCR to a project
+                var matchedProjId = q0.project_id; // default to batch project
+                var matchedProjHint = '';
+                if (ocr.job_name) {
+                    var jobLower = ocr.job_name.toLowerCase();
+                    var bestMatch = null;
+                    var bestScore = 0;
+                    DS.state.projects.forEach(function(p) {
+                        var pName = (p.name || '').toLowerCase();
+                        var pLoc = (p.location || '').toLowerCase();
+                        var pClient = (p.client || p.general_contractor || '').toLowerCase();
+                        // Check if job name contains part of project name or vice versa
+                        var words = pName.split(/[\s\/\-\—]+/).filter(function(w) { return w.length > 3; });
+                        var score = 0;
+                        words.forEach(function(w) { if (jobLower.indexOf(w) >= 0) score += 2; });
+                        // Also check location and client
+                        if (pLoc && jobLower.indexOf(pLoc) >= 0) score += 1;
+                        if (pClient) {
+                            var clientWords = pClient.split(/[\s\/\-]+/).filter(function(w) { return w.length > 3; });
+                            clientWords.forEach(function(w) { if (jobLower.indexOf(w) >= 0) score += 1; });
+                        }
+                        if (score > bestScore) { bestScore = score; bestMatch = p; }
+                    });
+                    if (bestMatch && bestScore >= 2) {
+                        matchedProjId = bestMatch.id;
+                        matchedProjHint = '<span style="font-size:.55rem;color:var(--success)">🎯 Matched: "' + DS.esc(ocr.job_name) + '" → ' + DS.esc(bestMatch.name) + '</span>';
+                    } else {
+                        matchedProjHint = '<span style="font-size:.55rem;color:var(--warning)">📋 Job: "' + DS.esc(ocr.job_name) + '" — verify project</span>';
+                    }
+                }
+
+                // Build project dropdown options
+                var projOpts = DS.state.projects.map(function(p) {
+                    return '<option value="' + p.id + '"' + (p.id === matchedProjId ? ' selected' : '') + '>' + DS.esc(p.name) + '</option>';
+                }).join('');
+
+                // Store matched project for confirmAllTickets
+                item.matchedProjectId = matchedProjId;
+
                 html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
                     '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                     '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
@@ -5569,6 +5607,8 @@ const DS = {
                     '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.55rem;padding:2px 8px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
                     '</div>' +
                     '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
+                    '<select id="mt_proj_'+i+'" class="form-input" style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:var(--primary)">' + projOpts + '</select>' +
+                    matchedProjHint +
                     '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
                     dayHint +
                     '<div style="display:flex;gap:4px">' +
@@ -5697,12 +5737,18 @@ const DS = {
             if (existing) {
                 var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
                 ticketData.debris_images = existDebris;
+                // Read project from per-ticket dropdown
+                var rowProjEl = document.getElementById('mt_proj_' + i);
+                var rowProjId = rowProjEl ? rowProjEl.value : q0.project_id;
+                ticketData.project_id = rowProjId;
                 // Update existing ticket with new photo/data
                 await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
                 ticketId = existing.id;
                 updated++;
             } else {
-                ticketData.project_id = q0.project_id;
+                // Read project from per-ticket dropdown
+                var rowProjEl2 = document.getElementById('mt_proj_' + i);
+                ticketData.project_id = rowProjEl2 ? rowProjEl2.value : q0.project_id;
                 ticketData.ticket_number = tktNum;
                 var result = await this.supabase('tickets', 'POST', ticketData);
                 if (result && result.length) {
