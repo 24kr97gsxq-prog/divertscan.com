@@ -1,1261 +1,900 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DivertScan - Scale Board</title>
-    <link rel="icon" type="image/png" href="icon-192.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Scale Board">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0f14">
+    <title>Dalmex Scale</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-        :root{
-            --bg:#0c1520;--card:#131f2e;--card2:#182636;--border:#1e3348;
-            --text:#e8edf2;--muted:#8899aa;--dim:#5a6a7a;
-            --green:#0fba6a;--green-bg:rgba(15,186,106,.08);--green-border:rgba(15,186,106,.25);
-            --amber:#e8a020;--amber-bg:rgba(232,160,32,.08);--amber-border:rgba(232,160,32,.25);
-            --red:#e84040;--red-bg:rgba(232,64,64,.08);
-            --blue:#3088e8;--blue-bg:rgba(48,136,232,.06);
-            --cyan:#00c9a7;
-            --mono:'SF Mono',SFMono-Regular,'Cascadia Code',Consolas,monospace;
-            --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-            --radius:10px;
+        :root {
+            --bg:#0a0f14;--card:#0d1a24;--border:#1a3044;
+            --text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;
+            --green:#22c55e;--green-glow:rgba(34,197,94,.12);
+            --amber:#f59e0b;--amber-glow:rgba(245,158,11,.12);
+            --red:#ef4444;--cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.08);
+            --blue:#3b82f6;
+            --mono:'JetBrains Mono',monospace;
+            --sans:'DM Sans',system-ui,sans-serif;
         }
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;overflow:hidden}
         body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 
-        /* Top bar */
-        .topbar{background:linear-gradient(135deg,#0f2438,#162d44);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
-        .topbar h1{font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-        .topbar-right{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--muted)}
-        .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 2s ease infinite}
-        @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-        .facility-bar{padding:4px 16px;font-size:.65rem;color:var(--dim);display:flex;justify-content:space-between;background:rgba(0,0,0,.2);flex-shrink:0}
+```
+    /* Header */
+    .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+    .hdr h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
+    .hdr h1 span{color:var(--cyan)}
+    .hdr-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted)}
+    .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s ease infinite}
+    .dot.on{background:var(--green)}.dot.off{background:var(--red)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-        /* Main scrollable area */
-        .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;padding-bottom:100px}
+    /* Main content */
+    .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:120px}
 
-        /* Current reading card */
-        .reading-card{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:16px;text-align:center;margin-bottom:10px}
-        .reading-card.idle{background:var(--blue-bg);border-color:var(--border)}
-        .reading-card.ready{background:var(--green-bg);border-color:var(--green-border)}
-        .reading-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--amber);font-weight:600;margin-bottom:6px}
-        .reading-card.idle .reading-label{color:var(--blue)}
-        .reading-card.ready .reading-label{color:var(--green)}
-        .reading-value{font-family:var(--mono);font-size:2.8rem;font-weight:800;letter-spacing:-.03em;line-height:1}
-        .reading-sub{font-size:.7rem;color:var(--muted);margin-top:4px}
-        .reading-fresh{font-size:.6rem;margin-top:2px}
+    /* Weight display cards */
+    .weight-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
+    .weight-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);opacity:.5}
+    .weight-card.captured{border-color:var(--green)}
+    .weight-card.captured::before{background:linear-gradient(90deg,var(--green),transparent);opacity:.8}
+    .weight-card.waiting{border-color:var(--amber);border-style:dashed}
+    .wc-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+    .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .wc-value.empty{color:var(--dim);font-size:1.2rem;font-weight:500}
+    .wc-sub{font-size:.7rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
 
-        /* Gross/Tare/Net row */
-        .weight-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
-        .weight-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center}
-        .weight-box.net{background:var(--green-bg);border-color:var(--green-border)}
-        .wb-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:3px}
-        .wb-value{font-family:var(--mono);font-size:1.1rem;font-weight:800}
-        .wb-unit{font-size:.6rem;color:var(--dim);font-weight:400}
-        .weight-box.net .wb-value{color:var(--green)}
-        .wb-time{font-size:.5rem;color:var(--dim);margin-top:2px}
+    /* Net result */
+    .net-card{background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(34,197,94,.06));border:2px solid var(--cyan);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px}
+    .net-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-weight:700;margin-bottom:6px}
+    .net-value{font-family:var(--mono);font-size:3rem;font-weight:800;color:var(--green);letter-spacing:-.03em}
+    .net-tons{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--cyan);margin-top:2px}
+    .net-ticket{font-family:var(--mono);font-size:.8rem;color:var(--amber);margin-top:6px;font-weight:700}
 
-        /* Driver + Project + Confirm */
-        .input-row{display:flex;gap:8px;margin-bottom:8px}
-        .field{flex:1;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:500;-webkit-appearance:none}
-        .field:focus{outline:none;border-color:var(--cyan)}
-        .confirm-btn{width:100%;padding:14px;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:1rem;font-weight:800;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;transition:all .12s}
-        .confirm-btn:active{transform:scale(.98)}
-        .confirm-btn.go{background:var(--green);color:#fff}
-        .confirm-btn.wait{background:var(--card);color:var(--dim);border:1px solid var(--border);cursor:default}
+    /* Project selector */
+    .proj-select{width:100%;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:600;-webkit-appearance:none;margin-bottom:12px}
+    .proj-select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
 
-        /* Activity feed */
-        .feed-header{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin:14px 0 8px;display:flex;justify-content:space-between;align-items:center}
-        .feed-count{background:var(--card2);padding:2px 8px;border-radius:10px;font-family:var(--mono);font-size:.6rem;color:var(--muted)}
-        .feed-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);align-items:center}
-        .feed-item:last-child{border-bottom:none}
-        .fi-ticket{font-family:var(--mono);font-weight:800;font-size:.75rem;color:var(--cyan);min-width:64px}
-        .fi-detail{flex:1;min-width:0}
-        .fi-weight{font-family:var(--mono);font-weight:700;font-size:.8rem}
-        .fi-meta{font-size:.6rem;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .fi-div{font-family:var(--mono);font-weight:800;font-size:.75rem;flex-shrink:0;min-width:36px;text-align:right}
-        .fi-time{font-size:.65rem;color:var(--muted);flex-shrink:0;text-align:left;min-width:52px;line-height:1.5}
+    /* Confirm button */
+    .confirm-btn{width:100%;padding:18px;border:none;border-radius:12px;font-family:var(--sans);font-size:1.1rem;font-weight:800;cursor:pointer;letter-spacing:.02em;transition:all .15s}
+    .confirm-btn:active{transform:scale(.97)}
+    .confirm-btn.ready{background:var(--green);color:#080f14}
+    .confirm-btn.disabled{background:var(--border);color:var(--dim);cursor:not-allowed}
 
-        /* Success overlay */
-        .done-overlay{display:none;position:fixed;inset:0;background:var(--green);color:#fff;z-index:100;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
-        .done-overlay.show{display:flex}
-        .done-check{font-size:4rem;margin-bottom:16px}
-        .done-ticket{font-family:var(--mono);font-size:2rem;font-weight:800;margin-bottom:4px}
-        .done-weight{font-size:1.1rem;opacity:.9}
-        .done-driver{font-size:.85rem;opacity:.7;margin-top:8px}
-        .done-countdown{font-size:.75rem;opacity:.5;margin-top:20px}
+    /* Success overlay */
+    .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+    .success-overlay.show{display:flex}
+    .success-check{font-size:4rem;margin-bottom:12px;animation:pop .4s ease}
+    .success-ticket{font-family:var(--mono);font-size:1.8rem;font-weight:800;color:var(--cyan);margin-bottom:6px}
+    .success-weight{font-family:var(--mono);font-size:1.2rem;color:var(--green);margin-bottom:4px}
+    .success-msg{font-size:.85rem;color:var(--muted);text-align:center;margin-top:8px}
+    .success-countdown{font-family:var(--mono);font-size:.75rem;color:var(--dim);margin-top:16px}
+    @keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
 
-        /* Show more button */
-        .more-btn{width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;font-weight:600;cursor:pointer;margin-top:8px}
+    /* Status bar */
+    .status-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#0f2b3c,#0a1f2e);border-top:1px solid var(--border);padding:8px 16px;padding-bottom:max(8px,env(safe-area-inset-bottom));font-size:.65rem;color:var(--dim);display:flex;justify-content:space-between;z-index:50}
 
-        /* Ticket Detail Modal */
-        .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center}
-        .modal-bg.show{display:flex}
-        .modal-panel{width:100%;max-width:600px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--card);border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;padding-bottom:40px}
-        .modal-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
-        .modal-title{font-size:1rem;font-weight:800;margin-bottom:14px;letter-spacing:-.02em}
-        .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem}
-        .detail-label{color:var(--dim);font-weight:500}
-        .detail-value{font-weight:700;font-family:var(--mono);text-align:right}
-        .mat-bar{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem}
-        .mat-name{width:70px;color:var(--muted);font-weight:500}
-        .mat-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
-        .mat-fill{height:100%;border-radius:2px}
-        .mat-pct{width:32px;text-align:right;font-family:var(--mono);font-weight:700}
-        .edit-field{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:.85rem;-webkit-appearance:none}
-        .edit-field:focus{outline:none;border-color:var(--cyan)}
-        .edit-row{display:flex;gap:8px;margin-bottom:8px}
-        .edit-group{flex:1}
-        .edit-label{display:block;font-size:.6rem;font-weight:600;color:var(--dim);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em}
-        .modal-btn{display:block;width:100%;padding:14px;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer;margin-top:8px}
-        .modal-btn:active{opacity:.85}
-        .modal-btn.save{background:var(--green);color:#fff}
-        .modal-btn.cancel{background:transparent;color:var(--muted);border:1px solid var(--border)}
-        .modal-btn.delete{background:transparent;color:var(--red);border:1px solid var(--red);margin-top:16px;font-size:.75rem}
-        .photo-thumb-sm{width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer}
+    /* Loading */
+    .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+```
 
-        @media(max-width:400px){.weight-row{grid-template-columns:1fr 1fr}.weight-box.net{grid-column:1/-1}}
-    </style>
 </head>
 <body>
-    <div class="topbar">
-        <h1>DivertScan Scale Board</h1>
-        <div class="topbar-right">
-            <div class="live-dot"></div> <span id="statusText">LIVE</span>
-            <span onclick="openSettings()" style="cursor:pointer;font-size:1.1rem;margin-left:8px">⚙️</span>
-        </div>
+
+<header class="hdr">
+    <div>
+        <h1><span>Dalmex</span> Scale</h1>
     </div>
-    <div class="facility-bar">
-        <span>Dalmex Recycling</span>
-        <span id="clock"></span>
+    <div class="hdr-status">
+        <span class="dot off" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
     </div>
+</header>
 
-    <div class="main">
-        <!-- Current Scale Reading -->
-        <div class="reading-card idle" id="readingCard">
-            <div class="reading-label" id="readingLabel">Waiting for truck</div>
-            <div class="reading-value" id="readingValue">--</div>
-            <div class="reading-sub" id="readingSub"></div>
-            <div class="reading-fresh" id="readingFresh"></div>
-        </div>
-
-        <!-- Gross / Tare / Net -->
-        <div class="weight-row">
-            <div class="weight-box">
-                <div class="wb-label">Gross</div>
-                <div class="wb-value" id="gwVal">--</div>
-                <div class="wb-time" id="gwTime"></div>
-            </div>
-            <div class="weight-box">
-                <div class="wb-label">Tare</div>
-                <div class="wb-value" id="twVal">--</div>
-                <div class="wb-time" id="twTime"></div>
-            </div>
-            <div class="weight-box net" id="netBox" style="opacity:.3">
-                <div class="wb-label">Net</div>
-                <div class="wb-value" id="nwVal">--</div>
-                <div class="wb-unit" id="nwTons"></div>
-            </div>
-        </div>
-
-        <!-- Driver + Project -->
-        <div class="input-row">
-            <input type="text" class="field" id="driverName" placeholder="Driver name" autocomplete="name">
-            <select class="field" id="projSel"><option value="">Project...</option></select>
-        </div>
-
-        <!-- Confirm -->
-        <button class="confirm-btn wait" id="confirmBtn" disabled>Waiting for weights...</button>
-
-        <!-- Activity Feed -->
-        <div class="feed-header">
-            All Scale Activity <span class="feed-count" id="feedCount">0</span>
-        </div>
-        <div id="feedList"></div>
-        <button class="more-btn" id="moreBtn" style="display:none" onclick="loadMore()">Show more</button>
+<div class="main">
+    <!-- Gross Weight -->
+    <div class="weight-card" id="grossCard">
+        <div class="wc-label">⚖️ Gross Weight (loaded truck)</div>
+        <div class="wc-value empty" id="grossValue">Waiting for truck...</div>
+        <div class="wc-sub" id="grossTime"></div>
     </div>
 
-    <!-- Success Overlay -->
-    <div class="done-overlay" id="doneOverlay">
-        <div class="done-check">✅</div>
-        <div class="done-ticket" id="doneTicket">DX-00001</div>
-        <div class="done-weight" id="doneWeight">Net: 31,800 lbs (15.90 T)</div>
-        <div class="done-driver" id="doneDriver"></div>
-        <div class="done-countdown" id="doneCountdown">Resetting in 8s...</div>
-    </div>
+```
+<!-- Tare Weight -->
+<div class="weight-card" id="tareCard">
+    <div class="wc-label">🚛 Tare Weight (empty truck)</div>
+    <div class="wc-value empty" id="tareValue">Drive to dump, then return</div>
+    <div class="wc-sub" id="tareTime"></div>
+</div>
 
-    <!-- Settings / Management Modal -->
-    <div class="modal-bg" id="settingsModal" onclick="if(event.target===this)closeSettings()">
-        <div class="modal-panel">
-            <div class="modal-handle"></div>
-            <div class="modal-title">⚙️ Settings & Management</div>
+<!-- Net Result -->
+<div class="net-card" id="netCard" style="display:none">
+    <div class="net-label">Net Weight</div>
+    <div class="net-value" id="netLbs">0</div>
+    <div style="font-size:.7rem;color:var(--muted)">lbs</div>
+    <div class="net-tons" id="netTons">0 tons</div>
+    <div class="net-ticket" id="netTicket"></div>
+</div>
 
-            <!-- Tab buttons -->
-            <div style="display:flex;gap:6px;margin-bottom:14px">
-                <button onclick="showSettingsTab('projects')" id="stProj" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--green);color:#fff;font-family:var(--sans);font-size:.75rem;font-weight:700;cursor:pointer">🏗️ Projects</button>
-                <button onclick="showSettingsTab('haulers')" id="stHaul" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:var(--sans);font-size:.75rem;font-weight:700;cursor:pointer">🚛 Haulers</button>
-            </div>
+<!-- Hauler Selector (persists — driver picks once) -->
+<div id="haulerSetup" style="display:none;">
+    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Select your company</div>
+    <div id="haulerButtons" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+</div>
 
-            <!-- Projects Tab -->
-            <div id="settingsProjects">
-                <button onclick="showNewProject()" style="width:100%;padding:12px;border:2px dashed var(--border);border-radius:8px;background:transparent;color:var(--cyan);font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:12px">+ New Project</button>
-                <div id="settingsProjectList"></div>
-            </div>
-
-            <!-- Haulers Tab -->
-            <div id="settingsHaulers" style="display:none">
-                <div style="display:flex;gap:6px;margin-bottom:12px">
-                    <input type="text" class="edit-field" id="newHaulerName" placeholder="New hauler name..." style="flex:1">
-                    <button onclick="addHauler()" style="padding:10px 16px;border:none;border-radius:8px;background:var(--green);color:#fff;font-family:var(--sans);font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap">+ Add</button>
-                </div>
-                <div id="settingsHaulerList"></div>
-                <div style="font-size:.6rem;color:var(--dim);margin-top:10px">Haulers are derived from the "Waste Hauler" field on each project. Adding a hauler here creates a placeholder project.</div>
-            </div>
-
-            <!-- New/Edit Project Form -->
-            <div id="projectForm" style="display:none">
-                <div style="font-size:.85rem;font-weight:700;margin-bottom:12px" id="projectFormTitle">New Project</div>
-                <input type="hidden" id="pf_id">
-                <div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Project Name *</label><input class="edit-field" id="pf_name" placeholder="e.g. Children's Hospital Dallas"></div>
-                <div class="edit-row">
-                    <div class="edit-group"><label class="edit-label">Client / GC</label><input class="edit-field" id="pf_client" placeholder="e.g. McCarthy Building"></div>
-                    <div class="edit-group"><label class="edit-label">Waste Hauler</label>
-                        <select class="edit-field" id="pf_hauler"><option value="">Select...</option></select>
-                    </div>
-                </div>
-                <div class="edit-row">
-                    <div class="edit-group"><label class="edit-label">Location</label><input class="edit-field" id="pf_location" placeholder="Dallas, TX"></div>
-                    <div class="edit-group"><label class="edit-label">LEED Version</label>
-                        <select class="edit-field" id="pf_leed">
-                            <option value="v4">LEED v4</option>
-                            <option value="v5">LEED v5</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Diversion Target %</label><input type="number" class="edit-field" id="pf_target" value="50"></div>
-                <button class="modal-btn save" onclick="saveProject()">💾 Save Project</button>
-                <button class="modal-btn cancel" onclick="cancelProjectForm()">Cancel</button>
-                <button class="modal-btn delete" id="pf_deleteBtn" style="display:none" onclick="deleteProject()">🗑️ Delete Project</button>
-            </div>
-
-            <button class="modal-btn cancel" style="margin-top:14px" onclick="closeSettings()">Close</button>
+<!-- Active hauler badge (tap to change) -->
+<div id="haulerBadge" style="display:none;margin-bottom:8px;padding:10px 14px;background:var(--cyan-glow);border:1px solid rgba(0,201,167,.25);border-radius:8px;display:none;cursor:pointer" onclick="changeHauler()">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+            <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--cyan);font-weight:600;">Hauler</div>
+            <div style="font-size:.9rem;font-weight:700;" id="haulerBadgeName"></div>
         </div>
+        <div style="font-size:.6rem;color:var(--muted);">tap to change</div>
     </div>
+</div>
 
-    <!-- Ticket Detail / Edit Modal -->
-    <div class="modal-bg" id="ticketModal" onclick="if(event.target===this)closeTicketModal()">
-        <div class="modal-panel">
-            <div class="modal-handle"></div>
-            <div id="ticketModalContent"></div>
-        </div>
+<!-- Driver Name -->
+<input type="text" class="proj-select" id="driverName" placeholder="Driver name" autocomplete="name"
+       oninput="localStorage.setItem('ds_driver_name',this.value);checkReady()"
+       style="margin-bottom:8px;display:none">
+
+<!-- Project Selector (filtered by hauler) -->
+<select class="proj-select" id="projectSelect" onchange="checkReady()" style="display:none">
+    <option value="">— Select Project —</option>
+</select>
+
+<!-- Confirmation Summary -->
+<div id="confirmSummary" style="display:none;background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.2);border-radius:10px;padding:12px;margin-bottom:8px;text-align:center;">
+    <div style="font-family:var(--mono);font-size:1.1rem;font-weight:800;color:var(--cyan);" id="summaryTicket"></div>
+    <div style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:var(--green);margin:4px 0;" id="summaryWeight"></div>
+    <div style="font-size:.75rem;color:var(--muted);" id="summaryProject"></div>
+</div>
+
+<!-- Confirm Button -->
+<button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
+    SELECT YOUR COMPANY FIRST
+</button>
+
+<!-- Recent Loads History (filtered to this hauler) -->
+<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Your Recent Loads</div>
+    <div id="recentLoads" style="font-size:.75rem;color:var(--muted);">Select your company to see loads</div>
+</div>
+```
+
+</div>
+
+<!-- Success Overlay -->
+
+<div class="success-overlay" id="successOverlay">
+    <div class="success-check">✅</div>
+    <div class="success-ticket" id="successTicket">DX-00001</div>
+    <div class="success-weight" id="successWeight">Net: 31,800 lbs (15.90 T)</div>
+    <div class="success-msg">Ticket created in DivertScan<br>Ready for next truck</div>
+    <div class="success-countdown" id="successCountdown">Resetting in 8s...</div>
+</div>
+
+<!-- Driver Ticket Detail Modal (view-only + add photos) -->
+
+<div id="driverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeDM()">
+    <div style="width:100%;max-width:600px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#131f2e;border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;padding-bottom:40px" id="driverModalInner">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px"></div>
+        <div id="driverModalContent"></div>
     </div>
+</div>
+
+<!-- Status Bar -->
+
+<div class="status-bar">
+    <span id="deviceLabel">Dalmex Scale 01</span>
+    <span id="lastSync">—</span>
+</div>
 
 <script>
-// ─── CONFIG ───
-var SB = "https://cyvvlngtojagfoaitoog.supabase.co";
-var KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
-var DEV = "dalmex-scale-01";
-var POLL = 3000;
-var PREFIX = "DX";
+// ─────────────────────────────────────────────
+// CONFIG — update these for your setup
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY  = localStorage.getItem('ds_supabase_key') || "YOUR_SUPABASE_ANON_KEY";
+const DEVICE_ID     = "dalmex-scale-01";
+const TICKET_PREFIX = "DX";
+const POLL_INTERVAL = 3000;  // Check for new weights every 3 seconds
 
-var gr = null, tr = null, pollTimer = null;
-var projects = [];
-var feedPage = 0;
-var FEED_SIZE = 20;
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let grossReading = null;
+let tareReading  = null;
+let projects     = [];
+let nextTicketNum = null;
+let pollTimer    = null;
 
-// ─── SUPABASE HELPER ───
-function sb(path, opts) {
-    opts = opts || {};
-    var headers = { "apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json", "Prefer": "return=representation" };
-    return fetch(SB + "/rest/v1/" + path, {
-        method: opts.method || "GET",
-        headers: headers,
-        body: opts.body || undefined
-    }).then(function(r) {
-        if (!r.ok) return r.text().then(function(e) { throw new Error(r.status + ": " + e); });
-        if (r.status === 204) return [];
-        return r.text().then(function(t) { return t ? JSON.parse(t) : []; });
-    });
+// ─────────────────────────────────────────────
+// SUPABASE HELPER
+// ─────────────────────────────────────────────
+async function sb(endpoint, method = 'GET', body = null) {
+    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+    };
+    if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    if (!res.ok) { console.error('SB error:', res.status, await res.text()); return null; }
+    if (res.status === 204) return [];
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
 }
 
-// ─── INIT ───
-function init() {
-    // Clock
-    setInterval(function() { document.getElementById("clock").textContent = new Date().toLocaleTimeString(); }, 1000);
-    document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+let selectedHauler = null;
+
+async function init() {
+    // Load all projects
+    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
+
+    // Build hauler list from projects (unique waste_hauler values)
+    const haulerSet = {};
+    projects.forEach(p => {
+        if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
+    });
+    const haulers = Object.keys(haulerSet).sort();
+
+    // Build hauler selection buttons
+    const btnContainer = document.getElementById('haulerButtons');
+    btnContainer.innerHTML = haulers.map(h => 
+        `<button onclick="selectHauler('${h.replace(/'/g, "\\'")}')" style="padding:16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:700;cursor:pointer;text-align:left;">🚛 ${h}</button>`
+    ).join('');
+
+    // Check for saved hauler
+    const savedHauler = localStorage.getItem('ds_driver_hauler');
+    if (savedHauler && haulers.includes(savedHauler)) {
+        selectHauler(savedHauler);
+    } else {
+        // Show hauler setup
+        document.getElementById('haulerSetup').style.display = 'block';
+    }
 
     // Restore driver name
-    var saved = localStorage.getItem("ds_driver_name");
-    if (saved) document.getElementById("driverName").value = saved;
-    document.getElementById("driverName").addEventListener("input", function() {
-        localStorage.setItem("ds_driver_name", this.value);
-        checkReady();
-    });
-    document.getElementById("projSel").addEventListener("change", checkReady);
+    const savedDriver = localStorage.getItem('ds_driver_name');
+    if (savedDriver) document.getElementById('driverName').value = savedDriver;
 
-    // Load projects
-    sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc").then(function(d) {
-        projects = d || [];
-        var sel = document.getElementById("projSel");
-        projects.forEach(function(p) {
-            var o = document.createElement("option");
-            o.value = p.id;
-            o.textContent = p.name;
-            sel.appendChild(o);
-        });
-    });
+    // Get next ticket number
+    await refreshNextTicketNum();
 
-    // Start polling
-    poll();
-    pollTimer = setInterval(poll, POLL);
-
-    // Load activity feed
-    loadFeed();
+    // Start polling for weights
+    updateStatus('on', 'Listening...');
+    pollWeights();
+    pollTimer = setInterval(pollWeights, POLL_INTERVAL);
 }
 
-// ─── POLL FOR WEIGHTS ───
-function poll() {
-    var since = new Date(Date.now() - 30 * 60000).toISOString();
-    sb("scale_weights?device_id=eq." + DEV + "&status=eq.pending&captured_at=gte." + since + "&order=captured_at.desc&limit=10")
-    .then(function(w) {
-        if (!w || w.length === 0) {
-            if (!gr) {
-                setReading("idle", "Waiting for truck", "--", "");
+function selectHauler(haulerName) {
+    selectedHauler = haulerName;
+    localStorage.setItem('ds_driver_hauler', haulerName);
+
+    // Hide setup, show badge
+    document.getElementById('haulerSetup').style.display = 'none';
+    document.getElementById('haulerBadge').style.display = 'block';
+    document.getElementById('haulerBadgeName').textContent = haulerName;
+
+    // Show driver name and project fields
+    document.getElementById('driverName').style.display = 'block';
+    document.getElementById('projectSelect').style.display = 'block';
+
+    // Filter projects to this hauler
+    const sel = document.getElementById('projectSelect');
+    sel.innerHTML = '<option value="">— Select Project —</option>';
+    const filtered = projects.filter(p => p.waste_hauler === haulerName);
+    filtered.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+    });
+
+    // If only one project, auto-select it
+    if (filtered.length === 1) {
+        sel.value = filtered[0].id;
+    }
+
+    checkReady();
+    loadRecentLoads();
+}
+
+function changeHauler() {
+    selectedHauler = null;
+    localStorage.removeItem('ds_driver_hauler');
+    document.getElementById('haulerSetup').style.display = 'block';
+    document.getElementById('haulerBadge').style.display = 'none';
+    document.getElementById('driverName').style.display = 'none';
+    document.getElementById('projectSelect').style.display = 'none';
+    document.getElementById('projectSelect').value = '';
+    document.getElementById('confirmBtn').className = 'confirm-btn disabled';
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('confirmBtn').textContent = 'SELECT YOUR COMPANY FIRST';
+}
+
+// ─────────────────────────────────────────────
+// TICKET NUMBERING — DX-XXXXX
+// ─────────────────────────────────────────────
+async function refreshNextTicketNum() {
+    // Query the highest existing DX- ticket number
+    const existing = await sb(
+        `tickets?ticket_number=like.${TICKET_PREFIX}-*&select=ticket_number&order=ticket_number.desc&limit=1`
+    );
+
+    let highest = 0;
+    if (existing && existing.length > 0) {
+        const num = existing[0].ticket_number.replace(TICKET_PREFIX + '-', '');
+        highest = parseInt(num) || 0;
+    }
+
+    // Also check scale_weights for any confirmed but not yet ticketed
+    nextTicketNum = highest + 1;
+    document.getElementById('netTicket').textContent = 
+        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+}
+
+function getTicketNumber() {
+    const num = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+    nextTicketNum++;
+    return num;
+}
+
+// ─────────────────────────────────────────────
+// POLL FOR NEW WEIGHT READINGS
+// ─────────────────────────────────────────────
+async function pollWeights() {
+    try {
+        // Get recent pending weights from Pi (last 30 minutes)
+        const since = new Date(Date.now() - 30 * 60000).toISOString();
+        const weights = await sb(
+            `scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`
+        );
+
+        if (!weights || weights.length === 0) return;
+
+        // Logic: highest pending weight = gross, lowest = tare
+        // Only pair if there are at least 2 readings
+        const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
+
+        // First reading (heaviest) is gross
+        if (!grossReading || sorted[0].id !== grossReading.id) {
+            if (sorted[0].weight_lbs > 5000) {  // Reasonable gross threshold
+                grossReading = sorted[0];
+                showGross(grossReading);
             }
-            return;
         }
 
-        var sorted = w.slice().sort(function(a, b) { return b.weight_lbs - a.weight_lbs; });
-
-        // Heaviest = gross candidate
-        if (sorted[0].weight_lbs > 5000) {
-            if (!gr || gr.id !== sorted[0].id) {
-                gr = sorted[0];
-                showGross(gr);
-            }
-        }
-
-        // If 2+ readings and lightest is significantly less, it's tare
-        if (sorted.length >= 2 && gr) {
-            var candidate = sorted[sorted.length - 1];
-            if (candidate.weight_lbs < gr.weight_lbs - 2000 && candidate.id !== gr.id) {
-                if (!tr || tr.id !== candidate.id) {
-                    tr = candidate;
-                    showTare(tr);
+        // If we have 2+ readings and the lightest is significantly less, it's tare
+        if (sorted.length >= 2 && grossReading) {
+            const candidate = sorted[sorted.length - 1];
+            // Tare must be less than gross and reasonably different (at least 2000 lbs net)
+            if (candidate.weight_lbs < grossReading.weight_lbs - 2000 &&
+                candidate.id !== grossReading.id) {
+                if (!tareReading || candidate.id !== tareReading.id) {
+                    tareReading = candidate;
+                    showTare(tareReading);
                     showNet();
                 }
             }
         }
-    }).catch(function() {
-        document.getElementById("statusText").textContent = "OFFLINE";
-    });
+
+        updateStatus('on', 'Connected');
+        document.getElementById('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
+
+    } catch (err) {
+        console.error('Poll error:', err);
+        updateStatus('off', 'Connection lost');
+    }
 }
 
-// ─── DISPLAY ───
-function setReading(state, label, value, sub) {
-    var card = document.getElementById("readingCard");
-    card.className = "reading-card " + state;
-    document.getElementById("readingLabel").textContent = label;
-    document.getElementById("readingValue").textContent = value;
-    document.getElementById("readingSub").textContent = sub;
+// ─────────────────────────────────────────────
+// DISPLAY FUNCTIONS
+// ─────────────────────────────────────────────
+function showGross(reading) {
+    const card = document.getElementById('grossCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('grossValue').textContent = 
+        Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    document.getElementById('grossValue').classList.remove('empty');
+    const grossAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
+    const freshLabel = grossAge <= 5 ? '🟢 Just now' : grossAge <= 15 ? '🟡 ' + grossAge + ' min ago' : '🔴 ' + grossAge + ' min ago — verify this is your truck';
+    document.getElementById('grossTime').innerHTML = 
+        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (grossAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + freshLabel + '</span>';
+
+    // Update tare card to show waiting
+    const tareCard = document.getElementById('tareCard');
+    tareCard.classList.add('waiting');
+    document.getElementById('tareValue').textContent = 'Waiting...';
+    document.getElementById('tareValue').classList.add('empty');
+
+    checkReady();
 }
 
-function showGross(r) {
-    var age = Math.round((Date.now() - new Date(r.captured_at).getTime()) / 60000);
-    var fresh = age <= 3 ? "🟢 Just now" : age <= 10 ? "🟡 " + age + " min ago" : "🔴 " + age + " min ago";
-    setReading("", "Gross captured", Number(r.weight_lbs).toLocaleString() + " lbs", "Truck on scale — dump load, return for tare");
-    document.getElementById("readingFresh").innerHTML = '<span style="color:' + (age <= 10 ? 'var(--green)' : 'var(--amber)') + '">' + fresh + '</span>';
-
-    document.getElementById("gwVal").textContent = Number(r.weight_lbs).toLocaleString();
-    document.getElementById("gwTime").textContent = new Date(r.captured_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-}
-
-function showTare(r) {
-    var age = Math.round((Date.now() - new Date(r.captured_at).getTime()) / 60000);
-    var fresh = age <= 3 ? "🟢 Just now" : age <= 10 ? "🟡 " + age + " min ago" : "🔴 " + age + " min ago";
-    setReading("ready", "Ready to confirm", Number(tr.weight_lbs).toLocaleString() + " lbs", "Gross + Tare captured — confirm below");
-    document.getElementById("readingFresh").innerHTML = '<span style="color:var(--green)">' + fresh + '</span>';
-
-    document.getElementById("twVal").textContent = Number(r.weight_lbs).toLocaleString();
-    document.getElementById("twTime").textContent = new Date(r.captured_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+function showTare(reading) {
+    const card = document.getElementById('tareCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('tareValue').textContent = 
+        Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    document.getElementById('tareValue').classList.remove('empty');
+    const tareAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
+    const tareFresh = tareAge <= 5 ? '🟢 Just now' : tareAge <= 15 ? '🟡 ' + tareAge + ' min ago' : '🔴 ' + tareAge + ' min ago';
+    document.getElementById('tareTime').innerHTML = 
+        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (tareAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + tareFresh + '</span>';
 
     checkReady();
 }
 
 function showNet() {
-    if (!gr || !tr) return;
-    var net = gr.weight_lbs - tr.weight_lbs;
-    var tons = (net / 2000).toFixed(2);
-    document.getElementById("nwVal").textContent = Number(net).toLocaleString();
-    document.getElementById("nwTons").textContent = tons + " tons";
-    document.getElementById("netBox").style.opacity = "1";
+    if (!grossReading || !tareReading) return;
+
+    const netLbs = grossReading.weight_lbs - tareReading.weight_lbs;
+    const netTons = (netLbs / 2000).toFixed(2);
+
+    document.getElementById('netCard').style.display = 'block';
+    document.getElementById('netLbs').textContent = Number(netLbs).toLocaleString();
+    document.getElementById('netTons').textContent = netTons + ' tons';
+    document.getElementById('netTicket').textContent = 
+        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+
+    checkReady();
 }
 
 function checkReady() {
-    var btn = document.getElementById("confirmBtn");
-    var proj = document.getElementById("projSel").value;
-    var driver = document.getElementById("driverName").value.trim();
-    var ready = gr && tr && proj;
+    const btn = document.getElementById('confirmBtn');
+    const projectId = document.getElementById('projectSelect').value;
+    const summary = document.getElementById('confirmSummary');
+    const ready = grossReading && tareReading && projectId && selectedHauler;
 
     if (ready) {
-        btn.className = "confirm-btn go";
+        btn.classList.remove('disabled');
+        btn.classList.add('ready');
         btn.disabled = false;
-        btn.textContent = "✅ CONFIRM TICKET";
-        btn.onclick = confirmTicket;
+        btn.textContent = '✅ CONFIRM TICKET';
+
+        // Show summary
+        const netLbs = grossReading.weight_lbs - tareReading.weight_lbs;
+        const netTons = (netLbs / 2000).toFixed(2);
+        const ticketNum = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
+        const projSel = document.getElementById('projectSelect');
+        const projName = projSel.options[projSel.selectedIndex]?.textContent || '';
+
+        document.getElementById('summaryTicket').textContent = ticketNum;
+        document.getElementById('summaryWeight').textContent = Number(netLbs).toLocaleString() + ' lbs (' + netTons + ' T)';
+        document.getElementById('summaryProject').textContent = selectedHauler + ' • ' + projName;
+        summary.style.display = 'block';
     } else {
-        btn.className = "confirm-btn wait";
+        btn.classList.add('disabled');
+        btn.classList.remove('ready');
         btn.disabled = true;
-        if (!gr) btn.textContent = "Waiting for gross weight...";
-        else if (!tr) btn.textContent = "Waiting for tare weight...";
-        else btn.textContent = "Select a project";
+        summary.style.display = 'none';
+        if (!selectedHauler) btn.textContent = 'SELECT YOUR COMPANY FIRST';
+        else if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
+        else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
+        else btn.textContent = 'SELECT A PROJECT';
     }
 }
 
-// ─── CONFIRM TICKET ───
-function confirmTicket() {
-    var btn = document.getElementById("confirmBtn");
+// ─────────────────────────────────────────────
+// CONFIRM — Creates ticket in DivertScan
+// ─────────────────────────────────────────────
+async function confirmTicket() {
+    const btn = document.getElementById('confirmBtn');
     btn.disabled = true;
-    btn.textContent = "Creating ticket...";
+    btn.textContent = '⏳ Creating ticket...';
 
-    var pid = document.getElementById("projSel").value;
-    var proj = projects.find(function(p) { return p.id === pid; });
-    var driver = document.getElementById("driverName").value.trim() || "Unknown";
-    var grossLbs = Number(gr.weight_lbs);
-    var tareLbs = Number(tr.weight_lbs);
-    var netLbs = grossLbs - tareLbs;
-    var netTons = parseFloat((netLbs / 2000).toFixed(4));
-    var now = new Date().toISOString();
-    var today = now.split("T")[0];
+    const projectId = document.getElementById('projectSelect').value;
+    const proj = projects.find(p => p.id === projectId);
+    const driverName = document.getElementById('driverName').value.trim() || 'Unknown';
+    const grossLbs = grossReading.weight_lbs;
+    const tareLbs = tareReading.weight_lbs;
+    const netLbs = grossLbs - tareLbs;
+    const netTons = +(netLbs / 2000).toFixed(4);
 
-    // Get next DX number
-    sb("tickets?ticket_number=like." + PREFIX + "-*&select=ticket_number&order=ticket_number.desc&limit=1").then(function(existing) {
-        var highest = 0;
-        if (existing && existing.length > 0) {
-            var num = existing[0].ticket_number.replace(PREFIX + "-", "");
-            highest = parseInt(num) || 0;
+    // Generate ticket number
+    const ticketNum = getTicketNumber();
+
+    // Today's date forced to 2026
+    let today = new Date().toISOString().split('T')[0];
+    if (today.substring(0, 4) !== '2026') today = '2026' + today.substring(4);
+
+    // Default material percentages (C&D mix)
+    const defaults = {
+        wood_pct: 34, occ_pct: 16, metal_pct: 11, plastic_pct: 0,
+        concrete_pct: 2, block_pct: 1, landfill_pct: 36
+    };
+
+    // Calculate tons per material
+    const matData = {};
+    let divertedTons = 0;
+    let co2e = 0;
+
+    const GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240, landfill: 0.520 };
+
+    Object.keys(defaults).forEach(k => {
+        const pct = defaults[k];
+        const mat = k.replace('_pct', '');
+        const tons = +(netTons * pct / 100).toFixed(4);
+        matData[k] = pct;
+        matData[mat + '_tons'] = tons;
+        if (mat !== 'landfill') {
+            divertedTons += tons;
+            co2e += tons * (GWP[mat] || 0);
         }
-        var ticketNum = PREFIX + "-" + String(highest + 1).padStart(5, "0");
+    });
 
-        // Default material mix
-        var defaults = { wood_pct: 34, occ_pct: 16, metal_pct: 11, plastic_pct: 0, concrete_pct: 2, block_pct: 2, landfill_pct: 35 };
-        var matData = {};
-        var co2e = 0;
-        var GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240 };
-        Object.keys(defaults).forEach(function(k) {
-            matData[k] = defaults[k];
-            var mat = k.replace("_pct", "");
-            var tons = parseFloat((netTons * defaults[k] / 100).toFixed(4));
-            matData[mat + "_tons"] = tons;
-            if (mat !== "landfill" && GWP[mat]) co2e += tons * GWP[mat];
+    const diversionPct = 100 - defaults.landfill_pct;
+
+    // Generate SHA-256 audit hash
+    let auditHash = '';
+    try {
+        const hashInput = JSON.stringify({
+            ticket_number: ticketNum,
+            net_lbs: netLbs,
+            project_id: projectId,
+            timestamp: new Date().toISOString()
+        });
+        const msgBuffer = new TextEncoder().encode(hashInput);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        auditHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) { console.error('Hash error:', e); }
+
+    try {
+        // 1. Create ticket in DivertScan tickets table
+        const ticket = {
+            project_id: projectId,
+            ticket_number: ticketNum,
+            ticket_date: today,
+            service_date: today,
+            gross_lbs: grossLbs,
+            tare_lbs: tareLbs,
+            net_lbs: netLbs,
+            net_tons: netTons,
+            hauler: selectedHauler || proj?.waste_hauler || 'Dalmex Scale',
+            container_size: 30,
+            scan_type: 'pi_scale',
+            diversion_pct: diversionPct,
+            diverted_tons: +divertedTons.toFixed(4),
+            landfill_tons: +(netTons * defaults.landfill_pct / 100).toFixed(4),
+            co2e_avoided: +co2e.toFixed(4),
+            captured_at: new Date().toISOString(),
+            audit_id: auditHash,
+            notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ') — Driver: ' + driverName,
+            ...matData
+        };
+
+        const result = await sb('tickets', 'POST', ticket);
+
+        if (!result || result.length === 0) {
+            throw new Error('Failed to insert ticket');
+        }
+
+        const createdTicket = result[0];
+
+        // 2. Update scale_weights to link to this ticket
+        await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
+            status: 'confirmed',
+            weight_type: 'gross',
+            project_id: projectId,
+            ticket_id: createdTicket.id,
+            paired_with: tareReading.id,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: driverName
         });
 
-        var divPct = 100 - defaults.landfill_pct;
-
-        // SHA-256 hash
-        var hashInput = ticketNum + "|" + netLbs + "|" + pid + "|" + now;
-        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(hashInput)).then(function(buf) {
-            var hash = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
-
-            var ticket = {
-                project_id: pid,
-                ticket_number: ticketNum,
-                ticket_date: today,
-                service_date: today,
-                gross_lbs: grossLbs,
-                tare_lbs: tareLbs,
-                net_lbs: netLbs,
-                net_tons: netTons,
-                hauler: (proj && proj.waste_hauler) || "Dalmex Scale",
-                container_size: 30,
-                scan_type: "pi_scale",
-                diversion_pct: divPct,
-                diverted_tons: parseFloat((netTons * divPct / 100).toFixed(4)),
-                landfill_tons: parseFloat((netTons * defaults.landfill_pct / 100).toFixed(4)),
-                co2e_avoided: parseFloat(co2e.toFixed(4)),
-                audit_id: hash,
-                captured_at: now,
-                notes: "Scale Board — Driver: " + driver
-            };
-            Object.keys(matData).forEach(function(k) { ticket[k] = matData[k]; });
-
-            return sb("tickets", { method: "POST", body: JSON.stringify(ticket) });
-        }).then(function(result) {
-            if (!result || !result.length) throw new Error("Insert failed");
-            var created = result[0];
-
-            // Link scale weights
-            return Promise.all([
-                sb("scale_weights?id=eq." + gr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: tr.id, confirmed_at: now, confirmed_by: driver, weight_type: "gross", project_id: pid }) }),
-                sb("scale_weights?id=eq." + tr.id, { method: "PATCH", body: JSON.stringify({ status: "confirmed", ticket_id: created.id, paired_with: gr.id, confirmed_at: now, confirmed_by: driver, weight_type: "tare", project_id: pid }) })
-            ]).then(function() { return { ticketNum: ticketNum, netLbs: netLbs, netTons: netTons, driver: driver }; });
+        await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
+            status: 'confirmed',
+            weight_type: 'tare',
+            project_id: projectId,
+            ticket_id: createdTicket.id,
+            paired_with: grossReading.id,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: driverName
         });
-    }).then(function(res) {
-        // Show success
-        document.getElementById("doneTicket").textContent = res.ticketNum;
-        document.getElementById("doneWeight").textContent = "Net: " + Number(res.netLbs).toLocaleString() + " lbs (" + res.netTons.toFixed(2) + " T)";
-        document.getElementById("doneDriver").textContent = "Driver: " + res.driver;
-        document.getElementById("doneOverlay").classList.add("show");
 
-        var cd = 8;
-        var cdEl = document.getElementById("doneCountdown");
-        var timer = setInterval(function() {
-            cd--;
-            cdEl.textContent = "Resetting in " + cd + "s...";
-            if (cd <= 0) { clearInterval(timer); resetPage(); }
+        // 3. Show success
+        document.getElementById('successTicket').textContent = ticketNum;
+        document.getElementById('successWeight').textContent = 
+            'Net: ' + Number(netLbs).toLocaleString() + ' lbs (' + netTons.toFixed(2) + ' T)';
+        document.getElementById('successOverlay').classList.add('show');
+
+        // Countdown and reset
+        let countdown = 8;
+        const cdEl = document.getElementById('successCountdown');
+        const cdTimer = setInterval(() => {
+            countdown--;
+            cdEl.textContent = 'Resetting in ' + countdown + 's...';
+            if (countdown <= 0) {
+                clearInterval(cdTimer);
+                resetPage();
+            }
         }, 1000);
 
-    }).catch(function(err) {
-        console.error("Confirm error:", err);
+    } catch (err) {
+        console.error('Confirm error:', err);
         btn.disabled = false;
-        btn.className = "confirm-btn go";
-        btn.textContent = "❌ ERROR — TAP TO RETRY";
-    });
+        btn.classList.add('ready');
+        btn.textContent = '❌ ERROR — TAP TO RETRY';
+        updateStatus('off', 'Error: ' + err.message);
+    }
 }
 
-// ─── RESET ───
+// ─────────────────────────────────────────────
+// RESET FOR NEXT TRUCK
+// ─────────────────────────────────────────────
 function resetPage() {
-    gr = null;
-    tr = null;
-    document.getElementById("doneOverlay").classList.remove("show");
-    document.getElementById("readingCard").className = "reading-card idle";
-    document.getElementById("readingLabel").textContent = "Waiting for truck";
-    document.getElementById("readingValue").textContent = "--";
-    document.getElementById("readingSub").textContent = "";
-    document.getElementById("readingFresh").textContent = "";
-    document.getElementById("gwVal").textContent = "--";
-    document.getElementById("gwTime").textContent = "";
-    document.getElementById("twVal").textContent = "--";
-    document.getElementById("twTime").textContent = "";
-    document.getElementById("nwVal").textContent = "--";
-    document.getElementById("nwTons").textContent = "";
-    document.getElementById("netBox").style.opacity = ".3";
-    document.getElementById("projSel").value = "";
-    document.getElementById("confirmBtn").className = "confirm-btn wait";
-    document.getElementById("confirmBtn").disabled = true;
-    document.getElementById("confirmBtn").textContent = "Waiting for weights...";
-    feedPage = 0;
-    loadFeed();
+    grossReading = null;
+    tareReading = null;
+
+    document.getElementById('successOverlay').classList.remove('show');
+
+    // Reset cards
+    document.getElementById('grossCard').classList.remove('captured', 'waiting');
+    document.getElementById('grossValue').textContent = 'Waiting for truck...';
+    document.getElementById('grossValue').classList.add('empty');
+    document.getElementById('grossTime').textContent = '';
+
+    document.getElementById('tareCard').classList.remove('captured', 'waiting');
+    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
+    document.getElementById('tareValue').classList.add('empty');
+    document.getElementById('tareTime').textContent = '';
+
+    document.getElementById('netCard').style.display = 'none';
+    document.getElementById('confirmSummary').style.display = 'none';
+    document.getElementById('projectSelect').value = '';
+
+    // Refresh ticket number for next one
+    refreshNextTicketNum();
+
+    // Refresh history
+    loadRecentLoads();
+
+    checkReady();
 }
 
-// ─── ACTIVITY FEED ───
-function loadFeed() {
-    var limit = FEED_SIZE;
-    var offset = 0;
-    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=" + limit + "&offset=" + offset)
-    .then(function(tickets) {
-        if (!tickets || tickets.length === 0) {
-            document.getElementById("feedList").innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:.75rem;">No tickets yet</div>';
-            document.getElementById("feedCount").textContent = "0";
-            return;
-        }
-
-        // Also get total count
-        sb("tickets?select=id&limit=1&head=true").catch(function() {});
-
-        renderFeed(tickets, false);
-        document.getElementById("feedCount").textContent = tickets.length + "+";
-        document.getElementById("moreBtn").style.display = tickets.length >= FEED_SIZE ? "block" : "none";
-    });
-}
-
-function loadMore() {
-    feedPage++;
-    var offset = feedPage * FEED_SIZE;
-    sb("tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=" + FEED_SIZE + "&offset=" + offset)
-    .then(function(tickets) {
-        if (!tickets || tickets.length === 0) {
-            document.getElementById("moreBtn").style.display = "none";
-            return;
-        }
-        renderFeed(tickets, true);
-        if (tickets.length < FEED_SIZE) document.getElementById("moreBtn").style.display = "none";
-    });
-}
-
-var feedTickets = [];
-
-function renderFeed(tickets, append) {
-    if (append) {
-        feedTickets = feedTickets.concat(tickets);
-    } else {
-        feedTickets = tickets;
+// ─────────────────────────────────────────────
+// RECENT LOADS HISTORY
+// ─────────────────────────────────────────────
+async function loadRecentLoads() {
+    const el = document.getElementById('recentLoads');
+    
+    if (!selectedHauler) {
+        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">Select your company to see loads</div>';
+        return;
     }
 
-    var projMap = {};
-    projects.forEach(function(p) { projMap[p.id] = p.name; });
+    // Get recent tickets for this hauler
+    const haulerFilter = encodeURIComponent(selectedHauler);
+    let data = await sb(
+        `tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=ticket_date.desc,captured_at.desc&limit=5`
+    );
 
-    var html = tickets.map(function(t) {
-        var net = Number(t.net_lbs || 0).toLocaleString();
-        var tons = Number(t.net_tons || 0).toFixed(2);
-        var divPct = t.diversion_pct || 0;
-        var divColor = divPct >= 75 ? "var(--green)" : divPct >= 50 ? "var(--amber)" : "var(--red)";
-        var projName = projMap[t.project_id] || "";
-        var driver = "";
-        if (t.notes) {
-            var m = t.notes.match(/Driver:\s*(.+)/);
-            if (m) driver = m[1].trim();
-        }
-        var time = "";
-        var dateStr = "";
-        var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        // Date from ticket_date (the actual service date)
+    if (!data || data.length === 0) {
+        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedHauler + '</div>';
+        return;
+    }
+
+    driverTickets = data;
+
+    el.innerHTML = data.map((t, i) => {
+        const net = Number(t.net_lbs || 0).toLocaleString();
+        const tons = Number(t.net_tons || 0).toFixed(2);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let dateStr = '';
+        let time = '';
         if (t.ticket_date) {
-            var p = t.ticket_date.split("-");
-            dateStr = months[parseInt(p[1]) - 1] + " " + parseInt(p[2]);
+            const p = t.ticket_date.split('-');
+            dateStr = months[parseInt(p[1]) - 1] + ' ' + parseInt(p[2]);
         }
-        // Time from captured_at (when it was entered)
         if (t.captured_at) {
-            var d = new Date(t.captured_at);
-            time = d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-            if (!dateStr) dateStr = months[d.getMonth()] + " " + d.getDate();
+            const d = new Date(t.captured_at);
+            time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            if (!dateStr) dateStr = months[d.getMonth()] + ' ' + d.getDate();
         }
-        var scanIcon = t.scan_type === "pi_scale" ? "⚖️" : t.scan_type === "batch_ocr" ? "📸" : t.scan_type === "ocr" ? "🔍" : "📝";
+        const driver = (t.notes || '').match(/Driver:\s*(.+)/);
+        const driverName = driver ? driver[1].trim() : '';
+        const divPct = t.diversion_pct || 0;
+        const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+        const debrisCount = Array.isArray(t.debris_images) ? t.debris_images.length : 0;
 
-        return '<div class="feed-item" onclick="viewTicket(\'' + t.id + '\')" style="cursor:pointer">' +
-            '<div class="fi-time"><div style="font-weight:600;color:var(--muted)">' + dateStr + '</div><div>' + time + '</div></div>' +
-            '<div class="fi-ticket">' + (t.ticket_number || "?") + '</div>' +
-            '<div class="fi-detail">' +
-                '<div class="fi-weight">' + net + ' lbs <span style="color:var(--muted);font-weight:400;font-size:.7rem">(' + tons + ' T)</span></div>' +
-                '<div class="fi-meta">' + scanIcon + ' ' + (driver || t.hauler || "") + (projName ? " • " + projName : "") + '</div>' +
-            '</div>' +
-            '<div class="fi-div" style="color:' + divColor + '">' + divPct + '%</div>' +
-        '</div>';
-    }).join("");
-
-    var el = document.getElementById("feedList");
-    if (append) {
-        el.innerHTML += html;
-    } else {
-        el.innerHTML = html;
-    }
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}cursor:pointer;" onclick="viewDriverTicket('${t.id}')">
+            <div style="flex-shrink:0;text-align:left;min-width:46px;line-height:1.4;">
+                <div style="font-size:.65rem;font-weight:600;color:var(--muted);">${dateStr}</div>
+                <div style="font-size:.55rem;color:var(--dim);">${time}</div>
+            </div>
+            <div style="flex-shrink:0;text-align:center;min-width:50px;">
+                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:var(--cyan);">${t.ticket_number}</div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-family:var(--mono);font-weight:700;font-size:.8rem;">${net} lbs <span style="color:var(--muted);font-weight:400;">(${tons} T)</span></div>
+                <div style="font-size:.6rem;color:var(--dim);">${Number(t.gross_lbs||0).toLocaleString()} gross / ${Number(t.tare_lbs||0).toLocaleString()} tare${driverName ? ' • ' + driverName : ''}</div>
+            </div>
+            <div style="flex-shrink:0;text-align:right;">
+                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:${divColor};">${divPct}%</div>
+                <div style="font-size:.55rem;color:var(--dim);">${debrisCount > 0 ? '📸' + debrisCount : '📷 add'}</div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
-// ─── SETTINGS & MANAGEMENT ───
-function openSettings() {
-    renderSettingsProjects();
-    renderSettingsHaulers();
-    populateHaulerDropdown();
-    showSettingsTab("projects");
-    document.getElementById("settingsModal").classList.add("show");
-}
+// ─────────────────────────────────────────────
+// DRIVER TICKET DETAIL (view + add photos)
+// ─────────────────────────────────────────────
+let driverTickets = [];
 
-function closeSettings() {
-    document.getElementById("settingsModal").classList.remove("show");
-    // Refresh projects in case changes were made
-    sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc").then(function(d) {
-        projects = d || [];
-        // Refresh project dropdown on main page
-        var sel = document.getElementById("projSel");
-        var curVal = sel.value;
-        sel.innerHTML = '<option value="">Project...</option>';
-        projects.forEach(function(p) {
-            var o = document.createElement("option");
-            o.value = p.id;
-            o.textContent = p.name;
-            sel.appendChild(o);
-        });
-        if (curVal) sel.value = curVal;
-        // Refresh feed
-        loadFeed();
-    });
-}
+function viewDriverTicket(id) {
+    const t = driverTickets.find(x => x.id === id);
+    if (!t) return;
 
-function showSettingsTab(tab) {
-    document.getElementById("settingsProjects").style.display = tab === "projects" ? "block" : "none";
-    document.getElementById("settingsHaulers").style.display = tab === "haulers" ? "block" : "none";
-    document.getElementById("projectForm").style.display = "none";
-    document.getElementById("stProj").style.background = tab === "projects" ? "var(--green)" : "transparent";
-    document.getElementById("stProj").style.color = tab === "projects" ? "#fff" : "var(--muted)";
-    document.getElementById("stHaul").style.background = tab === "haulers" ? "var(--green)" : "transparent";
-    document.getElementById("stHaul").style.color = tab === "haulers" ? "#fff" : "var(--muted)";
-}
+    const projMap = {};
+    projects.forEach(p => { projMap[p.id] = p.name; });
+    const projName = projMap[t.project_id] || '';
+    const divPct = t.diversion_pct || 0;
+    const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+    const time = t.captured_at ? new Date(t.captured_at).toLocaleString() : '';
+    const debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
 
-// ─── PROJECT MANAGEMENT ───
-function renderSettingsProjects() {
-    var el = document.getElementById("settingsProjectList");
-    if (projects.length === 0) {
-        el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--dim);font-size:.75rem">No projects yet</div>';
-        return;
-    }
-    el.innerHTML = projects.map(function(p) {
-        return '<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">' +
-            '<div style="flex:1">' +
-                '<div style="font-weight:700;font-size:.8rem">' + (p.name || "") + '</div>' +
-                '<div style="font-size:.6rem;color:var(--dim)">' + [p.waste_hauler, p.location].filter(Boolean).join(" • ") + ' • LEED ' + (p.leed_version || "v4") + '</div>' +
-            '</div>' +
-            '<button onclick="editProject(\'' + p.id + '\')" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);font-size:.65rem;font-weight:600;cursor:pointer">✏️ Edit</button>' +
-        '</div>';
-    }).join("");
-}
-
-function showNewProject() {
-    document.getElementById("settingsProjects").style.display = "none";
-    document.getElementById("projectForm").style.display = "block";
-    document.getElementById("projectFormTitle").textContent = "New Project";
-    document.getElementById("pf_id").value = "";
-    document.getElementById("pf_name").value = "";
-    document.getElementById("pf_client").value = "";
-    document.getElementById("pf_hauler").value = "";
-    document.getElementById("pf_location").value = "";
-    document.getElementById("pf_leed").value = "v4";
-    document.getElementById("pf_target").value = "50";
-    document.getElementById("pf_deleteBtn").style.display = "none";
-    populateHaulerDropdown();
-}
-
-function editProject(id) {
-    var p = projects.find(function(x) { return x.id === id; });
-    if (!p) return;
-    document.getElementById("settingsProjects").style.display = "none";
-    document.getElementById("projectForm").style.display = "block";
-    document.getElementById("projectFormTitle").textContent = "Edit Project";
-    document.getElementById("pf_id").value = p.id;
-    document.getElementById("pf_name").value = p.name || "";
-    document.getElementById("pf_client").value = p.client || p.general_contractor || "";
-    document.getElementById("pf_location").value = p.location || "";
-    document.getElementById("pf_leed").value = p.leed_version || "v4";
-    document.getElementById("pf_target").value = p.leed_target || 50;
-    document.getElementById("pf_deleteBtn").style.display = "block";
-    populateHaulerDropdown();
-    document.getElementById("pf_hauler").value = p.waste_hauler || "";
-}
-
-function populateHaulerDropdown() {
-    var sel = document.getElementById("pf_hauler");
-    var curVal = sel.value;
-    var haulerSet = {};
-    projects.forEach(function(p) { if (p.waste_hauler) haulerSet[p.waste_hauler] = true; });
-    sel.innerHTML = '<option value="">Select hauler...</option>';
-    Object.keys(haulerSet).sort().forEach(function(h) {
-        sel.innerHTML += '<option value="' + h + '">' + h + '</option>';
-    });
-    sel.innerHTML += '<option value="__new">+ New hauler...</option>';
-    if (curVal) sel.value = curVal;
-    sel.onchange = function() {
-        if (this.value === "__new") {
-            var name = prompt("Enter new hauler name:");
-            if (name && name.trim()) {
-                var opt = document.createElement("option");
-                opt.value = name.trim();
-                opt.textContent = name.trim();
-                this.insertBefore(opt, this.lastElementChild);
-                this.value = name.trim();
-            } else {
-                this.value = "";
-            }
-        }
-    };
-}
-
-function saveProject() {
-    var name = document.getElementById("pf_name").value.trim();
-    if (!name) { alert("Project name is required"); return; }
-    var id = document.getElementById("pf_id").value;
-    var haulerVal = document.getElementById("pf_hauler").value;
-    if (haulerVal === "__new") haulerVal = "";
-
-    var data = {
-        name: name,
-        client: document.getElementById("pf_client").value.trim() || null,
-        general_contractor: document.getElementById("pf_client").value.trim() || null,
-        waste_hauler: haulerVal || null,
-        location: document.getElementById("pf_location").value.trim() || null,
-        leed_version: document.getElementById("pf_leed").value || "v4",
-        leed_target: parseInt(document.getElementById("pf_target").value) || 50
-    };
-
-    if (id) {
-        // Update existing
-        data.updated_at = new Date().toISOString();
-        sb("projects?id=eq." + id, { method: "PATCH", body: JSON.stringify(data) })
-        .then(function(result) {
-            if (result && result.length) {
-                var idx = projects.findIndex(function(p) { return p.id === id; });
-                if (idx >= 0) Object.assign(projects[idx], result[0]);
-            }
-            cancelProjectForm();
-            renderSettingsProjects();
-        }).catch(function(e) { alert("Save failed: " + e.message); });
-    } else {
-        // Create new
-        data.access_code = "DS-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-        sb("projects", { method: "POST", body: JSON.stringify(data) })
-        .then(function(result) {
-            if (result && result.length) projects.unshift(result[0]);
-            cancelProjectForm();
-            renderSettingsProjects();
-        }).catch(function(e) { alert("Create failed: " + e.message); });
-    }
-}
-
-function deleteProject() {
-    var id = document.getElementById("pf_id").value;
-    var p = projects.find(function(x) { return x.id === id; });
-    if (!p) return;
-    if (!confirm('Delete "' + p.name + '"? All tickets in this project will be orphaned.')) return;
-
-    // Check for tickets
-    sb("tickets?project_id=eq." + id + "&select=id&limit=1").then(function(tix) {
-        if (tix && tix.length > 0) {
-            if (!confirm("This project has tickets. Delete the project AND all its tickets? This cannot be undone.")) return;
-            sb("tickets?project_id=eq." + id, { method: "DELETE" }).then(function() {
-                return sb("projects?id=eq." + id, { method: "DELETE" });
-            }).then(function() {
-                projects = projects.filter(function(x) { return x.id !== id; });
-                cancelProjectForm();
-                renderSettingsProjects();
-            });
-        } else {
-            sb("projects?id=eq." + id, { method: "DELETE" }).then(function() {
-                projects = projects.filter(function(x) { return x.id !== id; });
-                cancelProjectForm();
-                renderSettingsProjects();
-            });
-        }
-    });
-}
-
-function cancelProjectForm() {
-    document.getElementById("projectForm").style.display = "none";
-    document.getElementById("settingsProjects").style.display = "block";
-}
-
-// ─── HAULER MANAGEMENT ───
-function renderSettingsHaulers() {
-    var el = document.getElementById("settingsHaulerList");
-    var haulerMap = {};
-    projects.forEach(function(p) {
-        var h = p.waste_hauler || "(no hauler)";
-        if (!haulerMap[h]) haulerMap[h] = [];
-        haulerMap[h].push(p);
-    });
-
-    var haulers = Object.keys(haulerMap).sort();
-    if (haulers.length === 0) {
-        el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--dim);font-size:.75rem">No haulers yet — add one above or assign haulers to projects</div>';
-        return;
-    }
-
-    el.innerHTML = haulers.map(function(h, idx) {
-        var projs = haulerMap[h];
-        var isNull = (h === "(no hauler)");
-        return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-                '<div style="font-weight:700;font-size:.85rem">' + (isNull ? '⚠️ ' : '🚛 ') + h + '</div>' +
-                (isNull ? '<div style="font-size:.6rem;color:var(--amber)">Assign haulers via Projects tab</div>' :
-                '<div style="display:flex;gap:4px">' +
-                    '<button onclick="doRename(' + idx + ')" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card2);color:var(--muted);font-size:.65rem;cursor:pointer">✏️ Rename</button>' +
-                    '<button onclick="doRemove(' + idx + ')" style="padding:6px 10px;border:1px solid var(--red);border-radius:6px;background:transparent;color:var(--red);font-size:.65rem;cursor:pointer">✕ Remove</button>' +
-                '</div>') +
-            '</div>' +
-            '<div style="font-size:.65rem;color:var(--dim)">' + projs.length + ' project' + (projs.length !== 1 ? 's' : '') + ': ' + projs.map(function(p) { return p.name; }).join(", ") + '</div>' +
-        '</div>';
-    }).join("");
-
-    // Store hauler list for index-based lookup
-    window._haulerList = haulers;
-}
-
-function addHauler() {
-    var name = document.getElementById("newHaulerName").value.trim();
-    if (!name) { alert("Enter a hauler name"); return; }
-
-    var exists = projects.some(function(p) { return p.waste_hauler === name; });
-    if (exists) { alert(name + " already exists as a hauler"); return; }
-
-    // Show project picker - which project(s) should this hauler be assigned to?
-    var options = projects.map(function(p, i) {
-        return i + ": " + p.name + " (current: " + (p.waste_hauler || "none") + ")";
-    }).join("\n");
-    var pick = prompt('Assign "' + name + '" to which project?\n\nEnter the number:\n' + options);
-    if (pick === null) return;
-    var idx = parseInt(pick);
-    if (isNaN(idx) || idx < 0 || idx >= projects.length) { alert("Invalid selection"); return; }
-
-    var proj = projects[idx];
-    if (!confirm('Assign "' + name + '" as the hauler for "' + proj.name + '"?')) return;
-
-    sb("projects?id=eq." + proj.id, { method: "PATCH", body: JSON.stringify({ waste_hauler: name }) })
-    .then(function() {
-        return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
-    }).then(function(fresh) {
-        projects = fresh || [];
-        document.getElementById("newHaulerName").value = "";
-        renderSettingsHaulers();
-        renderSettingsProjects();
-        populateHaulerDropdown();
-        alert('✅ "' + name + '" assigned to ' + proj.name);
-    }).catch(function(e) { alert("Failed: " + e.message); });
-}
-
-function doRename(idx) {
-    var oldName = window._haulerList[idx];
-    if (!oldName) { alert("Error: hauler not found at index " + idx); return; }
-    renameHauler(oldName);
-}
-
-function doRemove(idx) {
-    var name = window._haulerList[idx];
-    if (!name) { alert("Error: hauler not found at index " + idx); return; }
-    removeHauler(name);
-}
-
-function renameHaulerByIdx(idx) { renameHauler(window._haulerList[parseInt(idx)]); }
-function removeHaulerByIdx(idx) { removeHauler(window._haulerList[parseInt(idx)]); }
-
-function renameHauler(oldName) {
-    if (!oldName) return;
-    var newName = prompt("Rename '" + oldName + "' to:", oldName);
-    if (!newName || newName.trim() === "" || newName.trim() === oldName) return;
-    newName = newName.trim();
-
-    if (!confirm("Rename '" + oldName + "' → '" + newName + "' across all projects and tickets?")) return;
-
-    // Update projects first, then tickets, then refresh from DB
-    sb("projects?waste_hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ waste_hauler: newName }) })
-    .then(function() {
-        return sb("tickets?hauler=eq." + encodeURIComponent(oldName), { method: "PATCH", body: JSON.stringify({ hauler: newName }) });
-    }).then(function() {
-        // Refresh projects from DB to get clean data
-        return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
-    }).then(function(fresh) {
-        projects = fresh || [];
-        renderSettingsHaulers();
-        renderSettingsProjects();
-        populateHaulerDropdown();
-        alert("✅ Renamed to '" + newName + "'");
-    }).catch(function(e) { alert("Rename failed: " + e.message); });
-}
-
-function removeHauler(haulerName) {
-    if (!haulerName || haulerName === "(no hauler)") return;
-    var projs = projects.filter(function(p) { return p.waste_hauler === haulerName; });
-    if (projs.length === 0) {
-        alert("No projects assigned to this hauler.");
-        return;
-    }
-
-    // Get other hauler names for reassignment
-    var otherHaulers = [];
-    projects.forEach(function(p) {
-        if (p.waste_hauler && p.waste_hauler !== haulerName && otherHaulers.indexOf(p.waste_hauler) === -1) {
-            otherHaulers.push(p.waste_hauler);
-        }
-    });
-
-    var msg = '"' + haulerName + '" has ' + projs.length + ' project(s):\n' +
-        projs.map(function(p) { return '  • ' + p.name; }).join('\n') + '\n\n';
-
-    if (otherHaulers.length > 0) {
-        msg += 'Reassign to another hauler? Enter number:\n' +
-            otherHaulers.map(function(h, i) { return i + ': ' + h; }).join('\n') +
-            '\n\nOr press Cancel to just clear the hauler field.';
-        var pick = prompt(msg);
-        if (pick === null) return;
-
-        var reassignTo = null;
-        var pickIdx = parseInt(pick);
-        if (!isNaN(pickIdx) && pickIdx >= 0 && pickIdx < otherHaulers.length) {
-            reassignTo = otherHaulers[pickIdx];
-        }
-
-        var newVal = reassignTo || null;
-        var updateBody = reassignTo ? { waste_hauler: reassignTo } : { waste_hauler: null };
-
-        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify(updateBody) })
-        .then(function() {
-            if (reassignTo) {
-                return sb("tickets?hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ hauler: reassignTo }) });
-            }
-        }).then(function() {
-            return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
-        }).then(function(fresh) {
-            projects = fresh || [];
-            renderSettingsHaulers();
-            renderSettingsProjects();
-            populateHaulerDropdown();
-            alert(reassignTo ? '✅ Reassigned to "' + reassignTo + '"' : '✅ Hauler cleared from projects');
-        }).catch(function(e) { alert("Failed: " + e.message); });
-    } else {
-        if (!confirm('Clear "' + haulerName + '" from ' + projs.length + ' project(s)?')) return;
-        sb("projects?waste_hauler=eq." + encodeURIComponent(haulerName), { method: "PATCH", body: JSON.stringify({ waste_hauler: null }) })
-        .then(function() {
-            return sb("projects?select=id,name,waste_hauler,leed_version,leed_target,client,general_contractor,location&order=name.asc");
-        }).then(function(fresh) {
-            projects = fresh || [];
-            renderSettingsHaulers();
-            renderSettingsProjects();
-            populateHaulerDropdown();
-        }).catch(function(e) { alert("Failed: " + e.message); });
-    }
-}
-
-// ─── TICKET DETAIL & EDIT ───
-var currentTicket = null;
-var editMode = false;
-
-function viewTicket(id) {
-    var t = feedTickets.find(function(x) { return x.id === id; });
-    if (!t) {
-        // Fetch from DB if not in feed
-        sb("tickets?id=eq." + id).then(function(d) {
-            if (d && d.length) { currentTicket = d[0]; renderTicketDetail(d[0]); }
-        });
-        return;
-    }
-    currentTicket = t;
-    renderTicketDetail(t);
-}
-
-function renderTicketDetail(t) {
-    editMode = false;
-    var projMap = {};
-    projects.forEach(function(p) { projMap[p.id] = p.name; });
-    var projName = projMap[t.project_id] || "Unknown";
-    var driver = "";
-    if (t.notes) { var m = t.notes.match(/Driver:\s*(.+)/); if (m) driver = m[1].trim(); }
-    var divPct = t.diversion_pct || 0;
-    var divColor = divPct >= 75 ? "var(--green)" : divPct >= 50 ? "var(--amber)" : "var(--red)";
-    var time = t.captured_at ? new Date(t.captured_at).toLocaleString() : "";
-    var scanIcon = t.scan_type === "pi_scale" ? "⚖️ Pi Scale" : t.scan_type === "batch_ocr" ? "📸 Batch OCR" : t.scan_type === "ocr" ? "🔍 OCR" : "📝 Manual";
-
-    var MATS = [
-        {key:"wood",name:"Wood",color:"#92400e"},
-        {key:"occ",name:"Cardboard",color:"#d97706"},
-        {key:"metal",name:"Metal",color:"#6b7280"},
-        {key:"plastic",name:"Plastic",color:"#fbbf24"},
-        {key:"concrete",name:"Concrete",color:"#78716c"},
-        {key:"block",name:"Block",color:"#a16207"},
-        {key:"landfill",name:"Landfill",color:"#e84040"}
+    // Material bars
+    const MATS = [
+        {key:'wood',name:'Wood',color:'#92400e'},{key:'occ',name:'Cardboard',color:'#d97706'},
+        {key:'metal',name:'Metal',color:'#6b7280'},{key:'concrete',name:'Concrete',color:'#78716c'},
+        {key:'block',name:'Block',color:'#a16207'},{key:'landfill',name:'Landfill',color:'#e84040'}
     ];
+    const matHtml = MATS.filter(m => (t[m.key + '_pct'] || 0) > 0).map(m => {
+        const pct = t[m.key + '_pct'] || 0;
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem">
+            <span style="width:65px;color:var(--muted)">${m.name}</span>
+            <div style="flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${m.color};border-radius:2px"></div>
+            </div>
+            <span style="width:30px;text-align:right;font-family:var(--mono);font-weight:700">${pct}%</span>
+        </div>`;
+    }).join('');
 
-    var matHtml = MATS.filter(function(m) { return (t[m.key + "_pct"] || 0) > 0; }).map(function(m) {
-        var pct = t[m.key + "_pct"] || 0;
-        return '<div class="mat-bar"><span class="mat-name">' + m.name + '</span>' +
-            '<div class="mat-track"><div class="mat-fill" style="width:' + pct + '%;background:' + m.color + '"></div></div>' +
-            '<span class="mat-pct">' + pct + '%</span></div>';
-    }).join("");
-
-    // Photos
-    var photoHtml = "";
+    // Photos section
+    let photoHtml = '';
     if (t.scale_ticket_image) {
-        photoHtml += '<div style="margin-top:12px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Scale Ticket Photo</div>' +
-            '<img src="' + t.scale_ticket_image + '" onclick="window.open(\'' + t.scale_ticket_image + '\')" class="photo-thumb-sm" style="width:100%;height:auto;max-height:200px;object-fit:contain;"></div>';
+        photoHtml += `<div style="margin-top:12px">
+            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Scale Ticket</div>
+            <img src="${t.scale_ticket_image}" onclick="window.open('${t.scale_ticket_image}')" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+        </div>`;
     }
-    var debris = Array.isArray(t.debris_images) ? t.debris_images : [];
-    if (debris.length > 0) {
-        photoHtml += '<div style="margin-top:10px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Debris Photos (' + debris.length + ')</div>' +
-            '<div style="display:flex;gap:6px;overflow-x:auto">' + debris.map(function(u) { return '<img src="' + u + '" onclick="window.open(\'' + u + '\')" class="photo-thumb-sm">'; }).join("") + '</div></div>';
-    }
-
-    var html = '<div class="modal-title">Ticket ' + (t.ticket_number || "") + '</div>' +
-        '<div style="text-align:center;padding:12px 0;margin-bottom:12px;background:' + (divPct >= 75 ? 'rgba(15,186,106,.08)' : divPct >= 50 ? 'rgba(232,160,32,.08)' : 'rgba(232,64,64,.08)') + ';border-radius:var(--radius);">' +
-            '<div style="font-size:2.2rem;font-weight:800;font-family:var(--mono);color:' + divColor + '">' + divPct + '%</div>' +
-            '<div style="font-size:.65rem;color:var(--muted)">Diversion Rate</div>' +
-        '</div>' +
-        '<div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">' + (t.ticket_date || "") + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Project</span><span class="detail-value" style="font-family:var(--sans)">' + projName + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Hauler</span><span class="detail-value" style="font-family:var(--sans)">' + (t.hauler || "") + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Driver</span><span class="detail-value" style="font-family:var(--sans)">' + driver + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Scan Type</span><span class="detail-value" style="font-family:var(--sans)">' + scanIcon + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Gross</span><span class="detail-value">' + Number(t.gross_lbs || 0).toLocaleString() + ' lbs</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Tare</span><span class="detail-value">' + Number(t.tare_lbs || 0).toLocaleString() + ' lbs</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Net</span><span class="detail-value" style="color:var(--green)">' + Number(t.net_lbs || 0).toLocaleString() + ' lbs (' + Number(t.net_tons || 0).toFixed(2) + ' T)</span></div>' +
-        '<div class="detail-row"><span class="detail-label">CO₂e Avoided</span><span class="detail-value">' + Number(t.co2e_avoided || 0).toFixed(2) + ' mt</span></div>' +
-        '<div class="detail-row"><span class="detail-label">Captured</span><span class="detail-value" style="font-size:.7rem">' + time + '</span></div>' +
-        (matHtml ? '<div style="margin-top:14px"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Material Breakdown</div>' + matHtml + '</div>' : '') +
-        photoHtml +
-        (t.audit_id ? '<div style="margin-top:12px;font-family:var(--mono);font-size:.55rem;color:var(--dim);word-break:break-all;">🔐 ' + t.audit_id + '</div>' : '') +
-        (t.notes ? '<div style="margin-top:10px;font-size:.75rem;color:var(--muted);">📝 ' + t.notes + '</div>' : '') +
-        '<button class="modal-btn save" onclick="showEditMode()">✏️ Edit Ticket</button>' +
-        '<button class="modal-btn cancel" onclick="closeTicketModal()">Done</button>';
-
-    document.getElementById("ticketModalContent").innerHTML = html;
-    document.getElementById("ticketModal").classList.add("show");
-}
-
-function showEditMode() {
-    if (!currentTicket) return;
-    editMode = true;
-    var t = currentTicket;
-    var projMap = {};
-    projects.forEach(function(p) { projMap[p.id] = p.name; });
-
-    var projOptions = projects.map(function(p) {
-        return '<option value="' + p.id + '"' + (p.id === t.project_id ? ' selected' : '') + '>' + p.name + '</option>';
-    }).join("");
-
-    var haulerOptions = ["Jaguar Waste Management","B&B Waste","Liberty Demolition","Ranger Waste Management LLC","Dalmex Scale"].map(function(h) {
-        return '<option value="' + h + '"' + (h === t.hauler ? ' selected' : '') + '>' + h + '</option>';
-    }).join("") + '<option value="__other">Other...</option>';
-
-    var MATS = [
-        {key:"wood",name:"Wood",icon:"🪵"},{key:"occ",name:"OCC",icon:"📦"},
-        {key:"metal",name:"Metal",icon:"🔩"},{key:"plastic",name:"Plastic",icon:"♻️"},
-        {key:"concrete",name:"Concrete",icon:"🧱"},{key:"block",name:"Block",icon:"🧱"},
-        {key:"landfill",name:"Landfill",icon:"🗑️"}
-    ];
-
-    var matSliders = MATS.map(function(m) {
-        var pct = t[m.key + "_pct"] || 0;
-        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-            '<span style="width:60px;font-size:.7rem;color:var(--muted)">' + m.icon + ' ' + m.name + '</span>' +
-            '<input type="range" id="es_' + m.key + '" min="0" max="100" value="' + pct + '" oninput="updateEditPct()" style="flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none">' +
-            '<span id="ep_' + m.key + '" style="width:30px;text-align:right;font-family:var(--mono);font-weight:700;font-size:.7rem">' + pct + '%</span></div>';
-    }).join("");
-
-    var html = '<div class="modal-title">Edit ' + (t.ticket_number || "") + '</div>' +
-        '<div class="edit-row">' +
-            '<div class="edit-group"><label class="edit-label">Ticket #</label><input class="edit-field" id="ed_num" value="' + (t.ticket_number || "") + '"></div>' +
-            '<div class="edit-group"><label class="edit-label">Date</label><input type="date" class="edit-field" id="ed_date" value="' + (t.ticket_date || "") + '"></div>' +
-        '</div>' +
-        '<div class="edit-row">' +
-            '<div class="edit-group"><label class="edit-label">Project</label><select class="edit-field" id="ed_proj">' + projOptions + '</select></div>' +
-        '</div>' +
-        '<div class="edit-row">' +
-            '<div class="edit-group"><label class="edit-label">Hauler</label><select class="edit-field" id="ed_hauler">' + haulerOptions + '</select></div>' +
-        '</div>' +
-        '<div class="edit-row">' +
-            '<div class="edit-group"><label class="edit-label">Gross (lbs)</label><input type="number" class="edit-field" id="ed_gross" value="' + (t.gross_lbs || 0) + '" oninput="calcEditNet()"></div>' +
-            '<div class="edit-group"><label class="edit-label">Tare (lbs)</label><input type="number" class="edit-field" id="ed_tare" value="' + (t.tare_lbs || 0) + '" oninput="calcEditNet()"></div>' +
-        '</div>' +
-        '<div class="edit-row">' +
-            '<div class="edit-group"><label class="edit-label">Net (lbs)</label><input type="number" class="edit-field" id="ed_net" value="' + (t.net_lbs || 0) + '" readonly style="color:var(--green);font-weight:700"></div>' +
-            '<div class="edit-group"><label class="edit-label">Net (tons)</label><input type="number" class="edit-field" id="ed_tons" value="' + (t.net_tons || 0) + '" readonly style="color:var(--green);font-weight:700"></div>' +
-        '</div>' +
-        '<div style="margin:12px 0"><div style="font-size:.6rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:6px;">Material Breakdown</div>' + matSliders +
-        '<div id="editPctTotal" style="font-family:var(--mono);font-size:.75rem;font-weight:700;text-align:right;margin-top:4px"></div></div>' +
-        '<div class="edit-group" style="margin-bottom:8px"><label class="edit-label">Notes</label><textarea class="edit-field" id="ed_notes" rows="2" style="resize:vertical">' + (t.notes || "") + '</textarea></div>' +
-        '<button class="modal-btn save" onclick="saveTicket()">💾 Save Changes</button>' +
-        '<button class="modal-btn cancel" onclick="renderTicketDetail(currentTicket)">Cancel</button>' +
-        '<button class="modal-btn delete" onclick="deleteTicket()">🗑️ Delete Ticket</button>';
-
-    document.getElementById("ticketModalContent").innerHTML = html;
-    updateEditPct();
-
-    // Style range thumbs
-    document.querySelectorAll('#ticketModalContent input[type=range]').forEach(function(r) {
-        r.style.cssText += ';-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none';
-    });
-}
-
-function calcEditNet() {
-    var g = parseInt(document.getElementById("ed_gross").value) || 0;
-    var t = parseInt(document.getElementById("ed_tare").value) || 0;
-    var n = g - t;
-    document.getElementById("ed_net").value = n;
-    document.getElementById("ed_tons").value = (n / 2000).toFixed(2);
-    updateEditPct();
-}
-
-function updateEditPct() {
-    var keys = ["wood","occ","metal","plastic","concrete","block","landfill"];
-    var total = 0;
-    keys.forEach(function(k) {
-        var slider = document.getElementById("es_" + k);
-        if (!slider) return;
-        var pct = parseInt(slider.value);
-        document.getElementById("ep_" + k).textContent = pct + "%";
-        total += pct;
-    });
-    var el = document.getElementById("editPctTotal");
-    if (el) {
-        el.textContent = "Total: " + total + "%";
-        el.style.color = total === 100 ? "var(--green)" : "var(--red)";
-    }
-}
-
-function saveTicket() {
-    if (!currentTicket) return;
-    var id = currentTicket.id;
-    var gross = parseInt(document.getElementById("ed_gross").value) || 0;
-    var tare = parseInt(document.getElementById("ed_tare").value) || 0;
-    var net = gross - tare;
-    var netTons = parseFloat((net / 2000).toFixed(4));
-
-    var keys = ["wood","occ","metal","plastic","concrete","block","landfill"];
-    var mats = {};
-    var totalPct = 0;
-    keys.forEach(function(k) {
-        var pct = parseInt(document.getElementById("es_" + k).value) || 0;
-        mats[k + "_pct"] = pct;
-        mats[k + "_tons"] = parseFloat((netTons * pct / 100).toFixed(4));
-        totalPct += pct;
-    });
-
-    if (totalPct !== 100 && net > 0) {
-        alert("Material percentages must total 100% (currently " + totalPct + "%)");
-        return;
+    if (debrisArr.length > 0) {
+        photoHtml += `<div style="margin-top:10px">
+            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Debris Photos (${debrisArr.length})</div>
+            <div style="display:flex;gap:6px;overflow-x:auto">
+                ${debrisArr.map(u => `<img src="${u}" onclick="window.open('${u}')" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">`).join('')}
+            </div>
+        </div>`;
     }
 
-    var divPct = 100 - (mats.landfill_pct || 0);
-    var divTons = parseFloat((netTons * divPct / 100).toFixed(4));
-    var GWP = {wood:0.310,occ:0.940,metal:1.850,plastic:3.100,concrete:0.130,block:0.240};
-    var co2e = 0;
-    keys.forEach(function(k) { if (k !== "landfill" && GWP[k]) co2e += (mats[k + "_tons"] || 0) * GWP[k]; });
+    const html = `
+        <div style="font-size:1rem;font-weight:800;margin-bottom:12px;letter-spacing:-.02em">${t.ticket_number}</div>
+        <div style="text-align:center;padding:14px 0;margin-bottom:14px;background:${divPct >= 75 ? 'rgba(15,186,106,.08)' : divPct >= 50 ? 'rgba(232,160,32,.08)' : 'rgba(232,64,64,.08)'};border-radius:10px;">
+            <div style="font-size:2.4rem;font-weight:800;font-family:var(--mono);color:${divColor}">${divPct}%</div>
+            <div style="font-size:.65rem;color:var(--muted)">Diversion Rate</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Gross</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.gross_lbs||0).toLocaleString()}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Tare</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.tare_lbs||0).toLocaleString()}</div>
+            </div>
+            <div style="background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:.5rem;color:var(--cyan);text-transform:uppercase;font-weight:600">Net</div>
+                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem;color:var(--green)">${Number(t.net_lbs||0).toLocaleString()}</div>
+                <div style="font-size:.6rem;color:var(--muted)">${Number(t.net_tons||0).toFixed(2)} T</div>
+            </div>
+        </div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">${projName}${t.ticket_date ? ' • ' + t.ticket_date : ''}</div>
+        <div style="font-size:.65rem;color:var(--dim);margin-bottom:12px">${time}</div>
+        ${matHtml ? '<div style="margin-bottom:12px">' + matHtml + '</div>' : ''}
+        ${photoHtml}
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:.65rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:8px">📸 Add Debris Photo</div>
+            <div style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;position:relative" onclick="document.getElementById('driverPhotoInput').click()">
+                <div style="font-size:1.5rem;margin-bottom:4px">📸</div>
+                <div style="font-size:.8rem;color:var(--muted);font-weight:500">Tap to take photo or choose from gallery</div>
+                <input type="file" id="driverPhotoInput" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="uploadDriverDebris('${t.id}', this)">
+            </div>
+            <div id="driverUploadStatus" style="font-size:.75rem;margin-top:8px;text-align:center"></div>
+        </div>
+        <button onclick="closeDM()" style="display:block;width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;margin-top:12px">Done</button>
+    `;
 
-    var haulerSel = document.getElementById("ed_hauler");
-    var haulerVal = haulerSel.value;
-    if (haulerVal === "__other") {
-        haulerVal = prompt("Enter hauler name:");
-        if (!haulerVal) return;
+    document.getElementById('driverModalContent').innerHTML = html;
+    document.getElementById('driverModal').style.display = 'flex';
+}
+
+async function uploadDriverDebris(ticketId, input) {
+    const files = Array.from(input.files);
+    if (files.length === 0) return;
+
+    const statusEl = document.getElementById('driverUploadStatus');
+    statusEl.innerHTML = '<span style="color:var(--cyan)">⏳ Uploading ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '...</span>';
+
+    const t = driverTickets.find(x => x.id === ticketId);
+    if (!t) { statusEl.innerHTML = '<span style="color:var(--red)">Ticket not found</span>'; return; }
+
+    const urls = Array.isArray(t.debris_images) ? [...t.debris_images] : [];
+    let uploaded = 0;
+
+    for (const file of files) {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = (t.project_id || 'unassigned') + '/' + t.ticket_number + '_debris_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.' + ext;
+
+        const uploadUrl = SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path;
+        try {
+            const res = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_KEY,
+                    'Content-Type': file.type || 'image/jpeg',
+                    'x-upsert': 'true'
+                },
+                body: file
+            });
+            if (res.ok) {
+                const publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
+                urls.push(publicUrl);
+                uploaded++;
+            }
+        } catch(e) { console.error('Upload error:', e); }
     }
 
-    var updates = {
-        ticket_number: document.getElementById("ed_num").value.trim(),
-        ticket_date: document.getElementById("ed_date").value,
-        project_id: document.getElementById("ed_proj").value,
-        hauler: haulerVal,
-        gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
-        diversion_pct: divPct, diverted_tons: divTons, co2e_avoided: parseFloat(co2e.toFixed(4)),
-        notes: document.getElementById("ed_notes").value.trim() || null,
-        last_modified: new Date().toISOString()
-    };
-    Object.keys(mats).forEach(function(k) { updates[k] = mats[k]; });
+    if (uploaded > 0) {
+        // Update ticket with new debris images
+        await sb('tickets?id=eq.' + ticketId, 'PATCH', { debris_images: urls });
+        t.debris_images = urls;
+        statusEl.innerHTML = '<span style="color:var(--green)">✅ ' + uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' added!</span>';
 
-    sb("tickets?id=eq." + id, { method: "PATCH", body: JSON.stringify(updates) })
-    .then(function(result) {
-        if (result && result.length) {
-            // Update local data
-            Object.assign(currentTicket, result[0]);
-            var idx = feedTickets.findIndex(function(x) { return x.id === id; });
-            if (idx >= 0) Object.assign(feedTickets[idx], result[0]);
-        } else {
-            Object.assign(currentTicket, updates);
-        }
-        renderTicketDetail(currentTicket);
-        loadFeed();
-        // Flash save confirmation
-        var panel = document.querySelector(".modal-panel");
-        if (panel) { panel.style.borderColor = "var(--green)"; setTimeout(function() { panel.style.borderColor = ""; }, 1500); }
-    }).catch(function(err) {
-        alert("Save failed: " + err.message);
-    });
+        // Refresh the modal to show new photos
+        setTimeout(function() { viewDriverTicket(ticketId); }, 1000);
+    } else {
+        statusEl.innerHTML = '<span style="color:var(--red)">Upload failed — check storage permissions</span>';
+    }
+
+    input.value = '';
 }
 
-function deleteTicket() {
-    if (!currentTicket) return;
-    if (!confirm("Delete ticket " + currentTicket.ticket_number + "? This cannot be undone.")) return;
-
-    sb("tickets?id=eq." + currentTicket.id, { method: "DELETE" })
-    .then(function() {
-        feedTickets = feedTickets.filter(function(x) { return x.id !== currentTicket.id; });
-        closeTicketModal();
-        loadFeed();
-    }).catch(function(err) {
-        alert("Delete failed: " + err.message);
-    });
+function closeDM() {
+    document.getElementById('driverModal').style.display = 'none';
+    loadRecentLoads(); // Refresh to show updated photo counts
 }
 
-function closeTicketModal() {
-    document.getElementById("ticketModal").classList.remove("show");
-    currentTicket = null;
-    editMode = false;
+// ─────────────────────────────────────────────
+// STATUS DISPLAY
+// ─────────────────────────────────────────────
+function updateStatus(state, text) {
+    const dot = document.getElementById('statusDot');
+    dot.classList.remove('on', 'off');
+    dot.classList.add(state === 'on' ? 'on' : 'off');
+    document.getElementById('statusText').textContent = text;
 }
 
-// ─── BOOT ───
-document.addEventListener("DOMContentLoaded", init);
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
 </script>
+
 </body>
 </html>
