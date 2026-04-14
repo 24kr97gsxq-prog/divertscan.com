@@ -5641,6 +5641,9 @@ const DS = {
         this.showLoading('Saving ' + scaleTickets.length + ' ticket' + (scaleTickets.length>1?'s':'') + '...');
 
         var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
+        // Also fetch ALL tickets to catch cross-project dupes by ticket number
+        var allTicketNums = {};
+        projectTickets.forEach(function(t) { if (t.ticket_number) allTicketNums[String(t.ticket_number).trim()] = t; });
 
         for (var i = 0; i < scaleTickets.length; i++) {
             var item = scaleTickets[i];
@@ -5686,13 +5689,15 @@ const DS = {
             });
             ticketData.co2e_avoided = +co2e.toFixed(4);
 
-            var existing = projectTickets.find(function(t){ return t.ticket_number === tktNum || t.ticket_number === String(tktNum); });
+            // Normalize ticket number for comparison
+            var normalizedNum = String(tktNum).trim();
+            var existing = allTicketNums[normalizedNum];
             var ticketId = null;
 
             if (existing) {
                 var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
                 ticketData.debris_images = existDebris;
-                // Only update if new data is better (has weight when existing doesn't)
+                // Update existing ticket with new photo/data
                 await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
                 ticketId = existing.id;
                 updated++;
@@ -5702,9 +5707,9 @@ const DS = {
                 var result = await this.supabase('tickets', 'POST', ticketData);
                 if (result && result.length) {
                     ticketId = result[0].id;
-                    this.state.tickets.unshift(result[0]);
-                    // Add to projectTickets so next iteration finds it (prevents batch dupes)
+                    // Add to both maps so next iteration finds it (prevents batch dupes)
                     projectTickets.push(result[0]);
+                    allTicketNums[normalizedNum] = result[0];
                     created++;
                 } else { failed++; continue; }
             }
@@ -5846,8 +5851,8 @@ const DS = {
             (q0.submitted_by||'Unknown') + ' — ' + parts.join(', ') +
             ' — ' + batch.items.length + ' photos total');
 
-        if (this.state.currentProject && this.state.currentProject.id === q0.project_id) {
-            await this.loadTickets(q0.project_id);
+        if (this.state.currentProject) {
+            await this.loadTickets(this.state.currentProject.id);
         }
         this.loadPhotoQueue();
     },
