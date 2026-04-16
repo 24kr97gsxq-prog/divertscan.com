@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DivertScan — All Projects Portfolio</title>
+<style>
+/* ── Reset & Base ── */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+    --bg:#0f172a;--card:#1e293b;--card-hover:#253349;
+    --text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b;
+    --border:#334155;--border-focus:#3b82f6;
+    --primary:#3b82f6;--primary-glow:rgba(59,130,246,0.15);
+    --success:#10b981;--success-glow:rgba(16,185,129,0.15);
+    --warning:#f59e0b;--warning-glow:rgba(245,158,11,0.15);
+    --danger:#ef4444;--danger-glow:rgba(239,68,68,0.15);
+    --accent:#8b5cf6;
+    --radius:10px;--radius-sm:6px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:0;-webkit-font-smoothing:antialiased}
+
+/* ── Header ── */
+.header{padding:16px 16px 12px;text-align:center;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#1a2744 0%,var(--bg) 100%)}
+.header h1{font-size:1.15rem;font-weight:700;letter-spacing:-.01em}
+.header .subtitle{font-size:.7rem;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.08em}
+
+/* ── Container ── */
+.container{max-width:960px;margin:0 auto;padding:12px}
+
+/* ── Grand Totals Bar ── */
+.grand-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.grand-stat{background:var(--card);border-radius:var(--radius-sm);padding:10px 8px;text-align:center;border:1px solid var(--border)}
+.grand-stat .val{font-size:1.25rem;font-weight:800;line-height:1.1}
+.grand-stat .lbl{font-size:.55rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.grand-stat.highlight{border-color:var(--success);background:var(--success-glow)}
+
+/* ── Sort Controls ── */
+.sort-bar{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.sort-btn{flex:0 0 auto;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:.7rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s}
+.sort-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.sort-btn:active{transform:scale(.96)}
+
+/* ── Project Cards ── */
+.proj-card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:8px;border:1px solid var(--border);cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.proj-card:active{transform:scale(.99);background:var(--card-hover)}
+.proj-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+
+/* ── Card Layout ── */
+.proj-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.proj-name{font-size:.9rem;font-weight:700;line-height:1.2;flex:1}
+.proj-badge{font-size:.55rem;padding:3px 8px;border-radius:12px;font-weight:700;white-space:nowrap;margin-left:8px}
+
+.proj-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.proj-stat{text-align:center}
+.proj-stat .sv{font-size:.95rem;font-weight:700;line-height:1.1}
+.proj-stat .sl{font-size:.5rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:1px}
+
+/* ── Diversion Bar ── */
+.div-bar-wrap{margin-top:10px;display:flex;align-items:center;gap:8px}
+.div-bar-track{flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.div-bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.div-bar-pct{font-size:.75rem;font-weight:700;min-width:42px;text-align:right}
+
+/* ── Activity Dot ── */
+.activity-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)}
+.activity-tag{font-size:.6rem;color:var(--text-dim);display:flex;align-items:center;gap:4px}
+.activity-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.hauler-tag{font-size:.6rem;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:10px}
+
+/* ── Performance Colors ── */
+.perf-green{color:var(--success)}.perf-green .div-bar-fill{background:var(--success)}
+.perf-yellow{color:var(--warning)}.perf-yellow .div-bar-fill{background:var(--warning)}
+.perf-red{color:var(--danger)}.perf-red .div-bar-fill{background:var(--danger)}
+.perf-green .proj-card::before,.proj-card.perf-green::before{background:var(--success)}
+.proj-card.perf-yellow::before{background:var(--warning)}
+.proj-card.perf-red::before{background:var(--danger)}
+
+/* ── CO₂e Footer ── */
+.co2-footer{margin-top:14px;padding:12px;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(59,130,246,0.08));border-radius:var(--radius);border:1px solid rgba(16,185,129,0.2);text-align:center}
+.co2-footer .big{font-size:1.6rem;font-weight:800;color:var(--success)}
+.co2-footer .lbl{font-size:.65rem;color:var(--text-muted);margin-top:2px}
+
+/* ── Loading ── */
+.loading{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Export Button ── */
+.export-bar{display:flex;gap:8px;margin-top:14px}
+.btn-export{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.75rem;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
+.btn-export:active{transform:scale(.97);background:var(--card-hover)}
+
+/* ── Back button ── */
+.btn-back{display:inline-flex;align-items:center;gap:4px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:.75rem;font-weight:600;cursor:pointer;margin-bottom:12px}
+.btn-back:active{background:var(--card)}
+
+/* ── Empty State ── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-dim)}
+.empty-state .icon{font-size:2rem;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>DivertScan™ Portfolio</h1>
+    <div class="subtitle">All Projects — Performance Overview</div>
+</div>
+
+<div class="container">
+    <div id="portfolioContent">
+        <div class="loading">
+            <div class="spinner"></div>
+            <div style="margin-top:12px;font-size:.8rem">Loading all projects...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  ALL PROJECTS PORTFOLIO — DivertScan Integration               ║
+// ║  Works standalone OR paste showAllProjectsSummary into DS obj   ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+(function(){
+'use strict';
+
+// ── Supabase Config ──
+var SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+
+async function sbQuery(endpoint) {
+    try {
+        var res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Accept': 'application/json'
+            }
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch(e) { return null; }
+}
+
+// ── Performance Tier ──
+function perfClass(pct) {
+    if (pct >= 50) return 'perf-green';
+    if (pct >= 25) return 'perf-yellow';
+    return 'perf-red';
+}
+
+function perfLabel(pct) {
+    if (pct >= 75) return '🏆 Excellent';
+    if (pct >= 50) return '✅ On Track';
+    if (pct >= 25) return '⚠️ Below Target';
+    return '🔴 Critical';
+}
+
+// ── Activity Recency ──
+function activityAge(dateStr) {
+    if (!dateStr) return { label: 'No activity', color: '#475569', dot: '#475569' };
+    var d = new Date(dateStr);
+    var now = new Date();
+    var days = Math.floor((now - d) / 86400000);
+    if (days <= 7) return { label: days === 0 ? 'Today' : days + 'd ago', color: '#10b981', dot: '#10b981' };
+    if (days <= 30) return { label: Math.floor(days / 7) + 'w ago', color: '#f59e0b', dot: '#f59e0b' };
+    return { label: Math.floor(days / 30) + 'mo ago', color: '#ef4444', dot: '#ef4444' };
+}
+
+// ── Sort State ──
+var currentSort = 'tonnage';
+var sortDir = -1; // -1 = descending
+var projectData = [];
+
+function sortProjects(key) {
+    if (currentSort === key) {
+        sortDir *= -1;
+    } else {
+        currentSort = key;
+        sortDir = -1;
+    }
+    renderPortfolio();
+}
+
+function getSorted() {
+    var sorted = projectData.slice();
+    sorted.sort(function(a, b) {
+        var va, vb;
+        switch (currentSort) {
+            case 'name': va = a.name.toLowerCase(); vb = b.name.toLowerCase(); return va < vb ? -sortDir : va > vb ? sortDir : 0;
+            case 'tickets': va = a.ticketCount; vb = b.ticketCount; break;
+            case 'tonnage': va = a.totalTons; vb = b.totalTons; break;
+            case 'diversion': va = a.diversionPct; vb = b.diversionPct; break;
+            case 'activity': va = a.lastDate ? new Date(a.lastDate).getTime() : 0; vb = b.lastDate ? new Date(b.lastDate).getTime() : 0; break;
+            case 'co2e': va = a.co2eAvoided; vb = b.co2eAvoided; break;
+            default: va = a.totalTons; vb = b.totalTons;
+        }
+        return (va - vb) * sortDir;
+    });
+    return sorted;
+}
+
+// ── Render ──
+function renderPortfolio() {
+    var sorted = getSorted();
+    var el = document.getElementById('portfolioContent');
+
+    // Grand totals
+    var totalTickets = 0, totalTons = 0, totalDiverted = 0, totalCO2e = 0;
+    projectData.forEach(function(p) {
+        totalTickets += p.ticketCount;
+        totalTons += p.totalTons;
+        totalDiverted += p.divertedTons;
+        totalCO2e += p.co2eAvoided;
+    });
+    var overallDiv = totalTons > 0 ? (totalDiverted / totalTons * 100) : 0;
+
+    var html = '';
+
+    // ── Grand Totals ──
+    html += '<div class="grand-bar">';
+    html += '<div class="grand-stat"><div class="val">' + projectData.length + '</div><div class="lbl">Projects</div></div>';
+    html += '<div class="grand-stat"><div class="val">' + totalTickets + '</div><div class="lbl">Tickets</div></div>';
+    html += '<div class="grand-stat"><div class="val">' + totalTons.toFixed(1) + '</div><div class="lbl">Total Tons</div></div>';
+    html += '<div class="grand-stat highlight"><div class="val">' + overallDiv.toFixed(1) + '%</div><div class="lbl">Avg Diversion</div></div>';
+    html += '</div>';
+
+    // ── Sort Buttons ──
+    var sorts = [
+        { key: 'tonnage', label: '⚖️ Tonnage' },
+        { key: 'diversion', label: '♻️ Diversion %' },
+        { key: 'tickets', label: '🎫 Tickets' },
+        { key: 'activity', label: '🕐 Activity' },
+        { key: 'co2e', label: '🌍 CO₂e' },
+        { key: 'name', label: 'A-Z Name' }
+    ];
+    html += '<div class="sort-bar">';
+    sorts.forEach(function(s) {
+        var active = currentSort === s.key ? ' active' : '';
+        var arrow = currentSort === s.key ? (sortDir === -1 ? ' ▼' : ' ▲') : '';
+        html += '<button class="sort-btn' + active + '" onclick="sortProjects(\'' + s.key + '\')">' + s.label + arrow + '</button>';
+    });
+    html += '</div>';
+
+    // ── Project Cards ──
+    if (sorted.length === 0) {
+        html += '<div class="empty-state"><div class="icon">📋</div><div>No projects found</div></div>';
+    } else {
+        sorted.forEach(function(p) {
+            var perf = perfClass(p.diversionPct);
+            var act = activityAge(p.lastDate);
+            var badge = perfLabel(p.diversionPct);
+            var badgeBg = perf === 'perf-green' ? 'rgba(16,185,129,0.15)' :
+                          perf === 'perf-yellow' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
+            var badgeColor = perf === 'perf-green' ? '#10b981' :
+                             perf === 'perf-yellow' ? '#f59e0b' : '#ef4444';
+
+            html += '<div class="proj-card ' + perf + '">';
+
+            // Top row
+            html += '<div class="proj-top">';
+            html += '<div class="proj-name">' + escHtml(p.name) + '</div>';
+            html += '<div class="proj-badge" style="background:' + badgeBg + ';color:' + badgeColor + '">' + badge + '</div>';
+            html += '</div>';
+
+            // Stats grid
+            html += '<div class="proj-stats">';
+            html += '<div class="proj-stat"><div class="sv">' + p.ticketCount + '</div><div class="sl">Tickets</div></div>';
+            html += '<div class="proj-stat"><div class="sv">' + p.totalTons.toFixed(1) + '</div><div class="sl">Net Tons</div></div>';
+            html += '<div class="proj-stat"><div class="sv">' + p.divertedTons.toFixed(1) + '</div><div class="sl">Diverted</div></div>';
+            html += '<div class="proj-stat"><div class="sv">' + p.co2eAvoided.toFixed(1) + '</div><div class="sl">CO₂e (mt)</div></div>';
+            html += '</div>';
+
+            // Diversion bar
+            html += '<div class="div-bar-wrap ' + perf + '">';
+            html += '<div class="div-bar-track"><div class="div-bar-fill" style="width:' + Math.min(p.diversionPct, 100) + '%"></div></div>';
+            html += '<div class="div-bar-pct">' + p.diversionPct.toFixed(1) + '%</div>';
+            html += '</div>';
+
+            // Activity & hauler row
+            html += '<div class="activity-row">';
+            html += '<div class="activity-tag"><span class="activity-dot" style="background:' + act.dot + '"></span> ' + act.label + '</div>';
+            if (p.hauler) html += '<div class="hauler-tag">🚛 ' + escHtml(p.hauler) + '</div>';
+            html += '</div>';
+
+            html += '</div>'; // proj-card
+        });
+    }
+
+    // ── CO₂e Footer ──
+    html += '<div class="co2-footer">';
+    html += '<div class="big">' + totalCO2e.toFixed(1) + ' mt</div>';
+    html += '<div class="lbl">Total CO₂e Avoided — All Projects Combined</div>';
+    html += '</div>';
+
+    // ── Export Bar ──
+    html += '<div class="export-bar">';
+    html += '<button class="btn-export" onclick="exportPortfolioCSV()">📥 Export CSV</button>';
+    html += '<button class="btn-export" onclick="window.print()">🖨️ Print Summary</button>';
+    html += '</div>';
+
+    el.innerHTML = html;
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Export CSV ──
+window.exportPortfolioCSV = function() {
+    var header = ['Project','Tickets','Net Tons','Diverted Tons','Landfill Tons','Diversion %','CO2e Avoided (mt)','Hauler','Last Activity'];
+    var rows = [header.join(',')];
+    projectData.forEach(function(p) {
+        rows.push([
+            '"' + (p.name || '').replace(/"/g,'""') + '"',
+            p.ticketCount,
+            p.totalTons.toFixed(2),
+            p.divertedTons.toFixed(2),
+            p.landfillTons.toFixed(2),
+            p.diversionPct.toFixed(1),
+            p.co2eAvoided.toFixed(2),
+            '"' + (p.hauler || '').replace(/"/g,'""') + '"',
+            p.lastDate || ''
+        ].join(','));
+    });
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'DivertScan_Portfolio_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// ── Sort from global ──
+window.sortProjects = sortProjects;
+
+// ── Load Data ──
+async function loadPortfolio() {
+    var projects = await sbQuery('projects?select=id,name,hauler,leed_version&order=name.asc');
+    var tickets = await sbQuery('tickets?select=id,project_id,ticket_date,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,hauler&order=ticket_date.desc&limit=5000');
+
+    if (!projects) {
+        document.getElementById('portfolioContent').innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><div>Could not connect to database.<br>Check Supabase credentials.</div></div>';
+        return;
+    }
+    if (!tickets) tickets = [];
+
+    // Build project map
+    var projMap = {};
+    projects.forEach(function(p) {
+        projMap[p.id] = {
+            id: p.id,
+            name: p.name || 'Untitled',
+            hauler: p.hauler || '',
+            leedVersion: p.leed_version || '',
+            ticketCount: 0,
+            totalTons: 0,
+            divertedTons: 0,
+            landfillTons: 0,
+            diversionPct: 0,
+            co2eAvoided: 0,
+            lastDate: null,
+            tickets: []
+        };
+    });
+
+    // Aggregate tickets
+    tickets.forEach(function(t) {
+        var proj = projMap[t.project_id];
+        if (!proj) return;
+        proj.ticketCount++;
+        proj.totalTons += parseFloat(t.net_tons) || 0;
+        proj.divertedTons += parseFloat(t.diverted_tons) || 0;
+        proj.landfillTons += parseFloat(t.landfill_tons) || 0;
+        proj.co2eAvoided += parseFloat(t.co2e_avoided) || 0;
+        // Use hauler from ticket if project doesn't have one
+        if (!proj.hauler && t.hauler) proj.hauler = t.hauler;
+        // Track most recent ticket date
+        if (t.ticket_date && (!proj.lastDate || t.ticket_date > proj.lastDate)) {
+            proj.lastDate = t.ticket_date;
+        }
+    });
+
+    // Compute diversion percentages
+    projectData = [];
+    Object.keys(projMap).forEach(function(id) {
+        var p = projMap[id];
+        if (p.totalTons > 0) {
+            p.diversionPct = (p.divertedTons / p.totalTons) * 100;
+        }
+        projectData.push(p);
+    });
+
+    renderPortfolio();
+}
+
+loadPortfolio();
+})();
+</script>
+</body>
+</html>
