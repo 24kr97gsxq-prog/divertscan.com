@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0f14">
+    <title>DivertScan — All Haulers Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+            --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+            --green:#22c55e;--green-glow:rgba(34,197,94,.12);
+            --amber:#f59e0b;--red:#ef4444;
+            --cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.08);
+            --blue:#3b82f6;
+            --mono:'JetBrains Mono',monospace;
+            --sans:'DM Sans',system-ui,sans-serif;
+        }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px}
+
+        .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50}
+        .hdr h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
+        .hdr h1 span{color:var(--cyan)}
+        .back-btn{color:var(--cyan);font-size:.8rem;text-decoration:none;font-weight:600}
+
+        .content{padding:16px;max-width:900px;margin:0 auto}
+
+        .summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+        .summary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+        .summary-card .label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:4px}
+        .summary-card .value{font-family:var(--mono);font-size:1.6rem;font-weight:800}
+        .summary-card .sub{font-size:.65rem;color:var(--muted);margin-top:2px}
+
+        .section-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:10px;margin-top:20px}
+
+        .hauler-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+        .hauler-card:active{border-color:var(--cyan)}
+        .hauler-name{font-size:1rem;font-weight:700;margin-bottom:8px}
+        .hauler-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+        .hauler-stat .label{font-size:.5rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600}
+        .hauler-stat .val{font-family:var(--mono);font-size:.9rem;font-weight:800;margin-top:2px}
+
+        .div-bar{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:8px}
+        .div-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+
+        .projects-list{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:none}
+        .projects-list.show{display:block}
+        .project-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.75rem}
+        .project-row .name{color:var(--muted);flex:1}
+        .project-row .tons{font-family:var(--mono);font-weight:700;color:var(--text);min-width:60px;text-align:right}
+        .project-row .div{font-family:var(--mono);font-weight:700;min-width:45px;text-align:right}
+
+        .export-bar{position:sticky;bottom:0;background:linear-gradient(135deg,#0f2b3c,#0a1f2e);border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:8px;justify-content:center}
+        .export-btn{padding:10px 20px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:.8rem;font-weight:600;cursor:pointer}
+        .export-btn:active{background:var(--cyan-glow);border-color:var(--cyan)}
+
+        .loading{text-align:center;padding:40px;color:var(--muted)}
+        .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;margin-right:8px;vertical-align:middle}
+        @keyframes spin{to{transform:rotate(360deg)}}
+    </style>
+</head>
+<body>
+
+<header class="hdr">
+    <a href="index.html" class="back-btn">← Back</a>
+    <h1><span>All Haulers</span> Report</h1>
+    <div style="width:50px"></div>
+</header>
+
+<div class="content">
+    <!-- Portfolio Summary -->
+    <div class="summary-grid" id="summaryGrid">
+        <div class="summary-card">
+            <div class="label">Total Haulers</div>
+            <div class="value" id="totalHaulers" style="color:var(--cyan)">—</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Tickets</div>
+            <div class="value" id="totalTickets" style="color:var(--text)">—</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Tons</div>
+            <div class="value" id="totalTons" style="color:var(--green)">—</div>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="label">Diverted</div>
+            <div class="value" id="totalDiverted" style="color:var(--green)">—</div>
+            <div class="sub" id="totalDivertedPct"></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Landfill</div>
+            <div class="value" id="totalLandfill" style="color:var(--red)">—</div>
+            <div class="sub" id="totalLandfillPct"></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">CO₂e Avoided</div>
+            <div class="value" id="totalCO2" style="color:var(--cyan)">—</div>
+            <div class="sub">metric tons</div>
+        </div>
+    </div>
+
+    <div class="section-label">Haulers by Tonnage</div>
+    <div id="haulerList">
+        <div class="loading"><span class="spinner"></span>Loading hauler data...</div>
+    </div>
+</div>
+
+<div class="export-bar">
+    <button class="export-btn" onclick="exportCSV()">📥 Export CSV</button>
+    <button class="export-btn" onclick="window.print()">🖨️ Print / PDF</button>
+</div>
+
+<script>
+const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+
+async function sb(endpoint) {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json'
+        }
+    });
+    if (!res.ok) return [];
+    return res.json();
+}
+
+let allHaulerData = [];
+
+async function init() {
+    // Get all tickets
+    const tickets = await sb('tickets?select=id,ticket_number,ticket_date,hauler,net_tons,net_lbs,gross_lbs,tare_lbs,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,scan_type,project_id&order=ticket_date.desc&limit=5000');
+    const projects = await sb('projects?select=id,name&order=name.asc');
+
+    const projMap = {};
+    projects.forEach(p => { projMap[p.id] = p.name; });
+
+    // Group by hauler
+    const haulerMap = {};
+    let grandTotalTons = 0, grandDiverted = 0, grandLandfill = 0, grandCO2 = 0, grandTickets = 0;
+
+    tickets.forEach(t => {
+        const h = t.hauler || 'Unknown';
+        if (!haulerMap[h]) {
+            haulerMap[h] = { name: h, tickets: [], totalTons: 0, diverted: 0, landfill: 0, co2: 0, projects: {} };
+        }
+        const hd = haulerMap[h];
+        hd.tickets.push(t);
+        const tons = parseFloat(t.net_tons) || 0;
+        const div = parseFloat(t.diverted_tons) || 0;
+        const lf = parseFloat(t.landfill_tons) || 0;
+        const co2 = parseFloat(t.co2e_avoided) || 0;
+        hd.totalTons += tons;
+        hd.diverted += div;
+        hd.landfill += lf;
+        hd.co2 += co2;
+
+        const projName = projMap[t.project_id] || 'Unassigned';
+        if (!hd.projects[projName]) {
+            hd.projects[projName] = { tons: 0, diverted: 0, tickets: 0 };
+        }
+        hd.projects[projName].tons += tons;
+        hd.projects[projName].diverted += div;
+        hd.projects[projName].tickets++;
+
+        grandTotalTons += tons;
+        grandDiverted += div;
+        grandLandfill += lf;
+        grandCO2 += co2;
+        grandTickets++;
+    });
+
+    // Sort by tonnage desc
+    allHaulerData = Object.values(haulerMap).sort((a, b) => b.totalTons - a.totalTons);
+
+    // Summary
+    document.getElementById('totalHaulers').textContent = allHaulerData.length;
+    document.getElementById('totalTickets').textContent = grandTickets.toLocaleString();
+    document.getElementById('totalTons').textContent = grandTotalTons.toFixed(1);
+    document.getElementById('totalDiverted').textContent = grandDiverted.toFixed(1);
+    document.getElementById('totalDivertedPct').textContent = grandTotalTons > 0 ? ((grandDiverted / grandTotalTons) * 100).toFixed(1) + '% of total' : '';
+    document.getElementById('totalLandfill').textContent = grandLandfill.toFixed(1);
+    document.getElementById('totalLandfillPct').textContent = grandTotalTons > 0 ? ((grandLandfill / grandTotalTons) * 100).toFixed(1) + '% of total' : '';
+    document.getElementById('totalCO2').textContent = grandCO2.toFixed(2);
+
+    // Render hauler cards
+    const el = document.getElementById('haulerList');
+    if (allHaulerData.length === 0) {
+        el.innerHTML = '<div class="loading">No ticket data found</div>';
+        return;
+    }
+
+    el.innerHTML = allHaulerData.map((h, i) => {
+        const divPct = h.totalTons > 0 ? ((h.diverted / h.totalTons) * 100).toFixed(1) : 0;
+        const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
+
+        const projRows = Object.entries(h.projects)
+            .sort((a, b) => b[1].tons - a[1].tons)
+            .map(([name, data]) => {
+                const pDiv = data.tons > 0 ? ((data.diverted / data.tons) * 100).toFixed(0) : 0;
+                const pColor = pDiv >= 75 ? 'var(--green)' : pDiv >= 50 ? 'var(--amber)' : 'var(--red)';
+                return `<div class="project-row">
+                    <span class="name">${name} (${data.tickets})</span>
+                    <span class="tons">${data.tons.toFixed(2)} T</span>
+                    <span class="div" style="color:${pColor}">${pDiv}%</span>
+                </div>`;
+            }).join('');
+
+        return `<div class="hauler-card" onclick="toggleProjects(${i})">
+            <div class="hauler-name">🚛 ${h.name}</div>
+            <div class="hauler-stats">
+                <div class="hauler-stat">
+                    <div class="label">Tickets</div>
+                    <div class="val" style="color:var(--text)">${h.tickets.length}</div>
+                </div>
+                <div class="hauler-stat">
+                    <div class="label">Net Tons</div>
+                    <div class="val" style="color:var(--cyan)">${h.totalTons.toFixed(2)}</div>
+                </div>
+                <div class="hauler-stat">
+                    <div class="label">Diverted</div>
+                    <div class="val" style="color:var(--green)">${h.diverted.toFixed(2)}</div>
+                </div>
+                <div class="hauler-stat">
+                    <div class="label">Div %</div>
+                    <div class="val" style="color:${divColor}">${divPct}%</div>
+                </div>
+            </div>
+            <div class="div-bar">
+                <div class="div-bar-fill" style="width:${divPct}%;background:${divColor}"></div>
+            </div>
+            <div class="projects-list" id="projects-${i}">
+                <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:6px">Projects</div>
+                ${projRows}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleProjects(idx) {
+    const el = document.getElementById('projects-' + idx);
+    el.classList.toggle('show');
+}
+
+function exportCSV() {
+    if (allHaulerData.length === 0) return;
+
+    let csv = 'Hauler,Tickets,Net Tons,Diverted Tons,Landfill Tons,Diversion %,CO2e Avoided\n';
+    allHaulerData.forEach(h => {
+        const divPct = h.totalTons > 0 ? ((h.diverted / h.totalTons) * 100).toFixed(1) : '0';
+        csv += `"${h.name}",${h.tickets.length},${h.totalTons.toFixed(4)},${h.diverted.toFixed(4)},${h.landfill.toFixed(4)},${divPct},${h.co2.toFixed(4)}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'DivertScan_All_Haulers_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
