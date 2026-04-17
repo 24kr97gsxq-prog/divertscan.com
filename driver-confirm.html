@@ -2,866 +2,713 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a0f14">
-    <title>Dalmex Scale</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DivertScan - Driver Scale Ticket</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         :root {
-            --bg:#0a0f14;--card:#0d1a24;--border:#1a3044;
-            --text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;
-            --green:#22c55e;--green-glow:rgba(34,197,94,.12);
-            --amber:#f59e0b;--amber-glow:rgba(245,158,11,.12);
-            --red:#ef4444;--cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.08);
-            --blue:#3b82f6;
-            --mono:'JetBrains Mono',monospace;
-            --sans:'DM Sans',system-ui,sans-serif;
+            --green: #0d7a3e;
+            --green-light: #e8f5ee;
+            --blue: #1a5fa8;
+            --blue-light: #e6f0fa;
+            --red: #c0392b;
+            --orange: #e67e22;
+            --orange-light: #fef3e2;
+            --gray-50: #f8f9fa;
+            --gray-100: #f0f1f3;
+            --gray-200: #dcdee2;
+            --gray-500: #6b7280;
+            --gray-700: #374151;
+            --gray-900: #111827;
+            --radius: 12px;
         }
-        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-        html,body{height:100%;overflow:hidden}
-        body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 
-        /* Header */
-        .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
-        .hdr h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
-        .hdr h1 span{color:var(--cyan)}
-        .hdr-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted)}
-        .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s ease infinite}
-        .dot.on{background:var(--green)}.dot.off{background:var(--red)}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-900);
+            min-height: 100vh;
+            padding: 0 0 100px 0;
+        }
 
-        /* Main content */
-        .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:120px}
+        .header {
+            background: var(--gray-900);
+            color: white;
+            padding: 16px 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .header .facility { font-size: 13px; opacity: 0.7; margin-top: 2px; }
 
-        /* Weight display cards */
-        .weight-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
-        .weight-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);opacity:.5}
-        .weight-card.captured{border-color:var(--green)}
-        .weight-card.captured::before{background:linear-gradient(90deg,var(--green),transparent);opacity:.8}
-        .weight-card.waiting{border-color:var(--amber);border-style:dashed}
-        .wc-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-        .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
-        .wc-value.empty{color:var(--dim);font-size:1.2rem;font-weight:500}
-        .wc-sub{font-size:.7rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+        .test-banner {
+            display: none;
+            padding: 8px 20px;
+            background: var(--orange-light);
+            color: var(--orange);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            text-transform: uppercase;
+        }
+        .test-banner.show { display: block; }
 
-        /* Net result */
-        .net-card{background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(34,197,94,.06));border:2px solid var(--cyan);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px}
-        .net-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-weight:700;margin-bottom:6px}
-        .net-value{font-family:var(--mono);font-size:3rem;font-weight:800;color:var(--green);letter-spacing:-.03em}
-        .net-tons{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--cyan);margin-top:2px}
-        .net-ticket{font-family:var(--mono);font-size:.8rem;color:var(--amber);margin-top:6px;font-weight:700}
+        .status-bar {
+            padding: 10px 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.connected { background: var(--green); }
+        .status-dot.error { background: var(--red); }
+        .status-dot.loading { background: var(--orange); animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        /* Project selector */
-        .proj-select{width:100%;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:600;-webkit-appearance:none;margin-bottom:12px}
-        .proj-select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
+        .content { padding: 16px 20px; }
 
-        /* Confirm button */
-        .confirm-btn{width:100%;padding:18px;border:none;border-radius:12px;font-family:var(--sans);font-size:1.1rem;font-weight:800;cursor:pointer;letter-spacing:.02em;transition:all .15s}
-        .confirm-btn:active{transform:scale(.97)}
-        .confirm-btn.ready{background:var(--green);color:#080f14}
-        .confirm-btn.disabled{background:var(--border);color:var(--dim);cursor:not-allowed}
+        .weight-card {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .weight-card label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--gray-500);
+            font-weight: 600;
+        }
+        .weight-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        .weight-card .unit { font-size: 16px; color: var(--gray-500); font-weight: 400; }
 
-        /* Success overlay */
-        .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
-        .success-overlay.show{display:flex}
-        .success-check{font-size:4rem;margin-bottom:12px;animation:pop .4s ease}
-        .success-ticket{font-family:var(--mono);font-size:1.8rem;font-weight:800;color:var(--cyan);margin-bottom:6px}
-        .success-weight{font-family:var(--mono);font-size:1.2rem;color:var(--green);margin-bottom:4px}
-        .success-msg{font-size:.85rem;color:var(--muted);text-align:center;margin-top:8px}
-        .success-countdown{font-family:var(--mono);font-size:.75rem;color:var(--dim);margin-top:16px}
-        @keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+        .net-card {
+            display: none;
+            background: var(--green-light);
+            border: 2px solid var(--green);
+        }
+        .net-card .value { color: var(--green); }
 
-        /* Status bar */
-        .status-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#0f2b3c,#0a1f2e);border-top:1px solid var(--border);padding:8px 16px;padding-bottom:max(8px,env(safe-area-inset-bottom));font-size:.65rem;color:var(--dim);display:flex;justify-content:space-between;z-index:50}
+        .instruction {
+            text-align: center;
+            padding: 16px;
+            color: var(--gray-500);
+            font-size: 14px;
+            line-height: 1.5;
+        }
 
-        /* Loading */
-        .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
-        @keyframes spin{to{transform:rotate(360deg)}}
+        .section-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--gray-500);
+            font-weight: 600;
+            margin-bottom: 8px;
+            margin-top: 16px;
+        }
+
+        select, input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            font-size: 16px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius);
+            background: white;
+            color: var(--gray-900);
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px; }
+
+        .walkin-toggle {
+            text-align: center;
+            margin-top: 12px;
+        }
+        .walkin-toggle a {
+            color: var(--blue);
+            font-size: 14px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .walkin-toggle a:active { opacity: 0.7; }
+
+        .walkin-section {
+            display: none;
+            margin-top: 12px;
+            padding: 16px;
+            background: var(--blue-light);
+            border-radius: var(--radius);
+            border: 1px solid #b8d4f0;
+        }
+        .walkin-section.show { display: block; }
+        .walkin-section label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--blue);
+            display: block;
+            margin-bottom: 6px;
+        }
+        .walkin-section input {
+            border: 1px solid #b8d4f0;
+        }
+
+        .confirm-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            background: var(--green);
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .confirm-btn:disabled {
+            background: var(--gray-200);
+            color: var(--gray-500);
+            cursor: not-allowed;
+        }
+        .confirm-btn:active:not(:disabled) { transform: scale(0.98); }
+
+        .success-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--green);
+            color: white;
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+        .success-overlay.show { display: flex; }
+        .success-overlay .checkmark { font-size: 80px; margin-bottom: 20px; }
+        .success-overlay h2 { font-size: 28px; margin-bottom: 8px; }
+        .success-overlay .ticket-num { font-size: 20px; opacity: 0.9; margin-bottom: 8px; }
+        .success-overlay .weight-summary { font-size: 16px; opacity: 0.8; margin-bottom: 24px; }
+        .success-overlay .reset-msg { font-size: 14px; opacity: 0.6; }
+
+        .test-btn {
+            display: none;
+            width: 100%;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--orange);
+            background: var(--orange-light);
+            border: 2px dashed var(--orange);
+            border-radius: var(--radius);
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        .test-btn.show { display: block; }
+
+        .hauler-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: var(--blue-light);
+            color: var(--blue);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
-
-<header class="hdr">
-    <div>
-        <h1><span>Dalmex</span> Scale</h1>
+    <div class="header">
+        <h1>DIVERTSCAN</h1>
+        <div class="facility">Dalmex Recycling — Scale Ticket</div>
     </div>
-    <div class="hdr-status">
-        <span class="dot off" id="statusDot"></span>
+
+    <div class="test-banner" id="testBanner">TEST MODE — NO REAL DATA</div>
+
+    <div class="status-bar">
+        <span class="status-dot loading" id="statusDot"></span>
         <span id="statusText">Connecting...</span>
     </div>
-</header>
 
-<div class="main">
-    <!-- Gross Weight -->
-    <div class="weight-card" id="grossCard">
-        <div class="wc-label">⚖️ Gross Weight (loaded truck)</div>
-        <div class="wc-value empty" id="grossValue">Waiting for truck...</div>
-        <div class="wc-sub" id="grossTime"></div>
-    </div>
-
-    <!-- Tare Weight -->
-    <div class="weight-card" id="tareCard">
-        <div class="wc-label">🚛 Tare Weight (empty truck)</div>
-        <div class="wc-value empty" id="tareValue">Drive to dump, then return</div>
-        <div class="wc-sub" id="tareTime"></div>
-    </div>
-
-    <!-- Net Result -->
-    <div class="net-card" id="netCard" style="display:none">
-        <div class="net-label">Net Weight</div>
-        <div class="net-value" id="netLbs">0</div>
-        <div style="font-size:.7rem;color:var(--muted)">lbs</div>
-        <div class="net-tons" id="netTons">0 tons</div>
-        <div class="net-ticket" id="netTicket"></div>
-    </div>
-
-    <!-- Hauler Selector (persists — driver picks once) -->
-    <div id="haulerSetup" style="display:none;">
-        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Select your company</div>
-        <div id="haulerButtons" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-    </div>
-
-    <!-- Active hauler badge (tap to change) -->
-    <div id="haulerBadge" style="display:none;margin-bottom:8px;padding:10px 14px;background:var(--cyan-glow);border:1px solid rgba(0,201,167,.25);border-radius:8px;display:none;cursor:pointer" onclick="changeHauler()">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-                <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--cyan);font-weight:600;">Hauler</div>
-                <div style="font-size:.9rem;font-weight:700;" id="haulerBadgeName"></div>
-            </div>
-            <div style="font-size:.6rem;color:var(--muted);">tap to change</div>
+    <div class="content">
+        <div class="weight-card">
+            <label>Gross Weight</label>
+            <div class="value" id="grossWeight">--<span class="unit"> lbs</span></div>
         </div>
+
+        <div class="weight-card">
+            <label>Tare Weight</label>
+            <div class="value" id="tareWeight">--<span class="unit"> lbs</span></div>
+        </div>
+
+        <div class="weight-card net-card" id="netCard">
+            <label>Net Weight</label>
+            <div class="value" id="netWeight">--<span class="unit"> lbs</span></div>
+            <div style="font-size:14px; color:var(--green); margin-top:4px;" id="netTons"></div>
+        </div>
+
+        <div class="instruction" id="instruction">
+            Drive onto the scale. Weight will appear automatically.
+        </div>
+
+        <!-- LEED Project Selection -->
+        <div id="projectSection" style="display:none;">
+            <div class="section-label">Select Project</div>
+            <select id="projectSelect" onchange="checkReady()">
+                <option value="">-- Choose a project --</option>
+            </select>
+
+            <!-- Non-LEED walk-in option -->
+            <div class="walkin-toggle">
+                <a onclick="toggleWalkin()">Not on a LEED project? Tap here</a>
+            </div>
+
+            <div class="walkin-section" id="walkinSection">
+                <label>Company or Job Name</label>
+                <input type="text" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="checkReady()">
+            </div>
+
+            <div class="section-label" style="margin-top:12px;">Hauler</div>
+            <select id="haulerSelect" onchange="checkReady()">
+                <option value="">-- Select hauler --</option>
+                <option value="Jaguar Vacuum">Jaguar Vacuum</option>
+                <option value="DFW Hauling">DFW Hauling</option>
+                <option value="Metro Waste">Metro Waste</option>
+                <option value="Other">Other</option>
+            </select>
+
+            <button class="confirm-btn" id="confirmBtn" disabled onclick="confirmTicket()">
+                CONFIRM TICKET
+            </button>
+        </div>
+
+        <button class="test-btn" id="testBtn" onclick="simulateWeights()">
+            Simulate Weight Readings (Test)
+        </button>
     </div>
 
-    <!-- Driver Name -->
-    <input type="text" class="proj-select" id="driverName" placeholder="Driver name" autocomplete="name"
-           oninput="localStorage.setItem('ds_driver_name',this.value);checkReady()"
-           style="margin-bottom:8px;display:none">
-
-    <!-- Project Selector (filtered by hauler) -->
-    <select class="proj-select" id="projectSelect" onchange="checkReady()" style="display:none">
-        <option value="">— Select Project —</option>
-    </select>
-
-    <!-- Confirm Button -->
-    <button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
-        SELECT YOUR COMPANY FIRST
-    </button>
-
-    <!-- Recent Loads History (filtered to this hauler) -->
-    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
-        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Your Recent Loads</div>
-        <div id="recentLoads" style="font-size:.75rem;color:var(--muted);">Select your company to see loads</div>
+    <div class="success-overlay" id="successOverlay">
+        <div class="checkmark">&#10003;</div>
+        <h2>TICKET CONFIRMED</h2>
+        <div class="ticket-num" id="successTicket"></div>
+        <div class="weight-summary" id="successSummary"></div>
+        <div class="reset-msg">Resetting in 10 seconds...</div>
     </div>
-</div>
 
-<!-- Success Overlay -->
-<div class="success-overlay" id="successOverlay">
-    <div class="success-check">✅</div>
-    <div class="success-ticket" id="successTicket">DX-00001</div>
-    <div class="success-weight" id="successWeight">Net: 31,800 lbs (15.90 T)</div>
-    <div class="success-msg">Ticket created in DivertScan<br>Ready for next truck</div>
-    <div class="success-countdown" id="successCountdown">Resetting in 8s...</div>
-</div>
+    <script>
+        // ── CONFIG ──
+        const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+        const POLL_INTERVAL = 5000;
+        const DEVICE_ID = "dalmex-scale-01";
 
-<!-- Driver Ticket Detail Modal (view-only + add photos) -->
-<div id="driverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeDM()">
-    <div style="width:100%;max-width:600px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#131f2e;border:1px solid var(--border);border-radius:14px 14px 0 0;padding:20px;padding-bottom:40px" id="driverModalInner">
-        <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px"></div>
-        <div id="driverModalContent"></div>
-    </div>
-</div>
+        let grossReading = null;
+        let tareReading = null;
+        let pollTimer = null;
+        let isTestMode = false;
+        let isWalkin = false;
 
-<!-- Status Bar -->
-<div class="status-bar">
-    <span id="deviceLabel">Dalmex Scale 01</span>
-    <span id="lastSync">—</span>
-</div>
-
-<script>
-// ─────────────────────────────────────────────
-// CONFIG — update these for your setup
-// ─────────────────────────────────────────────
-const SUPABASE_URL  = "https://cyvvlngtojagfoaitoog.supabase.co";
-const SUPABASE_KEY  = localStorage.getItem('ds_supabase_key') || "YOUR_SUPABASE_ANON_KEY";
-const DEVICE_ID     = "dalmex-scale-01";
-const TICKET_PREFIX = "DX";
-const POLL_INTERVAL = 3000;  // Check for new weights every 3 seconds
-
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-let grossReading = null;
-let tareReading  = null;
-let projects     = [];
-let nextTicketNum = null;
-let pollTimer    = null;
-
-// ─────────────────────────────────────────────
-// SUPABASE HELPER
-// ─────────────────────────────────────────────
-async function sb(endpoint, method = 'GET', body = null) {
-    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-    const headers = {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json'
-    };
-    if (method === 'POST' || method === 'PATCH') headers['Prefer'] = 'return=representation';
-    const opts = { method, headers };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
-    if (!res.ok) { console.error('SB error:', res.status, await res.text()); return null; }
-    if (res.status === 204) return [];
-    const text = await res.text();
-    return text ? JSON.parse(text) : [];
-}
-
-// ─────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────
-let selectedHauler = null;
-
-async function init() {
-    // Load all projects
-    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
-
-    // Build hauler list from projects (unique waste_hauler values)
-    const haulerSet = {};
-    projects.forEach(p => {
-        if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
-    });
-    const haulers = Object.keys(haulerSet).sort();
-
-    // Build hauler selection buttons
-    const btnContainer = document.getElementById('haulerButtons');
-    btnContainer.innerHTML = haulers.map(h => 
-        `<button onclick="selectHauler('${h.replace(/'/g, "\\'")}')" style="padding:16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:700;cursor:pointer;text-align:left;">🚛 ${h}</button>`
-    ).join('');
-
-    // Check for saved hauler
-    const savedHauler = localStorage.getItem('ds_driver_hauler');
-    if (savedHauler && haulers.includes(savedHauler)) {
-        selectHauler(savedHauler);
-    } else {
-        // Show hauler setup
-        document.getElementById('haulerSetup').style.display = 'block';
-    }
-
-    // Restore driver name
-    const savedDriver = localStorage.getItem('ds_driver_name');
-    if (savedDriver) document.getElementById('driverName').value = savedDriver;
-
-    // Get next ticket number
-    await refreshNextTicketNum();
-
-    // Start polling for weights
-    updateStatus('on', 'Listening...');
-    pollWeights();
-    pollTimer = setInterval(pollWeights, POLL_INTERVAL);
-}
-
-function selectHauler(haulerName) {
-    selectedHauler = haulerName;
-    localStorage.setItem('ds_driver_hauler', haulerName);
-
-    // Hide setup, show badge
-    document.getElementById('haulerSetup').style.display = 'none';
-    document.getElementById('haulerBadge').style.display = 'block';
-    document.getElementById('haulerBadgeName').textContent = haulerName;
-
-    // Show driver name and project fields
-    document.getElementById('driverName').style.display = 'block';
-    document.getElementById('projectSelect').style.display = 'block';
-
-    // Filter projects to this hauler
-    const sel = document.getElementById('projectSelect');
-    sel.innerHTML = '<option value="">— Select Project —</option>';
-    const filtered = projects.filter(p => p.waste_hauler === haulerName);
-    filtered.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = p.name;
-        sel.appendChild(opt);
-    });
-
-    // If only one project, auto-select it
-    if (filtered.length === 1) {
-        sel.value = filtered[0].id;
-    }
-
-    checkReady();
-    loadRecentLoads();
-}
-
-function changeHauler() {
-    selectedHauler = null;
-    localStorage.removeItem('ds_driver_hauler');
-    document.getElementById('haulerSetup').style.display = 'block';
-    document.getElementById('haulerBadge').style.display = 'none';
-    document.getElementById('driverName').style.display = 'none';
-    document.getElementById('projectSelect').style.display = 'none';
-    document.getElementById('projectSelect').value = '';
-    document.getElementById('confirmBtn').className = 'confirm-btn disabled';
-    document.getElementById('confirmBtn').disabled = true;
-    document.getElementById('confirmBtn').textContent = 'SELECT YOUR COMPANY FIRST';
-}
-
-// ─────────────────────────────────────────────
-// TICKET NUMBERING — DX-XXXXX
-// ─────────────────────────────────────────────
-async function refreshNextTicketNum() {
-    // Query the highest existing DX- ticket number
-    const existing = await sb(
-        `tickets?ticket_number=like.${TICKET_PREFIX}-*&select=ticket_number&order=ticket_number.desc&limit=1`
-    );
-
-    let highest = 0;
-    if (existing && existing.length > 0) {
-        const num = existing[0].ticket_number.replace(TICKET_PREFIX + '-', '');
-        highest = parseInt(num) || 0;
-    }
-
-    // Also check scale_weights for any confirmed but not yet ticketed
-    nextTicketNum = highest + 1;
-    document.getElementById('netTicket').textContent = 
-        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
-}
-
-function getTicketNumber() {
-    const num = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
-    nextTicketNum++;
-    return num;
-}
-
-// ─────────────────────────────────────────────
-// POLL FOR NEW WEIGHT READINGS
-// ─────────────────────────────────────────────
-async function pollWeights() {
-    try {
-        // Get recent pending weights from Pi (last 30 minutes)
-        const since = new Date(Date.now() - 30 * 60000).toISOString();
-        const weights = await sb(
-            `scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`
-        );
-
-        if (!weights || weights.length === 0) return;
-
-        // Logic: highest pending weight = gross, lowest = tare
-        // Only pair if there are at least 2 readings
-        const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
-
-        // First reading (heaviest) is gross
-        if (!grossReading || sorted[0].id !== grossReading.id) {
-            if (sorted[0].weight_lbs > 5000) {  // Reasonable gross threshold
-                grossReading = sorted[0];
-                showGross(grossReading);
+        // ── AUDIO CONTEXT FOR BEEP ──
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
         }
 
-        // If we have 2+ readings and the lightest is significantly less, it's tare
-        if (sorted.length >= 2 && grossReading) {
-            const candidate = sorted[sorted.length - 1];
-            // Tare must be less than gross and reasonably different (at least 2000 lbs net)
-            if (candidate.weight_lbs < grossReading.weight_lbs - 2000 &&
-                candidate.id !== grossReading.id) {
-                if (!tareReading || candidate.id !== tareReading.id) {
-                    tareReading = candidate;
-                    showTare(tareReading);
-                    showNet();
-                }
+        function playBeep(frequency, duration, count) {
+            initAudio();
+            for (let i = 0; i < count; i++) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = frequency;
+                osc.type = "square";
+                gain.gain.value = 0.3;
+                const startTime = audioCtx.currentTime + (i * (duration + 0.1));
+                osc.start(startTime);
+                osc.stop(startTime + duration);
             }
         }
 
-        updateStatus('on', 'Connected');
-        document.getElementById('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
-
-    } catch (err) {
-        console.error('Poll error:', err);
-        updateStatus('off', 'Connection lost');
-    }
-}
-
-// ─────────────────────────────────────────────
-// DISPLAY FUNCTIONS
-// ─────────────────────────────────────────────
-function showGross(reading) {
-    const card = document.getElementById('grossCard');
-    card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('grossValue').textContent = 
-        Number(reading.weight_lbs).toLocaleString() + ' lbs';
-    document.getElementById('grossValue').classList.remove('empty');
-    const grossAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
-    const freshLabel = grossAge <= 5 ? '🟢 Just now' : grossAge <= 15 ? '🟡 ' + grossAge + ' min ago' : '🔴 ' + grossAge + ' min ago — verify this is your truck';
-    document.getElementById('grossTime').innerHTML = 
-        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (grossAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + freshLabel + '</span>';
-
-    // Update tare card to show waiting
-    const tareCard = document.getElementById('tareCard');
-    tareCard.classList.add('waiting');
-    document.getElementById('tareValue').textContent = 'Waiting...';
-    document.getElementById('tareValue').classList.add('empty');
-
-    checkReady();
-}
-
-function showTare(reading) {
-    const card = document.getElementById('tareCard');
-    card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('tareValue').textContent = 
-        Number(reading.weight_lbs).toLocaleString() + ' lbs';
-    document.getElementById('tareValue').classList.remove('empty');
-    const tareAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
-    const tareFresh = tareAge <= 5 ? '🟢 Just now' : tareAge <= 15 ? '🟡 ' + tareAge + ' min ago' : '🔴 ' + tareAge + ' min ago';
-    document.getElementById('tareTime').innerHTML = 
-        new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (tareAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + tareFresh + '</span>';
-
-    checkReady();
-}
-
-function showNet() {
-    if (!grossReading || !tareReading) return;
-
-    const netLbs = grossReading.weight_lbs - tareReading.weight_lbs;
-    const netTons = (netLbs / 2000).toFixed(2);
-
-    document.getElementById('netCard').style.display = 'block';
-    document.getElementById('netLbs').textContent = Number(netLbs).toLocaleString();
-    document.getElementById('netTons').textContent = netTons + ' tons';
-    document.getElementById('netTicket').textContent = 
-        TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
-
-    checkReady();
-}
-
-function checkReady() {
-    const btn = document.getElementById('confirmBtn');
-    const projectId = document.getElementById('projectSelect').value;
-    const ready = grossReading && tareReading && projectId && selectedHauler;
-
-    if (ready) {
-        btn.classList.remove('disabled');
-        btn.classList.add('ready');
-        btn.disabled = false;
-        btn.textContent = '✅ CONFIRM TICKET';
-    } else {
-        btn.classList.add('disabled');
-        btn.classList.remove('ready');
-        btn.disabled = true;
-        if (!selectedHauler) btn.textContent = 'SELECT YOUR COMPANY FIRST';
-        else if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
-        else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
-        else btn.textContent = 'SELECT A PROJECT';
-    }
-}
-
-// ─────────────────────────────────────────────
-// CONFIRM — Creates ticket in DivertScan
-// ─────────────────────────────────────────────
-async function confirmTicket() {
-    const btn = document.getElementById('confirmBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳ Creating ticket...';
-
-    const projectId = document.getElementById('projectSelect').value;
-    const proj = projects.find(p => p.id === projectId);
-    const driverName = document.getElementById('driverName').value.trim() || 'Unknown';
-    const grossLbs = grossReading.weight_lbs;
-    const tareLbs = tareReading.weight_lbs;
-    const netLbs = grossLbs - tareLbs;
-    const netTons = +(netLbs / 2000).toFixed(4);
-
-    // Generate ticket number
-    const ticketNum = getTicketNumber();
-
-    // Today's date forced to 2026
-    let today = new Date().toISOString().split('T')[0];
-    if (today.substring(0, 4) !== '2026') today = '2026' + today.substring(4);
-
-    // Default material percentages (C&D mix)
-    const defaults = {
-        wood_pct: 34, occ_pct: 16, metal_pct: 11, plastic_pct: 0,
-        concrete_pct: 2, block_pct: 1, landfill_pct: 36
-    };
-
-    // Calculate tons per material
-    const matData = {};
-    let divertedTons = 0;
-    let co2e = 0;
-
-    const GWP = { wood: 0.310, occ: 0.940, metal: 1.850, plastic: 3.100, concrete: 0.130, block: 0.240, landfill: 0.520 };
-
-    Object.keys(defaults).forEach(k => {
-        const pct = defaults[k];
-        const mat = k.replace('_pct', '');
-        const tons = +(netTons * pct / 100).toFixed(4);
-        matData[k] = pct;
-        matData[mat + '_tons'] = tons;
-        if (mat !== 'landfill') {
-            divertedTons += tons;
-            co2e += tons * (GWP[mat] || 0);
+        function vibratePhone(pattern) {
+            if (navigator.vibrate) {
+                navigator.vibrate(pattern);
+            }
         }
-    });
 
-    const diversionPct = 100 - defaults.landfill_pct;
+        function notifyGross() {
+            playBeep(800, 0.15, 2);          // 2 short beeps
+            vibratePhone([200, 100, 200]);    // vibrate-pause-vibrate
+        }
 
-    // Generate SHA-256 audit hash
-    let auditHash = '';
-    try {
-        const hashInput = JSON.stringify({
-            ticket_number: ticketNum,
-            net_lbs: netLbs,
-            project_id: projectId,
-            timestamp: new Date().toISOString()
-        });
-        const msgBuffer = new TextEncoder().encode(hashInput);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        auditHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) { console.error('Hash error:', e); }
+        function notifyTare() {
+            playBeep(1200, 0.15, 3);          // 3 higher beeps
+            vibratePhone([200, 100, 200, 100, 200]);
+        }
 
-    try {
-        // 1. Create ticket in DivertScan tickets table
-        const ticket = {
-            project_id: projectId,
-            ticket_number: ticketNum,
-            ticket_date: today,
-            service_date: today,
-            gross_lbs: grossLbs,
-            tare_lbs: tareLbs,
-            net_lbs: netLbs,
-            net_tons: netTons,
-            hauler: selectedHauler || proj?.waste_hauler || 'Dalmex Scale',
-            container_size: 30,
-            scan_type: 'pi_scale',
-            diversion_pct: diversionPct,
-            diverted_tons: +divertedTons.toFixed(4),
-            landfill_tons: +(netTons * defaults.landfill_pct / 100).toFixed(4),
-            co2e_avoided: +co2e.toFixed(4),
-            captured_at: new Date().toISOString(),
-            audit_id: auditHash,
-            notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ') — Driver: ' + driverName,
-            ...matData
+        function notifyConfirm() {
+            playBeep(600, 0.3, 1);            // 1 long low beep
+            vibratePhone([500]);
+        }
+
+        // ── SUPABASE HELPERS ──
+        const headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+            "Content-Type": "application/json"
         };
 
-        const result = await sb('tickets', 'POST', ticket);
-
-        if (!result || result.length === 0) {
-            throw new Error('Failed to insert ticket');
+        async function supabaseGet(endpoint) {
+            const resp = await fetch(SUPABASE_URL + "/rest/v1/" + endpoint, { headers });
+            if (!resp.ok) throw new Error("Supabase GET failed: " + resp.status);
+            return resp.json();
         }
 
-        const createdTicket = result[0];
-
-        // 2. Update scale_weights to link to this ticket
-        await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
-            status: 'confirmed',
-            weight_type: 'gross',
-            project_id: projectId,
-            ticket_id: createdTicket.id,
-            paired_with: tareReading.id,
-            confirmed_at: new Date().toISOString(),
-            confirmed_by: driverName
-        });
-
-        await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
-            status: 'confirmed',
-            weight_type: 'tare',
-            project_id: projectId,
-            ticket_id: createdTicket.id,
-            paired_with: grossReading.id,
-            confirmed_at: new Date().toISOString(),
-            confirmed_by: driverName
-        });
-
-        // 3. Show success
-        document.getElementById('successTicket').textContent = ticketNum;
-        document.getElementById('successWeight').textContent = 
-            'Net: ' + Number(netLbs).toLocaleString() + ' lbs (' + netTons.toFixed(2) + ' T)';
-        document.getElementById('successOverlay').classList.add('show');
-
-        // Countdown and reset
-        let countdown = 8;
-        const cdEl = document.getElementById('successCountdown');
-        const cdTimer = setInterval(() => {
-            countdown--;
-            cdEl.textContent = 'Resetting in ' + countdown + 's...';
-            if (countdown <= 0) {
-                clearInterval(cdTimer);
-                resetPage();
-            }
-        }, 1000);
-
-    } catch (err) {
-        console.error('Confirm error:', err);
-        btn.disabled = false;
-        btn.classList.add('ready');
-        btn.textContent = '❌ ERROR — TAP TO RETRY';
-        updateStatus('off', 'Error: ' + err.message);
-    }
-}
-
-// ─────────────────────────────────────────────
-// RESET FOR NEXT TRUCK
-// ─────────────────────────────────────────────
-function resetPage() {
-    grossReading = null;
-    tareReading = null;
-
-    document.getElementById('successOverlay').classList.remove('show');
-
-    // Reset cards
-    document.getElementById('grossCard').classList.remove('captured', 'waiting');
-    document.getElementById('grossValue').textContent = 'Waiting for truck...';
-    document.getElementById('grossValue').classList.add('empty');
-    document.getElementById('grossTime').textContent = '';
-
-    document.getElementById('tareCard').classList.remove('captured', 'waiting');
-    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
-    document.getElementById('tareValue').classList.add('empty');
-    document.getElementById('tareTime').textContent = '';
-
-    document.getElementById('netCard').style.display = 'none';
-    document.getElementById('projectSelect').value = '';
-
-    // Refresh ticket number for next one
-    refreshNextTicketNum();
-
-    // Refresh history
-    loadRecentLoads();
-
-    checkReady();
-}
-
-// ─────────────────────────────────────────────
-// RECENT LOADS HISTORY
-// ─────────────────────────────────────────────
-async function loadRecentLoads() {
-    const el = document.getElementById('recentLoads');
-    
-    if (!selectedHauler) {
-        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">Select your company to see loads</div>';
-        return;
-    }
-
-    // Get recent tickets for this hauler
-    const haulerFilter = encodeURIComponent(selectedHauler);
-    let data = await sb(
-        `tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=ticket_date.desc,captured_at.desc&limit=5`
-    );
-
-    if (!data || data.length === 0) {
-        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedHauler + '</div>';
-        return;
-    }
-
-    driverTickets = data;
-
-    el.innerHTML = data.map((t, i) => {
-        const net = Number(t.net_lbs || 0).toLocaleString();
-        const tons = Number(t.net_tons || 0).toFixed(2);
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        let dateStr = '';
-        let time = '';
-        if (t.ticket_date) {
-            const p = t.ticket_date.split('-');
-            dateStr = months[parseInt(p[1]) - 1] + ' ' + parseInt(p[2]);
-        }
-        if (t.captured_at) {
-            const d = new Date(t.captured_at);
-            time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            if (!dateStr) dateStr = months[d.getMonth()] + ' ' + d.getDate();
-        }
-        const driver = (t.notes || '').match(/Driver:\s*(.+)/);
-        const driverName = driver ? driver[1].trim() : '';
-        const divPct = t.diversion_pct || 0;
-        const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
-        const debrisCount = Array.isArray(t.debris_images) ? t.debris_images.length : 0;
-
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;${i < data.length - 1 ? 'border-bottom:1px solid var(--border);' : ''}cursor:pointer;" onclick="viewDriverTicket('${t.id}')">
-            <div style="flex-shrink:0;text-align:left;min-width:46px;line-height:1.4;">
-                <div style="font-size:.65rem;font-weight:600;color:var(--muted);">${dateStr}</div>
-                <div style="font-size:.55rem;color:var(--dim);">${time}</div>
-            </div>
-            <div style="flex-shrink:0;text-align:center;min-width:50px;">
-                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:var(--cyan);">${t.ticket_number}</div>
-            </div>
-            <div style="flex:1;">
-                <div style="font-family:var(--mono);font-weight:700;font-size:.8rem;">${net} lbs <span style="color:var(--muted);font-weight:400;">(${tons} T)</span></div>
-                <div style="font-size:.6rem;color:var(--dim);">${Number(t.gross_lbs||0).toLocaleString()} gross / ${Number(t.tare_lbs||0).toLocaleString()} tare${driverName ? ' • ' + driverName : ''}</div>
-            </div>
-            <div style="flex-shrink:0;text-align:right;">
-                <div style="font-family:var(--mono);font-weight:800;font-size:.8rem;color:${divColor};">${divPct}%</div>
-                <div style="font-size:.55rem;color:var(--dim);">${debrisCount > 0 ? '📸' + debrisCount : '📷 add'}</div>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// ─────────────────────────────────────────────
-// DRIVER TICKET DETAIL (view + add photos)
-// ─────────────────────────────────────────────
-let driverTickets = [];
-
-function viewDriverTicket(id) {
-    const t = driverTickets.find(x => x.id === id);
-    if (!t) return;
-
-    const projMap = {};
-    projects.forEach(p => { projMap[p.id] = p.name; });
-    const projName = projMap[t.project_id] || '';
-    const divPct = t.diversion_pct || 0;
-    const divColor = divPct >= 75 ? 'var(--green)' : divPct >= 50 ? 'var(--amber)' : 'var(--red)';
-    const time = t.captured_at ? new Date(t.captured_at).toLocaleString() : '';
-    const debrisArr = Array.isArray(t.debris_images) ? t.debris_images : [];
-
-    // Material bars
-    const MATS = [
-        {key:'wood',name:'Wood',color:'#92400e'},{key:'occ',name:'Cardboard',color:'#d97706'},
-        {key:'metal',name:'Metal',color:'#6b7280'},{key:'concrete',name:'Concrete',color:'#78716c'},
-        {key:'block',name:'Block',color:'#a16207'},{key:'landfill',name:'Landfill',color:'#e84040'}
-    ];
-    const matHtml = MATS.filter(m => (t[m.key + '_pct'] || 0) > 0).map(m => {
-        const pct = t[m.key + '_pct'] || 0;
-        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.7rem">
-            <span style="width:65px;color:var(--muted)">${m.name}</span>
-            <div style="flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${m.color};border-radius:2px"></div>
-            </div>
-            <span style="width:30px;text-align:right;font-family:var(--mono);font-weight:700">${pct}%</span>
-        </div>`;
-    }).join('');
-
-    // Photos section
-    let photoHtml = '';
-    if (t.scale_ticket_image) {
-        photoHtml += `<div style="margin-top:12px">
-            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Scale Ticket</div>
-            <img src="${t.scale_ticket_image}" onclick="window.open('${t.scale_ticket_image}')" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--border);cursor:pointer">
-        </div>`;
-    }
-    if (debrisArr.length > 0) {
-        photoHtml += `<div style="margin-top:10px">
-            <div style="font-size:.55rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Debris Photos (${debrisArr.length})</div>
-            <div style="display:flex;gap:6px;overflow-x:auto">
-                ${debrisArr.map(u => `<img src="${u}" onclick="window.open('${u}')" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">`).join('')}
-            </div>
-        </div>`;
-    }
-
-    const html = `
-        <div style="font-size:1rem;font-weight:800;margin-bottom:12px;letter-spacing:-.02em">${t.ticket_number}</div>
-        <div style="text-align:center;padding:14px 0;margin-bottom:14px;background:${divPct >= 75 ? 'rgba(15,186,106,.08)' : divPct >= 50 ? 'rgba(232,160,32,.08)' : 'rgba(232,64,64,.08)'};border-radius:10px;">
-            <div style="font-size:2.4rem;font-weight:800;font-family:var(--mono);color:${divColor}">${divPct}%</div>
-            <div style="font-size:.65rem;color:var(--muted)">Diversion Rate</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
-                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Gross</div>
-                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.gross_lbs||0).toLocaleString()}</div>
-            </div>
-            <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:10px;text-align:center">
-                <div style="font-size:.5rem;color:var(--dim);text-transform:uppercase;font-weight:600">Tare</div>
-                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem">${Number(t.tare_lbs||0).toLocaleString()}</div>
-            </div>
-            <div style="background:rgba(0,201,167,.06);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px;text-align:center">
-                <div style="font-size:.5rem;color:var(--cyan);text-transform:uppercase;font-weight:600">Net</div>
-                <div style="font-family:var(--mono);font-weight:800;font-size:.9rem;color:var(--green)">${Number(t.net_lbs||0).toLocaleString()}</div>
-                <div style="font-size:.6rem;color:var(--muted)">${Number(t.net_tons||0).toFixed(2)} T</div>
-            </div>
-        </div>
-        <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">${projName}${t.ticket_date ? ' • ' + t.ticket_date : ''}</div>
-        <div style="font-size:.65rem;color:var(--dim);margin-bottom:12px">${time}</div>
-        ${matHtml ? '<div style="margin-bottom:12px">' + matHtml + '</div>' : ''}
-        ${photoHtml}
-        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <div style="font-size:.65rem;color:var(--dim);font-weight:600;text-transform:uppercase;margin-bottom:8px">📸 Add Debris Photo</div>
-            <div style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;position:relative" onclick="document.getElementById('driverPhotoInput').click()">
-                <div style="font-size:1.5rem;margin-bottom:4px">📸</div>
-                <div style="font-size:.8rem;color:var(--muted);font-weight:500">Tap to take photo or choose from gallery</div>
-                <input type="file" id="driverPhotoInput" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="uploadDriverDebris('${t.id}', this)">
-            </div>
-            <div id="driverUploadStatus" style="font-size:.75rem;margin-top:8px;text-align:center"></div>
-        </div>
-        <button onclick="closeDM()" style="display:block;width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;margin-top:12px">Done</button>
-    `;
-
-    document.getElementById('driverModalContent').innerHTML = html;
-    document.getElementById('driverModal').style.display = 'flex';
-}
-
-async function uploadDriverDebris(ticketId, input) {
-    const files = Array.from(input.files);
-    if (files.length === 0) return;
-
-    const statusEl = document.getElementById('driverUploadStatus');
-    statusEl.innerHTML = '<span style="color:var(--cyan)">⏳ Uploading ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '...</span>';
-
-    const t = driverTickets.find(x => x.id === ticketId);
-    if (!t) { statusEl.innerHTML = '<span style="color:var(--red)">Ticket not found</span>'; return; }
-
-    const urls = Array.isArray(t.debris_images) ? [...t.debris_images] : [];
-    let uploaded = 0;
-
-    for (const file of files) {
-        const ext = file.name.split('.').pop() || 'jpg';
-        const path = (t.project_id || 'unassigned') + '/' + t.ticket_number + '_debris_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.' + ext;
-
-        const uploadUrl = SUPABASE_URL + '/storage/v1/object/ticket-photos/' + path;
-        try {
-            const res = await fetch(uploadUrl, {
-                method: 'POST',
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': 'Bearer ' + SUPABASE_KEY,
-                    'Content-Type': file.type || 'image/jpeg',
-                    'x-upsert': 'true'
-                },
-                body: file
+        async function supabasePost(table, data) {
+            const resp = await fetch(SUPABASE_URL + "/rest/v1/" + table, {
+                method: "POST",
+                headers: { ...headers, "Prefer": "return=representation" },
+                body: JSON.stringify(data)
             });
-            if (res.ok) {
-                const publicUrl = SUPABASE_URL + '/storage/v1/object/public/ticket-photos/' + path;
-                urls.push(publicUrl);
-                uploaded++;
+            if (!resp.ok) throw new Error("Supabase POST failed: " + resp.status);
+            return resp.json();
+        }
+
+        async function supabasePatch(table, matchCol, matchVal, data) {
+            const resp = await fetch(SUPABASE_URL + "/rest/v1/" + table + "?" + matchCol + "=eq." + matchVal, {
+                method: "PATCH",
+                headers: { ...headers, "Prefer": "return=minimal" },
+                body: JSON.stringify(data)
+            });
+            return resp;
+        }
+
+        // ── INIT ──
+        async function init() {
+            isTestMode = window.location.search.includes("test");
+            if (isTestMode) {
+                document.getElementById("testBanner").classList.add("show");
+                document.getElementById("testBtn").classList.add("show");
             }
-        } catch(e) { console.error('Upload error:', e); }
-    }
 
-    if (uploaded > 0) {
-        // Update ticket with new debris images
-        await sb('tickets?id=eq.' + ticketId, 'PATCH', { debris_images: urls });
-        t.debris_images = urls;
-        statusEl.innerHTML = '<span style="color:var(--green)">✅ ' + uploaded + ' photo' + (uploaded > 1 ? 's' : '') + ' added!</span>';
+            // Init audio on first touch (required by mobile browsers)
+            document.addEventListener("touchstart", initAudio, { once: true });
+            document.addEventListener("click", initAudio, { once: true });
 
-        // Refresh the modal to show new photos
-        setTimeout(function() { viewDriverTicket(ticketId); }, 1000);
-    } else {
-        statusEl.innerHTML = '<span style="color:var(--red)">Upload failed — check storage permissions</span>';
-    }
+            try {
+                await loadProjects();
+                updateStatus("connected", "Waiting for truck on scale...");
+                pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+            } catch (err) {
+                console.error("Init error:", err);
+                updateStatus("error", "Connection failed — retrying...");
+                setTimeout(init, 5000);
+            }
+        }
 
-    input.value = '';
-}
+        async function loadProjects() {
+            try {
+                const projects = await supabaseGet("projects?select=id,name&order=name.asc");
+                const sel = document.getElementById("projectSelect");
+                sel.innerHTML = '<option value="">-- Choose a LEED project --</option>';
+                projects.forEach(function(p) {
+                    const opt = document.createElement("option");
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    sel.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load projects:", err);
+            }
+        }
 
-function closeDM() {
-    document.getElementById('driverModal').style.display = 'none';
-    loadRecentLoads(); // Refresh to show updated photo counts
-}
+        // ── WALK-IN TOGGLE ──
+        function toggleWalkin() {
+            isWalkin = !isWalkin;
+            document.getElementById("walkinSection").classList.toggle("show", isWalkin);
+            if (isWalkin) {
+                document.getElementById("projectSelect").value = "";
+                document.getElementById("projectSelect").disabled = true;
+            } else {
+                document.getElementById("projectSelect").disabled = false;
+                document.getElementById("walkinName").value = "";
+            }
+            checkReady();
+        }
 
-// ─────────────────────────────────────────────
-// STATUS DISPLAY
-// ─────────────────────────────────────────────
-function updateStatus(state, text) {
-    const dot = document.getElementById('statusDot');
-    dot.classList.remove('on', 'off');
-    dot.classList.add(state === 'on' ? 'on' : 'off');
-    document.getElementById('statusText').textContent = text;
-}
+        // ── POLL FOR WEIGHTS ──
+        async function pollWeights() {
+            try {
+                const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+                const weights = await supabaseGet(
+                    "scale_weights?device_id=eq." + DEVICE_ID +
+                    "&status=eq.pending" +
+                    "&captured_at=gte." + cutoff +
+                    "&order=captured_at.desc&limit=10"
+                );
 
-// ─────────────────────────────────────────────
-// BOOT
-// ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', init);
-</script>
+                if (!weights || weights.length === 0) return;
+
+                let latestGross = null;
+                let latestTare = null;
+
+                for (const w of weights) {
+                    if (w.weight_type === "gross" && !latestGross) latestGross = w;
+                    if (w.weight_type === "tare" && !latestTare) latestTare = w;
+                }
+
+                // Also handle "unknown" types by weight size
+                if (!latestGross && !latestTare) {
+                    const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
+                    if (sorted.length >= 2) {
+                        latestGross = sorted[0];
+                        latestTare = sorted[sorted.length - 1];
+                    } else if (sorted.length === 1) {
+                        latestGross = sorted[0];
+                    }
+                }
+
+                if (latestGross && !grossReading) {
+                    grossReading = latestGross;
+                    document.getElementById("grossWeight").innerHTML =
+                        Number(latestGross.weight_lbs).toLocaleString() + '<span class="unit"> lbs</span>';
+                    document.getElementById("instruction").textContent =
+                        "Gross captured! Drive to dump, then return to scale.";
+                    notifyGross();
+                    updateStatus("connected", "Gross captured — waiting for tare...");
+                }
+
+                if (latestTare && grossReading && !tareReading) {
+                    // Make sure tare is different from gross
+                    if (latestTare.id !== grossReading.id) {
+                        tareReading = latestTare;
+                        document.getElementById("tareWeight").innerHTML =
+                            Number(latestTare.weight_lbs).toLocaleString() + '<span class="unit"> lbs</span>';
+
+                        const net = grossReading.weight_lbs - tareReading.weight_lbs;
+                        const netCard = document.getElementById("netCard");
+                        netCard.style.display = "block";
+                        document.getElementById("netWeight").innerHTML =
+                            Number(net).toLocaleString() + '<span class="unit"> lbs</span>';
+                        document.getElementById("netTons").textContent =
+                            (net / 2000).toFixed(2) + " tons";
+
+                        document.getElementById("instruction").textContent = "";
+                        document.getElementById("projectSection").style.display = "block";
+                        document.getElementById("timestamp").textContent = "";
+
+                        notifyTare();
+                        updateStatus("connected", "Ready — select project and confirm.");
+                    }
+                }
+
+            } catch (err) {
+                console.error("Poll error:", err);
+            }
+        }
+
+        // ── CHECK IF READY TO CONFIRM ──
+        function checkReady() {
+            const btn = document.getElementById("confirmBtn");
+            const hauler = document.getElementById("haulerSelect").value;
+
+            if (isWalkin) {
+                const walkinName = document.getElementById("walkinName").value.trim();
+                btn.disabled = !(grossReading && tareReading && walkinName && hauler);
+            } else {
+                const project = document.getElementById("projectSelect").value;
+                btn.disabled = !(grossReading && tareReading && project && hauler);
+            }
+        }
+
+        // ── CONFIRM TICKET ──
+        async function confirmTicket() {
+            const btn = document.getElementById("confirmBtn");
+            btn.disabled = true;
+            btn.textContent = "SAVING...";
+
+            try {
+                const net = grossReading.weight_lbs - tareReading.weight_lbs;
+                const hauler = document.getElementById("haulerSelect").value;
+                const projectId = isWalkin ? null : document.getElementById("projectSelect").value;
+                const walkinName = isWalkin ? document.getElementById("walkinName").value.trim() : null;
+
+                // 1. Get next ticket number
+                const lastTicket = await supabaseGet("tickets?select=ticket_number&order=ticket_number.desc&limit=1");
+                let nextNum = 1001;
+                if (lastTicket && lastTicket.length > 0) {
+                    const match = lastTicket[0].ticket_number.match(/(\d+)/);
+                    if (match) nextNum = parseInt(match[1]) + 1;
+                }
+                const ticketNumber = "SCL-" + nextNum;
+
+                // 2. Create ticket
+                const ticketData = {
+                    ticket_number: ticketNumber,
+                    ticket_date: new Date().toISOString().split("T")[0],
+                    gross_lbs: grossReading.weight_lbs,
+                    tare_lbs: tareReading.weight_lbs,
+                    net_lbs: net,
+                    net_tons: parseFloat((net / 2000).toFixed(2)),
+                    hauler: hauler,
+                    scan_type: "scale_capture",
+                    diversion_rate: 0,
+                    material_breakdown: {}
+                };
+
+                // Add project_id for LEED tickets, or notes for walk-in
+                if (isWalkin) {
+                    ticketData.notes = "Walk-in: " + walkinName;
+                    ticketData.leed_project = false;
+                } else {
+                    ticketData.project_id = projectId;
+                    ticketData.leed_project = true;
+                }
+
+                const created = await supabasePost("tickets", ticketData);
+
+                // 3. Mark scale weights as confirmed
+                if (grossReading.id) {
+                    await supabasePatch("scale_weights", "id", grossReading.id, { status: "confirmed" });
+                }
+                if (tareReading.id) {
+                    await supabasePatch("scale_weights", "id", tareReading.id, { status: "confirmed" });
+                }
+
+                // 4. Create LEED audit log entry
+                try {
+                    await supabasePost("leed_audit_log", {
+                        action: "scale_ticket_confirmed",
+                        details: JSON.stringify({
+                            ticket_number: ticketNumber,
+                            gross_lbs: grossReading.weight_lbs,
+                            tare_lbs: tareReading.weight_lbs,
+                            net_lbs: net,
+                            hauler: hauler,
+                            leed_project: !isWalkin,
+                            walk_in_name: walkinName,
+                            gross_hash: grossReading.sha256_hash,
+                            tare_hash: tareReading.sha256_hash
+                        })
+                    });
+                } catch (auditErr) {
+                    console.warn("Audit log entry failed:", auditErr);
+                }
+
+                // 5. Stop polling
+                clearInterval(pollTimer);
+
+                // 6. Notify and show success
+                notifyConfirm();
+
+                document.getElementById("successTicket").textContent = ticketNumber;
+                document.getElementById("successSummary").textContent =
+                    "Net: " + Number(net).toLocaleString() + " lbs (" + (net / 2000).toFixed(2) + " tons)" +
+                    (isWalkin ? "\n" + walkinName : "");
+                document.getElementById("successOverlay").classList.add("show");
+
+                setTimeout(resetPage, 10000);
+
+            } catch (err) {
+                console.error("Confirm error:", err);
+                btn.textContent = "ERROR — TAP TO RETRY";
+                btn.disabled = false;
+                btn.onclick = confirmTicket;
+            }
+        }
+
+        // ── SIMULATE (TEST MODE) ──
+        async function simulateWeights() {
+            const btn = document.getElementById("testBtn");
+            btn.disabled = true;
+            btn.textContent = "Inserting test data...";
+
+            try {
+                const now = new Date();
+                const fiveMinAgo = new Date(now.getTime() - 5 * 60000);
+
+                await supabasePost("scale_weights", {
+                    captured_at: fiveMinAgo.toISOString(),
+                    weight_lbs: 48200 + Math.round(Math.random() * 20 - 10),
+                    weight_type: "gross",
+                    device_id: DEVICE_ID,
+                    facility: "Dalmex Recycling",
+                    sha256_hash: "test_gross_" + Date.now(),
+                    status: "pending"
+                });
+
+                await supabasePost("scale_weights", {
+                    captured_at: now.toISOString(),
+                    weight_lbs: 16400 + Math.round(Math.random() * 20 - 10),
+                    weight_type: "tare",
+                    device_id: DEVICE_ID,
+                    facility: "Dalmex Recycling",
+                    sha256_hash: "test_tare_" + Date.now(),
+                    status: "pending"
+                });
+
+                btn.textContent = "Test data inserted — waiting for poll...";
+                setTimeout(function() {
+                    btn.textContent = "Simulate Weight Readings (Test)";
+                    btn.disabled = false;
+                }, 3000);
+
+            } catch (err) {
+                console.error("Simulation error:", err);
+                btn.textContent = "Error — check console";
+                btn.disabled = false;
+            }
+        }
+
+        // ── RESET ──
+        function resetPage() {
+            grossReading = null;
+            tareReading = null;
+            isWalkin = false;
+            document.getElementById("grossWeight").innerHTML = '--<span class="unit"> lbs</span>';
+            document.getElementById("tareWeight").innerHTML = '--<span class="unit"> lbs</span>';
+            document.getElementById("netWeight").innerHTML = '--<span class="unit"> lbs</span>';
+            document.getElementById("netTons").textContent = "";
+            document.getElementById("netCard").style.display = "none";
+            document.getElementById("projectSelect").value = "";
+            document.getElementById("projectSelect").disabled = false;
+            document.getElementById("haulerSelect").value = "";
+            document.getElementById("walkinName").value = "";
+            document.getElementById("walkinSection").classList.remove("show");
+            document.getElementById("projectSection").style.display = "none";
+            document.getElementById("confirmBtn").disabled = true;
+            document.getElementById("confirmBtn").textContent = "CONFIRM TICKET";
+            document.getElementById("successOverlay").classList.remove("show");
+            document.getElementById("successTicket").textContent = "";
+            document.getElementById("successSummary").textContent = "";
+            document.getElementById("instruction").textContent = "Drive onto the scale. Weight will appear automatically.";
+            updateStatus("connected", "Waiting for truck on scale...");
+            pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+        }
+
+        function updateStatus(type, text) {
+            const dot = document.getElementById("statusDot");
+            dot.className = "status-dot " + type;
+            document.getElementById("statusText").textContent = text;
+        }
+
+        document.addEventListener("DOMContentLoaded", init);
+    </script>
 </body>
 </html>
