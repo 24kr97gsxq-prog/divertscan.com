@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#080f14">
+<title>DivertScan — Hauler Volume Report</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+    --bg:#080f14;--card:#0d1a24;--card-hover:#122231;--input:#0a1520;
+    --border:#1a3044;--text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#64748b;
+    --primary:#00c9a7;--primary-glow:rgba(0,201,167,.08);
+    --success:#22c55e;--success-light:rgba(34,197,94,.12);
+    --warning:#f59e0b;--warning-light:rgba(245,158,11,.12);
+    --danger:#ef4444;--danger-light:rgba(239,68,68,.12);
+    --radius:10px;--font:'DM Sans',system-ui,sans-serif;--mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.back-bar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#0f2b3c 0%,#0a1f2e 100%);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.back-bar a{display:inline-flex;align-items:center;gap:6px;color:var(--primary);text-decoration:none;font-size:.85rem;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(0,201,167,.06)}
+.back-bar a:active{background:rgba(0,201,167,.15);transform:scale(.97)}
+.back-bar .title{font-size:.75rem;color:var(--text-muted);margin-left:auto}
+.header{padding:14px 16px 10px;text-align:center;border-bottom:1px solid var(--border)}
+.header h1{font-size:1.1rem;font-weight:700}.header h1 span{color:var(--primary)}
+.header .sub{font-size:.6rem;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.container{max-width:960px;margin:0 auto;padding:12px;padding-bottom:120px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),transparent);opacity:.6}
+.card-title{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.hauler-colors{--h1:#00c9a7;--h2:#3b82f6;--h3:#f59e0b;--h4:#ef4444;--h5:#8b5cf6;--h6:#ec4899;--h7:#14b8a6;--h8:#f97316}
+.grand-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.gs{background:var(--card);border-radius:8px;padding:10px 8px;text-align:center;border:1px solid var(--border)}
+.gs .v{font-size:1.25rem;font-weight:800;line-height:1.1;font-family:var(--mono)}
+.gs .l{font-size:.55rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.gs.hi{border-color:var(--primary);background:var(--primary-glow)}
+.hauler-card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:8px;border:1px solid var(--border)}
+.hc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.hc-name{font-weight:700;font-size:.9rem;display:flex;align-items:center;gap:8px}
+.hc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.hc-badge{font-size:.6rem;padding:3px 8px;border-radius:12px;font-weight:700;font-family:var(--mono)}
+.hc-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}
+.hc-stat .v{font-size:.9rem;font-weight:700;font-family:var(--mono)}
+.hc-stat .l{font-size:.45rem;color:var(--text-dim);text-transform:uppercase;margin-top:1px}
+.hc-bar{margin-top:10px;height:8px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden}
+.hc-bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.month-table{width:100%;border-collapse:collapse;font-size:.7rem}
+.month-table th{text-align:left;padding:8px 6px;border-bottom:2px solid var(--border);color:var(--text-muted);font-size:.55rem;text-transform:uppercase;letter-spacing:.05em}
+.month-table th.r{text-align:right}
+.month-table td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.month-table td.r{text-align:right;font-family:var(--mono)}
+.month-table td.b{font-weight:700}
+.month-table tr.tot{border-top:2px solid var(--primary)}
+.month-table tr.tot td{font-weight:700;padding-top:10px}
+.share-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:6px}
+.share-seg{transition:width .6s ease;min-width:2px}
+.share-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.share-leg-item{display:flex;align-items:center;gap:4px;font-size:.6rem;color:var(--text-muted)}
+.share-leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.export-bar{display:flex;gap:8px;margin-top:14px}
+.btn-export{flex:1;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:var(--font);font-size:.8rem;font-weight:600;cursor:pointer;text-align:center}
+.btn-export:active{transform:scale(.97);background:var(--card-hover)}
+.btn-export.primary{background:var(--primary);color:#080f14;border-color:var(--primary)}
+.loading{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .6s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media print{
+    .back-bar,.export-bar,.no-print{display:none!important}
+    body{background:#fff;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .header{background:#fff;border-bottom:2px solid #059669}.header h1{color:#18181b}.header h1 span{color:#059669}.header .sub{color:#71717a}
+    .container{padding:0}
+    .card{background:#fff;border:1px solid #d4d4d8;page-break-inside:avoid}
+    .card::before{background:linear-gradient(90deg,#059669,transparent)}
+    .gs{background:#f4f4f5;border:1px solid #d4d4d8}.gs .v{color:#18181b}.gs.hi{background:#ecfdf5;border-color:#059669}
+    .hauler-card{background:#fff;border:1px solid #d4d4d8;page-break-inside:avoid}
+    .month-table th{border-color:#d4d4d8}
+    .print-footer{display:block!important;text-align:center;font-size:10px;color:#a1a1aa;margin-top:20px;padding-top:10px;border-top:1px solid #d4d4d8}
+}
+.print-footer{display:none}
+</style>
+</head>
+<body>
+<div class="back-bar no-print">
+    <a href="index.html">&larr; Back to DivertScan</a>
+    <span class="title">Hauler Volume Report</span>
+</div>
+<div class="header">
+    <h1><span>Dalmex</span> Recycling &mdash; Hauler Report</h1>
+    <div class="sub">Monthly Volume Comparison &bull; All Haulers</div>
+</div>
+<div class="container hauler-colors">
+    <div id="reportContent">
+        <div class="loading"><div class="spinner"></div><div style="margin-top:12px;font-size:.8rem">Loading hauler data...</div></div>
+    </div>
+</div>
+<script>
+(function(){
+'use strict';
+var SB_URL=localStorage.getItem('ds_supabase_url')||'https://cyvvlngtojagfoaitoog.supabase.co';
+var SB_KEY=localStorage.getItem('ds_supabase_key')||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+var COLORS=['#00c9a7','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+var MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+async function sb(ep){try{var r=await fetch(SB_URL+'/rest/v1/'+ep,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+var ALL_DATA=[];
+async function load(){
+var tickets=await sb('tickets?select=id,ticket_date,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,hauler,project_id&order=ticket_date.asc&limit=5000');
+if(!tickets){document.getElementById('reportContent').innerHTML='<div style="text-align:center;padding:40px;color:var(--danger);">\u26A0\uFE0F Could not connect.<br><br><a href="index.html" style="color:var(--primary)">\u2190 Back</a></div>';return;}
+var projects=await sb('projects?select=id,name');
+var projMap={};
+if(projects)projects.forEach(function(p){projMap[p.id]=p.name;});
+// Build hauler data
+var haulers={};
+var months={};
+tickets.forEach(function(t){
+    var h=t.hauler||'Unknown';
+    var nt=parseFloat(t.net_tons)||0;
+    var dt=parseFloat(t.diverted_tons)||0;
+    var co=parseFloat(t.co2e_avoided)||0;
+    var dp=parseFloat(t.diversion_pct)||0;
+    if(!haulers[h])haulers[h]={name:h,tickets:0,tons:0,diverted:0,co2e:0,months:{},projects:{}};
+    haulers[h].tickets++;
+    haulers[h].tons+=nt;
+    haulers[h].diverted+=dt;
+    haulers[h].co2e+=co;
+    if(t.project_id)haulers[h].projects[t.project_id]=projMap[t.project_id]||'Unknown';
+    var mk=(t.ticket_date||'').substring(0,7);
+    if(mk.length>=7){
+        if(!haulers[h].months[mk])haulers[h].months[mk]={tickets:0,tons:0,diverted:0};
+        haulers[h].months[mk].tickets++;
+        haulers[h].months[mk].tons+=nt;
+        haulers[h].months[mk].diverted+=dt;
+        if(!months[mk])months[mk]=true;
+    }
+});
+// Sort haulers by tonnage desc
+var hList=Object.values(haulers).sort(function(a,b){return b.tons-a.tons;});
+var sortedMonths=Object.keys(months).sort();
+// Assign colors
+hList.forEach(function(h,i){h.color=COLORS[i%COLORS.length];});
+// Grand totals
+var totalTickets=0,totalTons=0,totalDiverted=0,totalCO2e=0;
+hList.forEach(function(h){totalTickets+=h.tickets;totalTons+=h.tons;totalDiverted+=h.diverted;totalCO2e+=h.co2e;});
+var avgPerLoad=totalTickets>0?(totalTons/totalTickets):0;
+ALL_DATA={hList:hList,sortedMonths:sortedMonths,totalTickets:totalTickets,totalTons:totalTons,totalDiverted:totalDiverted,totalCO2e:totalCO2e};
+var el=document.getElementById('reportContent');
+var h='';
+// Grand totals
+h+='<div class="grand-bar">';
+h+='<div class="gs"><div class="v">'+hList.length+'</div><div class="l">Haulers</div></div>';
+h+='<div class="gs"><div class="v">'+totalTickets+'</div><div class="l">Total Loads</div></div>';
+h+='<div class="gs"><div class="v">'+totalTons.toFixed(1)+'</div><div class="l">Total Tons</div></div>';
+h+='<div class="gs hi"><div class="v">'+avgPerLoad.toFixed(1)+'</div><div class="l">Avg Tons/Load</div></div>';
+h+='</div>';
+// Market share bar
+h+='<div class="card">';
+h+='<div class="card-title"><span style="font-size:1rem">\u{1F4CA}</span> Volume Share by Hauler</div>';
+h+='<div class="share-bar">';
+hList.forEach(function(hd){
+    var pct=totalTons>0?(hd.tons/totalTons*100):0;
+    h+='<div class="share-seg" style="width:'+pct+'%;background:'+hd.color+'" title="'+esc(hd.name)+': '+pct.toFixed(1)+'%"></div>';
+});
+h+='</div>';
+h+='<div class="share-legend">';
+hList.forEach(function(hd){
+    var pct=totalTons>0?(hd.tons/totalTons*100):0;
+    h+='<div class="share-leg-item"><div class="share-leg-dot" style="background:'+hd.color+'"></div>'+esc(hd.name)+' '+pct.toFixed(0)+'%</div>';
+});
+h+='</div></div>';
+// Hauler cards
+hList.forEach(function(hd){
+    var pct=totalTons>0?(hd.tons/totalTons*100):0;
+    var divRate=hd.tons>0?(hd.diverted/hd.tons*100):0;
+    var avgLoad=hd.tickets>0?(hd.tons/hd.tickets):0;
+    var projList=Object.values(hd.projects).join(', ');
+    h+='<div class="hauler-card">';
+    h+='<div class="hc-top">';
+    h+='<div class="hc-name"><div class="hc-dot" style="background:'+hd.color+'"></div>'+esc(hd.name)+'</div>';
+    h+='<div class="hc-badge" style="background:'+hd.color+'22;color:'+hd.color+'">'+pct.toFixed(1)+'% share</div>';
+    h+='</div>';
+    h+='<div class="hc-stats">';
+    h+='<div class="hc-stat"><div class="v">'+hd.tickets+'</div><div class="l">Loads</div></div>';
+    h+='<div class="hc-stat"><div class="v">'+hd.tons.toFixed(1)+'</div><div class="l">Total Tons</div></div>';
+    h+='<div class="hc-stat"><div class="v">'+avgLoad.toFixed(1)+'</div><div class="l">Avg/Load</div></div>';
+    h+='<div class="hc-stat"><div class="v" style="color:var(--success)">'+divRate.toFixed(0)+'%</div><div class="l">Diversion</div></div>';
+    h+='<div class="hc-stat"><div class="v" style="color:var(--warning)">'+hd.co2e.toFixed(1)+'</div><div class="l">CO\u2082e</div></div>';
+    h+='</div>';
+    h+='<div class="hc-bar"><div class="hc-bar-fill" style="width:'+pct+'%;background:'+hd.color+'"></div></div>';
+    if(projList)h+='<div style="font-size:.55rem;color:var(--text-dim);margin-top:8px">Projects: '+esc(projList)+'</div>';
+    h+='</div>';
+});
+// Monthly breakdown table
+if(sortedMonths.length>0){
+    h+='<div class="card">';
+    h+='<div class="card-title"><span style="font-size:1rem">\u{1F4C5}</span> Monthly Loads by Hauler</div>';
+    h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
+    h+='<table class="month-table"><thead><tr>';
+    h+='<th>Month</th>';
+    hList.forEach(function(hd){h+='<th class="r" style="color:'+hd.color+'">'+esc(hd.name.split(' ')[0])+'</th>';});
+    h+='<th class="r" style="color:var(--primary)">Total</th>';
+    h+='</tr></thead><tbody>';
+    var colTotals={};
+    hList.forEach(function(hd){colTotals[hd.name]={tickets:0,tons:0};});
+    var grandLoads=0,grandTons=0;
+    sortedMonths.forEach(function(mk){
+        var pts=mk.split('-');
+        var label=MONTH_NAMES[parseInt(pts[1])-1]+' '+pts[0];
+        var rowLoads=0,rowTons=0;
+        h+='<tr><td class="b">'+label+'</td>';
+        hList.forEach(function(hd){
+            var m=hd.months[mk];
+            var loads=m?m.tickets:0;
+            var tons=m?m.tons:0;
+            rowLoads+=loads;rowTons+=tons;
+            colTotals[hd.name].tickets+=loads;
+            colTotals[hd.name].tons+=tons;
+            h+='<td class="r">'+(loads>0?loads+'<span style="color:var(--text-dim);font-size:.6rem"> / '+tons.toFixed(1)+'T</span>':'<span style="color:var(--text-dim)">—</span>')+'</td>';
+        });
+        grandLoads+=rowLoads;grandTons+=rowTons;
+        h+='<td class="r b" style="color:var(--primary)">'+rowLoads+' <span style="color:var(--text-dim);font-size:.6rem">/ '+rowTons.toFixed(1)+'T</span></td>';
+        h+='</tr>';
+    });
+    // Totals row
+    h+='<tr class="tot"><td style="color:var(--primary)">TOTALS</td>';
+    hList.forEach(function(hd){
+        var ct=colTotals[hd.name];
+        h+='<td class="r" style="color:'+hd.color+'">'+ct.tickets+' <span style="font-size:.6rem">/ '+ct.tons.toFixed(1)+'T</span></td>';
+    });
+    h+='<td class="r" style="color:var(--primary)">'+grandLoads+' <span style="font-size:.6rem">/ '+grandTons.toFixed(1)+'T</span></td>';
+    h+='</tr></tbody></table></div></div>';
+    // Monthly tonnage table (tons only, cleaner view)
+    h+='<div class="card">';
+    h+='<div class="card-title"><span style="font-size:1rem">\u2696\uFE0F</span> Monthly Tonnage Comparison</div>';
+    h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
+    h+='<table class="month-table"><thead><tr>';
+    h+='<th>Month</th>';
+    hList.forEach(function(hd){h+='<th class="r" style="color:'+hd.color+'">'+esc(hd.name.split(' ')[0])+'</th>';});
+    h+='<th class="r" style="color:var(--primary)">Total</th>';
+    h+='<th class="r">Avg/Load</th>';
+    h+='</tr></thead><tbody>';
+    sortedMonths.forEach(function(mk){
+        var pts=mk.split('-');
+        var label=MONTH_NAMES[parseInt(pts[1])-1]+' '+pts[0];
+        var rowTons=0,rowLoads=0;
+        h+='<tr><td class="b">'+label+'</td>';
+        hList.forEach(function(hd){
+            var m=hd.months[mk];
+            var tons=m?m.tons:0;
+            var loads=m?m.tickets:0;
+            rowTons+=tons;rowLoads+=loads;
+            h+='<td class="r">'+(tons>0?tons.toFixed(1):'<span style="color:var(--text-dim)">—</span>')+'</td>';
+        });
+        var rowAvg=rowLoads>0?(rowTons/rowLoads):0;
+        h+='<td class="r b" style="color:var(--primary)">'+rowTons.toFixed(1)+'</td>';
+        h+='<td class="r" style="color:var(--text-muted)">'+rowAvg.toFixed(1)+'</td>';
+        h+='</tr>';
+    });
+    // Totals
+    h+='<tr class="tot"><td style="color:var(--primary)">TOTALS</td>';
+    hList.forEach(function(hd){h+='<td class="r" style="color:'+hd.color+'">'+hd.tons.toFixed(1)+'</td>';});
+    h+='<td class="r" style="color:var(--primary)">'+totalTons.toFixed(1)+'</td>';
+    h+='<td class="r" style="color:var(--text-muted)">'+avgPerLoad.toFixed(1)+'</td>';
+    h+='</tr></tbody></table></div></div>';
+}
+// Export bar
+h+='<div class="export-bar no-print">';
+h+='<button class="btn-export primary" onclick="xPDF()">\u{1F4C4} Save as PDF</button>';
+h+='<button class="btn-export" onclick="xCSV()">\u{1F4CA} Export CSV</button>';
+h+='</div>';
+h+='<div class="print-footer">Dalmex Recycling LLC \u2022 TCEQ RN103219481 \u2022 (214) 352-2000 \u2022 robert@dalmexrecycling.com \u2022 DivertScan \u2022 '+new Date().toLocaleDateString()+'</div>';
+el.innerHTML=h;
+}
+window.xPDF=function(){window.print();};
+window.xCSV=function(){
+var d=ALL_DATA;if(!d.hList)return;
+var rows=['Month,'+d.hList.map(function(h){return'"'+h.name+' Loads","'+h.name+' Tons"';}).join(',')+',Total Loads,Total Tons'];
+d.sortedMonths.forEach(function(mk){
+    var pts=mk.split('-');
+    var label=MONTH_NAMES[parseInt(pts[1])-1]+' '+pts[0];
+    var row=[label];var tl=0,tt=0;
+    d.hList.forEach(function(hd){
+        var m=hd.months[mk];
+        var loads=m?m.tickets:0;var tons=m?m.tons:0;
+        tl+=loads;tt+=tons;
+        row.push(loads);row.push(tons.toFixed(2));
+    });
+    row.push(tl);row.push(tt.toFixed(2));
+    rows.push(row.join(','));
+});
+// Summary rows
+rows.push('');
+rows.push('HAULER SUMMARY');
+rows.push('Hauler,Total Loads,Total Tons,Avg Tons/Load,Diversion %,CO2e Avoided,Volume Share %');
+d.hList.forEach(function(hd){
+    var divRate=hd.tons>0?(hd.diverted/hd.tons*100):0;
+    var share=d.totalTons>0?(hd.tons/d.totalTons*100):0;
+    rows.push('"'+hd.name+'",'+hd.tickets+','+hd.tons.toFixed(2)+','+(hd.tickets>0?(hd.tons/hd.tickets).toFixed(2):0)+','+divRate.toFixed(1)+','+hd.co2e.toFixed(2)+','+share.toFixed(1));
+});
+var bl=new Blob([rows.join('\n')],{type:'text/csv'});
+var u=URL.createObjectURL(bl);
+var a=document.createElement('a');a.href=u;a.download='DivertScan_Hauler_Report_'+new Date().toISOString().slice(0,10)+'.csv';
+document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);
+};
+load();
+})();
+</script>
+</body>
+</html>
