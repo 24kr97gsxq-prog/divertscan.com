@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#080f14">
+<title>DivertScan — Ticket Photo Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+    --bg:#080f14;--card:#0d1a24;--card-hover:#122231;--input:#0a1520;
+    --border:#1a3044;--text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#64748b;
+    --primary:#00c9a7;--primary-glow:rgba(0,201,167,.08);
+    --success:#22c55e;--success-light:rgba(34,197,94,.12);
+    --warning:#f59e0b;--warning-light:rgba(245,158,11,.12);
+    --danger:#ef4444;--danger-light:rgba(239,68,68,.12);
+    --info:#3b82f6;
+    --radius:10px;--font:'DM Sans',system-ui,sans-serif;--mono:'Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.back-bar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#0f2b3c 0%,#0a1f2e 100%);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.back-bar a{display:inline-flex;align-items:center;gap:6px;color:var(--primary);text-decoration:none;font-size:.85rem;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(0,201,167,.06)}
+.back-bar a:active{background:rgba(0,201,167,.15);transform:scale(.97)}
+.back-bar .title{font-size:.75rem;color:var(--text-muted);margin-left:auto}
+.header{padding:14px 16px 10px;text-align:center;border-bottom:1px solid var(--border)}
+.header h1{font-size:1.1rem;font-weight:700}.header h1 span{color:var(--primary)}
+.header .sub{font-size:.6rem;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.container{max-width:960px;margin:0 auto;padding:12px;padding-bottom:120px}
+
+/* Filters */
+.filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filter-select{padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--text);font-family:var(--font);font-size:.8rem;flex:1;min-width:120px;-webkit-appearance:menulist;appearance:menulist}
+.filter-select:focus{border-color:var(--primary);outline:none}
+.filter-search{padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--text);font-family:var(--font);font-size:.8rem;flex:2;min-width:150px}
+.filter-search:focus{border-color:var(--primary);outline:none}
+
+/* Stats row */
+.stats-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.stat-pill{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:.7rem;font-weight:600;display:flex;align-items:center;gap:4px}
+.stat-pill .num{font-family:var(--mono);color:var(--primary)}
+.stat-pill.warn{border-color:var(--warning);color:var(--warning)}
+.stat-pill.danger{border-color:var(--danger);color:var(--danger)}
+
+/* View toggle */
+.view-toggle{display:flex;gap:4px;margin-bottom:12px}
+.view-btn{padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-muted);font-family:var(--font);font-size:.75rem;font-weight:600;cursor:pointer}
+.view-btn.active{background:var(--primary);color:#080f14;border-color:var(--primary)}
+.view-btn:active{transform:scale(.97)}
+
+/* Grid view */
+.ticket-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:700px){.ticket-grid{grid-template-columns:repeat(4,1fr)}}
+.tg-item{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .15s;position:relative}
+.tg-item:active{transform:scale(.97)}
+.tg-item.flagged{border-color:var(--warning);box-shadow:0 0 0 1px var(--warning)}
+.tg-item.no-photo{border-color:var(--danger);border-style:dashed}
+.tg-img{width:100%;aspect-ratio:1;object-fit:cover;background:var(--input);display:block}
+.tg-no-img{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--input);color:var(--text-dim);font-size:1.5rem}
+.tg-info{padding:6px 8px}
+.tg-num{font-family:var(--mono);font-weight:700;font-size:.7rem}
+.tg-meta{font-size:.55rem;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tg-flag{position:absolute;top:4px;right:4px;background:var(--warning);color:#080f14;font-size:.5rem;font-weight:700;padding:2px 6px;border-radius:4px}
+.tg-flag.danger{background:var(--danger);color:#fff}
+
+/* List view */
+.ticket-list .tl-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;align-items:center}
+.tl-item:active{background:var(--primary-glow)}
+.tl-item.flagged{border-left:3px solid var(--warning);padding-left:8px}
+.tl-thumb{width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
+.tl-no-thumb{width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:var(--input);border-radius:6px;color:var(--text-dim);font-size:1rem;flex-shrink:0}
+.tl-info{flex:1;min-width:0}
+.tl-top{display:flex;justify-content:space-between;align-items:center}
+.tl-num{font-family:var(--mono);font-weight:700;font-size:.8rem}
+.tl-tons{font-family:var(--mono);font-weight:700;font-size:.8rem;color:var(--primary)}
+.tl-meta{font-size:.65rem;color:var(--text-dim);margin-top:2px}
+.tl-flag-tag{font-size:.55rem;background:var(--warning-light);color:var(--warning);padding:2px 6px;border-radius:4px;font-weight:700;margin-top:4px;display:inline-block}
+
+/* Lightbox */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.lightbox.open{display:flex}
+.lb-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1.5rem;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lb-img{max-width:100%;max-height:70vh;border-radius:12px;border:2px solid var(--border)}
+.lb-info{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;width:100%;max-width:500px}
+.lb-row{display:flex;justify-content:space-between;padding:4px 0;font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.lb-row .lbl{color:var(--text-dim)}.lb-row .val{font-weight:700;font-family:var(--mono)}
+.lb-nav{display:flex;gap:12px;margin-top:10px}
+.lb-nav-btn{flex:1;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:var(--font);font-size:.85rem;font-weight:600;cursor:pointer;text-align:center}
+.lb-nav-btn:active{background:var(--card-hover);transform:scale(.97)}
+
+.loading{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .6s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="back-bar">
+    <a href="index.html">&larr; Back to DivertScan</a>
+    <span class="title">Ticket Photo Audit</span>
+</div>
+<div class="header">
+    <h1><span>Dalmex</span> Recycling &mdash; Photo Audit</h1>
+    <div class="sub">Review Scale Ticket Photos &bull; Flag Mismatches</div>
+</div>
+<div class="container">
+    <div id="auditContent">
+        <div class="loading"><div class="spinner"></div><div style="margin-top:12px;font-size:.8rem">Loading tickets...</div></div>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="if(event.target===this)closeLB()">
+    <button class="lb-close" onclick="closeLB()">&times;</button>
+    <img class="lb-img" id="lbImg" src="">
+    <div class="lb-info" id="lbInfo"></div>
+    <div class="lb-nav">
+        <button class="lb-nav-btn" onclick="navLB(-1)">&larr; Previous</button>
+        <button class="lb-nav-btn" onclick="navLB(1)">Next &rarr;</button>
+    </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var SB_URL=localStorage.getItem('ds_supabase_url')||'https://cyvvlngtojagfoaitoog.supabase.co';
+var SB_KEY=localStorage.getItem('ds_supabase_key')||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+async function sb(ep){try{var r=await fetch(SB_URL+'/rest/v1/'+ep,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+var ALL=[],FILTERED=[],PROJECTS={},VIEW='grid',CURRENT_LB=-1;
+
+async function load(){
+var tickets=await sb('tickets?select=id,ticket_number,ticket_date,net_tons,diverted_tons,diversion_pct,co2e_avoided,hauler,project_id,scale_ticket_image,debris_images,notes,scan_type,gross_lbs,tare_lbs,net_lbs&order=ticket_date.desc,created_at.desc&limit=5000');
+var projects=await sb('projects?select=id,name,waste_hauler');
+if(!tickets){document.getElementById('auditContent').innerHTML='<div style="text-align:center;padding:40px;color:var(--danger);">\u26A0\uFE0F Could not connect.</div>';return;}
+if(!projects)projects=[];
+projects.forEach(function(p){PROJECTS[p.id]={name:p.name,hauler:p.waste_hauler};});
+
+// Process tickets and flag suspects
+ALL=tickets.map(function(t){
+    var proj=PROJECTS[t.project_id]||{name:'Unknown',hauler:''};
+    var flags=[];
+    // Flag: no photo
+    if(!t.scale_ticket_image)flags.push({type:'danger',msg:'No scale ticket photo'});
+    // Flag: hauler mismatch with project default
+    if(proj.hauler&&t.hauler&&t.hauler.toLowerCase()!==proj.hauler.toLowerCase())flags.push({type:'warn',msg:'Hauler "'+t.hauler+'" differs from project default "'+proj.hauler+'"'});
+    // Flag: 0 weight
+    if(!t.net_tons||parseFloat(t.net_tons)===0)flags.push({type:'danger',msg:'Zero weight'});
+    // Flag: very low weight (under 0.5 tons)
+    if(t.net_tons&&parseFloat(t.net_tons)>0&&parseFloat(t.net_tons)<0.5)flags.push({type:'warn',msg:'Very low weight: '+parseFloat(t.net_tons).toFixed(2)+' T'});
+    // Flag: very high weight (over 25 tons)
+    if(t.net_tons&&parseFloat(t.net_tons)>25)flags.push({type:'warn',msg:'Very high weight: '+parseFloat(t.net_tons).toFixed(2)+' T'});
+    // Flag: notes contain driver name that doesn't match
+    return {
+        id:t.id,num:t.ticket_number||'?',date:t.ticket_date||'',tons:parseFloat(t.net_tons)||0,
+        gross:parseInt(t.gross_lbs)||0,tare:parseInt(t.tare_lbs)||0,net:parseInt(t.net_lbs)||0,
+        divPct:t.diversion_pct||0,co2e:parseFloat(t.co2e_avoided)||0,
+        hauler:t.hauler||'Unknown',projId:t.project_id,projName:proj.name,
+        photo:t.scale_ticket_image||'',debris:Array.isArray(t.debris_images)?t.debris_images:[],
+        notes:t.notes||'',scanType:t.scan_type||'',flags:flags
+    };
+});
+FILTERED=ALL.slice();
+render();
+}
+
+function render(){
+var el=document.getElementById('auditContent');
+// Get unique projects and haulers for filters
+var projSet={},haulerSet={};
+ALL.forEach(function(t){projSet[t.projId]=t.projName;haulerSet[t.hauler]=true;});
+var projOptions=Object.keys(projSet).sort(function(a,b){return projSet[a].localeCompare(projSet[b]);});
+var haulerOptions=Object.keys(haulerSet).sort();
+
+var totalFlags=0,noPhoto=0;
+FILTERED.forEach(function(t){if(t.flags.length>0)totalFlags++;if(!t.photo)noPhoto++;});
+
+var o='';
+// Filters
+o+='<div class="filter-bar">';
+o+='<select class="filter-select" id="fProject" onchange="applyFilters()"><option value="">All Projects</option>';
+projOptions.forEach(function(pid){o+='<option value="'+pid+'">'+esc(projSet[pid])+'</option>';});
+o+='</select>';
+o+='<select class="filter-select" id="fHauler" onchange="applyFilters()"><option value="">All Haulers</option>';
+haulerOptions.forEach(function(h){o+='<option value="'+esc(h)+'">'+esc(h)+'</option>';});
+o+='</select>';
+o+='<select class="filter-select" id="fFlags" onchange="applyFilters()"><option value="">All Tickets</option><option value="flagged">\u26A0\uFE0F Flagged Only</option><option value="nophoto">\u{1F4F7} No Photo</option><option value="clean">\u2705 Clean Only</option></select>';
+o+='</div>';
+o+='<div class="filter-bar">';
+o+='<input type="text" class="filter-search" id="fSearch" placeholder="\u{1F50D} Search ticket number..." oninput="applyFilters()">';
+o+='</div>';
+
+// Stats
+o+='<div class="stats-row">';
+o+='<div class="stat-pill"><span class="num">'+FILTERED.length+'</span> tickets</div>';
+o+='<div class="stat-pill'+(totalFlags>0?' warn':'')+'"><span class="num">'+totalFlags+'</span> flagged</div>';
+o+='<div class="stat-pill'+(noPhoto>0?' danger':'')+'"><span class="num">'+noPhoto+'</span> no photo</div>';
+var totalTons=0;FILTERED.forEach(function(t){totalTons+=t.tons;});
+o+='<div class="stat-pill"><span class="num">'+totalTons.toFixed(1)+'</span> tons</div>';
+o+='</div>';
+
+// View toggle
+o+='<div class="view-toggle">';
+o+='<button class="view-btn'+(VIEW==='grid'?' active':'')+'" onclick="setView(\'grid\')">\u{1F5BC}\uFE0F Grid</button>';
+o+='<button class="view-btn'+(VIEW==='list'?' active':'')+'" onclick="setView(\'list\')">\u{1F4CB} List</button>';
+o+='</div>';
+
+if(VIEW==='grid'){
+    o+='<div class="ticket-grid">';
+    FILTERED.forEach(function(t,idx){
+        var flagged=t.flags.length>0;
+        var noImg=!t.photo;
+        o+='<div class="tg-item'+(flagged?' flagged':'')+(noImg?' no-photo':'')+'" onclick="openLB('+idx+')">';
+        if(t.photo){
+            o+='<img class="tg-img" src="'+t.photo+'" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" alt=""><div class="tg-no-img" style="display:none">\u{1F4F7}</div>';
+        }else{
+            o+='<div class="tg-no-img">\u274C</div>';
+        }
+        if(t.flags.length>0){
+            var worst=t.flags.some(function(f){return f.type==='danger';})?'danger':'';
+            o+='<div class="tg-flag'+( worst?' danger':'')+'">'+t.flags.length+' \u26A0\uFE0F</div>';
+        }
+        o+='<div class="tg-info">';
+        o+='<div class="tg-num">#'+esc(t.num)+'</div>';
+        o+='<div class="tg-meta">'+t.tons.toFixed(1)+'T \u2022 '+esc(t.hauler.split(' ')[0])+' \u2022 '+esc(t.projName.split(' ')[0])+'</div>';
+        o+='</div></div>';
+    });
+    o+='</div>';
+}else{
+    o+='<div class="ticket-list">';
+    FILTERED.forEach(function(t,idx){
+        var flagged=t.flags.length>0;
+        o+='<div class="tl-item'+(flagged?' flagged':'')+'" onclick="openLB('+idx+')">';
+        if(t.photo){o+='<img class="tl-thumb" src="'+t.photo+'" loading="lazy" alt="">';}
+        else{o+='<div class="tl-no-thumb">\u274C</div>';}
+        o+='<div class="tl-info">';
+        o+='<div class="tl-top"><span class="tl-num">#'+esc(t.num)+'</span><span class="tl-tons">'+t.tons.toFixed(2)+' T</span></div>';
+        o+='<div class="tl-meta">'+fmtDate(t.date)+' \u2022 '+esc(t.hauler)+' \u2022 '+esc(t.projName)+' \u2022 '+t.divPct+'% div</div>';
+        if(t.flags.length>0){t.flags.forEach(function(f){o+='<div class="tl-flag-tag">'+esc(f.msg)+'</div> ';});}
+        o+='</div></div>';
+    });
+    o+='</div>';
+}
+el.innerHTML=o;
+}
+
+function fmtDate(d){
+    if(!d)return'';
+    var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var p=d.split('-');if(p.length<3)return d;
+    return MN[parseInt(p[1])-1]+' '+parseInt(p[2])+', '+p[0];
+}
+
+window.setView=function(v){VIEW=v;render();};
+
+window.applyFilters=function(){
+    var proj=document.getElementById('fProject').value;
+    var hauler=document.getElementById('fHauler').value;
+    var flags=document.getElementById('fFlags').value;
+    var search=(document.getElementById('fSearch').value||'').toLowerCase().trim();
+    FILTERED=ALL.filter(function(t){
+        if(proj&&t.projId!==proj)return false;
+        if(hauler&&t.hauler!==hauler)return false;
+        if(flags==='flagged'&&t.flags.length===0)return false;
+        if(flags==='nophoto'&&t.photo)return false;
+        if(flags==='clean'&&t.flags.length>0)return false;
+        if(search&&(t.num||'').toLowerCase().indexOf(search)<0)return false;
+        return true;
+    });
+    render();
+    // Restore filter values
+    if(proj)document.getElementById('fProject').value=proj;
+    if(hauler)document.getElementById('fHauler').value=hauler;
+    if(flags)document.getElementById('fFlags').value=flags;
+    if(search)document.getElementById('fSearch').value=search;
+};
+
+window.openLB=function(idx){
+    CURRENT_LB=idx;
+    var t=FILTERED[idx];if(!t)return;
+    var lb=document.getElementById('lightbox');
+    var img=document.getElementById('lbImg');
+    var info=document.getElementById('lbInfo');
+    if(t.photo){img.src=t.photo;img.style.display='block';}
+    else{img.style.display='none';}
+    var o='';
+    o+='<div class="lb-row"><span class="lbl">Ticket #</span><span class="val">'+esc(t.num)+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Date</span><span class="val">'+fmtDate(t.date)+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Project</span><span class="val">'+esc(t.projName)+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Hauler</span><span class="val">'+esc(t.hauler)+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Gross</span><span class="val">'+(t.gross?t.gross.toLocaleString()+' lbs':'\u2014')+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Tare</span><span class="val">'+(t.tare?t.tare.toLocaleString()+' lbs':'\u2014')+'</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Net</span><span class="val" style="color:var(--success)">'+t.tons.toFixed(2)+' T ('+(t.net?t.net.toLocaleString():0)+' lbs)</span></div>';
+    o+='<div class="lb-row"><span class="lbl">Diversion</span><span class="val" style="color:'+(t.divPct>=50?'var(--success)':'var(--danger)')+'">'+t.divPct+'%</span></div>';
+    if(t.notes)o+='<div class="lb-row"><span class="lbl">Notes</span><span class="val" style="font-family:var(--font);font-weight:400;font-size:.75rem">'+esc(t.notes)+'</span></div>';
+    if(t.flags.length>0){
+        o+='<div style="margin-top:8px">';
+        t.flags.forEach(function(f){
+            var c=f.type==='danger'?'var(--danger)':'var(--warning)';
+            o+='<div style="font-size:.7rem;color:'+c+';font-weight:700;padding:3px 0">\u26A0\uFE0F '+esc(f.msg)+'</div>';
+        });
+        o+='</div>';
+    }
+    if(t.debris.length>0){
+        o+='<div style="margin-top:8px"><div style="font-size:.6rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;margin-bottom:4px">Debris Photos ('+t.debris.length+')</div>';
+        o+='<div style="display:flex;gap:6px;overflow-x:auto">';
+        t.debris.forEach(function(u){o+='<img src="'+u+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;cursor:pointer" onclick="event.stopPropagation();window.open(\''+u+'\')">';});
+        o+='</div></div>';
+    }
+    o+='<div style="font-size:.6rem;color:var(--text-dim);margin-top:8px;text-align:center">'+(idx+1)+' of '+FILTERED.length+'</div>';
+    info.innerHTML=o;
+    lb.classList.add('open');
+};
+
+window.closeLB=function(){document.getElementById('lightbox').classList.remove('open');CURRENT_LB=-1;};
+
+window.navLB=function(dir){
+    var next=CURRENT_LB+dir;
+    if(next<0)next=FILTERED.length-1;
+    if(next>=FILTERED.length)next=0;
+    openLB(next);
+};
+
+// Keyboard nav
+document.addEventListener('keydown',function(e){
+    if(CURRENT_LB<0)return;
+    if(e.key==='Escape')closeLB();
+    if(e.key==='ArrowLeft')navLB(-1);
+    if(e.key==='ArrowRight')navLB(1);
+});
+
+load();
+})();
+</script>
+</body>
+</html>
