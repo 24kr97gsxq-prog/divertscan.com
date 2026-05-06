@@ -315,6 +315,17 @@
                     <button class="btn btn-sm btn-outline" onclick="DS.filterTickets('nophoto')">📷 No Photo</button>
                     <button class="btn btn-sm btn-primary" onclick="DS.loadAllProjectTickets()">🌐 All Projects</button>
                 </div>
+                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                    <select class="form-input" id="ticketZoneFilter" onchange="DS.filterTickets(DS._lastTicketFilter||'all')" style="padding:8px;font-size:.75rem;flex:0 0 auto;width:auto;">
+                        <option value="">All Zones</option>
+                        <option value="A">Zone A</option>
+                        <option value="B">Zone B</option>
+                        <option value="D">Zone D</option>
+                        <option value="E">Zone E</option>
+                        <option value="F">Zone F</option>
+                        <option value="none">No Zone</option>
+                    </select>
+                </div>
                 <div id="ticketList"></div>
             </div>
         </div>
@@ -1746,6 +1757,7 @@ const DS = {
     renderTickets(filter = 'all') {
         const el = document.getElementById('ticketList');
         let tickets = [...this.state.tickets];
+        this._lastTicketFilter = filter;
 
         if (filter === 'complete') {
             tickets = tickets.filter(t => {
@@ -1767,6 +1779,16 @@ const DS = {
             tickets = tickets.filter(t => !t.scale_ticket_image);
         }
 
+        // Zone filter
+        var zoneFilter = document.getElementById('ticketZoneFilter');
+        if (zoneFilter && zoneFilter.value) {
+            var zv = zoneFilter.value;
+            if (zv === 'none') {
+                tickets = tickets.filter(function(t) { return !t.zone; });
+            } else {
+                tickets = tickets.filter(function(t) { return t.zone === zv; });
+            }
+        }
         // Sort newest scan first (by database entry time, not ticket date)
         tickets.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
@@ -3241,7 +3263,7 @@ const DS = {
         var projMap = {};
         projects.forEach(function(p) { projMap[p.id] = p.name; });
         var matKeys = Object.keys(this.MATERIALS);
-        var header = ['Project','Date','Ticket No','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
+        var header = ['Project','Date','Ticket No','Zone','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
         matKeys.forEach(function(k) { header.push(DS.MATERIALS[k].name + ' %'); header.push(DS.MATERIALS[k].name + ' Tons'); });
         header.push('Diverted Tons','Landfill Tons','Diversion %','CO2e (mt)');
         var rows = [header.join(',')];
@@ -3250,6 +3272,7 @@ const DS = {
                 '"' + (projMap[t.project_id] || 'Unknown') + '"',
                 t.ticket_date || '',
                 t.ticket_number || '',
+                t.zone || '',
                 '"' + (t.hauler || '') + '"',
                 t.gross_lbs || '',
                 t.tare_lbs || '',
@@ -3315,7 +3338,7 @@ const DS = {
 
         // Detail sheet
         var ws2 = wb.addWorksheet('All Tickets');
-        var h2 = ['Project', 'Date', 'Ticket #', 'Hauler', 'Net Tons'];
+        var h2 = ['Project', 'Date', 'Ticket #', 'Zone', 'Hauler', 'Net Tons'];
         matKeys.forEach(function(k) { h2.push(DS.MATERIALS[k].name + ' T'); });
         h2.push('Diverted T', 'Landfill T', 'Div %', 'CO2e');
         var hdr2 = ws2.addRow(h2);
@@ -3323,7 +3346,7 @@ const DS = {
         hdr2.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
         allTickets.forEach(function(t, i) {
             var proj = projMap[t.project_id];
-            var row = [proj ? proj.name : 'Unknown', t.ticket_date || '', t.ticket_number || '', t.hauler || '', parseFloat(t.net_tons) || 0];
+            var row = [proj ? proj.name : 'Unknown', t.ticket_date || '', t.ticket_number || '', t.zone || '', t.hauler || '', parseFloat(t.net_tons) || 0];
             matKeys.forEach(function(k) { row.push(parseFloat(t[k + '_tons']) || 0); });
             row.push(parseFloat(t.diverted_tons) || 0, parseFloat(t.landfill_tons) || 0, (t.diversion_pct || 0) / 100, parseFloat(t.co2e_avoided) || 0);
             var r = ws2.addRow(row);
@@ -3331,7 +3354,7 @@ const DS = {
             if (divCol > 0) r.getCell(divCol).numFmt = '0%';
             if (i % 2 === 0) r.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; });
         });
-        ws2.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 25 }, { width: 10 }].concat(matKeys.map(function() { return { width: 10 }; })).concat([{ width: 10 }, { width: 10 }, { width: 8 }, { width: 8 }]);
+        ws2.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 7 }, { width: 25 }, { width: 10 }].concat(matKeys.map(function() { return { width: 10 }; })).concat([{ width: 10 }, { width: 10 }, { width: 8 }, { width: 8 }]);
 
         wb.xlsx.writeBuffer().then(function(buf) {
             var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -3360,7 +3383,7 @@ const DS = {
         titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } };
         ws.addRow(['Generated: ' + new Date().toLocaleDateString() + '  |  ' + allTickets.length + ' tickets  |  ' + projects.length + ' projects']);
         ws.addRow([]);
-        var hdr = ws.addRow(['Project', 'Date', 'Ticket #', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net Tons', 'Div %', 'Diverted T', 'CO2e', 'Scale Ticket Photo']);
+        var hdr = ws.addRow(['Project', 'Date', 'Ticket #', 'Zone', 'Hauler', 'Gross (lbs)', 'Tare (lbs)', 'Net (lbs)', 'Net Tons', 'Div %', 'Diverted T', 'CO2e', 'Scale Ticket Photo']);
         hdr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         hdr.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
         var grandTons = 0, grandDiv = 0;
@@ -3373,6 +3396,7 @@ const DS = {
                 projMap[t.project_id] || 'Unknown',
                 t.ticket_date || '',
                 t.ticket_number || '',
+                t.zone || '',
                 t.hauler || '',
                 t.gross_lbs || 0,
                 t.tare_lbs || 0,
@@ -3383,14 +3407,14 @@ const DS = {
                 parseFloat(t.co2e_avoided) || 0,
                 t.scale_ticket_image || ''
             ]);
-            r.getCell(9).numFmt = '0%';
-            if (t.scale_ticket_image) { r.getCell(12).font = { color: { argb: 'FF1565C0' }, underline: true }; }
+            r.getCell(10).numFmt = '0%';
+            if (t.scale_ticket_image) { r.getCell(13).font = { color: { argb: 'FF1565C0' }, underline: true }; }
             if (i % 2 === 0) r.eachCell(function(c) { if (!c.fill || !c.fill.fgColor) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; });
         });
         var totRow = ws.addRow(['TOTALS', '', allTickets.length + ' tickets', '', '', '', '', grandTons.toFixed(2), '', grandDiv.toFixed(2)]);
         totRow.font = { bold: true };
         totRow.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } }; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; });
-        ws.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 25 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 8 }, { width: 10 }, { width: 8 }, { width: 50 }];
+        ws.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 7 }, { width: 25 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 8 }, { width: 10 }, { width: 8 }, { width: 50 }];
         wb.xlsx.writeBuffer().then(function(buf) {
             var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             var a = document.createElement('a');
@@ -3584,6 +3608,7 @@ const DS = {
                     </div>
                 </div>
                 ${this.renderMaterialBars(data.matTotals, data.totalTons)}
+                ${this.renderZoneSummary(months[key])}
                 <div class="divider"></div>
                 ${this.renderMonthTicketTable(months[key])}
                 <div class="divider"></div>
@@ -3655,6 +3680,38 @@ const DS = {
             '<td></td><td></td></tr></tfoot></table></div>';
 
         return tbl;
+    },
+
+    renderZoneSummary(tickets) {
+        if (!tickets || tickets.length === 0) return '';
+        var zones = {};
+        var hasAnyZone = false;
+        tickets.forEach(function(t) {
+            var z = t.zone || 'Unassigned';
+            if (t.zone) hasAnyZone = true;
+            if (!zones[z]) zones[z] = { count: 0, tons: 0, diverted: 0 };
+            zones[z].count++;
+            zones[z].tons += parseFloat(t.net_tons) || 0;
+            zones[z].diverted += parseFloat(t.diverted_tons) || 0;
+        });
+        if (!hasAnyZone) return '';
+        var sortedZones = Object.keys(zones).sort(function(a, b) { return a === 'Unassigned' ? 1 : b === 'Unassigned' ? -1 : a.localeCompare(b); });
+        var html = '<div style="margin-top:10px;margin-bottom:4px;"><div style="font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:6px;">📍 Zone Breakdown</div>';
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        sortedZones.forEach(function(z) {
+            var d = zones[z];
+            var rate = d.tons > 0 ? Math.round(d.diverted / d.tons * 100) : 0;
+            var rateColor = rate >= 75 ? 'var(--success)' : rate >= 50 ? 'var(--warning)' : 'var(--danger)';
+            var isUnassigned = z === 'Unassigned';
+            html += '<div style="flex:1;min-width:70px;background:' + (isUnassigned ? 'var(--bg-input)' : 'rgba(245,158,11,.06)') + ';border:1px solid ' + (isUnassigned ? 'var(--border)' : 'rgba(245,158,11,.2)') + ';border-radius:8px;padding:8px;text-align:center;">';
+            html += '<div style="font-size:.8rem;font-weight:800;color:' + (isUnassigned ? 'var(--text-dim)' : 'var(--warning)') + ';">' + z + '</div>';
+            html += '<div style="font-family:var(--mono);font-size:.75rem;font-weight:700;">' + d.tons.toFixed(1) + 'T</div>';
+            html += '<div style="font-size:.6rem;color:var(--text-muted);">' + d.count + ' tickets</div>';
+            html += '<div style="font-size:.6rem;font-weight:700;color:' + rateColor + ';">' + rate + '% div</div>';
+            html += '</div>';
+        });
+        html += '</div></div>';
+        return html;
     },
 
     // ============================================================
