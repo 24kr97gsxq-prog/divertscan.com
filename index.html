@@ -749,6 +749,7 @@
                 <select class="form-input" id="newProjLeedVersion" onchange="DS.updateNewProjTarget()">
                     <option value="v4" selected>LEED v4 / v4.1</option>
                     <option value="v5">LEED v5</option>
+                    <option value="none">Non-LEED (Tracking Only)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -827,6 +828,7 @@
                 <select class="form-input" id="editProjLeedVersion" onchange="DS.updateEditProjTarget()">
                     <option value="v4">LEED v4 / v4.1</option>
                     <option value="v5">LEED v5</option>
+                    <option value="none">Non-LEED (Tracking Only)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -1100,7 +1102,7 @@ const DS = {
 
         const hauler = document.getElementById('scaleFilterHauler').value;
         const project = document.getElementById('scaleFilterProject').value;
-        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize;
+        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize;
         if (hauler) q += '&hauler=eq.' + encodeURIComponent(hauler);
         if (project) q += '&project_id=eq.' + project;
 
@@ -1122,7 +1124,7 @@ const DS = {
         const offset = this._scalePage * this._scalePageSize;
         const hauler = document.getElementById('scaleFilterHauler').value;
         const project = document.getElementById('scaleFilterProject').value;
-        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize + '&offset=' + offset;
+        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize + '&offset=' + offset;
         if (hauler) q += '&hauler=eq.' + encodeURIComponent(hauler);
         if (project) q += '&project_id=eq.' + project;
         const data = await this.supabase(q);
@@ -1169,7 +1171,7 @@ const DS = {
                 <div style="flex-shrink:0;min-width:56px;font-family:var(--mono);font-weight:800;font-size:.75rem;color:var(--primary)">${t.ticket_number || '?'}</div>
                 <div style="flex:1;min-width:0">
                     <div style="font-family:var(--mono);font-weight:700;font-size:.8rem">${net} lbs <span style="color:var(--text-muted);font-weight:400;font-size:.7rem">(${tons} T)</span></div>
-                    <div style="font-size:.6rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${scanIcon} ${driver || t.hauler || ''}${projName ? ' • ' + projName : ''}</div>
+                    <div style="font-size:.6rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${scanIcon} ${driver || t.hauler || ''}${projName ? ' • ' + projName : ''}${t.zone ? ' • Z:' + t.zone : ''}</div>
                 </div>
                 <div style="font-family:var(--mono);font-weight:800;font-size:.75rem;color:${divColor};flex-shrink:0">${divPct}%</div>
             </div>`;
@@ -1216,6 +1218,7 @@ const DS = {
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Project</span><span style="font-weight:700">${projName}</span></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Hauler</span><span style="font-weight:700">${t.hauler || ''}</span></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Driver</span><span style="font-weight:700">${driver}</span></div>
+            ${t.zone ? '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Zone</span><span style="font-weight:700;color:var(--warning)">Zone ' + t.zone + '</span></div>' : ''}
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Gross</span><span style="font-weight:700;font-family:var(--mono)">${Number(t.gross_lbs||0).toLocaleString()} lbs</span></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Tare</span><span style="font-weight:700;font-family:var(--mono)">${Number(t.tare_lbs||0).toLocaleString()} lbs</span></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.8rem"><span style="color:var(--text-dim)">Net</span><span style="font-weight:700;font-family:var(--mono);color:var(--success)">${Number(t.net_lbs||0).toLocaleString()} lbs (${Number(t.net_tons||0).toFixed(2)} T)</span></div>
@@ -1571,7 +1574,7 @@ const DS = {
         // Update LEED badge
         var ver = proj.leed_version || 'v4';
         var badge = document.getElementById('leedBadge');
-        if (badge) badge.textContent = ver === 'v5' ? '🌿 LEED v5' : '🌿 LEED v4';
+        if (badge) badge.textContent = ver === 'v5' ? '🌿 LEED v5' : ver === 'none' ? '📊 Non-LEED' : '🌿 LEED v4';
 
         // Load project tickets
         this.loadTickets(proj.id);
@@ -1595,15 +1598,19 @@ const DS = {
     // LEED version helpers
     updateNewProjTarget() {
         var ver = document.getElementById('newProjLeedVersion').value;
-        document.getElementById('newProjTarget').value = ver === 'v5' ? 75 : 50;
+        document.getElementById('newProjTarget').value = ver === 'v5' ? 75 : ver === 'none' ? 0 : 50;
     },
     updateEditProjTarget() {
         var ver = document.getElementById('editProjLeedVersion').value;
-        document.getElementById('editProjTarget').value = ver === 'v5' ? 75 : 50;
+        document.getElementById('editProjTarget').value = ver === 'v5' ? 75 : ver === 'none' ? 0 : 50;
     },
     getLeedInfo(proj) {
         var ver = (proj && proj.leed_version) || 'v4';
-        var target = (proj && proj.leed_target) || (ver === 'v5' ? 75 : 50);
+        var target = (proj && proj.leed_target) || (ver === 'v5' ? 75 : ver === 'none' ? 0 : 50);
+        if (ver === 'none') {
+            return { version: 'none', target: 0, credit: 'N/A', isPrereq: false, isNonLeed: true,
+                tiers: [] };
+        }
         if (ver === 'v5') {
             return { version: 'v5', target: target, credit: 'MRp2', isPrereq: true,
                 tiers: [{pct:75,label:'Prerequisite'},{pct:90,label:'1 point'},{pct:95,label:'2 points'}] };
@@ -1784,7 +1791,7 @@ const DS = {
                 </div>
                 <div class="ticket-info">
                     <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}${projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : ''}</div>
-                    <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div</div>
+                    <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${t.diversion_pct || 0}% div${t.zone ? ' • Zone ' + t.zone : ''}</div>
                     <div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">${uploadInfo}</div>
                 </div>
                 <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
@@ -1932,7 +1939,7 @@ const DS = {
 
         document.getElementById('ticketDetailContent').innerHTML = `
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
-                ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''} • ${t.scan_type || 'manual'}
+                ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
             </div>
             <div style="font-size:0.65rem; color:var(--text-dim); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap;">
                 ${t.created_at ? '<span>📤 Uploaded: ' + new Date(t.created_at).toLocaleString() + ' (' + this.timeAgo(t.created_at) + ')</span>' : ''}
@@ -3534,10 +3541,15 @@ const DS = {
             for (var ti = leedInfo.tiers.length - 1; ti >= 0; ti--) {
                 if (data.divRate >= leedInfo.tiers[ti].pct) { creditLabel = leedInfo.tiers[ti].label; break; }
             }
-            var scoreLine = 'LEED ' + leedInfo.version + ' ' + leedInfo.credit + ' • Target: ' + target + '%';
-            if (creditLabel) scoreLine += ' • ' + creditLabel + ' ✓';
-            else if (leedInfo.isPrereq) scoreLine += ' • PREREQUISITE NOT MET';
-            else scoreLine += ' • ' + (target - data.divRate) + '% below target';
+            var scoreLine = '';
+            if (leedInfo.isNonLeed) {
+                scoreLine = 'Non-LEED • Tracking Only';
+            } else {
+                scoreLine = 'LEED ' + leedInfo.version + ' ' + leedInfo.credit + ' • Target: ' + target + '%';
+                if (creditLabel) scoreLine += ' • ' + creditLabel + ' ✓';
+                else if (leedInfo.isPrereq) scoreLine += ' • PREREQUISITE NOT MET';
+                else scoreLine += ' • ' + (target - data.divRate) + '% below target';
+            }
 
             html += `
             <div class="card">
@@ -3608,6 +3620,7 @@ const DS = {
             '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>' +
             '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>' +
             '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">📷</th>' +
+            '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">Zone</th>' +
             '</tr></thead><tbody>';
 
         var sumTons = 0, sumDiverted = 0, sumCo2e = 0;
@@ -3628,6 +3641,7 @@ const DS = {
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>' +
                 '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '🖼️' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
+                '<td style="padding:8px 6px; text-align:center; font-weight:700; color:var(--warning);">' + (t.zone || '') + '</td>' +
                 '</tr>';
         }
 
@@ -3638,7 +3652,7 @@ const DS = {
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800;">' + this.fmt(sumTons) + '</td>' +
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">' + totalDivRate + '%</td>' +
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700;">' + this.fmt(sumCo2e) + '</td>' +
-            '<td></td></tr></tfoot></table></div>';
+            '<td></td><td></td></tr></tfoot></table></div>';
 
         return tbl;
     },
@@ -4239,7 +4253,7 @@ const DS = {
         const headers = ['ticket_number','ticket_date','hauler','gross_lbs','tare_lbs','net_lbs','net_tons',
             'wood_pct','gypsum_pct','plastic_pct','occ_pct','metal_pct','concrete_pct','block_pct','landfill_pct',
             'wood_tons','gypsum_tons','plastic_tons','occ_tons','metal_tons','concrete_tons','block_tons','landfill_tons',
-            'diversion_pct','diverted_tons','co2e_avoided','scan_type','audit_id'];
+            'diversion_pct','diverted_tons','co2e_avoided','scan_type','zone','audit_id'];
 
         let csv = headers.join(',') + '\n';
         tickets.forEach(t => {
@@ -4320,7 +4334,7 @@ const DS = {
         tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';
             if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
             var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
-            var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td class=r>'+DS.fmt(g)+'</td><td class=r>'+DS.fmt(ta)+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';
+            var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td>'+(t.zone||'')+'</td><td class=r>'+DS.fmt(g)+'</td><td class=r>'+DS.fmt(ta)+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';
             matKeys.forEach(function(k){r+='<td class=r>'+(t[k+'_pct']||0)+'%</td>';});
             r+='<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
             rows+=r;});
@@ -4372,7 +4386,7 @@ const DS = {
         '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
         '<h2>Scale Tickets — '+label+'</h2>'+
-        '<table><tr><th>Date</th><th>Ticket#</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
+        '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
         '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
         '<div class="footer"><b>'+DS.FACILITY.name+'</b> • TCEQ '+DS.FACILITY.tceq_rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • '+DS.FACILITY.email+' • '+DS.FACILITY.phone+'</div>'+
         '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
@@ -4393,7 +4407,7 @@ const DS = {
         const [year, month] = monthKey.split('-');
         const monthName = monthNames[parseInt(month)];
 
-        const headers = ['Date','Ticket No','GWT (lbs)','Tare (lbs)','Net (lbs)','Tons','Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %'];
+        const headers = ['Date','Ticket No','Zone','GWT (lbs)','Tare (lbs)','Net (lbs)','Tons','Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %'];
         let csv = headers.join(',') + '\n';
         tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
         tickets.forEach(t => {
@@ -4402,7 +4416,7 @@ const DS = {
             const divTons = parseFloat(t.diverted_tons) || 0;
             const divPct = t.diversion_pct || 0;
             csv += [
-                this.fmtDate(t.ticket_date), t.ticket_number, t.gross_lbs, t.tare_lbs, netLbs, tons.toFixed(2),
+                this.fmtDate(t.ticket_date), t.ticket_number, t.zone || '', t.gross_lbs, t.tare_lbs, netLbs, tons.toFixed(2),
                 (t.wood_pct||0)+'%', (tons*(t.wood_pct||0)/100).toFixed(2),
                 (t.gypsum_pct||0)+'%', (tons*(t.gypsum_pct||0)/100).toFixed(2),
                 (t.plastic_pct||0)+'%', (tons*(t.plastic_pct||0)/100).toFixed(2),
@@ -4445,7 +4459,7 @@ const DS = {
 
         // Column widths
         ws.columns = [
-            {width:12},{width:10},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},
+            {width:12},{width:10},{width:7},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},
             {width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},
             {width:7},{width:7},{width:9},{width:7},{width:7},{width:7},{width:14}
         ];
@@ -4503,7 +4517,7 @@ const DS = {
         ws.addRow([]);
 
         // Column headers
-        var headers = ['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+        var headers = ['Date','Ticket No','Zone','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
             'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
             'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo'];
         var hdrRow = ws.addRow(headers);
@@ -4544,7 +4558,7 @@ const DS = {
 
             var photoUrl = t.scale_ticket_image || '';
             var r = ws.addRow([
-                dateFmt, parseInt(t.ticket_number)||t.ticket_number,
+                dateFmt, parseInt(t.ticket_number)||t.ticket_number, t.zone||'',
                 gross, gross/2000, tare, tare/2000, net, tons,
                 divPct, diverted,
                 wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt,
@@ -4558,25 +4572,25 @@ const DS = {
             r.eachCell(function(c){ c.border = thinBorder; c.font = {size:10}; });
 
             // Diversion % color coding
-            var divCell = r.getCell(9);
+            var divCell = r.getCell(10);
             var pctVal = Math.round(divPct * 100);
             divCell.font = {bold:true, size:10, color:{argb: pctVal >= 75 ? medGreen : pctVal >= 50 ? 'D97706' : redText}};
 
             // Number formats
-            [9,11,13,15,17,19,21,23].forEach(function(c){ r.getCell(c).numFmt = '0%'; });
-            [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0.00'; });
-            [3,5,7].forEach(function(c){ r.getCell(c).numFmt = '#,##0'; });
+            [10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0%'; });
+            [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ r.getCell(c).numFmt = '0.00'; });
+            [4,6,8].forEach(function(c){ r.getCell(c).numFmt = '#,##0'; });
 
             // Photo hyperlink
             if (photoUrl) {
-                r.getCell(25).value = {text:'View Photo', hyperlink: photoUrl};
-                r.getCell(25).font = {size:9, color:{argb:'3B82F6'}, underline:true};
+                r.getCell(26).value = {text:'View Photo', hyperlink: photoUrl};
+                r.getCell(26).font = {size:9, color:{argb:'3B82F6'}, underline:true};
             }
         });
 
         // Totals row
         var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
-        var totRow = ws.addRow(['TOTALS','',
+        var totRow = ws.addRow(['TOTALS','','',
             sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
             totalDivPct, sumDiverted,
             sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
@@ -4592,9 +4606,9 @@ const DS = {
             font: {bold:true, size:10, color:{argb:hdrFont}},
             border: thinBorder
         });
-        [9,11,13,15,17,19,21,23].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
-        [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
-        [3,5,7].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
+        [10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
+        [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
+        [4,6,8].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
 
         // Summary section
         ws.addRow([]);
@@ -4718,7 +4732,7 @@ const DS = {
             var pts = key.split('-');
             var mName = monthNames[+pts[1]];
             var d = [];
-            d.push(['Date','Ticket No','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
+            d.push(['Date','Ticket No','Zone','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
                 'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
                 'Metal%','Metal','Concrete%','Concrete','Block%','Block']);
             var sG=0,sT=0,sTn=0,sD=0;
@@ -4729,17 +4743,17 @@ const DS = {
                 var dv=wt+gt+pt+ot+mt+ct+bt;
                 sG+=g;sT+=ta;sTn+=tn;sD+=dv;
                 var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp2=df.split('-');df=parseInt(dp2[1])+'/'+parseInt(dp2[2])+'/'+dp2[0];}
-                d.push([df,parseInt(t.ticket_number)||t.ticket_number,g,g/2000,ta,ta/2000,g-ta,tn,
+                d.push([df,parseInt(t.ticket_number)||t.ticket_number,t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,
                     tn>0?dv/tn:0,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);
             });
             d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
             var mWs = XLSX.utils.aoa_to_sheet(d);
-            mWs['!cols']=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
+            mWs['!cols']=[{wch:12},{wch:10},{wch:6},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
             // Format cells
             for(var r2=1;r2<=mTix.length+1;r2++){
-                [8,10,12,14,16,18,20,22].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0%';});
-                [3,5,7,9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0.00';});
-                [2,4,6].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='#,##0';});
+                [9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0%';});
+                [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0.00';});
+                [3,5,7].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='#,##0';});
             }
             XLSX.utils.book_append_sheet(wb, mWs, mName + ' ' + pts[0]);
         });
@@ -4871,7 +4885,7 @@ const DS = {
         var tickets = await this.supabase('tickets?project_id=eq.' + id + '&order=ticket_date.asc');
         if (!tickets || tickets.length === 0) { this.showToast('No tickets found'); return; }
         var matKeys = Object.keys(this.MATERIALS);
-        var header = ['Date','Ticket No','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
+        var header = ['Date','Ticket No','Zone','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
         matKeys.forEach(function(k) { header.push(DS.MATERIALS[k].name + ' %'); header.push(DS.MATERIALS[k].name + ' Tons'); });
         header.push('Total Diverted Tons','Diversion %','CO2e Avoided (mt)','Scale Ticket Photo','AI Classified','Human Verified');
         var rows = [header.join(',')];
@@ -4879,6 +4893,7 @@ const DS = {
             var row = [
                 t.ticket_date || '',
                 t.ticket_number || '',
+                t.zone || '',
                 '"' + (t.hauler || '') + '"',
                 t.gross_lbs || '',
                 t.tare_lbs || '',
