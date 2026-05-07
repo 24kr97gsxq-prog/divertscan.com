@@ -150,7 +150,7 @@
             <div class="header-row">
                 <div>
                     <h1><span>Dalmex</span> Recycling</h1>
-                    <div class="header-sub">powered by DivertScan • LEED MRp2/MRc5</div>
+                    <div class="header-sub" id="headerSub">powered by DivertScan • LEED MRp2/MRc5</div>
                 </div>
                 <span class="leed-badge" id="leedBadge">🌿 LEED v4</span>
             </div>
@@ -1586,6 +1586,8 @@ const DS = {
         var ver = proj.leed_version || 'v4';
         var badge = document.getElementById('leedBadge');
         if (badge) badge.textContent = ver === 'v5' ? '🌿 LEED v5' : ver === 'none' ? '📊 Non-LEED' : '🌿 LEED v4';
+        var headerSub = document.getElementById('headerSub');
+        if (headerSub) headerSub.textContent = ver === 'none' ? 'powered by DivertScan • Waste Tracking' : 'powered by DivertScan • LEED MRp2/MRc5';
 
         // Load project tickets
         this.loadTickets(proj.id);
@@ -3461,6 +3463,8 @@ const DS = {
                            totals.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
+        var gSub = document.querySelector('.gauge-sublabel');
+        if (gSub) gSub.textContent = (proj.leed_version === 'none') ? 'Overall Diversion Rate' : 'Overall Diversion Rate — LEED ' + (proj.leed_version || 'v4') + ' Target: ' + (proj.leed_target || 50) + '%';
 
         // Material breakdown — All Time
         document.getElementById('reportMaterials').innerHTML = this.renderMaterialBars(totals.matTotals, totals.totalTons);
@@ -4429,10 +4433,10 @@ const DS = {
         '@media print{body{padding:16px}.toolbar{display:none!important}}</style></head><body>'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div>'+
         '<h1>Waste Diversion Report</h1><div style="font-size:13px;color:#71717a">'+label+' — '+DS.esc(proj.name)+'</div></div>'+
-        '<div style="text-align:right"><div style="font-weight:700;font-size:13px">LEED '+ver+'</div>'+
-        '<div class="badge '+(ok?'pass':'fail')+'" style="margin-top:3px">'+(ok?'✅ ON TRACK':'⚠️ BELOW TARGET')+'</div></div></div>'+
+        '<div style="text-align:right"><div style="font-weight:700;font-size:13px">'+(ver==='none'?'Non-LEED':'LEED '+ver)+'</div>'+
+        '<div class="badge '+(ver==='none'?'pass':ok?'pass':'fail')+'" style="margin-top:3px">'+(ver==='none'?'📊 Tracking Only':ok?'✅ ON TRACK':'⚠️ BELOW TARGET')+'</div></div></div>'+
         '<h2>Project Information</h2><table>'+
-        '<tr><td width=25%><b>Project</b></td><td>'+DS.esc(proj.name)+'</td><td width=25%><b>LEED</b></td><td>'+ver+' • Target '+tgt+'%</td></tr>'+
+        '<tr><td width=25%><b>Project</b></td><td>'+DS.esc(proj.name)+'</td><td width=25%><b>'+(ver==='none'?'Type':'LEED')+'</b></td><td>'+(ver==='none'?'Non-LEED — Waste Tracking':ver+' • Target '+tgt+'%')+'</td></tr>'+
         '<tr><td><b>GC / Client</b></td><td>'+(proj.general_contractor||proj.client||'—')+'</td><td><b>Hauler</b></td><td>'+(proj.waste_hauler||'—')+'</td></tr>'+
         '<tr><td><b>Location</b></td><td>'+(proj.location||'—')+'</td><td><b>Recycling Facility</b></td><td>'+DS.FACILITY.name+', '+DS.FACILITY.address+'</td></tr>'+
         '<tr><td><b>TCEQ Registration</b></td><td>'+DS.FACILITY.tceq_rn+' • SIC '+DS.FACILITY.tceq_sic+'</td><td><b>Report Date</b></td><td>'+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+'</td></tr></table>'+
