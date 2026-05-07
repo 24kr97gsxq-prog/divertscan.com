@@ -605,9 +605,11 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<div class="stat"><b style="color:#dc2626">'+P.f(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
 '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
 (ptdRate!==rate?'<div class="note">Cumulative project diversion: '+P.f(ptdDiv)+' T diverted / '+P.f(ptdTons)+' T generated = '+ptdRate+'% '+(ptdRate>=tgt?'(meets '+tgt+'% target)':'(below '+tgt+'% target)')+'</div>':'')+
+// ZONE BREAKDOWN
+'<h2>Tonnage by Zone — '+label+'</h2>'+
+(zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>')+
 // MATERIALS
 '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
-(hasZones?'<h2>Tonnage by Zone — '+label+'</h2><table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'')+
 // TICKET TABLE
 '<h2>Scale Tickets — '+label+'</h2>'+
 '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+MT[k].n+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
@@ -755,6 +757,17 @@ for(var r=dr;r<=tr;r++){[9,11,13,15,17,19,21].forEach(function(c){var a=XLSX.uti
 [3,5,7].forEach(function(c){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].z='#,##0';});}
 if(ws[aT])ws[aT].z='0.00';if(ws[aD])ws[aD].z='0.00';if(ws[aP])ws[aP].z='0%';
 pL.forEach(function(l){var a=XLSX.utils.encode_cell({r:l.r,c:l.c});if(ws[a])ws[a].l={Target:l.u,Tooltip:'View photo'};});
+// Add zone summary rows at the bottom of the sheet
+var zd={},hz=false;tix.forEach(function(t){var z=t.zone||'Unassigned';if(t.zone)hz=true;
+if(!zd[z])zd[z]={count:0,tons:0,div:0};zd[z].count++;zd[z].tons+=+(t.net_tons)||0;zd[z].div+=+(t.diverted_tons)||0;});
+var zr2=tr+4;// start zone section 3 rows below totals
+var zHdr=['Zone','Tickets','Total (T)','Diverted (T)','Landfill (T)','Div %'];
+XLSX.utils.sheet_add_aoa(ws,[['TONNAGE BY ZONE']],{origin:{r:zr2,c:0}});
+XLSX.utils.sheet_add_aoa(ws,[zHdr],{origin:{r:zr2+1,c:0}});
+var zKeys2=Object.keys(zd).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
+zKeys2.forEach(function(z,zi){var dd=zd[z];var lf=dd.tons-dd.div;if(lf<0)lf=0;var zrt=dd.tons>0?dd.div/dd.tons:0;
+XLSX.utils.sheet_add_aoa(ws,[[z,dd.count,+dd.tons.toFixed(2),+dd.div.toFixed(2),+lf.toFixed(2),zrt]],{origin:{r:zr2+2+zi,c:0}});
+var pctCell=XLSX.utils.encode_cell({r:zr2+2+zi,c:5});if(ws[pctCell])ws[pctCell].z='0%';});
 XLSX.utils.book_append_sheet(wb,ws,mn+' '+yr);},
 exportAllXLSX(){if(typeof XLSX==='undefined'||!P.cp)return;var proj=P.cp;
 var wb=XLSX.utils.book_new();
