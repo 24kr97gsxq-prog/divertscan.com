@@ -4403,6 +4403,15 @@ const DS = {
         matKeys.forEach(function(k){if(mc[k]<=0)return;
             matRows+='<tr><td>'+matNames[k]+'</td><td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1):0)+'%</td><td class=r>'+DS.fmt(mc[k])+' T</td><td>'+matEm[k]+'</td></tr>';});
 
+        // Zone breakdown for PDF
+        var zoneData={},hasZones=false;tix.forEach(function(t){var z=t.zone||'Unassigned';if(t.zone)hasZones=true;
+        if(!zoneData[z])zoneData[z]={count:0,tons:0,div:0,lf:0};zoneData[z].count++;
+        var tn=+(t.net_tons)||0,dv=+(t.diverted_tons)||0;zoneData[z].tons+=tn;zoneData[z].div+=dv;zoneData[z].lf+=tn-dv;});
+        var zoneRows='';if(hasZones){var zKeys=Object.keys(zoneData).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
+        zKeys.forEach(function(z){var d=zoneData[z];var zr=d.tons>0?Math.round(d.div/d.tons*100):0;
+        var zc=zr>=75?'#059669':zr>=50?'#d97706':'#dc2626';
+        zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:#a1a1aa">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+DS.fmt(d.tons)+'</td><td class=r style="color:#059669">'+DS.fmt(d.div)+'</td><td class=r style="color:#dc2626">'+DS.fmt(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
+
         var w=window.open('','_blank');
         w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+DS.esc(proj.name)+'</title>'+
         '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.6}'+
@@ -4442,6 +4451,7 @@ const DS = {
         '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
         '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
+        (hasZones?'<h2>Tonnage by Zone — '+label+'</h2><table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'')+
         '<h2>Scale Tickets — '+label+'</h2>'+
         '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
         '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
