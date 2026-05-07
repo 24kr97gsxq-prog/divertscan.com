@@ -4450,8 +4450,9 @@ const DS = {
         '<div class="stat"><b style="color:#059669">'+DS.fmt(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
         '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
         '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+        '<h2>Tonnage by Zone — '+label+'</h2>'+
+        (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>')+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
-        (hasZones?'<h2>Tonnage by Zone — '+label+'</h2><table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'')+
         '<h2>Scale Tickets — '+label+'</h2>'+
         '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
         '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
@@ -4701,6 +4702,19 @@ const DS = {
 
         // Freeze header row
         ws.views = [{state:'frozen', ySplit: hdrRow.number}];
+
+        // Zone summary section
+        var zd={},hz=false;tickets.forEach(function(t){var z=t.zone||'Unassigned';if(t.zone)hz=true;
+        if(!zd[z])zd[z]={count:0,tons:0,div:0};zd[z].count++;zd[z].tons+=+(t.net_tons)||0;zd[z].div+=+(t.diverted_tons)||0;});
+        ws.addRow([]);ws.addRow([]);
+        var zTitle=ws.addRow(['TONNAGE BY ZONE']);zTitle.font={bold:true,size:12,color:{argb:'FFFFFFFF'}};
+        zTitle.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1B5E20'}};
+        var zHdr=ws.addRow(['Zone','Tickets','Total (T)','Diverted (T)','Landfill (T)','Div %']);
+        zHdr.font={bold:true,color:{argb:'FFFFFFFF'}};zHdr.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E7D32'}};});
+        var zKeys=Object.keys(zd).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
+        zKeys.forEach(function(z){var dd=zd[z];var lf=dd.tons-dd.div;if(lf<0)lf=0;var zrt=dd.tons>0?Math.round(dd.div/dd.tons*100)/100:0;
+        var zr=ws.addRow([z,dd.count,+dd.tons.toFixed(2),+dd.div.toFixed(2),+lf.toFixed(2),zrt]);
+        zr.getCell(6).numFmt='0%';if(z==='Unassigned')zr.getCell(1).font={italic:true,color:{argb:'FFA1A1AA'}};});
 
         // Download
         wb.xlsx.writeBuffer().then(function(buffer) {
