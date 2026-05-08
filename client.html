@@ -346,7 +346,7 @@ var n=d?d.length:0;var b=document.getElementById('navBadge');if(n>0){b.textConte
 renderPL(el,mode){document.getElementById(el).innerHTML=P.pj.map(function(p){
 return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\''+mode+'\',\''+p.id+'\')">'+
 '<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%')+'</div></div>';}).join('');},
+'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
 P.tx=await P.api('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];
@@ -393,7 +393,7 @@ renderDash(){var p=P.cp,t=P.tx,tot=0,dv=0,co=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
 t.forEach(function(x){var tn=+(x.net_tons)||0;tot+=tn;dv+=+(x.diverted_tons)||0;co+=+(x.co2e_avoided)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((x[k+'_pct']||0)/100);});});
-var rate=tot>0?Math.round(dv/tot*100):0,tgt=p.leed_target||50;
+var rate=tot>0?Math.round(dv/tot*100):0,tgt=p.leed_target!=null?p.leed_target:50;
 var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
 document.getElementById('dName').textContent=p.name;
 document.getElementById('dMeta').textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
@@ -413,7 +413,7 @@ P.renderMonths();P.renderTbl(P.tx);},
 
 renderMonths(){var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
-P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.cp.leed_target||50,html='';
+P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.cp.leed_target!=null?p.leed_target:50,html='';
 keys.forEach(function(key){var tix=months[key],pts=key.split('-'),label=mn[+pts[1]]+' '+pts[0];
 var tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
 var rate=tons>0?Math.round(div/tons*100):0;var c=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
@@ -472,7 +472,7 @@ var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0,co2=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
-var rate=tons>0?Math.round(div/tons*100):0;var tgt=P.cp?P.cp.leed_target||50:50;
+var rate=tons>0?Math.round(div/tons*100):0;var tgt=P.cp?P.cp.leed_target!=null?p.leed_target:50:50;
 var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
 // Materials HTML
 var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tons>0?mc[k]/tons*100:0;
@@ -667,7 +667,7 @@ if(!q){P.renderPL('uProjList','upload');return;}
 var filtered=P.pj.filter(function(p){return (p.name||'').toLowerCase().indexOf(q)>=0||(p.client||'').toLowerCase().indexOf(q)>=0||(p.location||'').toLowerCase().indexOf(q)>=0||(p.waste_hauler||'').toLowerCase().indexOf(q)>=0;});
 el.innerHTML=filtered.map(function(p){return '<div class="pp" onclick="P.pickPj(\'upload\',\''+p.id+'\')">'+
 '<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target||50)+'%')+'</div></div>';}).join('');
+'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');
 if(!filtered.length)el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-d);font-size:.75rem">No projects matching "'+P.esc(q)+'"</div>';},
 addP(type,input){var files=Array.from(input.files);var arr=P._u[type];
 files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.renderG(type);P.updBtn();};r.readAsDataURL(f);});input.value='';},
@@ -745,7 +745,7 @@ t1.alignment={horizontal:'center',vertical:'middle'};ws.getRow(1).height=32;
 ws.mergeCells('A2:Z2');ws.getCell('A2').value=mn+' '+yr+' — '+proj.name;
 ws.getCell('A2').font={bold:true,size:12,color:{argb:dkGreen}};ws.getCell('A2').alignment={horizontal:'center'};
 // Project info
-var info=[['Project:',proj.name,'','LEED:',(proj.leed_version==='none'?'Non-LEED':(proj.leed_version||'v4'))+' • Target '+(proj.leed_target||50)+'%'],
+var info=[['Project:',proj.name,'','LEED:',(proj.leed_version==='none'?'Non-LEED':(proj.leed_version||'v4'))+' • Target '+(proj.leed_target!=null?proj.leed_target:50)+'%'],
 ['GC / Client:',proj.general_contractor||proj.client||'N/A','','Hauler:',proj.waste_hauler||'N/A'],
 ['Location:',proj.location||'N/A','','Recycling Facility:',DX.facility+', '+DX.addr],
 ['TCEQ:',DX.tceq.rn+' • SIC '+DX.tceq.sic,'','Report Date:',new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})]];
@@ -812,7 +812,7 @@ ws0.mergeCells('A1:G1');var st=ws0.getCell('A1');st.value='LEED WASTE DIVERSION 
 st.font={bold:true,size:16,color:{argb:'FFFFFFFF'}};st.fill={type:'pattern',pattern:'solid',fgColor:{argb:dkGreen}};st.alignment={horizontal:'center'};ws0.getRow(1).height=32;
 ws0.addRow([]);
 [['Project:',proj.name],['GC / Client:',proj.general_contractor||proj.client||''],['Location:',proj.location||''],['Waste Hauler:',proj.waste_hauler||''],
-['LEED Version:',proj.leed_version==='none'?'Non-LEED':(proj.leed_version||'v4')],['Target:',(proj.leed_target||50)+'%'],
+['LEED Version:',proj.leed_version==='none'?'Non-LEED':(proj.leed_version||'v4')],['Target:',(proj.leed_target!=null?proj.leed_target:50)+'%'],
 [],['Processing Facility:',DX.facility],['Address:',DX.addr],['Phone:',DX.phone],
 [],['Report by:','Dalmex Recycling LLC'],['Contact:','Robert Vandling'],['Email:','robert@dalmexrecycling.com'],['Generated:',new Date().toLocaleDateString()]
 ].forEach(function(row){var r=ws0.addRow(row);r.getCell(1).font={bold:true,size:10,color:{argb:'FF52525B'}};});
@@ -840,7 +840,7 @@ P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7
 months[k].tons+=+(t.net_tons)||0;months[k].div+=+(t.diverted_tons)||0;months[k].count++;}});
 var keys=Object.keys(months).sort().slice(-12);if(keys.length<2){document.getElementById('dTrend').innerHTML='';return;}
 var maxT=Math.max.apply(null,keys.map(function(k){return months[k].tons;}));if(maxT<=0)maxT=1;
-var tgt=P.cp?P.cp.leed_target||50:50;
+var tgt=P.cp?P.cp.leed_target!=null?p.leed_target:50:50;
 var h='<div style="border:1px solid var(--border);border-radius:var(--r);padding:14px;background:var(--card)">';
 h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="ct" style="margin:0">📈 Monthly Trend</div>';
 h+='<div style="font-size:.55rem;color:var(--text-d)"><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:2px;vertical-align:middle"></span> Diverted &nbsp;';
