@@ -3463,8 +3463,13 @@ const DS = {
                            totals.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
-        var gSub = document.querySelector('.gauge-sublabel');
-        if (gSub) gSub.textContent = (proj.leed_version === 'none') ? 'Overall Diversion Rate' : 'Overall Diversion Rate — LEED ' + (proj.leed_version || 'v4') + ' Target: ' + (proj.leed_target != null ? proj.leed_target : 50) + '%';
+        var gContainer = document.getElementById('gaugeContainer');
+        if (proj.leed_version === 'none') {
+            gContainer.innerHTML = '<div style="text-align:center;padding:12px;"><div style="font-size:.75rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>';
+        } else {
+            var gSub = document.querySelector('.gauge-sublabel');
+            if (gSub) gSub.textContent = 'Overall Diversion Rate — LEED ' + (proj.leed_version || 'v4') + ' Target: ' + (proj.leed_target != null ? proj.leed_target : 50) + '%';
+        }
 
         // Material breakdown — All Time
         document.getElementById('reportMaterials').innerHTML = this.renderMaterialBars(totals.matTotals, totals.totalTons);
@@ -3583,16 +3588,16 @@ const DS = {
             <div class="card">
                 <div class="card-title">
                     <span class="icon">📅</span> ${monthName} ${year}
-                    <span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>
+                    ${leedInfo.isNonLeed ? '' : `<span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>`}
                 </div>
-                <div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
+                ${leedInfo.isNonLeed ? '<div style="text-align:center;padding:8px 0;margin-bottom:8px;background:var(--bg-input);border-radius:var(--radius);"><div style="font-size:0.7rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>' : `<div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
                     <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${data.divRate}%</div>
                     <div style="font-size:0.65rem; color:var(--text-muted);">Monthly Diversion Rate</div>
                     <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 16px 0; overflow:hidden;">
                         <div style="height:100%; border-radius:3px; width:${data.divRate}%; background:${statusColor};"></div>
                     </div>
                     <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">${scoreLine}</div>
-                </div>
+                </div>`}
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value text-primary" style="font-size:1.1rem;">${data.ticketCount}</div>
