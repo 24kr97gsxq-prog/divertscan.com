@@ -1975,18 +1975,10 @@ const DS = {
                 <div class="stat-card highlight"><div class="stat-value">${this.fmt(t.net_lbs)}</div><div class="stat-label">Net (lbs)</div></div>
                 <div class="stat-card"><div class="stat-value">${this.fmt(t.net_tons)}</div><div class="stat-label">Net (tons)</div></div>
             </div>
-            <div style="text-align:center; padding:10px 0; margin-bottom:12px; background:${(t.diversion_pct || 0) >= 75 ? 'var(--success-light)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
-                <div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Diversion Rate</div>
-                <div style="font-size:1.8rem; font-weight:800; color:${(t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)'};">${t.diversion_pct || 0}%</div>
-                <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 20px 0; overflow:hidden;">
-                    <div style="height:100%; border-radius:3px; width:${t.diversion_pct || 0}%; background:${(t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)'};"></div>
-                </div>
-                <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">${this.fmt(t.diverted_tons)} T diverted • ${this.fmt(t.co2e_avoided)} mt CO₂e avoided</div>
-            </div>
+            ${this.state.currentProject?.leed_version === 'none' ? '' : '<div style="text-align:center; padding:10px 0; margin-bottom:12px; background:' + ((t.diversion_pct || 0) >= 75 ? 'var(--success-light)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning-light)' : 'var(--danger-light)') + '; border-radius:var(--radius);"><div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Diversion Rate</div><div style="font-size:1.8rem; font-weight:800; color:' + ((t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)') + ';">' + (t.diversion_pct || 0) + '%</div><div style="height:6px; border-radius:3px; background:var(--border); margin:6px 20px 0; overflow:hidden;"><div style="height:100%; border-radius:3px; width:' + (t.diversion_pct || 0) + '%; background:' + ((t.diversion_pct || 0) >= 75 ? 'var(--success)' : (t.diversion_pct || 0) >= 50 ? 'var(--warning)' : 'var(--danger)') + ';"></div></div><div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">' + this.fmt(t.diverted_tons) + ' T diverted</div></div>'}
             ${mats ? `<div class="card-title mt-12"><span class="icon">📊</span> Material Breakdown</div>${mats}` : ''}
             <div class="stats-grid mt-12">
-                <div class="stat-card"><div class="stat-value text-success">${this.fmt(t.diverted_tons)}</div><div class="stat-label">Diverted</div></div>
-                <div class="stat-card"><div class="stat-value text-warning">${this.fmt(t.co2e_avoided)}</div><div class="stat-label">CO₂e Avoided</div></div>
+                ${this.state.currentProject?.leed_version === 'none' ? '' : '<div class="stat-card"><div class="stat-value text-success">' + this.fmt(t.diverted_tons) + '</div><div class="stat-label">Diverted</div></div><div class="stat-card"><div class="stat-value text-warning">' + this.fmt(t.co2e_avoided) + '</div><div class="stat-label">CO₂e Avoided</div></div>'}
             </div>
             ${scaleHtml}
             ${debrisHtml}
@@ -3177,9 +3169,12 @@ const DS = {
         html += '</div>';
         html += '<div class="stats-grid">';
         html += '<div class="stat-card highlight"><div class="stat-value">' + grandTotal.toFixed(1) + '</div><div class="stat-label">Total Tons</div></div>';
-        html += '<div class="stat-card"><div class="stat-value text-success">' + grandDiv.toFixed(1) + '</div><div class="stat-label">Diverted</div></div>';
+        var _nlAt = this.state.currentProject && this.state.currentProject.leed_version === 'none';
+        if (!_nlAt) {
+        if (!(this.state.currentProject && this.state.currentProject.leed_version === 'none')) html += '<div class="stat-card"><div class="stat-value text-success">' + grandDiv.toFixed(1) + '</div><div class="stat-label">Diverted</div></div>';
         html += '<div class="stat-card"><div class="stat-value text-danger">' + (grandTotal - grandDiv).toFixed(1) + '</div><div class="stat-label">Landfill</div></div>';
-        html += '<div class="stat-card"><div class="stat-value text-warning">' + grandCO2e.toFixed(1) + '</div><div class="stat-label">CO₂e (mt)</div></div>';
+        if (!(this.state.currentProject && this.state.currentProject.leed_version === 'none')) html += '<div class="stat-card"><div class="stat-value text-warning">' + grandCO2e.toFixed(1) + '</div><div class="stat-label">CO₂e (mt)</div></div>';
+        }
         html += '</div>';
         html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:8px;font-size:.75rem;color:var(--text-muted);">';
         html += '<span>' + grandTickets + ' total tickets</span>';
@@ -3607,14 +3602,14 @@ const DS = {
                         <div class="stat-value" style="font-size:1.1rem;">${this.fmt(data.totalTons)}</div>
                         <div class="stat-label">Total Tons</div>
                     </div>
-                    <div class="stat-card">
+                    ${leedInfo.isNonLeed ? '' : `<div class="stat-card">
                         <div class="stat-value text-success" style="font-size:1.1rem;">${this.fmt(data.divertedTons)}</div>
                         <div class="stat-label">Diverted</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value text-warning" style="font-size:1.1rem;">${this.fmt(data.co2e)}</div>
                         <div class="stat-label">CO₂e (mt)</div>
-                    </div>
+                    </div>`}
                 </div>
                 ${this.renderMaterialBars(data.matTotals, data.totalTons)}
                 ${this.renderZoneSummary(months[key])}
@@ -3652,7 +3647,7 @@ const DS = {
             '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Date</th>' +
             '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Ticket#</th>' +
             '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Net Tons</th>' +
-            (_isNL?'':'<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>') + '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>' +
+            (_isNL?'':'<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>') + (_isNL?'':'<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>') +
             '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">📷</th>' +
             '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">Zone</th>' +
             '</tr></thead><tbody>';
@@ -3672,7 +3667,7 @@ const DS = {
                 '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
-                (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>' +
+                (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>') +
                 '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '🖼️' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:center; font-weight:700; color:var(--warning);">' + (t.zone || '') + '</td>' +
                 '</tr>';
@@ -3683,7 +3678,7 @@ const DS = {
             '<tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">' +
             '<td style="padding:8px 6px; font-weight:800;" colspan="2">TOTALS</td>' +
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800;">' + this.fmt(sumTons) + '</td>' +
-            (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">' + totalDivRate + '%</td>') +
+            (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">' + totalDivRate + '%</td>') + (_isNL?'':
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700;">' + this.fmt(sumCo2e) + '</td>' +
             '<td></td><td></td></tr></tfoot></table></div>';
 
@@ -3766,7 +3761,7 @@ const DS = {
                 '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
-                (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>' +
+                (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>') +
                 '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '<span onclick="event.stopPropagation(); DS.showTicketPhotos(\'' + t.id + '\')" style="cursor:pointer;font-size:1rem;">🖼️</span>' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
                 '</tr>';
         });
