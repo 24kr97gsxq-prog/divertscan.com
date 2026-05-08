@@ -425,7 +425,7 @@ html+='<div class="c" onclick="P.openMo(\''+key+'\')" style="cursor:pointer"><di
 document.getElementById('dMonthly').innerHTML=html;},
 
 renderTbl(list){var el=document.getElementById('dTable');if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
-var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th><th class="r">Div%</th><th class="r">CO₂e</th><th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
+var _nl=P.cp&&P.cp.leed_version==='none';var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+'<th class="r">CO₂e</th><th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
 list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
 var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
@@ -456,7 +456,7 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div class="sg"><div class="sc"><div class="sv">'+P.f(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
 '<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
-'<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div></div></div>'+
+'+(P.cp&&P.cp.leed_version==="none"?"":'<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div>')+'</div></div>'+
 (mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
 '<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
 document.body.appendChild(el);},
@@ -503,7 +503,8 @@ document.body.appendChild(el);P.renderMoTix(tix);},
 renderMoTix(tix){var el=document.getElementById('moList');if(!el)return;
 if(!tix.length){el.innerHTML='<div class="c" style="text-align:center;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
 var h='<div class="c" style="padding:8px"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="t"><thead><tr>';
-h+='<th>Date</th><th>Ticket#</th><th class="r">Net Tons</th><th class="r">Div%</th><th class="r">CO₂e</th><th class="ctr">Zone</th><th class="ctr">📷</th>';
+var _nl2=P.cp&&P.cp.leed_version==='none';
+h+='<th>Date</th><th>Ticket#</th><th class="r">Net Tons</th>'+(_nl2?'':'<th class="r">Div%</th>')+'<th class="r">CO₂e</th><th class="ctr">Zone</th><th class="ctr">📷</th>';
 h+='</tr></thead><tbody>';
 var sumTons=0,sumDiv=0,sumCo2=0;
 tix.forEach(function(t){
@@ -516,7 +517,7 @@ h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer">';
 h+='<td style="white-space:nowrap">'+P.fd(t.ticket_date)+'</td>';
 h+='<td class="bld">'+t.ticket_number+'</td>';
 h+='<td class="r m">'+P.f(t.net_tons)+'</td>';
-h+='<td class="r m bld" style="'+dc+'">'+dp+'%</td>';
+if(!_nl2)h+='<td class="r m bld" style="'+dc+'">'+dp+'%</td>';
 h+='<td class="r m" style="color:var(--text-m)">'+P.f(co2)+'</td>';
 h+='<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td>';
 h+='<td class="ctr">'+pi+'</td>';
@@ -527,7 +528,7 @@ var trc=totalRate>=75?'color:var(--success)':totalRate>=50?'color:var(--warning)
 h+='</tbody><tfoot><tr style="border-top:2px solid var(--primary);font-weight:700">';
 h+='<td colspan="2">TOTALS ('+tix.length+' tickets)</td>';
 h+='<td class="r m">'+P.f(sumTons)+'</td>';
-h+='<td class="r m" style="'+trc+'">'+totalRate+'%</td>';
+h+='+(_nl2?'':'<td class="r m" style="'+trc+'">'+totalRate+'%</td>')+';
 h+='<td class="r m">'+P.f(sumCo2)+'</td>';
 h+='<td></td><td></td></tr></tfoot></table></div></div>';
 el.innerHTML=h;},
@@ -847,14 +848,15 @@ h+='<div style="display:flex;justify-content:space-between;align-items:center;ma
 h+='<div style="font-size:.55rem;color:var(--text-d)"><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:2px;vertical-align:middle"></span> Diverted &nbsp;';
 h+='<span style="display:inline-block;width:8px;height:8px;background:var(--danger);border-radius:2px;vertical-align:middle"></span> Landfill</div></div>';
 h+='<div style="display:flex;align-items:flex-end;gap:3px;height:120px;padding-bottom:20px;position:relative">';
-// Target line
+// Target line (hidden for Non-LEED)
+if(!(P.cp&&P.cp.leed_version==='none')){
 h+='<div style="position:absolute;left:0;right:0;bottom:'+(20+100*tgt/100)+'px;border-top:1.5px dashed var(--warning);z-index:1"></div>';
-h+='<div style="position:absolute;right:2px;bottom:'+(22+100*tgt/100)+'px;font-size:.5rem;color:var(--warning);font-weight:700;z-index:2">'+tgt+'% target</div>';
+h+='<div style="position:absolute;right:2px;bottom:'+(22+100*tgt/100)+'px;font-size:.5rem;color:var(--warning);font-weight:700;z-index:2">'+tgt+'% target</div>';}
 keys.forEach(function(k){var d=months[k],pct=d.tons/maxT*100,divPct=d.tons>0?d.div/d.tons:0;
 var divH=pct*divPct,lfH=pct-divH;var pts=k.split('-');var label=mn[+pts[1]];
 var rate=d.tons>0?Math.round(d.div/d.tons*100):0;var rc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
 h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">';
-h+='<div style="font-size:.5rem;font-weight:700;color:'+rc+';margin-bottom:2px">'+rate+'%</div>';
+if(!(P.cp&&P.cp.leed_version==='none'))h+='<div style="font-size:.5rem;font-weight:700;color:'+rc+';margin-bottom:2px">'+rate+'%</div>';
 h+='<div style="width:100%;max-width:32px;display:flex;flex-direction:column;border-radius:3px;overflow:hidden">';
 h+='<div style="height:'+lfH+'px;background:rgba(220,38,38,.25)"></div>';
 h+='<div style="height:'+divH+'px;background:var(--success)"></div></div>';
@@ -877,16 +879,16 @@ var h='<div style="display:flex;gap:8px">';
 h+='<div style="flex:1;background:var(--primary-glow);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
 h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[now.getMonth()+1]+' (current)</div>';
 h+='<div style="font-family:var(--mono);font-size:1rem;font-weight:800">'+P.f(cur.tons)+'T</div>';
-h+='<div style="font-size:.6rem;color:var(--text-m)">'+cur.count+' tix • '+curRate+'% div</div></div>';
+h+='<div style="font-size:.6rem;color:var(--text-m)">'+cur.count+' tix'+(P.cp&&P.cp.leed_version==='none'?'':' • '+curRate+'% div')+'</div></div>';
 h+='<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
 h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[prev.getMonth()+1]+' (prev)</div>';
 h+='<div style="font-family:var(--mono);font-size:1rem;font-weight:800">'+P.f(lst.tons)+'T</div>';
-h+='<div style="font-size:.6rem;color:var(--text-m)">'+lst.count+' tix • '+lstRate+'% div</div></div>';
+h+='<div style="font-size:.6rem;color:var(--text-m)">'+lst.count+' tix'+(P.cp&&P.cp.leed_version==='none'?'':' • '+lstRate+'% div')+'</div></div>';
 if(lst.tons>0){h+='<div style="flex:0 0 60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
 var ta=tonsDiff>=0?'▲':'▼',tc=tonsDiff>=0?'var(--success)':'var(--danger)';
 var ra=rateDiff>=0?'▲':'▼',rc=rateDiff>=0?'var(--success)':'var(--danger)';
 h+='<div style="font-size:.7rem;font-weight:800;color:'+tc+'">'+ta+Math.abs(tonsDiff).toFixed(1)+'T</div>';
-h+='<div style="font-size:.6rem;font-weight:700;color:'+rc+'">'+ra+Math.abs(rateDiff)+'%</div></div>';}
+if(!(P.cp&&P.cp.leed_version==='none'))h+='<div style="font-size:.6rem;font-weight:700;color:'+rc+'">'+ra+Math.abs(rateDiff)+'%</div>';h+='</div>';}
 h+='</div>';document.getElementById('dComparison').innerHTML=h;},
 
 // NEW TICKETS BADGE (since last login)
