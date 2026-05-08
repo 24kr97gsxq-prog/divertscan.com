@@ -1643,7 +1643,7 @@ const DS = {
                     <div>
                         <div class="pill-name">${this.esc(p.name)}</div>
                         <div class="pill-meta">${[p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ')}</div>
-                        <div class="pill-meta">LEED ${p.leed_version || 'v4'} • Target: ${p.leed_target != null ? p.leed_target : 50}%</div>
+                        <div class="pill-meta">${p.leed_version === 'none' ? 'Non-LEED • Tracking Only' : 'LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target != null ? p.leed_target : 50) + '%'}</div>
                     </div>
                 </div>
             `).join('');
@@ -1719,7 +1719,7 @@ const DS = {
                 '<div class="ticket-info">' +
                     '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + '</div>' +
                     '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
-                    '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target != null ? p.leed_target : 50) + '%' +
+                    '<div class="ticket-meta">' + (p.leed_version === 'none' ? 'Non-LEED • Tracking Only' : 'LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target != null ? p.leed_target : 50) + '%') +
                         (ticketCount !== null ? ' • ' + ticketCount + ' tickets' : '') + '</div>' +
                     '<div style="display:flex;gap:6px;margin-top:6px">' +
                         '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.selectAndShowProject(\'' + p.id + '\')">📊 Reports</button>' +
@@ -3459,7 +3459,7 @@ const DS = {
         const arcLen = (totals.divRate / 100) * maxArc;
         document.getElementById('gaugeArc').setAttribute('stroke-dasharray', `${arcLen} ${maxArc}`);
 
-        const gaugeColor = totals.divRate >= (proj.leed_target || 75) ? 'var(--success)' :
+        const gaugeColor = totals.divRate >= (proj.leed_target != null ? proj.leed_target : 75) ? 'var(--success)' :
                            totals.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
@@ -3559,7 +3559,7 @@ const DS = {
             const [year, month] = key.split('-');
             const monthName = monthNames[parseInt(month)] || month;
             const data = monthDataMap[key];
-            const target = proj.leed_target || leedInfo.target;
+            const target = (proj.leed_target != null ? proj.leed_target : leedInfo.target);
             const statusColor = data.divRate >= target ? 'var(--success)' :
                                 data.divRate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
             const statusIcon = data.divRate >= target ? '✅' : data.divRate >= (target * 0.67) ? '⚠️' : '❌';
@@ -4338,8 +4338,8 @@ const DS = {
                 landfill_tons: +totals.landfillTons.toFixed(4),
                 diversion_rate_pct: totals.divRate,
                 co2e_avoided_mt: +totals.co2e.toFixed(4),
-                leed_target_pct: this.state.currentProject?.leed_target || 75,
-                target_met: totals.divRate >= (this.state.currentProject?.leed_target || 75)
+                leed_target_pct: this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75,
+                target_met: totals.divRate >= (this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75)
             },
             tickets: this.state.tickets,
             exported_at: new Date().toISOString(),
@@ -4379,7 +4379,7 @@ const DS = {
             matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
         var landfill=Math.max(0,tons-div);
         var rate=tons>0?Math.round(div/tons*100):0;
-        var ver=proj.leed_version||'v4';var tgt=proj.leed_target||(ver==='v5'?75:50);
+        var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
         var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
         var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 
@@ -4570,7 +4570,7 @@ const DS = {
 
         // Project info block
         var infoData = [
-            ['Project:', proj?.name||'', '', 'LEED:', (proj?.leed_version||'v4') + ' • Target ' + (proj?.leed_target!=null?proj.leed_target:50) + '%'],
+            ['Project:', proj?.name||'', '', (proj?.leed_version==='none'?'Type':'LEED:'), (proj?.leed_version==='none'?'Non-LEED — Waste Tracking':(proj?.leed_version||'v4') + ' • Target ' + (proj?.leed_target!=null?proj.leed_target:50) + '%')],
             ['GC / Client:', proj?.general_contractor||proj?.client||'N/A', '', 'Hauler:', proj?.waste_hauler||'N/A'],
             ['Location:', proj?.location||'N/A', '', 'Recycling Facility:', F.name + ', ' + F.address],
             ['TCEQ:', F.tceq_rn + ' • SIC ' + F.tceq_sic, '', 'Contact:', F.email + ' • ' + F.phone]
@@ -5050,7 +5050,7 @@ const DS = {
         var divRate = totTons > 0 ? Math.round(divTons / totTons * 100) : 0;
         var landfillTons = totTons - divTons;
         var ver = proj.leed_version || 'v4';
-        var tgt = proj.leed_target || (ver === 'v5' ? 75 : 50);
+        var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
         var lines = [];
         lines.push('══════════════════════════════════════════════════════');
         lines.push('LEED ' + ver + ' WASTE DIVERSION COMPLIANCE SUMMARY');
@@ -5251,7 +5251,7 @@ const DS = {
         });
         var divRate = totTons > 0 ? Math.round(divTons / totTons * 100) : 0;
         var ver = proj.leed_version || 'v4';
-        var tgt = proj.leed_target || (ver === 'v5' ? 75 : 50);
+        var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
 
         document.getElementById('auditProjSummary').innerHTML =
             '<div style="font-weight:700;margin-bottom:4px">' + this.esc(proj.name) + '</div>' +
