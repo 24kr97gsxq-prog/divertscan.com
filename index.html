@@ -1619,7 +1619,7 @@ const DS = {
     },
     getLeedInfo(proj) {
         var ver = (proj && proj.leed_version) || 'v4';
-        var target = (proj && proj.leed_target) || (ver === 'v5' ? 75 : ver === 'none' ? 0 : 50);
+        var target = (proj && proj.leed_target != null && proj.leed_target >= 0) ? proj.leed_target : (ver === 'v5' ? 75 : ver === 'none' ? 0 : 50);
         if (ver === 'none') {
             return { version: 'none', target: 0, credit: 'N/A', isPrereq: false, isNonLeed: true,
                 tiers: [] };
@@ -1643,7 +1643,7 @@ const DS = {
                     <div>
                         <div class="pill-name">${this.esc(p.name)}</div>
                         <div class="pill-meta">${[p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ')}</div>
-                        <div class="pill-meta">LEED ${p.leed_version || 'v4'} • Target: ${p.leed_target || 50}%</div>
+                        <div class="pill-meta">LEED ${p.leed_version || 'v4'} • Target: ${p.leed_target != null ? p.leed_target : 50}%</div>
                     </div>
                 </div>
             `).join('');
@@ -1667,7 +1667,7 @@ const DS = {
             location: document.getElementById('newProjLocation').value.trim() || null,
             waste_hauler: document.getElementById('newProjHauler').value.trim() || null,
             leed_version: document.getElementById('newProjLeedVersion').value || 'v4',
-            leed_target: parseInt(document.getElementById('newProjTarget').value) || 50,
+            leed_target: parseInt(document.getElementById('newProjTarget').value) >= 0 ? parseInt(document.getElementById('newProjTarget').value) : 50,
             access_code: this.generateAccessCode()
         };
 
@@ -1719,7 +1719,7 @@ const DS = {
                 '<div class="ticket-info">' +
                     '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + '</div>' +
                     '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
-                    '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target || 50) + '%' +
+                    '<div class="ticket-meta">LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target != null ? p.leed_target : 50) + '%' +
                         (ticketCount !== null ? ' • ' + ticketCount + ' tickets' : '') + '</div>' +
                     '<div style="display:flex;gap:6px;margin-top:6px">' +
                         '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.selectAndShowProject(\'' + p.id + '\')">📊 Reports</button>' +
@@ -2118,7 +2118,7 @@ const DS = {
         document.getElementById('editProjLocation').value = p.location || '';
         document.getElementById('editProjHauler').value = p.waste_hauler || '';
         document.getElementById('editProjLeedVersion').value = p.leed_version || 'v4';
-        document.getElementById('editProjTarget').value = p.leed_target || 50;
+        document.getElementById('editProjTarget').value = p.leed_target != null ? p.leed_target : 50;
         document.getElementById('editProjAccess').value = p.access_code || '';
         this.openModal('editProjectModal');
     },
@@ -2135,7 +2135,7 @@ const DS = {
             location: document.getElementById('editProjLocation').value.trim() || null,
             waste_hauler: document.getElementById('editProjHauler').value.trim() || null,
             leed_version: document.getElementById('editProjLeedVersion').value || 'v4',
-            leed_target: parseInt(document.getElementById('editProjTarget').value) || 50,
+            leed_target: parseInt(document.getElementById('editProjTarget').value) >= 0 ? parseInt(document.getElementById('editProjTarget').value) : 50,
             updated_at: new Date().toISOString()
         };
 
@@ -3464,7 +3464,7 @@ const DS = {
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
         var gSub = document.querySelector('.gauge-sublabel');
-        if (gSub) gSub.textContent = (proj.leed_version === 'none') ? 'Overall Diversion Rate' : 'Overall Diversion Rate — LEED ' + (proj.leed_version || 'v4') + ' Target: ' + (proj.leed_target || 50) + '%';
+        if (gSub) gSub.textContent = (proj.leed_version === 'none') ? 'Overall Diversion Rate' : 'Overall Diversion Rate — LEED ' + (proj.leed_version || 'v4') + ' Target: ' + (proj.leed_target != null ? proj.leed_target : 50) + '%';
 
         // Material breakdown — All Time
         document.getElementById('reportMaterials').innerHTML = this.renderMaterialBars(totals.matTotals, totals.totalTons);
@@ -4570,7 +4570,7 @@ const DS = {
 
         // Project info block
         var infoData = [
-            ['Project:', proj?.name||'', '', 'LEED:', (proj?.leed_version||'v4') + ' • Target ' + (proj?.leed_target||50) + '%'],
+            ['Project:', proj?.name||'', '', 'LEED:', (proj?.leed_version||'v4') + ' • Target ' + (proj?.leed_target!=null?proj.leed_target:50) + '%'],
             ['GC / Client:', proj?.general_contractor||proj?.client||'N/A', '', 'Hauler:', proj?.waste_hauler||'N/A'],
             ['Location:', proj?.location||'N/A', '', 'Recycling Facility:', F.name + ', ' + F.address],
             ['TCEQ:', F.tceq_rn + ' • SIC ' + F.tceq_sic, '', 'Contact:', F.email + ' • ' + F.phone]
@@ -4757,7 +4757,7 @@ const DS = {
         sum.push(['Location:', proj.location || '']);
         sum.push(['Waste Hauler:', proj.waste_hauler || '']);
         sum.push(['LEED Version:', proj.leed_version || 'v4']);
-        sum.push(['Target:', '', '', (proj.leed_target || 50) / 100]);
+        sum.push(['Target:', '', '', (proj.leed_target != null ? proj.leed_target : 50) / 100]);
         sum.push([]);
         sum.push(['Processing Facility:', 'Dalmex Recycling LLC']);
         sum.push(['Address:', '2828 Nagle St, Dallas, TX 75220']);
@@ -4775,7 +4775,7 @@ const DS = {
         sum.push(['Landfill:', totals.totalTons - totals.divertedTons]);
         sum.push(['Diversion Rate:', totals.divRate / 100]);
         sum.push(['CO2e Avoided:', totals.co2e]);
-        sum.push(['Target Met:', totals.divRate >= (proj.leed_target || 50) ? 'YES' : 'NO']);
+        sum.push(['Target Met:', totals.divRate >= (proj.leed_target != null ? proj.leed_target : 50) ? 'YES' : 'NO']);
         sum.push([]);
         sum.push(['MONTHLY BREAKDOWN']);
         sum.push(['Month', 'Tickets', 'Tonnage', 'Diverted', 'Landfill', 'Rate']);
@@ -5008,7 +5008,7 @@ const DS = {
         rows.push('');
         rows.push('Project,' + '"' + (proj.name || '') + '"');
         rows.push('LEED Version,' + (proj.leed_version || 'v4'));
-        rows.push('Target,' + (proj.leed_target || 50) + '%');
+        rows.push('Target,' + (proj.leed_target != null ? proj.leed_target : 50) + '%');
         rows.push('Recycling Facility,Dalmex Recycling LLC');
         rows.push('TCEQ Registration,RN103219481 • SIC 5093');
         rows.push('Generated,' + new Date().toLocaleDateString());
