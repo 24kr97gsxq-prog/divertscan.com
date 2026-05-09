@@ -408,8 +408,11 @@ var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?m
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%</div></div>';});
 document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
 document.getElementById('dZones').innerHTML=P.renderZoneSummary(t);
-P.renderTrend();P.renderComparison();P.renderNewBadge();
-P.renderMonths();P.renderTbl(P.tx);},
+try{P.renderTrend();}catch(e){console.error('Trend error:',e);}
+try{P.renderComparison();}catch(e){console.error('Comparison error:',e);}
+try{P.renderNewBadge();}catch(e){console.error('Badge error:',e);}
+P.renderMonths();
+try{P.renderTbl(P.tx);}catch(e){var dtel=document.getElementById('dTable');if(dtel)dtel.innerHTML='<div style="color:red;padding:10px;font-size:.75rem">Render error: '+e.message+'</div>';console.error('Table error:',e);}},
 
 renderMonths(){var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
@@ -424,7 +427,10 @@ html+='<div class="c" onclick="P.openMo(\''+key+'\')" style="cursor:pointer"><di
 '<div style="color:var(--text-d)">›</div></div></div>';});
 document.getElementById('dMonthly').innerHTML=html;},
 
-renderTbl(list){var el=document.getElementById('dTable');if(!el)return;if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
+renderTbl(list){var el=document.getElementById('dTable');
+if(!el){console.error('dTable not found');return;}
+el.innerHTML='<div style="color:var(--text-d);font-size:.75rem;padding:10px">Loading '+((list&&list.length)||0)+' tickets...</div>';
+if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets found</div>';return;}
 try{
 var _nl=P.cp&&P.cp.leed_version==='none';
 var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+(_nl?'':'<th class="r">CO₂e</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
