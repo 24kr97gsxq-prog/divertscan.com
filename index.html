@@ -1145,6 +1145,109 @@ const DS = {
         document.getElementById('scaleMoreBtn').style.display = data.length >= this._scalePageSize ? 'block' : 'none';
     },
 
+    // ============================================================
+    // PI SCALE CAPTURES — Raw weight readings from WI-127 indicator
+    // ============================================================
+    async loadPiCaptures() {
+        const listEl = document.getElementById('piCapturesList');
+        const countEl = document.getElementById('piCapturesCount');
+        const summaryEl = document.getElementById('piCapturesSummary');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">Loading Pi captures...</div>';
+
+        try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            const endpoint = 'v_admin_review?captured_at=gte.' + encodeURIComponent(sevenDaysAgo) + '&order=captured_at.desc';
+            const data = await this.supabase(endpoint);
+
+            if (!data) {
+                listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;">Failed to load Pi captures — check Supabase connection</div>';
+                if (countEl) countEl.style.display = 'none';
+                if (summaryEl) summaryEl.innerHTML = '';
+                return;
+            }
+
+            if (data.length === 0) {
+                listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No Pi captures in last 7 days</div>';
+                if (countEl) countEl.style.display = 'none';
+                if (summaryEl) summaryEl.innerHTML = '';
+                return;
+            }
+
+            // Count badge
+            if (countEl) {
+                countEl.textContent = data.length;
+                countEl.style.display = 'inline-block';
+            }
+
+            // Summary chips
+            const grossCount = data.filter(r => r.weight_band === 'gross_candidate').length;
+            const tareCount = data.filter(r => r.weight_band === 'tare_candidate').length;
+            const noiseCount = data.filter(r => r.weight_band === 'noise').length;
+            const orphanCount = data.filter(r => r.weight_band === 'gross_candidate' && r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date() && !r.ticket_id).length;
+            const clusterCount = data.filter(r => r.cluster_flag === true).length;
+
+            if (summaryEl) {
+                summaryEl.innerHTML =
+                    '<span style="background:rgba(0,201,167,0.15);color:var(--primary);padding:3px 8px;border-radius:8px;font-weight:600;">' + grossCount + ' gross</span>' +
+                    '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:3px 8px;border-radius:8px;font-weight:600;">' + tareCount + ' tare</span>' +
+                    '<span style="background:rgba(107,114,128,0.15);color:#9ca3af;padding:3px 8px;border-radius:8px;font-weight:600;">' + noiseCount + ' noise</span>' +
+                    (orphanCount > 0 ? '<span style="background:rgba(239,68,68,0.15);color:#f87171;padding:3px 8px;border-radius:8px;font-weight:600;">⚠️ ' + orphanCount + ' orphan</span>' : '') +
+                    (clusterCount > 0 ? '<span style="background:rgba(245,158,11,0.15);color:var(--warning);padding:3px 8px;border-radius:8px;font-weight:600;">🔁 ' + clusterCount + ' cluster</span>' : '');
+            }
+
+            // Row list
+            const rows = data.map(function(r) {
+                const captured = new Date(r.captured_at);
+                const dateStr = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const timeStr = captured.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+                let statusBadge = '';
+                let bandColor = 'var(--text-muted)';
+                if (r.weight_band === 'gross_candidate') {
+                    bandColor = 'var(--primary)';
+                    if (r.ticket_id) {
+                        statusBadge = '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>';
+                    } else if (r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date()) {
+                        statusBadge = '<span style="color:#f87171;font-size:.65rem;font-weight:600;">⚠️ ORPHAN</span>';
+                    } else {
+                        statusBadge = '<span style="color:var(--warning);font-size:.65rem;">⏳ pending</span>';
+                    }
+                } else if (r.weight_band === 'tare_candidate') {
+                    bandColor = '#60a5fa';
+                    statusBadge = r.ticket_id ? '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>' : '<span style="color:#60a5fa;font-size:.65rem;">tare</span>';
+                } else if (r.weight_band === 'noise') {
+                    bandColor = '#9ca3af';
+                    statusBadge = '<span style="color:#9ca3af;font-size:.65rem;">🚫 noise</span>';
+                }
+
+                const clusterFlag = r.cluster_flag ? '<span style="color:var(--warning);font-size:.65rem;margin-left:6px;">🔁</span>' : '';
+                const weightFmt = Number(r.weight_lbs).toLocaleString();
+                const hashShort = (r.sha256_hash || '').substring(0, 8);
+                const deviceStr = r.device_id || 'unknown';
+
+                return '<div style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);">' +
+                    '<div style="min-width:60px;font-size:.65rem;color:var(--text-muted);">' +
+                        '<div style="font-weight:600;color:var(--text);">' + dateStr + '</div>' +
+                        '<div>' + timeStr + '</div>' +
+                    '</div>' +
+                    '<div style="flex:1;">' +
+                        '<div style="font-weight:700;color:' + bandColor + ';font-size:.95rem;">' + weightFmt + ' lbs ' + clusterFlag + '</div>' +
+                        '<div style="font-size:.65rem;color:var(--text-muted);">' + deviceStr + ' • ' + hashShort + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;">' + statusBadge + '</div>' +
+                '</div>';
+            }).join('');
+
+            listEl.innerHTML = rows;
+        } catch (err) {
+            console.error('loadPiCaptures error:', err);
+            listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;">Error: ' + (err && err.message ? err.message : err) + '</div>';
+            if (typeof this.showToast === 'function') this.showToast('Failed to load Pi captures');
+        }
+    },
+
     async loadMoreScale() {
         this._scalePage++;
         const offset = this._scalePage * this._scalePageSize;
@@ -1427,7 +1530,7 @@ const DS = {
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'projectsTab') this.renderProjectList();
                 if (tab === 'auditTab') { this.loadPendingReview(); this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); this.loadHaulerMgmt(); }
-                if (tab === 'scaleTab') this.loadScaleFeed();
+                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); }
             });
         });
     },
