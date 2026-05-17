@@ -1041,9 +1041,9 @@
 
         <!-- Step 3: Manual tare -->
         <div class="form-group" id="orphanManualTareGroup">
-            <label class="form-label">Or Enter Tare Manually</label>
+            <label class="form-label">Tare Weight <span style="font-weight:400;color:var(--text-dim)">(edit to override)</span></label>
             <div style="display:flex;gap:8px;align-items:center;">
-                <input type="number" class="form-input" id="orphanManualTare" placeholder="e.g. 14200" style="flex:1;" oninput="DS.updateOrphanNetPreview()">
+                <input type="number" class="form-input" id="orphanManualTare" placeholder="e.g. 14200" style="flex:1;" oninput="DS.onOrphanTareInput()">
                 <span style="color:var(--text-dim);font-size:.75rem;">lbs</span>
             </div>
         </div>
@@ -1510,9 +1510,12 @@ const DS = {
         const hauler = document.getElementById('orphanHaulerSelect').value;
         const section = document.getElementById('orphanFleetSection');
         const cards = document.getElementById('orphanFleetCards');
+        const manualField = document.getElementById('orphanManualTare');
 
         if (!hauler) {
             section.style.display = 'none';
+            manualField.value = '';
+            this._orphanTareSource = null;
             this.updateOrphanNetPreview();
             return;
         }
@@ -1523,51 +1526,74 @@ const DS = {
         if (!match) {
             section.style.display = 'block';
             cards.innerHTML = '<div style="padding:10px;background:var(--bg-input);border-radius:8px;font-size:.7rem;color:var(--text-dim);">No tare history for this hauler — enter manually below.</div>';
+            manualField.value = '';
+            manualField.placeholder = 'Enter tare in lbs';
+            this._orphanTareSource = null;
             this.updateOrphanNetPreview();
             return;
         }
 
-        // Render fleet default card with confidence chip
+        // Decide confidence styling
         let confColor, confLabel, confEmoji, confNote;
         if (match.confidence === 'high') {
             confColor = 'var(--primary)';
             confEmoji = '✅';
             confLabel = 'High confidence';
-            confNote = 'Tight variance (±' + match.stddev_tare.toLocaleString() + ' lb)';
+            confNote = 'Tight variance (±' + match.stddev_tare.toLocaleString() + ' lb across ' + match.ticket_count + ' tickets)';
         } else if (match.confidence === 'medium') {
             confColor = 'var(--warning)';
             confEmoji = '⚠️';
             confLabel = 'Medium confidence';
-            confNote = 'Wider variance (±' + match.stddev_tare.toLocaleString() + ' lb) — verify if possible';
+            confNote = 'Wider variance (±' + match.stddev_tare.toLocaleString() + ' lb across ' + match.ticket_count + ' tickets) — verify if possible';
         } else {
             confColor = '#f87171';
             confEmoji = '❌';
             confLabel = 'Low confidence';
-            confNote = 'Not enough data — manual entry recommended';
+            confNote = 'Only ' + match.ticket_count + ' ticket(s) — manual entry recommended';
         }
 
+        // AUTO-APPLY the fleet default to the manual field as the starting value
+        // User can override by typing a different number
+        if (match.confidence !== 'low') {
+            manualField.value = match.avg_tare;
+            this._orphanTareSource = 'fleet_default';
+        } else {
+            manualField.value = '';
+            this._orphanTareSource = null;
+        }
+        manualField.placeholder = 'Override fleet default if needed';
+
+        // Render informational card (no longer a tappable button)
         section.style.display = 'block';
         cards.innerHTML =
-            '<button class="btn-outline" onclick="DS.applyFleetTare(' + match.avg_tare + ')" style="width:100%;text-align:left;padding:12px;border:1px solid ' + confColor + ';border-radius:10px;background:rgba(0,0,0,0.2);cursor:pointer;color:var(--text);">' +
-                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+            '<div style="padding:12px;border:1px solid ' + confColor + ';border-radius:10px;background:rgba(0,0,0,0.2);">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">' +
                     '<div>' +
-                        '<div style="font-size:1.1rem;font-weight:700;color:' + confColor + ';">' + match.avg_tare.toLocaleString() + ' lbs</div>' +
-                        '<div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">Avg of ' + match.ticket_count + ' tickets · range ' + match.min_tare.toLocaleString() + '–' + match.max_tare.toLocaleString() + '</div>' +
+                        '<div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Suggested tare</div>' +
+                        '<div style="font-size:1.3rem;font-weight:700;color:' + confColor + ';">' + match.avg_tare.toLocaleString() + ' lbs</div>' +
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-top:2px;">Range ' + match.min_tare.toLocaleString() + '–' + match.max_tare.toLocaleString() + ' lbs</div>' +
                     '</div>' +
                     '<div style="text-align:right;">' +
                         '<div style="font-size:.65rem;color:' + confColor + ';font-weight:600;">' + confEmoji + ' ' + confLabel + '</div>' +
-                        '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px;">Tap to apply</div>' +
+                        (match.confidence !== 'low' ? '<div style="font-size:.6rem;color:var(--primary);margin-top:2px;font-weight:600;">↓ Applied to field below</div>' : '<div style="font-size:.6rem;color:#f87171;margin-top:2px;">Enter manually ↓</div>') +
                     '</div>' +
                 '</div>' +
-                '<div style="font-size:.6rem;color:var(--text-dim);margin-top:6px;font-style:italic;">' + confNote + '</div>' +
-            '</button>';
+                '<div style="font-size:.6rem;color:var(--text-dim);margin-top:8px;font-style:italic;">' + confNote + '</div>' +
+            '</div>';
 
         this.updateOrphanNetPreview();
     },
 
     applyFleetTare(tareLbs) {
+        // Kept for backwards compatibility but no longer wired to a button in the UI
         document.getElementById('orphanManualTare').value = tareLbs;
         this._orphanTareSource = 'fleet_default';
+        this.updateOrphanNetPreview();
+    },
+
+    // Called when user types in the tare field — flip source to manual since they're overriding
+    onOrphanTareInput() {
+        this._orphanTareSource = 'manual';
         this.updateOrphanNetPreview();
     },
 
@@ -1579,9 +1605,18 @@ const DS = {
         const preview = document.getElementById('orphanNetPreview');
         const btn = document.getElementById('orphanResolveBtn');
 
+        // If user typed a different value than the fleet default, switch source to manual
+        if (this._orphanTareSource === 'fleet_default' && this._lastAppliedFleetValue !== tareLbs) {
+            // tareLbs changed — was it user input or initial auto-apply?
+            // Heuristic: if the field's value matches the fleet card amount we set, it's still fleet_default
+            // Track _lastAppliedFleetValue when we auto-apply (done in onOrphanHaulerChange)
+        }
+
         if (!tareLbs || tareLbs <= 0 || tareLbs >= grossLbs) {
             preview.style.display = 'none';
             btn.disabled = true;
+            btn.style.opacity = '0.4';
+            btn.style.cursor = 'not-allowed';
             return;
         }
 
@@ -1591,6 +1626,8 @@ const DS = {
         document.getElementById('orphanNetTons').textContent = netTons.toFixed(2) + ' T';
         preview.style.display = 'block';
         btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
     },
 
     async confirmOrphanResolve() {
