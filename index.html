@@ -435,7 +435,7 @@
                     <span id="piCapturesCount" style="margin-left:8px;background:var(--warning);color:#080f14;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none;">0</span>
                     <button onclick="DS.loadPiCaptures()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.7rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
                 </div>
-                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Live captures from Dalmex scale (last 7 days). Pending = not yet confirmed into a ticket.</p>
+                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Live captures from Dalmex scale (last 7 days). Tap any row to resolve to a ticket or mark as ignored.</p>
                 <div id="piCapturesSummary" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;font-size:.65rem;"></div>
                 <div id="piCapturesList" style="font-size:.8rem;">
                     <div style="text-align:center;padding:16px;color:var(--text-dim);">Tap Refresh to load Pi captures</div>
@@ -992,6 +992,91 @@
     </div>
 </div>
 
+<!-- ============================================================
+     ORPHAN RESOLUTION DRAWER (Phase 2)
+     Tap any Pi capture row to open this drawer.
+     For orphan grosses: resolve to ticket via fleet default or manual tare.
+     For any row: ignore as "not a truck" with reason.
+     ============================================================ -->
+<div class="modal-overlay" id="orphanResolveModal">
+    <div class="modal" style="max-height:85vh;overflow-y:auto;">
+        <div class="modal-handle"></div>
+        <div class="modal-title" id="orphanResolveTitle">Resolve Pi Capture</div>
+
+        <!-- Read-only capture summary -->
+        <div style="background:var(--bg-input);border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;">Gross Weight</div>
+                    <div id="orphanGrossLbs" style="font-size:1.5rem;font-weight:700;color:var(--primary);">— lbs</div>
+                    <div id="orphanGrossTons" style="font-size:.7rem;color:var(--text-muted);">— T</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;">Captured</div>
+                    <div id="orphanCapturedAt" style="font-size:.85rem;color:var(--text);font-weight:600;">—</div>
+                    <div id="orphanCapturedHash" style="font-size:.6rem;color:var(--text-dim);font-family:monospace;">—</div>
+                </div>
+            </div>
+            <div id="orphanAlertBanner" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:.7rem;color:#f87171;">
+                ⚠️ <span id="orphanAlertText">No matching tare received within 4 hours.</span>
+            </div>
+        </div>
+
+        <!-- Step 1: Pick hauler -->
+        <div class="form-group">
+            <label class="form-label">Hauler *</label>
+            <select class="form-input" id="orphanHaulerSelect" onchange="DS.onOrphanHaulerChange()">
+                <option value="">— Select hauler —</option>
+            </select>
+        </div>
+
+        <!-- Step 2: Fleet default options (populated after hauler picked) -->
+        <div id="orphanFleetSection" style="display:none;margin-bottom:14px;">
+            <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600;">Fleet Default Tare</div>
+            <div id="orphanFleetCards"></div>
+        </div>
+
+        <!-- Step 3: Manual tare -->
+        <div class="form-group">
+            <label class="form-label">Or Enter Tare Manually</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="number" class="form-input" id="orphanManualTare" placeholder="e.g. 14200" style="flex:1;" oninput="DS.updateOrphanNetPreview()">
+                <span style="color:var(--text-dim);font-size:.75rem;">lbs</span>
+            </div>
+        </div>
+
+        <!-- Step 4: Optional project assignment -->
+        <div class="form-group">
+            <label class="form-label">Project <span style="font-weight:400;color:var(--text-dim)">(optional)</span></label>
+            <select class="form-input" id="orphanProjectSelect">
+                <option value="">— No project assigned —</option>
+            </select>
+        </div>
+
+        <!-- Live net weight preview -->
+        <div id="orphanNetPreview" style="display:none;background:var(--primary-glow);border:1px solid var(--primary);border-radius:10px;padding:12px;margin-bottom:14px;">
+            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Calculated Net</div>
+            <div id="orphanNetLbs" style="font-size:1.3rem;font-weight:700;color:var(--primary);">— lbs</div>
+            <div id="orphanNetTons" style="font-size:.7rem;color:var(--text-muted);">— T</div>
+        </div>
+
+        <!-- Action buttons -->
+        <button class="btn btn-success" id="orphanResolveBtn" onclick="DS.confirmOrphanResolve()" disabled>✓ Create Ticket from Orphan</button>
+
+        <div class="divider" style="margin:12px 0;"></div>
+
+        <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;font-weight:600;">Not a real truck?</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('forklift')" style="font-size:.7rem;">🛠️ Forklift</button>
+            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('equipment')" style="font-size:.7rem;">⚙️ Equipment</button>
+            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('test')" style="font-size:.7rem;">🧪 Test scan</button>
+            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('other')" style="font-size:.7rem;">❓ Other</button>
+        </div>
+
+        <button class="btn btn-outline mt-8" onclick="DS.closeModal('orphanResolveModal')">Cancel</button>
+    </div>
+</div>
+
 <!-- Month Drill-Down Modal -->
 <div class="modal-overlay" id="monthDrillModal">
     <div class="modal">
@@ -1181,13 +1266,11 @@ const DS = {
                 countEl.style.display = 'inline-block';
             }
 
-            // Summary chips — uses view fields: weight_band, status, orphan_deadline, cluster_flag
-            const now = new Date();
+            // Summary chips
             const grossCount = data.filter(r => r.weight_band === 'gross_candidate').length;
             const tareCount = data.filter(r => r.weight_band === 'tare_candidate').length;
             const noiseCount = data.filter(r => r.weight_band === 'noise').length;
-            const unclassifiedCount = data.filter(r => !r.weight_band).length;
-            const orphanCount = data.filter(r => r.weight_band === 'gross_candidate' && r.orphan_deadline && new Date(r.orphan_deadline) < now && r.status !== 'confirmed' && r.status !== 'ignored').length;
+            const orphanCount = data.filter(r => r.weight_band === 'gross_candidate' && r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date() && !r.ticket_id).length;
             const clusterCount = data.filter(r => r.cluster_flag === true).length;
 
             if (summaryEl) {
@@ -1195,12 +1278,11 @@ const DS = {
                     '<span style="background:rgba(0,201,167,0.15);color:var(--primary);padding:3px 8px;border-radius:8px;font-weight:600;">' + grossCount + ' gross</span>' +
                     '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:3px 8px;border-radius:8px;font-weight:600;">' + tareCount + ' tare</span>' +
                     '<span style="background:rgba(107,114,128,0.15);color:#9ca3af;padding:3px 8px;border-radius:8px;font-weight:600;">' + noiseCount + ' noise</span>' +
-                    (unclassifiedCount > 0 ? '<span style="background:rgba(168,85,247,0.15);color:#c084fc;padding:3px 8px;border-radius:8px;font-weight:600;">❓ ' + unclassifiedCount + ' unclassified</span>' : '') +
                     (orphanCount > 0 ? '<span style="background:rgba(239,68,68,0.15);color:#f87171;padding:3px 8px;border-radius:8px;font-weight:600;">⚠️ ' + orphanCount + ' orphan</span>' : '') +
                     (clusterCount > 0 ? '<span style="background:rgba(245,158,11,0.15);color:var(--warning);padding:3px 8px;border-radius:8px;font-weight:600;">🔁 ' + clusterCount + ' cluster</span>' : '');
             }
 
-            // Row list — drives badge off view fields (status, weight_band, orphan_deadline)
+            // Row list
             const rows = data.map(function(r) {
                 const captured = new Date(r.captured_at);
                 const dateStr = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -1208,32 +1290,18 @@ const DS = {
 
                 let statusBadge = '';
                 let bandColor = 'var(--text-muted)';
-
-                const isOrphan = r.weight_band === 'gross_candidate'
-                    && r.orphan_deadline
-                    && new Date(r.orphan_deadline) < now
-                    && r.status !== 'confirmed'
-                    && r.status !== 'ignored';
-
-                if (!r.weight_band) {
-                    bandColor = '#c084fc';
-                    statusBadge = '<span style="color:#c084fc;font-size:.65rem;">❓ unclassified</span>';
-                } else if (r.weight_band === 'gross_candidate') {
+                if (r.weight_band === 'gross_candidate') {
                     bandColor = 'var(--primary)';
-                    if (r.status === 'confirmed') {
+                    if (r.ticket_id) {
                         statusBadge = '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>';
-                    } else if (r.status === 'ignored') {
-                        statusBadge = '<span style="color:#9ca3af;font-size:.65rem;">⚙️ ignored</span>';
-                    } else if (isOrphan) {
+                    } else if (r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date()) {
                         statusBadge = '<span style="color:#f87171;font-size:.65rem;font-weight:600;">⚠️ ORPHAN</span>';
                     } else {
                         statusBadge = '<span style="color:var(--warning);font-size:.65rem;">⏳ pending</span>';
                     }
                 } else if (r.weight_band === 'tare_candidate') {
                     bandColor = '#60a5fa';
-                    statusBadge = (r.status === 'confirmed')
-                        ? '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>'
-                        : '<span style="color:#60a5fa;font-size:.65rem;">tare</span>';
+                    statusBadge = r.ticket_id ? '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>' : '<span style="color:#60a5fa;font-size:.65rem;">tare</span>';
                 } else if (r.weight_band === 'noise') {
                     bandColor = '#9ca3af';
                     statusBadge = '<span style="color:#9ca3af;font-size:.65rem;">🚫 noise</span>';
@@ -1244,7 +1312,7 @@ const DS = {
                 const hashShort = (r.sha256_hash || '').substring(0, 8);
                 const deviceStr = r.device_id || 'unknown';
 
-                return '<div style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);">' +
+                return '<div onclick="DS.openOrphanResolve(\'' + r.id + '\')" style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">' +
                     '<div style="min-width:60px;font-size:.65rem;color:var(--text-muted);">' +
                         '<div style="font-weight:600;color:var(--text);">' + dateStr + '</div>' +
                         '<div>' + timeStr + '</div>' +
@@ -1263,6 +1331,309 @@ const DS = {
             listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;">Error: ' + (err && err.message ? err.message : err) + '</div>';
             if (typeof this.showToast === 'function') this.showToast('Failed to load Pi captures');
         }
+    },
+
+    // ============================================================
+    // ORPHAN RESOLUTION (Phase 2)
+    // Tap any Pi capture row to open a drawer where admin can either:
+    //   - Resolve to a ticket (fleet default tare or manual tare)
+    //   - Mark as ignored (forklift / equipment / test / other)
+    // ============================================================
+    _orphanResolveContext: null,  // holds the capture being resolved
+    _fleetTaresCache: null,       // cached v_fleet_tares result
+
+    async openOrphanResolve(weightId) {
+        if (!weightId) return;
+        // Find the row in current Pi captures data (already loaded into DOM via loadPiCaptures)
+        // We re-query Supabase for the single row to ensure freshness.
+        const rows = await this.supabase('v_admin_review?id=eq.' + encodeURIComponent(weightId) + '&limit=1');
+        if (!rows || rows.length === 0) {
+            this.showToast('Capture not found');
+            return;
+        }
+        const r = rows[0];
+        this._orphanResolveContext = r;
+
+        // Title
+        let title = 'Resolve Pi Capture';
+        if (r.weight_band === 'gross_candidate') {
+            const isOrphan = r.orphan_deadline && new Date(r.orphan_deadline) < new Date()
+                && r.status !== 'confirmed' && r.status !== 'ignored';
+            title = isOrphan ? '⚠️ Resolve Orphan Gross' : '⏳ Resolve Pending Gross';
+        } else if (r.weight_band === 'tare_candidate') {
+            title = '🔍 Review Tare Capture';
+        } else if (r.weight_band === 'noise') {
+            title = '🚫 Review Noise Capture';
+        } else if (!r.weight_band) {
+            title = '❓ Review Unclassified Capture';
+        }
+        document.getElementById('orphanResolveTitle').textContent = title;
+
+        // Summary fields
+        const grossLbs = Number(r.weight_lbs);
+        document.getElementById('orphanGrossLbs').textContent = grossLbs.toLocaleString() + ' lbs';
+        document.getElementById('orphanGrossTons').textContent = (grossLbs / 2000).toFixed(2) + ' T';
+
+        const captured = new Date(r.captured_at);
+        document.getElementById('orphanCapturedAt').textContent = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + captured.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        document.getElementById('orphanCapturedHash').textContent = (r.sha256_hash || '').substring(0, 12);
+
+        // Orphan banner
+        const banner = document.getElementById('orphanAlertBanner');
+        const bannerText = document.getElementById('orphanAlertText');
+        const isOrphan = r.weight_band === 'gross_candidate' && r.orphan_deadline
+            && new Date(r.orphan_deadline) < new Date()
+            && r.status !== 'confirmed' && r.status !== 'ignored';
+        if (isOrphan) {
+            const hoursOverdue = ((new Date() - new Date(r.orphan_deadline)) / 1000 / 60 / 60).toFixed(1);
+            bannerText.textContent = 'No matching tare received within 4 hours of capture. ' + hoursOverdue + 'h overdue.';
+            banner.style.display = 'block';
+        } else {
+            banner.style.display = 'none';
+        }
+
+        // Populate hauler dropdown — combine v_fleet_tares + state.projects haulers + a default
+        const haulerSel = document.getElementById('orphanHaulerSelect');
+        const fleetTares = await this._getFleetTares();
+        const haulerSet = {};
+        fleetTares.forEach(function(f) { haulerSet[f.hauler] = true; });
+        (this.state.projects || []).forEach(function(p) {
+            if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
+        });
+        const haulers = Object.keys(haulerSet).sort();
+        haulerSel.innerHTML = '<option value="">— Select hauler —</option>'
+            + haulers.map(function(h) { return '<option value="' + h.replace(/"/g, '&quot;') + '">' + h + '</option>'; }).join('');
+
+        // Populate project dropdown
+        const projSel = document.getElementById('orphanProjectSelect');
+        projSel.innerHTML = '<option value="">— No project assigned —</option>'
+            + (this.state.projects || []).map(function(p) {
+                return '<option value="' + p.id + '">' + p.name + '</option>';
+            }).join('');
+
+        // Reset form state
+        document.getElementById('orphanManualTare').value = '';
+        document.getElementById('orphanFleetSection').style.display = 'none';
+        document.getElementById('orphanFleetCards').innerHTML = '';
+        document.getElementById('orphanNetPreview').style.display = 'none';
+        document.getElementById('orphanResolveBtn').disabled = true;
+
+        // Show modal
+        document.getElementById('orphanResolveModal').classList.add('show');
+    },
+
+    async _getFleetTares() {
+        if (this._fleetTaresCache) return this._fleetTaresCache;
+        const data = await this.supabase('v_fleet_tares?order=ticket_count.desc');
+        this._fleetTaresCache = data || [];
+        return this._fleetTaresCache;
+    },
+
+    async onOrphanHaulerChange() {
+        const hauler = document.getElementById('orphanHaulerSelect').value;
+        const section = document.getElementById('orphanFleetSection');
+        const cards = document.getElementById('orphanFleetCards');
+
+        if (!hauler) {
+            section.style.display = 'none';
+            this.updateOrphanNetPreview();
+            return;
+        }
+
+        const fleetTares = await this._getFleetTares();
+        const match = fleetTares.find(function(f) { return f.hauler === hauler; });
+
+        if (!match) {
+            section.style.display = 'block';
+            cards.innerHTML = '<div style="padding:10px;background:var(--bg-input);border-radius:8px;font-size:.7rem;color:var(--text-dim);">No tare history for this hauler — enter manually below.</div>';
+            this.updateOrphanNetPreview();
+            return;
+        }
+
+        // Render fleet default card with confidence chip
+        let confColor, confLabel, confEmoji, confNote;
+        if (match.confidence === 'high') {
+            confColor = 'var(--primary)';
+            confEmoji = '✅';
+            confLabel = 'High confidence';
+            confNote = 'Tight variance (±' + match.stddev_tare.toLocaleString() + ' lb)';
+        } else if (match.confidence === 'medium') {
+            confColor = 'var(--warning)';
+            confEmoji = '⚠️';
+            confLabel = 'Medium confidence';
+            confNote = 'Wider variance (±' + match.stddev_tare.toLocaleString() + ' lb) — verify if possible';
+        } else {
+            confColor = '#f87171';
+            confEmoji = '❌';
+            confLabel = 'Low confidence';
+            confNote = 'Not enough data — manual entry recommended';
+        }
+
+        section.style.display = 'block';
+        cards.innerHTML =
+            '<button class="btn-outline" onclick="DS.applyFleetTare(' + match.avg_tare + ')" style="width:100%;text-align:left;padding:12px;border:1px solid ' + confColor + ';border-radius:10px;background:rgba(0,0,0,0.2);cursor:pointer;color:var(--text);">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+                    '<div>' +
+                        '<div style="font-size:1.1rem;font-weight:700;color:' + confColor + ';">' + match.avg_tare.toLocaleString() + ' lbs</div>' +
+                        '<div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">Avg of ' + match.ticket_count + ' tickets · range ' + match.min_tare.toLocaleString() + '–' + match.max_tare.toLocaleString() + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;">' +
+                        '<div style="font-size:.65rem;color:' + confColor + ';font-weight:600;">' + confEmoji + ' ' + confLabel + '</div>' +
+                        '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px;">Tap to apply</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="font-size:.6rem;color:var(--text-dim);margin-top:6px;font-style:italic;">' + confNote + '</div>' +
+            '</button>';
+
+        this.updateOrphanNetPreview();
+    },
+
+    applyFleetTare(tareLbs) {
+        document.getElementById('orphanManualTare').value = tareLbs;
+        this._orphanTareSource = 'fleet_default';
+        this.updateOrphanNetPreview();
+    },
+
+    updateOrphanNetPreview() {
+        const ctx = this._orphanResolveContext;
+        if (!ctx) return;
+        const grossLbs = Number(ctx.weight_lbs);
+        const tareLbs = parseFloat(document.getElementById('orphanManualTare').value);
+        const preview = document.getElementById('orphanNetPreview');
+        const btn = document.getElementById('orphanResolveBtn');
+
+        if (!tareLbs || tareLbs <= 0 || tareLbs >= grossLbs) {
+            preview.style.display = 'none';
+            btn.disabled = true;
+            return;
+        }
+
+        const netLbs = grossLbs - tareLbs;
+        const netTons = netLbs / 2000;
+        document.getElementById('orphanNetLbs').textContent = Math.round(netLbs).toLocaleString() + ' lbs';
+        document.getElementById('orphanNetTons').textContent = netTons.toFixed(2) + ' T';
+        preview.style.display = 'block';
+        btn.disabled = false;
+    },
+
+    async confirmOrphanResolve() {
+        const ctx = this._orphanResolveContext;
+        if (!ctx) return;
+
+        const hauler = document.getElementById('orphanHaulerSelect').value;
+        const tareLbs = parseFloat(document.getElementById('orphanManualTare').value);
+        const projectId = document.getElementById('orphanProjectSelect').value || null;
+        const grossLbs = Number(ctx.weight_lbs);
+
+        if (!hauler) { this.showToast('Pick a hauler first'); return; }
+        if (!tareLbs || tareLbs <= 0 || tareLbs >= grossLbs) { this.showToast('Enter a valid tare weight'); return; }
+
+        const netLbs = grossLbs - tareLbs;
+        const netTons = +(netLbs / 2000).toFixed(3);
+
+        // Determine tare source — fleet_default if user tapped the fleet card, manual otherwise
+        const tareSource = this._orphanTareSource === 'fleet_default' ? 'fleet_default' : 'manual';
+        this._orphanTareSource = null;  // reset
+
+        // Generate a ticket number — "ORPH-" + timestamp
+        const ticketNum = 'ORPH-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + ctx.id.substring(0, 6);
+
+        const captured = new Date(ctx.captured_at);
+        const ticketDate = captured.toISOString().slice(0, 10);
+
+        const ticket = {
+            ticket_number: ticketNum,
+            ticket_date: ticketDate,
+            gross_lbs: grossLbs,
+            tare_lbs: tareLbs,
+            net_lbs: Math.round(netLbs),
+            net_tons: netTons,
+            hauler: hauler,
+            scan_type: 'pi_orphan_resolve',
+            captured_at: ctx.captured_at,
+            service_date: ticketDate,
+            project_id: projectId,
+            resolved_from_orphan: true,
+            tare_source: tareSource,
+            source_weight_id: ctx.id,
+            notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource + '.'
+        };
+
+        // Generate audit hash
+        try {
+            const hashInput = JSON.stringify({
+                ticket_number: ticket.ticket_number,
+                net_lbs: ticket.net_lbs,
+                source_weight_id: ticket.source_weight_id,
+                timestamp: ticket.captured_at
+            });
+            ticket.audit_id = await this.sha256(hashInput);
+        } catch (e) { console.error('Hash error:', e); }
+
+        this.showLoading && this.showLoading();
+        const result = await this.supabase('tickets', 'POST', ticket);
+        this.hideLoading && this.hideLoading();
+
+        if (!result || result.length === 0) {
+            this.showToast('❌ Failed to create ticket — check console');
+            return;
+        }
+
+        const newTicket = result[0];
+
+        // Update scale_weights — mark as confirmed and link to ticket
+        await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', {
+            status: 'confirmed',
+            resolved_at: new Date().toISOString(),
+            resolved_ticket_id: newTicket.id
+        });
+
+        // Audit entry
+        if (typeof this.addAuditEntry === 'function') {
+            this.addAuditEntry('ORPHAN_RESOLVE',
+                ticketNum + ' | ' + netTons + 'T | ' + hauler + ' | tare_source: ' + tareSource);
+        }
+
+        this.showToast('✅ Ticket ' + ticketNum + ' created — ' + netTons + ' T');
+        this.closeModal('orphanResolveModal');
+        this._orphanResolveContext = null;
+        this._fleetTaresCache = null;  // bust cache so future opens see fresh data
+        this.loadPiCaptures();          // refresh dashboard
+        if (typeof this.loadScaleFeed === 'function') this.loadScaleFeed();
+    },
+
+    async ignoreOrphan(reason) {
+        const ctx = this._orphanResolveContext;
+        if (!ctx) return;
+
+        const reasonMap = {
+            forklift: 'Forklift / yard equipment',
+            equipment: 'Equipment driving over scale',
+            test: 'Test scan',
+            other: 'Other (not a real truck)'
+        };
+        const reasonText = reasonMap[reason] || 'Not a real truck';
+
+        const result = await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', {
+            status: 'ignored',
+            ignore_reason: reasonText,
+            resolved_at: new Date().toISOString()
+        });
+
+        if (result === null) {
+            this.showToast('❌ Failed to mark as ignored');
+            return;
+        }
+
+        if (typeof this.addAuditEntry === 'function') {
+            this.addAuditEntry('PI_CAPTURE_IGNORE',
+                ctx.id.substring(0, 8) + ' | ' + ctx.weight_lbs + ' lbs | ' + reasonText);
+        }
+
+        this.showToast('🚫 Marked as ignored: ' + reasonText);
+        this.closeModal('orphanResolveModal');
+        this._orphanResolveContext = null;
+        this.loadPiCaptures();
     },
 
     async loadMoreScale() {
