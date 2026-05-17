@@ -1020,6 +1020,9 @@
             <div id="orphanAlertBanner" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:.7rem;color:#f87171;">
                 ⚠️ <span id="orphanAlertText">No matching tare received within 4 hours.</span>
             </div>
+            <button id="orphanUndoBtn" onclick="DS.undoIgnore()" style="display:none;width:100%;margin-top:10px;padding:10px;background:rgba(96,165,250,0.15);border:1px solid #60a5fa;border-radius:8px;color:#60a5fa;font-size:.8rem;font-weight:600;cursor:pointer;">
+                ↩️ Undo Ignore — Restore to Pending
+            </button>
         </div>
 
         <!-- Step 1: Pick hauler -->
@@ -1462,6 +1465,10 @@ const DS = {
         const ignoreDivider = document.getElementById('orphanIgnoreDivider');
         if (ignoreDivider) ignoreDivider.style.display = showResolution && showIgnoreSection ? '' : 'none';
 
+        // Show Undo Ignore button only when row is currently ignored
+        const undoBtn = document.getElementById('orphanUndoBtn');
+        if (undoBtn) undoBtn.style.display = (r.status === 'ignored') ? '' : 'none';
+
         // Only populate haulers/fleet/projects if we're actually showing the resolution flow
         if (showResolution) {
             const haulerSel = document.getElementById('orphanHaulerSelect');
@@ -1652,15 +1659,50 @@ const DS = {
         } catch (e) { console.error('Hash error:', e); }
 
         this.showLoading && this.showLoading();
-        const result = await this.supabase('tickets', 'POST', ticket);
+        
+        // Inline POST with detailed error surfacing (instead of generic this.supabase wrapper)
+        let newTicket = null;
+        let postError = null;
+        try {
+            const url = this.state.supabaseUrl + '/rest/v1/tickets';
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'apikey': this.state.supabaseKey,
+                    'Authorization': 'Bearer ' + this.state.supabaseKey,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify(ticket)
+            });
+            if (!res.ok) {
+                postError = await res.text();
+                console.error('Ticket POST failed:', res.status, postError);
+                console.error('Ticket payload was:', JSON.stringify(ticket, null, 2));
+            } else {
+                const result = await res.json();
+                if (result && result.length > 0) newTicket = result[0];
+            }
+        } catch (e) {
+            postError = e.message || String(e);
+            console.error('Ticket POST exception:', e);
+        }
+        
         this.hideLoading && this.hideLoading();
 
-        if (!result || result.length === 0) {
-            this.showToast('❌ Failed to create ticket — check console');
+        if (!newTicket) {
+            // Show the actual Postgres error in the toast (truncated for screen)
+            let errMsg = postError || 'unknown error';
+            try {
+                const errObj = JSON.parse(postError);
+                if (errObj.message) errMsg = errObj.message;
+                else if (errObj.hint) errMsg = errObj.hint;
+                else if (errObj.details) errMsg = errObj.details;
+            } catch (e) { /* postError is not JSON, use as-is */ }
+            if (errMsg.length > 120) errMsg = errMsg.substring(0, 117) + '...';
+            this.showToast('❌ ' + errMsg);
             return;
         }
-
-        const newTicket = result[0];
 
         // Update scale_weights — mark as confirmed and link to ticket
         await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', {
@@ -1712,6 +1754,36 @@ const DS = {
         }
 
         this.showToast('🚫 Marked as ignored: ' + reasonText);
+        this.closeModal('orphanResolveModal');
+        this._orphanResolveContext = null;
+        this.loadPiCaptures();
+    },
+
+    async undoIgnore() {
+        const ctx = this._orphanResolveContext;
+        if (!ctx) return;
+        if (ctx.status !== 'ignored') {
+            this.showToast('Not an ignored row');
+            return;
+        }
+
+        const result = await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', {
+            status: null,
+            ignore_reason: null,
+            resolved_at: null
+        });
+
+        if (result === null) {
+            this.showToast('❌ Failed to undo ignore — check console');
+            return;
+        }
+
+        if (typeof this.addAuditEntry === 'function') {
+            this.addAuditEntry('PI_CAPTURE_UNIGNORE',
+                ctx.id.substring(0, 8) + ' | ' + ctx.weight_lbs + ' lbs | reason was: ' + (ctx.ignore_reason || 'unknown'));
+        }
+
+        this.showToast('↩️ Restored — capture is back to pending');
         this.closeModal('orphanResolveModal');
         this._orphanResolveContext = null;
         this.loadPiCaptures();
