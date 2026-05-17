@@ -441,6 +441,31 @@
                     <div style="text-align:center;padding:16px;color:var(--text-dim);">Tap Refresh to load Pi captures</div>
                 </div>
             </div>
+
+            <!-- ============================================================
+                 DRIVERS — Lookup driver loadbook URLs (Phase 2.4)
+                 Admin types name or filters by hauler → sees URL → copies to send to driver
+                 ============================================================ -->
+            <div class="card" id="driversCard" style="border-color:#60a5fa;background:linear-gradient(135deg,var(--bg-card) 0%,rgba(96,165,250,0.04) 100%);">
+                <div class="card-title">
+                    <span class="icon">👤</span> Drivers
+                    <span id="driversCount" style="margin-left:8px;background:#60a5fa;color:#080f14;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none;">0</span>
+                    <button onclick="DS.loadDrivers()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.7rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
+                </div>
+                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Look up any driver's loadbook URL. Copy & text it to them if they lose their bookmark.</p>
+
+                <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                    <input type="text" id="driversSearch" placeholder="Search by name..." oninput="DS.filterDrivers()" style="flex:1;min-width:140px;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
+                    <select id="driversHaulerFilter" onchange="DS.filterDrivers()" style="padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
+                        <option value="">All Haulers</option>
+                    </select>
+                </div>
+
+                <div id="driversList" style="font-size:.8rem;">
+                    <div style="text-align:center;padding:16px;color:var(--text-dim);">Tap Refresh to load drivers</div>
+                </div>
+            </div>
+
             <div class="card" style="border-color:var(--primary);">
                 <div class="card-title"><span class="icon">⚖️</span> Scale Activity
                     <span id="scaleCount" style="margin-left:8px;background:var(--bg-input);color:var(--text-muted);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;">0</span>
@@ -1354,6 +1379,205 @@ const DS = {
     _orphanResolveContext: null,  // holds the capture being resolved
     _fleetTaresCache: null,       // cached v_fleet_tares result
 
+    // ============================================================
+    // DRIVERS LOOKUP (Phase 2.4)
+    // Search/filter all drivers, copy their loadbook URL, regenerate token
+    // ============================================================
+    _allDriversCache: null,  // full driver list with stats
+
+    async loadDrivers() {
+        const listEl = document.getElementById('driversList');
+        const countEl = document.getElementById('driversCount');
+        const haulerSelect = document.getElementById('driversHaulerFilter');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">Loading drivers...</div>';
+
+        try {
+            // Fetch all drivers with their stats. Pull recent ticket info to compute load counts.
+            const drivers = await this.supabase('drivers?select=*&order=hauler.asc,driver_name.asc');
+            if (!drivers) throw new Error('No data');
+
+            // Enrich with ticket counts per driver (one query for all drivers)
+            const tickets = await this.supabase('tickets?driver_id=not.is.null&select=driver_id,net_tons,captured_at&order=captured_at.desc&limit=10000') || [];
+
+            const statsByDriver = {};
+            tickets.forEach(t => {
+                if (!statsByDriver[t.driver_id]) {
+                    statsByDriver[t.driver_id] = { count: 0, tons: 0, last_load: null };
+                }
+                statsByDriver[t.driver_id].count++;
+                statsByDriver[t.driver_id].tons += Number(t.net_tons || 0);
+                if (!statsByDriver[t.driver_id].last_load || t.captured_at > statsByDriver[t.driver_id].last_load) {
+                    statsByDriver[t.driver_id].last_load = t.captured_at;
+                }
+            });
+
+            // Merge stats into driver records
+            drivers.forEach(d => {
+                const s = statsByDriver[d.id] || { count: 0, tons: 0, last_load: null };
+                d._loadCount = s.count;
+                d._totalTons = s.tons;
+                d._lastLoad = s.last_load;
+            });
+
+            this._allDriversCache = drivers;
+
+            // Populate hauler filter dropdown
+            const haulers = [...new Set(drivers.map(d => d.hauler))].sort();
+            const currentVal = haulerSelect.value;
+            haulerSelect.innerHTML = '<option value="">All Haulers (' + drivers.length + ')</option>'
+                + haulers.map(h => {
+                    const ct = drivers.filter(d => d.hauler === h).length;
+                    return '<option value="' + h.replace(/"/g, '&quot;') + '"' + (h === currentVal ? ' selected' : '') + '>' + h + ' (' + ct + ')</option>';
+                }).join('');
+
+            if (countEl) {
+                countEl.textContent = drivers.length;
+                countEl.style.display = 'inline-block';
+            }
+
+            this.filterDrivers();
+        } catch (err) {
+            console.error('loadDrivers error:', err);
+            listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;">Error: ' + (err.message || err) + '</div>';
+        }
+    },
+
+    filterDrivers() {
+        const listEl = document.getElementById('driversList');
+        if (!listEl || !this._allDriversCache) return;
+
+        const search = (document.getElementById('driversSearch').value || '').toLowerCase().trim();
+        const haulerFilter = document.getElementById('driversHaulerFilter').value;
+
+        let filtered = this._allDriversCache;
+        if (haulerFilter) filtered = filtered.filter(d => d.hauler === haulerFilter);
+        if (search) filtered = filtered.filter(d => (d.driver_name || '').toLowerCase().includes(search));
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No drivers match your filter</div>';
+            return;
+        }
+
+        const baseUrl = window.location.origin + window.location.pathname.replace(/index\.html$/, '').replace(/[^/]*$/, '');
+
+        listEl.innerHTML = filtered.map(d => {
+            const phoneFmt = d.phone ? this._formatPhone(d.phone) : '';
+            const lastLoadStr = d._lastLoad
+                ? new Date(d._lastLoad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : '—';
+            const url = baseUrl + 'driver.html?t=' + encodeURIComponent(d.driver_token);
+            const isInactive = !d.is_active;
+
+            return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg-input);' + (isInactive ? 'opacity:0.5;' : '') + '">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">' +
+                    '<div style="flex:1;min-width:140px;">' +
+                        '<div style="font-weight:700;color:var(--text);font-size:.9rem;">' + d.driver_name + '</div>' +
+                        '<div style="font-size:.65rem;color:var(--text-muted);">🚛 ' + d.hauler + '</div>' +
+                        (phoneFmt ? '<div style="font-size:.65rem;color:#60a5fa;margin-top:2px;">📱 ' + phoneFmt + '</div>' : '') +
+                    '</div>' +
+                    '<div style="text-align:right;min-width:80px;">' +
+                        '<div style="font-family:monospace;font-weight:700;color:var(--primary);font-size:.85rem;">' + d._loadCount + ' loads</div>' +
+                        '<div style="font-size:.6rem;color:var(--text-muted);">' + d._totalTons.toFixed(1) + ' T · last ' + lastLoadStr + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
+                    '<button onclick="DS.copyDriverUrl(\'' + d.id + '\')" style="flex:1;min-width:90px;padding:6px 10px;background:rgba(0,201,167,0.15);border:1px solid var(--primary);color:var(--primary);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">📋 Copy URL</button>' +
+                    '<button onclick="DS.openDriverUrl(\'' + d.id + '\')" style="flex:1;min-width:70px;padding:6px 10px;background:rgba(96,165,250,0.15);border:1px solid #60a5fa;color:#60a5fa;border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">🔍 View</button>' +
+                    '<button onclick="DS.regenerateDriverToken(\'' + d.id + '\')" style="flex:1;min-width:90px;padding:6px 10px;background:rgba(245,158,11,0.15);border:1px solid var(--warning);color:var(--warning);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">🔄 Regenerate</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    _formatPhone(raw) {
+        const d = (raw || '').replace(/\D/g, '');
+        if (d.length === 10) return '(' + d.substring(0, 3) + ') ' + d.substring(3, 6) + '-' + d.substring(6);
+        return raw;
+    },
+
+    _driverUrl(driver) {
+        const baseUrl = window.location.origin + window.location.pathname.replace(/index\.html$/, '').replace(/[^/]*$/, '');
+        return baseUrl + 'driver.html?t=' + encodeURIComponent(driver.driver_token);
+    },
+
+    copyDriverUrl(driverId) {
+        const driver = (this._allDriversCache || []).find(d => d.id === driverId);
+        if (!driver) return;
+        const url = this._driverUrl(driver);
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => {
+                this.showToast('✅ Copied — text it to ' + driver.driver_name);
+            }).catch(() => this._fallbackCopy(url, driver.driver_name));
+        } else {
+            this._fallbackCopy(url, driver.driver_name);
+        }
+    },
+
+    openDriverUrl(driverId) {
+        const driver = (this._allDriversCache || []).find(d => d.id === driverId);
+        if (!driver) return;
+        window.open(this._driverUrl(driver), '_blank');
+    },
+
+    _fallbackCopy(text, name) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); this.showToast('✅ Copied — text to ' + name); } catch (e) { this.showToast('Long-press to select'); }
+        document.body.removeChild(ta);
+    },
+
+    async regenerateDriverToken(driverId) {
+        const driver = (this._allDriversCache || []).find(d => d.id === driverId);
+        if (!driver) return;
+
+        const confirmed = confirm(
+            'Regenerate ' + driver.driver_name + "'s loadbook token?\n\n" +
+            "• Their current bookmark will stop working IMMEDIATELY.\n" +
+            "• A new URL will be generated.\n" +
+            "• All their historical loads stay intact.\n" +
+            "• You'll need to send them the new link.\n\n" +
+            "Continue?"
+        );
+        if (!confirmed) return;
+
+        // Generate a new 32-char URL-safe token client-side using browser crypto
+        const newToken = this._generateToken();
+
+        const result = await this.supabase('drivers?id=eq.' + driverId, 'PATCH', { driver_token: newToken });
+        if (result === null) {
+            this.showToast('❌ Regenerate failed — check console');
+            return;
+        }
+
+        // Update cache and copy new URL
+        driver.driver_token = newToken;
+        const newUrl = this._driverUrl(driver);
+        if (navigator.clipboard) {
+            try { await navigator.clipboard.writeText(newUrl); } catch (e) { /* fallthrough */ }
+        }
+
+        this.showToast('🔄 New URL copied — text it to ' + driver.driver_name + '. Old link is dead.');
+
+        if (typeof this.addAuditEntry === 'function') {
+            this.addAuditEntry('DRIVER_TOKEN_REGEN', driver.driver_name + ' (' + driver.hauler + ')');
+        }
+
+        this.filterDrivers();  // re-render row
+    },
+
+    _generateToken() {
+        // 24 random bytes → 32 URL-safe base64 chars (matches DB trigger format)
+        const bytes = new Uint8Array(24);
+        crypto.getRandomValues(bytes);
+        // Base64 then convert to URL-safe
+        let b64 = btoa(String.fromCharCode.apply(null, bytes));
+        return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
     async openOrphanResolve(weightId) {
         if (!weightId) return;
         const rows = await this.supabase('v_admin_review?id=eq.' + encodeURIComponent(weightId) + '&limit=1');
@@ -2155,7 +2379,7 @@ const DS = {
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'projectsTab') this.renderProjectList();
                 if (tab === 'auditTab') { this.loadPendingReview(); this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); this.loadHaulerMgmt(); }
-                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); }
+                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); }
             });
         });
     },
