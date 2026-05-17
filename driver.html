@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0f14">
+    <title>My Loadbook — DivertScan</title>
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%2300c9a7' width='100' height='100'/%3E%3Ctext x='50' y='65' font-size='60' text-anchor='middle' fill='%23080f14' font-family='system-ui' font-weight='800'%3E📒%3C/text%3E%3C/svg%3E">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+            --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+            --green:#22c55e;--amber:#f59e0b;--red:#ef4444;
+            --cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.1);
+            --mono:'JetBrains Mono',monospace;
+            --sans:'DM Sans',system-ui,sans-serif;
+        }
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+        body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px}
+
+        .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border)}
+        .hdr-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+        .hdr-brand{font-size:.75rem;font-weight:700;color:var(--cyan);letter-spacing:.05em;text-transform:uppercase}
+        .hdr-driver{font-size:1.25rem;font-weight:800;letter-spacing:-.02em}
+        .hdr-hauler{font-size:.8rem;color:var(--muted);font-weight:500}
+
+        .container{max-width:760px;margin:0 auto;padding:16px}
+
+        .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+        .summary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+        .summary-card.active{border-color:var(--cyan);background:var(--cyan-glow)}
+        .summary-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
+        .summary-count{font-family:var(--mono);font-size:1.8rem;font-weight:800;color:var(--green);line-height:1;margin:4px 0 2px}
+        .summary-tons{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+        .summary-card.active .summary-count{color:var(--cyan)}
+
+        .actions-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+        .action-btn{flex:1;min-width:120px;padding:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s}
+        .action-btn:active{transform:scale(.96)}
+        .action-btn:hover{border-color:var(--cyan)}
+        .action-btn.primary{background:var(--cyan-glow);border-color:var(--cyan);color:var(--cyan)}
+
+        .date-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:.8rem;color:var(--muted)}
+        .date-input{padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:.8rem;flex:1;min-width:120px}
+        .date-input:focus{outline:none;border-color:var(--cyan)}
+
+        .quick-chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+        .chip{padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:14px;color:var(--muted);font-size:.7rem;font-weight:600;cursor:pointer}
+        .chip:active{transform:scale(.95)}
+        .chip.active{background:var(--cyan-glow);border-color:var(--cyan);color:var(--cyan)}
+
+        .loads-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+        .loads-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+        .loads-title-text{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700}
+        .loads-count{font-family:var(--mono);background:var(--cyan);color:#080f14;font-size:.65rem;font-weight:800;padding:2px 8px;border-radius:8px}
+
+        .load-row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(42,64,88,.5);font-size:.8rem}
+        .load-row:last-child{border-bottom:none}
+        .load-date{font-family:var(--mono);font-size:.7rem;color:var(--muted);min-width:54px;line-height:1.4}
+        .load-date strong{color:var(--text);font-weight:700;display:block}
+        .load-main{font-family:var(--mono)}
+        .load-ticket{color:var(--cyan);font-weight:800;font-size:.85rem}
+        .load-weights{font-size:.7rem;color:var(--muted);margin-top:2px}
+        .load-net{text-align:right;font-family:var(--mono)}
+        .load-net-lbs{color:var(--green);font-weight:800;font-size:.9rem}
+        .load-net-tons{font-size:.65rem;color:var(--muted)}
+
+        .empty-state{text-align:center;padding:40px 20px;color:var(--dim)}
+        .empty-state-icon{font-size:3rem;margin-bottom:10px;opacity:.6}
+
+        .bookmark-banner{background:var(--cyan-glow);border:1px solid var(--cyan);border-radius:10px;padding:14px;margin-bottom:14px;display:none}
+        .bookmark-banner.show{display:block}
+        .bookmark-banner h3{font-size:.85rem;color:var(--cyan);margin-bottom:4px;font-weight:700}
+        .bookmark-banner p{font-size:.75rem;color:var(--muted);line-height:1.4}
+        .bookmark-banner button{margin-top:8px;padding:8px 16px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer}
+
+        .error-state{background:var(--card);border:1px solid var(--red);border-radius:12px;padding:20px;text-align:center;margin:40px 16px;color:var(--red)}
+        .error-state h2{font-size:1rem;margin-bottom:8px}
+        .error-state p{font-size:.8rem;color:var(--muted);line-height:1.5}
+
+        .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;margin:40px auto}
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        @media print{
+            body{background:white;color:black}
+            .hdr{background:none;color:black;border-bottom:2px solid black}
+            .hdr-brand,.hdr-driver,.hdr-hauler{color:black}
+            .summary-card,.loads-section{border-color:#999;background:white;color:black}
+            .summary-card *,.loads-section *{color:black !important}
+            .actions-row,.date-row,.quick-chips,.bookmark-banner,.no-print{display:none !important}
+        }
+    </style>
+</head>
+<body>
+
+<header class="hdr">
+    <div class="container">
+        <div class="hdr-row">
+            <div class="hdr-brand">📒 DivertScan Loadbook</div>
+        </div>
+        <div class="hdr-driver" id="driverName">Loading...</div>
+        <div class="hdr-hauler" id="haulerName"></div>
+    </div>
+</header>
+
+<div class="container">
+
+    <div id="bookmarkBanner" class="bookmark-banner">
+        <h3>📌 Save This Page</h3>
+        <p>This is your permanent load record. Bookmark this page on your phone — Add to Home Screen so you can pull it up anywhere. You'll never need to type a password.</p>
+        <button onclick="dismissBookmark()">Got it</button>
+    </div>
+
+    <div id="loadingState" class="spinner"></div>
+
+    <div id="content" style="display:none">
+        <!-- Summary cards -->
+        <div class="summary-grid">
+            <div class="summary-card" id="card7d" onclick="setQuickRange('7d')">
+                <div class="summary-label">7 Days</div>
+                <div class="summary-count" id="loads7d">—</div>
+                <div class="summary-tons" id="tons7d">—</div>
+            </div>
+            <div class="summary-card" id="card30d" onclick="setQuickRange('30d')">
+                <div class="summary-label">30 Days</div>
+                <div class="summary-count" id="loads30d">—</div>
+                <div class="summary-tons" id="tons30d">—</div>
+            </div>
+            <div class="summary-card" id="cardAll" onclick="setQuickRange('all')">
+                <div class="summary-label">All Time</div>
+                <div class="summary-count" id="loadsAll">—</div>
+                <div class="summary-tons" id="tonsAll">—</div>
+            </div>
+        </div>
+
+        <!-- Quick filter chips -->
+        <div class="quick-chips">
+            <span class="chip" onclick="setQuickRange('today')">Today</span>
+            <span class="chip" onclick="setQuickRange('yesterday')">Yesterday</span>
+            <span class="chip" onclick="setQuickRange('thisweek')">This Week</span>
+            <span class="chip" onclick="setQuickRange('lastweek')">Last Week</span>
+            <span class="chip" onclick="setQuickRange('thismonth')">This Month</span>
+            <span class="chip" onclick="setQuickRange('lastmonth')">Last Month</span>
+        </div>
+
+        <!-- Date pickers -->
+        <div class="date-row">
+            <label>From</label>
+            <input type="date" class="date-input" id="dateFrom" onchange="onDateChange()">
+            <label>To</label>
+            <input type="date" class="date-input" id="dateTo" onchange="onDateChange()">
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-row no-print">
+            <button class="action-btn primary" onclick="copyForCurtis()">📋 Copy for Dispatcher</button>
+            <button class="action-btn" onclick="window.print()">🖨️ Print View</button>
+            <button class="action-btn" onclick="shareUrl()">🔗 Share Link</button>
+        </div>
+
+        <!-- Loads list -->
+        <div class="loads-section">
+            <div class="loads-title">
+                <div class="loads-title-text">Loads in Selected Range</div>
+                <div class="loads-count" id="rangeCount">0</div>
+            </div>
+            <div id="loadsList"></div>
+            <div id="rangeSummary" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:.75rem;color:var(--muted);text-align:right;display:none">
+                <strong id="rangeSummaryText"></strong>
+            </div>
+        </div>
+    </div>
+
+    <div id="errorState" class="error-state" style="display:none">
+        <h2>⚠️ Loadbook Not Found</h2>
+        <p>This link doesn't match any driver in our system. Double-check the URL or contact Dalmex Recycling for a new link.</p>
+    </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+
+let driverInfo = null;
+let allLoads = [];
+let currentRange = { from: null, to: null };
+
+async function sb(endpoint) {
+    const url = SUPABASE_URL + "/rest/v1/" + endpoint;
+    const res = await fetch(url, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if (!res.ok) return null;
+    const txt = await res.text();
+    return txt ? JSON.parse(txt) : [];
+}
+
+async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('t');
+
+    if (!token || token.length < 8) {
+        showError();
+        return;
+    }
+
+    // Show bookmark banner on first visit
+    if (!localStorage.getItem('ds_logbook_bookmarked_' + token)) {
+        document.getElementById('bookmarkBanner').classList.add('show');
+    }
+
+    // Fetch driver record
+    const drivers = await sb('drivers?driver_token=eq.' + encodeURIComponent(token) + '&limit=1');
+    if (!drivers || drivers.length === 0) {
+        showError();
+        return;
+    }
+    driverInfo = drivers[0];
+
+    document.getElementById('driverName').textContent = driverInfo.driver_name;
+    document.getElementById('haulerName').textContent = '🚛 ' + driverInfo.hauler;
+    document.title = driverInfo.driver_name + ' — Loadbook';
+
+    // Update last_seen_at (fire and forget)
+    fetch(SUPABASE_URL + '/rest/v1/drivers?id=eq.' + driverInfo.id, {
+        method: 'PATCH',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ last_seen_at: new Date().toISOString() })
+    }).catch(() => {});
+
+    // Fetch all loads via v_driver_logbook
+    const loads = await sb('v_driver_logbook?driver_token=eq.' + encodeURIComponent(token) + '&order=captured_at.desc') || [];
+    // Filter out null ticket rows (driver may exist with zero tickets)
+    allLoads = loads.filter(l => l.ticket_id);
+
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    renderSummaryCards();
+    setQuickRange('30d');  // default view
+}
+
+function renderSummaryCards() {
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+
+    const loads7d  = allLoads.filter(l => l.captured_at && (now - new Date(l.captured_at).getTime() < 7 * day));
+    const loads30d = allLoads.filter(l => l.captured_at && (now - new Date(l.captured_at).getTime() < 30 * day));
+
+    document.getElementById('loads7d').textContent = loads7d.length;
+    document.getElementById('loads30d').textContent = loads30d.length;
+    document.getElementById('loadsAll').textContent = allLoads.length;
+
+    document.getElementById('tons7d').textContent  = sumTons(loads7d) + ' T';
+    document.getElementById('tons30d').textContent = sumTons(loads30d) + ' T';
+    document.getElementById('tonsAll').textContent = sumTons(allLoads) + ' T';
+}
+
+function sumTons(arr) {
+    return arr.reduce((s, l) => s + Number(l.net_tons || 0), 0).toFixed(1);
+}
+
+function setQuickRange(key) {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    let from, to = new Date(today);
+
+    if (key === 'today') {
+        from = new Date(today); from.setHours(0, 0, 0, 0);
+    } else if (key === 'yesterday') {
+        from = new Date(today); from.setDate(from.getDate() - 1); from.setHours(0, 0, 0, 0);
+        to = new Date(from); to.setHours(23, 59, 59, 999);
+    } else if (key === 'thisweek') {
+        from = new Date(today);
+        from.setDate(from.getDate() - from.getDay()); // Sunday start
+        from.setHours(0, 0, 0, 0);
+    } else if (key === 'lastweek') {
+        from = new Date(today);
+        from.setDate(from.getDate() - from.getDay() - 7);
+        from.setHours(0, 0, 0, 0);
+        to = new Date(from); to.setDate(to.getDate() + 6); to.setHours(23, 59, 59, 999);
+    } else if (key === 'thismonth') {
+        from = new Date(today.getFullYear(), today.getMonth(), 1);
+    } else if (key === 'lastmonth') {
+        from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        to = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+    } else if (key === '7d') {
+        from = new Date(today); from.setDate(from.getDate() - 7);
+    } else if (key === '30d') {
+        from = new Date(today); from.setDate(from.getDate() - 30);
+    } else if (key === 'all') {
+        from = new Date(2000, 0, 1);
+    }
+
+    currentRange = { from, to };
+
+    document.getElementById('dateFrom').value = toDateInput(from);
+    document.getElementById('dateTo').value = toDateInput(to);
+
+    // Highlight active card if 7d/30d/all
+    document.getElementById('card7d').classList.toggle('active', key === '7d');
+    document.getElementById('card30d').classList.toggle('active', key === '30d');
+    document.getElementById('cardAll').classList.toggle('active', key === 'all');
+
+    // Highlight active chip
+    document.querySelectorAll('.chip').forEach(c => {
+        c.classList.toggle('active', c.textContent.trim().toLowerCase().replace(/\s/g, '') === keyToChipText(key));
+    });
+
+    renderLoads();
+}
+
+function keyToChipText(key) {
+    const map = { today: 'today', yesterday: 'yesterday', thisweek: 'thisweek', lastweek: 'lastweek', thismonth: 'thismonth', lastmonth: 'lastmonth' };
+    return map[key] || '';
+}
+
+function onDateChange() {
+    const fromStr = document.getElementById('dateFrom').value;
+    const toStr   = document.getElementById('dateTo').value;
+    if (!fromStr || !toStr) return;
+
+    currentRange.from = new Date(fromStr); currentRange.from.setHours(0, 0, 0, 0);
+    currentRange.to   = new Date(toStr);   currentRange.to.setHours(23, 59, 59, 999);
+
+    // Deselect cards/chips
+    document.getElementById('card7d').classList.remove('active');
+    document.getElementById('card30d').classList.remove('active');
+    document.getElementById('cardAll').classList.remove('active');
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+
+    renderLoads();
+}
+
+function toDateInput(d) {
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+function filteredLoads() {
+    return allLoads.filter(l => {
+        if (!l.captured_at) return false;
+        const t = new Date(l.captured_at);
+        return t >= currentRange.from && t <= currentRange.to;
+    });
+}
+
+function renderLoads() {
+    const loads = filteredLoads();
+    const listEl = document.getElementById('loadsList');
+    const countEl = document.getElementById('rangeCount');
+    const summaryEl = document.getElementById('rangeSummary');
+    const summaryTextEl = document.getElementById('rangeSummaryText');
+
+    countEl.textContent = loads.length;
+
+    if (loads.length === 0) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div>No loads in this range</div>';
+        summaryEl.style.display = 'none';
+        return;
+    }
+
+    listEl.innerHTML = loads.map(l => {
+        const cap = new Date(l.captured_at);
+        const dateStr = cap.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const timeStr = cap.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const gross = Number(l.gross_lbs || 0).toLocaleString();
+        const tare  = Number(l.tare_lbs  || 0).toLocaleString();
+        const net   = Number(l.net_lbs   || 0).toLocaleString();
+        const tons  = Number(l.net_tons  || 0).toFixed(2);
+        return `
+            <div class="load-row">
+                <div class="load-date"><strong>${dateStr}</strong>${timeStr}</div>
+                <div class="load-main">
+                    <div class="load-ticket">${l.ticket_number || '—'}</div>
+                    <div class="load-weights">${gross} gross / ${tare} tare</div>
+                </div>
+                <div class="load-net">
+                    <div class="load-net-lbs">${net} lbs</div>
+                    <div class="load-net-tons">${tons} T</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    summaryEl.style.display = 'block';
+    const totalTons = sumTons(loads);
+    summaryTextEl.textContent = loads.length + ' loads · ' + totalTons + ' tons total';
+}
+
+function copyForCurtis() {
+    const loads = filteredLoads();
+    if (loads.length === 0) { alert('No loads to copy'); return; }
+
+    const fromStr = currentRange.from.toLocaleDateString();
+    const toStr = currentRange.to.toLocaleDateString();
+    let text = driverInfo.driver_name + ' — ' + driverInfo.hauler + '\n';
+    text += fromStr + ' to ' + toStr + '\n';
+    text += loads.length + ' loads · ' + sumTons(loads) + ' tons\n';
+    text += '─────────────────────\n';
+    loads.forEach(l => {
+        const cap = new Date(l.captured_at);
+        const dateStr = cap.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' });
+        const timeStr = cap.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        text += dateStr + ' ' + timeStr + ' · ' + (l.ticket_number || '—') + ' · ' + Number(l.net_lbs || 0).toLocaleString() + ' lbs (' + Number(l.net_tons || 0).toFixed(2) + ' T)\n';
+    });
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Copied to clipboard. Paste it in a text to your dispatcher.');
+        }).catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); alert('Copied to clipboard.'); } catch (e) { alert('Could not copy. Long press to select.'); }
+    document.body.removeChild(ta);
+}
+
+function shareUrl() {
+    const url = window.location.href;
+    if (navigator.share) {
+        navigator.share({
+            title: driverInfo.driver_name + ' — Loadbook',
+            text: 'My DivertScan loadbook',
+            url: url
+        }).catch(() => {});
+    } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => alert('Link copied. Paste it anywhere.')).catch(() => fallbackCopy(url));
+    } else {
+        fallbackCopy(url);
+    }
+}
+
+function dismissBookmark() {
+    document.getElementById('bookmarkBanner').classList.remove('show');
+    const token = new URLSearchParams(window.location.search).get('t');
+    if (token) localStorage.setItem('ds_logbook_bookmarked_' + token, '1');
+}
+
+function showError() {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
