@@ -1181,11 +1181,13 @@ const DS = {
                 countEl.style.display = 'inline-block';
             }
 
-            // Summary chips
+            // Summary chips — uses view fields: weight_band, status, orphan_deadline, cluster_flag
+            const now = new Date();
             const grossCount = data.filter(r => r.weight_band === 'gross_candidate').length;
             const tareCount = data.filter(r => r.weight_band === 'tare_candidate').length;
             const noiseCount = data.filter(r => r.weight_band === 'noise').length;
-            const orphanCount = data.filter(r => r.weight_band === 'gross_candidate' && r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date() && !r.ticket_id).length;
+            const unclassifiedCount = data.filter(r => !r.weight_band).length;
+            const orphanCount = data.filter(r => r.weight_band === 'gross_candidate' && r.orphan_deadline && new Date(r.orphan_deadline) < now && r.status !== 'confirmed' && r.status !== 'ignored').length;
             const clusterCount = data.filter(r => r.cluster_flag === true).length;
 
             if (summaryEl) {
@@ -1193,11 +1195,12 @@ const DS = {
                     '<span style="background:rgba(0,201,167,0.15);color:var(--primary);padding:3px 8px;border-radius:8px;font-weight:600;">' + grossCount + ' gross</span>' +
                     '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:3px 8px;border-radius:8px;font-weight:600;">' + tareCount + ' tare</span>' +
                     '<span style="background:rgba(107,114,128,0.15);color:#9ca3af;padding:3px 8px;border-radius:8px;font-weight:600;">' + noiseCount + ' noise</span>' +
+                    (unclassifiedCount > 0 ? '<span style="background:rgba(168,85,247,0.15);color:#c084fc;padding:3px 8px;border-radius:8px;font-weight:600;">❓ ' + unclassifiedCount + ' unclassified</span>' : '') +
                     (orphanCount > 0 ? '<span style="background:rgba(239,68,68,0.15);color:#f87171;padding:3px 8px;border-radius:8px;font-weight:600;">⚠️ ' + orphanCount + ' orphan</span>' : '') +
                     (clusterCount > 0 ? '<span style="background:rgba(245,158,11,0.15);color:var(--warning);padding:3px 8px;border-radius:8px;font-weight:600;">🔁 ' + clusterCount + ' cluster</span>' : '');
             }
 
-            // Row list
+            // Row list — drives badge off view fields (status, weight_band, orphan_deadline)
             const rows = data.map(function(r) {
                 const captured = new Date(r.captured_at);
                 const dateStr = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -1205,18 +1208,32 @@ const DS = {
 
                 let statusBadge = '';
                 let bandColor = 'var(--text-muted)';
-                if (r.weight_band === 'gross_candidate') {
+
+                const isOrphan = r.weight_band === 'gross_candidate'
+                    && r.orphan_deadline
+                    && new Date(r.orphan_deadline) < now
+                    && r.status !== 'confirmed'
+                    && r.status !== 'ignored';
+
+                if (!r.weight_band) {
+                    bandColor = '#c084fc';
+                    statusBadge = '<span style="color:#c084fc;font-size:.65rem;">❓ unclassified</span>';
+                } else if (r.weight_band === 'gross_candidate') {
                     bandColor = 'var(--primary)';
-                    if (r.ticket_id) {
+                    if (r.status === 'confirmed') {
                         statusBadge = '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>';
-                    } else if (r.orphan_alert_at && new Date(r.orphan_alert_at) < new Date()) {
+                    } else if (r.status === 'ignored') {
+                        statusBadge = '<span style="color:#9ca3af;font-size:.65rem;">⚙️ ignored</span>';
+                    } else if (isOrphan) {
                         statusBadge = '<span style="color:#f87171;font-size:.65rem;font-weight:600;">⚠️ ORPHAN</span>';
                     } else {
                         statusBadge = '<span style="color:var(--warning);font-size:.65rem;">⏳ pending</span>';
                     }
                 } else if (r.weight_band === 'tare_candidate') {
                     bandColor = '#60a5fa';
-                    statusBadge = r.ticket_id ? '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>' : '<span style="color:#60a5fa;font-size:.65rem;">tare</span>';
+                    statusBadge = (r.status === 'confirmed')
+                        ? '<span style="color:var(--primary);font-size:.65rem;">✅ paired</span>'
+                        : '<span style="color:#60a5fa;font-size:.65rem;">tare</span>';
                 } else if (r.weight_band === 'noise') {
                     bandColor = '#9ca3af';
                     statusBadge = '<span style="color:#9ca3af;font-size:.65rem;">🚫 noise</span>';
