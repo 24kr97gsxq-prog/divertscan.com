@@ -588,9 +588,36 @@ function onDriverInput() {
 }
 
 // Commit driver name as a real driver row. Called on debounce timeout OR when user blurs the input.
+// Phase 2.3 cleanup: if a shorter prefix was created in the last 30 seconds with zero tickets,
+// it was almost certainly a mid-typing artifact — supersede it with the new longer name.
 async function commitDriverName() {
     if (!selectedHauler || !selectedDriverName || selectedDriverName.length < 3) return;
     if (selectedDriverToken) return;  // already minted
+
+    // Step 1: Look for recent prefix-matching rows from THIS hauler that might be typing artifacts
+    const haulerEnc = encodeURIComponent(selectedHauler);
+    const thirtySecAgo = new Date(Date.now() - 30 * 1000).toISOString();
+    const recent = await sb('drivers?hauler=eq.' + haulerEnc + '&created_at=gte.' + encodeURIComponent(thirtySecAgo) + '&select=id,driver_name,driver_token');
+
+    if (recent && recent.length > 0) {
+        // Find rows whose name is a prefix of the new name (case-insensitive) AND have zero tickets
+        const lowerNew = selectedDriverName.toLowerCase();
+        for (const candidate of recent) {
+            const lowerOld = (candidate.driver_name || '').toLowerCase();
+            // Is candidate a prefix of new name, and shorter?
+            if (lowerOld.length < lowerNew.length && lowerNew.startsWith(lowerOld)) {
+                // Check if this candidate has any tickets — if it does, leave it alone
+                const ticketCheck = await sb('tickets?driver_id=eq.' + candidate.id + '&select=id&limit=1');
+                if (!ticketCheck || ticketCheck.length === 0) {
+                    // Safe to delete — typing artifact with no tickets
+                    await sb('drivers?id=eq.' + candidate.id, 'DELETE');
+                    console.log('Cleaned up typing artifact:', candidate.driver_name);
+                }
+            }
+        }
+    }
+
+    // Step 2: Get or create the row for the final committed name
     const driver = await getOrCreateDriver(selectedHauler, selectedDriverName);
     if (driver) {
         selectedDriverId = driver.id;
