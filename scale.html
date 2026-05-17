@@ -188,7 +188,7 @@
         <div class="driver-label">👤 Driver</div>
         <div class="driver-hint" id="driverHint">Tap your name (or "New" if not listed)</div>
         <div class="driver-buttons" id="driverButtons"></div>
-        <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()">
+        <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()" onblur="commitDriverName()">
     </div>
 
     <!-- Project Selector -->
@@ -241,9 +241,9 @@
     <!-- Phase 2.3: Loadbook URL -->
     <div id="successLoadbook" style="display:none;margin-top:14px;padding:12px;background:rgba(0,201,167,0.1);border:1px solid var(--cyan);border-radius:10px;max-width:340px;text-align:center;">
         <div style="font-size:.65rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px;">📒 Your Loadbook</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">All your loads — bookmark this page on your phone:</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">Your loads opened in a new tab. Bookmark that page on your phone to save it.</div>
         <div style="display:flex;gap:6px;justify-content:center;">
-            <button onclick="openLoadbook()" style="padding:8px 14px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer;">View Now</button>
+            <button onclick="openLoadbook()" style="padding:8px 14px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer;">Open Again</button>
             <button onclick="copyLoadbookUrl()" style="padding:8px 14px;background:transparent;border:1px solid var(--cyan);color:var(--cyan);border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer;">📋 Copy Link</button>
         </div>
     </div>
@@ -569,25 +569,34 @@ function showNewDriverInput() {
 function onDriverInput() {
     const input = document.getElementById('driverInput');
     selectedDriverName = input.value.trim();
-    // Save as user types (so refresh doesn't lose name)
+    // Save name to localStorage as user types so a refresh doesn't lose it
     if (selectedHauler && selectedDriverName) {
         localStorage.setItem('ds_driver_name_' + selectedHauler, selectedDriverName);
     }
-    // Clear token until they pause typing — _commitNewDriver below mints it
+    // Clear token until commit
     selectedDriverToken = '';
     selectedDriverId = '';
+    // Defer driver row creation until user STOPS typing for 2.5s AND name is at least 3 chars
+    // (Real driver names like "Bob G" or "Tom S" are 4+ chars, "Robert" / "Curtis" / etc.)
     clearTimeout(window._driverInputTimer);
-    window._driverInputTimer = setTimeout(async () => {
-        if (selectedHauler && selectedDriverName) {
-            const driver = await getOrCreateDriver(selectedHauler, selectedDriverName);
-            if (driver) {
-                selectedDriverId = driver.id;
-                selectedDriverToken = driver.driver_token;
-                localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + selectedDriverName, driver.driver_token);
-            }
-        }
-    }, 800);
+    if (selectedDriverName.length >= 3) {
+        window._driverInputTimer = setTimeout(async () => {
+            await commitDriverName();
+        }, 2500);
+    }
     checkReady();
+}
+
+// Commit driver name as a real driver row. Called on debounce timeout OR when user blurs the input.
+async function commitDriverName() {
+    if (!selectedHauler || !selectedDriverName || selectedDriverName.length < 3) return;
+    if (selectedDriverToken) return;  // already minted
+    const driver = await getOrCreateDriver(selectedHauler, selectedDriverName);
+    if (driver) {
+        selectedDriverId = driver.id;
+        selectedDriverToken = driver.driver_token;
+        localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + selectedDriverName, driver.driver_token);
+    }
 }
 
 function hideDriverSection() {
@@ -818,6 +827,12 @@ async function confirmTicket() {
     btn.disabled = true;
     btn.textContent = '⏳ Creating ticket...';
 
+    // Phase 2.3 safety: if driver typed name but debounce hadn't fired yet, commit now
+    if (selectedDriverName && !selectedDriverToken) {
+        clearTimeout(window._driverInputTimer);
+        await commitDriverName();
+    }
+
     const driverName = selectedDriverName || 'Unknown';
     const grossLbs = grossReading.weight_lbs;
     const tareLbs = tareReading.weight_lbs;
@@ -931,6 +946,12 @@ async function confirmTicket() {
         const loadbookEl = document.getElementById('successLoadbook');
         if (selectedDriverToken) {
             loadbookEl.style.display = 'block';
+            // Auto-open the driver's loadbook in a new tab — driver sees their loads immediately
+            // Brief delay so the scale.html success animation has a moment first
+            setTimeout(() => {
+                const url = loadbookUrl();
+                if (url) window.open(url, '_blank');
+            }, 600);
         } else {
             loadbookEl.style.display = 'none';
         }
