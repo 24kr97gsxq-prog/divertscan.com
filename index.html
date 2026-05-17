@@ -1023,7 +1023,7 @@
         </div>
 
         <!-- Step 1: Pick hauler -->
-        <div class="form-group">
+        <div class="form-group" id="orphanHaulerGroup">
             <label class="form-label">Hauler *</label>
             <select class="form-input" id="orphanHaulerSelect" onchange="DS.onOrphanHaulerChange()">
                 <option value="">— Select hauler —</option>
@@ -1037,7 +1037,7 @@
         </div>
 
         <!-- Step 3: Manual tare -->
-        <div class="form-group">
+        <div class="form-group" id="orphanManualTareGroup">
             <label class="form-label">Or Enter Tare Manually</label>
             <div style="display:flex;gap:8px;align-items:center;">
                 <input type="number" class="form-input" id="orphanManualTare" placeholder="e.g. 14200" style="flex:1;" oninput="DS.updateOrphanNetPreview()">
@@ -1046,7 +1046,7 @@
         </div>
 
         <!-- Step 4: Optional project assignment -->
-        <div class="form-group">
+        <div class="form-group" id="orphanProjectGroup">
             <label class="form-label">Project <span style="font-weight:400;color:var(--text-dim)">(optional)</span></label>
             <select class="form-input" id="orphanProjectSelect">
                 <option value="">— No project assigned —</option>
@@ -1063,14 +1063,16 @@
         <!-- Action buttons -->
         <button class="btn btn-success" id="orphanResolveBtn" onclick="DS.confirmOrphanResolve()" disabled>✓ Create Ticket from Orphan</button>
 
-        <div class="divider" style="margin:12px 0;"></div>
+        <div class="divider" id="orphanIgnoreDivider" style="margin:12px 0;"></div>
 
-        <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;font-weight:600;">Not a real truck?</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('forklift')" style="font-size:.7rem;">🛠️ Forklift</button>
-            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('equipment')" style="font-size:.7rem;">⚙️ Equipment</button>
-            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('test')" style="font-size:.7rem;">🧪 Test scan</button>
-            <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('other')" style="font-size:.7rem;">❓ Other</button>
+        <div id="orphanIgnoreSection">
+            <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;font-weight:600;">Not a real truck?</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('forklift')" style="font-size:.7rem;">🛠️ Forklift</button>
+                <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('equipment')" style="font-size:.7rem;">⚙️ Equipment</button>
+                <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('test')" style="font-size:.7rem;">🧪 Test scan</button>
+                <button class="btn btn-sm btn-outline" onclick="DS.ignoreOrphan('other')" style="font-size:.7rem;">❓ Other</button>
+            </div>
         </div>
 
         <button class="btn btn-outline mt-8" onclick="DS.closeModal('orphanResolveModal')">Cancel</button>
@@ -1344,8 +1346,6 @@ const DS = {
 
     async openOrphanResolve(weightId) {
         if (!weightId) return;
-        // Find the row in current Pi captures data (already loaded into DOM via loadPiCaptures)
-        // We re-query Supabase for the single row to ensure freshness.
         const rows = await this.supabase('v_admin_review?id=eq.' + encodeURIComponent(weightId) + '&limit=1');
         if (!rows || rows.length === 0) {
             this.showToast('Capture not found');
@@ -1354,71 +1354,141 @@ const DS = {
         const r = rows[0];
         this._orphanResolveContext = r;
 
-        // Title
-        let title = 'Resolve Pi Capture';
-        if (r.weight_band === 'gross_candidate') {
-            const isOrphan = r.orphan_deadline && new Date(r.orphan_deadline) < new Date()
-                && r.status !== 'confirmed' && r.status !== 'ignored';
-            title = isOrphan ? '⚠️ Resolve Orphan Gross' : '⏳ Resolve Pending Gross';
-        } else if (r.weight_band === 'tare_candidate') {
-            title = '🔍 Review Tare Capture';
-        } else if (r.weight_band === 'noise') {
-            title = '🚫 Review Noise Capture';
-        } else if (!r.weight_band) {
-            title = '❓ Review Unclassified Capture';
-        }
+        // Classify the row so we know which drawer mode to show
+        const isOrphan = r.weight_band === 'gross_candidate'
+            && r.orphan_deadline && new Date(r.orphan_deadline) < new Date()
+            && r.status !== 'confirmed' && r.status !== 'ignored';
+        const isPendingGross = r.weight_band === 'gross_candidate' && !isOrphan
+            && r.status !== 'confirmed' && r.status !== 'ignored';
+        const isTare = r.weight_band === 'tare_candidate';
+        const isNoise = r.weight_band === 'noise';
+        const isUnclassified = !r.weight_band;
+        const isAlreadyResolved = r.status === 'confirmed' || r.status === 'ignored';
+
+        // Title varies by row type
+        let title = 'Review Pi Capture';
+        if (isOrphan) title = '⚠️ Resolve Orphan Gross';
+        else if (isPendingGross) title = '⏳ Pending Gross — Awaiting Tare';
+        else if (isTare) title = '🔍 Tare Reading';
+        else if (isNoise) title = '🚫 Noise Capture';
+        else if (isUnclassified) title = '❓ Unclassified Capture';
+        if (r.status === 'confirmed') title = '✅ Already Resolved';
+        else if (r.status === 'ignored') title = '⚙️ Already Ignored';
         document.getElementById('orphanResolveTitle').textContent = title;
 
-        // Summary fields
+        // Capture summary (always shown)
         const grossLbs = Number(r.weight_lbs);
         document.getElementById('orphanGrossLbs').textContent = grossLbs.toLocaleString() + ' lbs';
         document.getElementById('orphanGrossTons').textContent = (grossLbs / 2000).toFixed(2) + ' T';
-
         const captured = new Date(r.captured_at);
         document.getElementById('orphanCapturedAt').textContent = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + captured.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
         document.getElementById('orphanCapturedHash').textContent = (r.sha256_hash || '').substring(0, 12);
 
-        // Orphan banner
+        // Alert banner — varies by row type
         const banner = document.getElementById('orphanAlertBanner');
         const bannerText = document.getElementById('orphanAlertText');
-        const isOrphan = r.weight_band === 'gross_candidate' && r.orphan_deadline
-            && new Date(r.orphan_deadline) < new Date()
-            && r.status !== 'confirmed' && r.status !== 'ignored';
         if (isOrphan) {
             const hoursOverdue = ((new Date() - new Date(r.orphan_deadline)) / 1000 / 60 / 60).toFixed(1);
-            bannerText.textContent = 'No matching tare received within 4 hours of capture. ' + hoursOverdue + 'h overdue.';
+            banner.style.background = 'rgba(239,68,68,0.1)';
+            banner.style.borderColor = 'rgba(239,68,68,0.3)';
+            banner.style.color = '#f87171';
+            bannerText.textContent = 'No matching tare received within 4 hours. ' + hoursOverdue + 'h overdue. Driver likely did not return for tare — estimate using fleet default below.';
+            banner.style.display = 'block';
+        } else if (isPendingGross) {
+            banner.style.background = 'rgba(245,158,11,0.1)';
+            banner.style.borderColor = 'rgba(245,158,11,0.3)';
+            banner.style.color = 'var(--warning)';
+            bannerText.textContent = 'Within 4-hour window — waiting for driver to return with tare. No action needed unless overdue.';
+            banner.style.display = 'block';
+        } else if (isTare) {
+            banner.style.background = 'rgba(96,165,250,0.1)';
+            banner.style.borderColor = 'rgba(96,165,250,0.3)';
+            banner.style.color = '#60a5fa';
+            bannerText.textContent = 'This is a tare reading. Auto-pairing in Phase 3 will match it with the corresponding gross. No manual action needed.';
+            banner.style.display = 'block';
+        } else if (isNoise) {
+            banner.style.background = 'rgba(156,163,175,0.1)';
+            banner.style.borderColor = 'rgba(156,163,175,0.3)';
+            banner.style.color = '#9ca3af';
+            bannerText.textContent = 'Weight below 10,000 lbs — likely forklift, equipment, or test scan. Mark as ignored below if confirmed.';
+            banner.style.display = 'block';
+        } else if (isUnclassified) {
+            banner.style.background = 'rgba(168,85,247,0.1)';
+            banner.style.borderColor = 'rgba(168,85,247,0.3)';
+            banner.style.color = '#c084fc';
+            bannerText.textContent = 'Not yet classified. Run the classifier SQL in Supabase to assign weight_band.';
+            banner.style.display = 'block';
+        } else if (r.status === 'confirmed') {
+            banner.style.background = 'rgba(0,201,167,0.1)';
+            banner.style.borderColor = 'rgba(0,201,167,0.3)';
+            banner.style.color = 'var(--primary)';
+            bannerText.textContent = 'Already converted into a ticket. View it in the Scale Activity feed below.';
+            banner.style.display = 'block';
+        } else if (r.status === 'ignored') {
+            banner.style.background = 'rgba(156,163,175,0.1)';
+            banner.style.borderColor = 'rgba(156,163,175,0.3)';
+            banner.style.color = '#9ca3af';
+            bannerText.textContent = 'Marked as ignored: ' + (r.ignore_reason || 'no reason given');
             banner.style.display = 'block';
         } else {
             banner.style.display = 'none';
         }
 
-        // Populate hauler dropdown — combine v_fleet_tares + state.projects haulers + a default
-        const haulerSel = document.getElementById('orphanHaulerSelect');
-        const fleetTares = await this._getFleetTares();
-        const haulerSet = {};
-        fleetTares.forEach(function(f) { haulerSet[f.hauler] = true; });
-        (this.state.projects || []).forEach(function(p) {
-            if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
+        // === Decide which sections to show based on row type ===
+        // Resolution flow (hauler / fleet / manual tare / project / create button) only for orphans/pending grosses
+        const showResolution = (isOrphan || isPendingGross) && !isAlreadyResolved;
+        const showIgnoreSection = !isAlreadyResolved;
+
+        // Toggle resolution sections
+        const resolutionSections = [
+            'orphanHaulerGroup',
+            'orphanFleetSection',
+            'orphanManualTareGroup',
+            'orphanProjectGroup',
+            'orphanNetPreview',
+            'orphanResolveBtn'
+        ];
+        resolutionSections.forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = showResolution ? '' : 'none';
         });
-        const haulers = Object.keys(haulerSet).sort();
-        haulerSel.innerHTML = '<option value="">— Select hauler —</option>'
-            + haulers.map(function(h) { return '<option value="' + h.replace(/"/g, '&quot;') + '">' + h + '</option>'; }).join('');
-
-        // Populate project dropdown
-        const projSel = document.getElementById('orphanProjectSelect');
-        projSel.innerHTML = '<option value="">— No project assigned —</option>'
-            + (this.state.projects || []).map(function(p) {
-                return '<option value="' + p.id + '">' + p.name + '</option>';
-            }).join('');
-
-        // Reset form state
-        document.getElementById('orphanManualTare').value = '';
-        document.getElementById('orphanFleetSection').style.display = 'none';
-        document.getElementById('orphanFleetCards').innerHTML = '';
-        document.getElementById('orphanNetPreview').style.display = 'none';
         document.getElementById('orphanResolveBtn').disabled = true;
 
-        // Show modal
+        // Toggle ignore section + its label
+        const ignoreSection = document.getElementById('orphanIgnoreSection');
+        if (ignoreSection) ignoreSection.style.display = showIgnoreSection ? '' : 'none';
+
+        // Hide the divider above ignore section if no resolution section above it
+        const ignoreDivider = document.getElementById('orphanIgnoreDivider');
+        if (ignoreDivider) ignoreDivider.style.display = showResolution && showIgnoreSection ? '' : 'none';
+
+        // Only populate haulers/fleet/projects if we're actually showing the resolution flow
+        if (showResolution) {
+            const haulerSel = document.getElementById('orphanHaulerSelect');
+            const fleetTares = await this._getFleetTares();
+            const haulerSet = {};
+            fleetTares.forEach(function(f) { haulerSet[f.hauler] = true; });
+            (this.state.projects || []).forEach(function(p) {
+                if (p.waste_hauler) haulerSet[p.waste_hauler] = true;
+            });
+            const haulers = Object.keys(haulerSet).sort();
+            haulerSel.innerHTML = '<option value="">— Select hauler —</option>'
+                + haulers.map(function(h) { return '<option value="' + h.replace(/"/g, '&quot;') + '">' + h + '</option>'; }).join('');
+            haulerSel.value = '';
+
+            const projSel = document.getElementById('orphanProjectSelect');
+            projSel.innerHTML = '<option value="">— No project assigned —</option>'
+                + (this.state.projects || []).map(function(p) {
+                    return '<option value="' + p.id + '">' + p.name + '</option>';
+                }).join('');
+            projSel.value = '';
+
+            document.getElementById('orphanManualTare').value = '';
+            document.getElementById('orphanFleetSection').style.display = 'none';
+            document.getElementById('orphanFleetCards').innerHTML = '';
+            document.getElementById('orphanNetPreview').style.display = 'none';
+        }
+
         document.getElementById('orphanResolveModal').classList.add('show');
     },
 
@@ -1525,8 +1595,19 @@ const DS = {
         const projectId = document.getElementById('orphanProjectSelect').value || null;
         const grossLbs = Number(ctx.weight_lbs);
 
-        if (!hauler) { this.showToast('Pick a hauler first'); return; }
-        if (!tareLbs || tareLbs <= 0 || tareLbs >= grossLbs) { this.showToast('Enter a valid tare weight'); return; }
+        // Validation with explicit error messages
+        if (!hauler) { this.showToast('⚠️ Pick a hauler first'); return; }
+        if (!tareLbs || tareLbs <= 0) { this.showToast('⚠️ Enter a tare weight in lbs'); return; }
+        if (tareLbs >= grossLbs) {
+            this.showToast('⚠️ Tare (' + tareLbs.toLocaleString() + ') must be less than gross (' + grossLbs.toLocaleString() + ')');
+            return;
+        }
+
+        // Sanity check: this row should be a gross_candidate. If not, refuse.
+        if (ctx.weight_band !== 'gross_candidate') {
+            this.showToast('⚠️ This row is a ' + (ctx.weight_band || 'unclassified') + ' — only gross captures can be resolved to tickets');
+            return;
+        }
 
         const netLbs = grossLbs - tareLbs;
         const netTons = +(netLbs / 2000).toFixed(3);
