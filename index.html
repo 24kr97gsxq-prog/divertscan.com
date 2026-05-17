@@ -1033,6 +1033,13 @@
             </select>
         </div>
 
+        <!-- Step 1b: Driver name (NEW Phase 2.2) -->
+        <div class="form-group" id="orphanDriverGroup">
+            <label class="form-label">Driver Name <span style="font-weight:400;color:var(--text-dim)">(optional for legacy orphans)</span></label>
+            <input type="text" class="form-input" id="orphanDriverInput" placeholder="e.g. Bob G" autocomplete="off">
+            <div id="orphanDriverRecent" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+
         <!-- Step 2: Fleet default options (populated after hauler picked) -->
         <div id="orphanFleetSection" style="display:none;margin-bottom:14px;">
             <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600;">Fleet Default Tare</div>
@@ -1445,6 +1452,7 @@ const DS = {
         // Toggle resolution sections
         const resolutionSections = [
             'orphanHaulerGroup',
+            'orphanDriverGroup',
             'orphanFleetSection',
             'orphanManualTareGroup',
             'orphanProjectGroup',
@@ -1494,6 +1502,14 @@ const DS = {
             document.getElementById('orphanFleetSection').style.display = 'none';
             document.getElementById('orphanFleetCards').innerHTML = '';
             document.getElementById('orphanNetPreview').style.display = 'none';
+
+            // Phase 2.2: Driver name field — prefill from scale_weights.confirmed_by if present
+            const driverInput = document.getElementById('orphanDriverInput');
+            if (driverInput) {
+                driverInput.value = r.confirmed_by || '';
+            }
+            const recentEl = document.getElementById('orphanDriverRecent');
+            if (recentEl) recentEl.innerHTML = '';  // Cleared until hauler picked
         }
 
         document.getElementById('orphanResolveModal').classList.add('show');
@@ -1511,13 +1527,30 @@ const DS = {
         const section = document.getElementById('orphanFleetSection');
         const cards = document.getElementById('orphanFleetCards');
         const manualField = document.getElementById('orphanManualTare');
+        const recentDriversEl = document.getElementById('orphanDriverRecent');
 
         if (!hauler) {
             section.style.display = 'none';
             manualField.value = '';
+            if (recentDriversEl) recentDriversEl.innerHTML = '';
             this._orphanTareSource = null;
             this.updateOrphanNetPreview();
             return;
+        }
+
+        // Load recent drivers for this hauler (Phase 2.2)
+        if (recentDriversEl) {
+            const haulerEnc = encodeURIComponent(hauler);
+            const drivers = await this.supabase('v_hauler_drivers?hauler=eq.' + haulerEnc + '&order=ticket_count.desc&limit=8');
+            if (drivers && drivers.length > 0) {
+                recentDriversEl.innerHTML = '<div style="font-size:.6rem;color:var(--text-muted);width:100%;margin-bottom:4px;">Recent drivers (tap to fill):</div>'
+                    + drivers.map(function(d) {
+                        const safeName = (d.driver_name || '').replace(/'/g, "\\'");
+                        return '<button onclick="DS.applyOrphanDriver(\'' + safeName + '\')" style="padding:4px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.7rem;cursor:pointer;">' + d.driver_name + '</button>';
+                    }).join('');
+            } else {
+                recentDriversEl.innerHTML = '<div style="font-size:.6rem;color:var(--text-dim);font-style:italic;">No prior drivers for this hauler yet</div>';
+            }
         }
 
         const fleetTares = await this._getFleetTares();
@@ -1591,10 +1624,16 @@ const DS = {
         this.updateOrphanNetPreview();
     },
 
-    // Called when user types in the tare field — flip source to manual since they're overriding
+    // Called when user typing in the tare field — flip source to manual since they're overriding
     onOrphanTareInput() {
         this._orphanTareSource = 'manual';
         this.updateOrphanNetPreview();
+    },
+
+    // Phase 2.2: tap a recent driver button to fill the input
+    applyOrphanDriver(name) {
+        const input = document.getElementById('orphanDriverInput');
+        if (input) input.value = name;
     },
 
     updateOrphanNetPreview() {
@@ -1666,6 +1705,10 @@ const DS = {
         const captured = new Date(ctx.captured_at);
         const ticketDate = captured.toISOString().slice(0, 10);
 
+        // Phase 2.2: pull driver name from the new field (optional)
+        const driverInput = document.getElementById('orphanDriverInput');
+        const driverName = driverInput ? driverInput.value.trim() : '';
+
         const ticket = {
             ticket_number: ticketNum,
             ticket_date: ticketDate,
@@ -1681,7 +1724,8 @@ const DS = {
             resolved_from_orphan: true,
             tare_source: tareSource,
             source_weight_id: ctx.id,
-            notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource + '.'
+            driver_name: driverName || null,
+            notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource + (driverName ? '. Driver: ' + driverName : '') + '.'
         };
 
         // Generate audit hash
@@ -1742,11 +1786,14 @@ const DS = {
         }
 
         // Update scale_weights — mark as confirmed and link to ticket
-        await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', {
+        const swPatch = {
             status: 'confirmed',
             resolved_at: new Date().toISOString(),
             resolved_ticket_id: newTicket.id
-        });
+        };
+        // Phase 2.2: stamp confirmed_by with driver name if entered
+        if (driverName) swPatch.confirmed_by = driverName;
+        await this.supabase('scale_weights?id=eq.' + ctx.id, 'PATCH', swPatch);
 
         // Audit entry
         if (typeof this.addAuditEntry === 'function') {
