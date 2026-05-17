@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0f14">
+    <title>Dispatcher Roster — DivertScan</title>
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%2300c9a7' width='100' height='100'/%3E%3Ctext x='50' y='65' font-size='60' text-anchor='middle' fill='%23080f14' font-family='system-ui' font-weight='800'%3E📊%3C/text%3E%3C/svg%3E">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+            --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+            --green:#22c55e;--amber:#f59e0b;--red:#ef4444;
+            --cyan:#00c9a7;--cyan-glow:rgba(0,201,167,.1);
+            --mono:'JetBrains Mono',monospace;
+            --sans:'DM Sans',system-ui,sans-serif;
+        }
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+        body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px}
+
+        .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border)}
+        .hdr-brand{font-size:.75rem;font-weight:700;color:var(--cyan);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+        .hdr-hauler{font-size:1.4rem;font-weight:800;letter-spacing:-.02em}
+        .hdr-sub{font-size:.8rem;color:var(--muted)}
+
+        .container{max-width:1000px;margin:0 auto;padding:16px}
+
+        .totals-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px}
+        .total-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+        .total-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
+        .total-count{font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--cyan);line-height:1;margin:4px 0 2px}
+        .total-sub{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+
+        .actions-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+        .period-chips{display:flex;gap:6px;flex-wrap:wrap}
+        .chip{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:14px;color:var(--muted);font-size:.75rem;font-weight:600;cursor:pointer}
+        .chip:active{transform:scale(.95)}
+        .chip.active{background:var(--cyan-glow);border-color:var(--cyan);color:var(--cyan)}
+        .action-btn{padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.8rem;font-weight:600;cursor:pointer}
+        .action-btn:active{transform:scale(.96)}
+        .action-btn.primary{background:var(--cyan-glow);border-color:var(--cyan);color:var(--cyan)}
+
+        .drivers-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+        .drivers-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+        .drivers-title-text{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700}
+
+        table{width:100%;border-collapse:collapse;font-size:.85rem}
+        th{text-align:left;padding:10px 8px;border-bottom:1px solid var(--border);font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:700}
+        th.num{text-align:right}
+        td{padding:12px 8px;border-bottom:1px solid rgba(42,64,88,.4);vertical-align:top}
+        tr:last-child td{border-bottom:none}
+        td.num{text-align:right;font-family:var(--mono);font-weight:700}
+        td.name{font-weight:700;color:var(--text)}
+        td.name a{color:var(--cyan);text-decoration:none;font-size:.7rem;font-weight:600;display:block;margin-top:2px}
+        .pay-cell{font-family:var(--mono);color:var(--green);font-weight:800;font-size:1rem}
+        .secondary{font-size:.65rem;color:var(--dim);font-family:var(--mono);font-weight:500}
+        .driver-link-btn{padding:4px 10px;background:rgba(0,201,167,0.15);border:1px solid var(--cyan);border-radius:6px;color:var(--cyan);font-size:.7rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+
+        .empty-state{text-align:center;padding:40px 20px;color:var(--dim)}
+        .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;margin:40px auto}
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        .error-state{background:var(--card);border:1px solid var(--red);border-radius:12px;padding:20px;text-align:center;margin:40px 16px;color:var(--red)}
+
+        @media print{
+            body{background:white;color:black}
+            .hdr{background:none;color:black;border-bottom:2px solid black}
+            .hdr-brand,.hdr-hauler,.hdr-sub{color:black}
+            .total-card,.drivers-section{border-color:#999;background:white;color:black}
+            .total-card *,.drivers-section *{color:black !important}
+            .actions-bar,.no-print{display:none !important}
+            table{font-size:.8rem}
+            .pay-cell{color:black !important;font-weight:800}
+            tr{page-break-inside:avoid}
+        }
+    </style>
+</head>
+<body>
+
+<header class="hdr">
+    <div class="container">
+        <div class="hdr-brand">📊 DivertScan Dispatcher</div>
+        <div class="hdr-hauler" id="haulerName">Loading...</div>
+        <div class="hdr-sub" id="dispatcherName"></div>
+    </div>
+</header>
+
+<div class="container">
+
+    <div id="loadingState" class="spinner"></div>
+
+    <div id="content" style="display:none">
+        <!-- Totals -->
+        <div class="totals-grid">
+            <div class="total-card">
+                <div class="total-label">Active Drivers</div>
+                <div class="total-count" id="totalDrivers">—</div>
+                <div class="total-sub">in roster</div>
+            </div>
+            <div class="total-card">
+                <div class="total-label">Loads (period)</div>
+                <div class="total-count" id="totalLoads">—</div>
+                <div class="total-sub" id="totalLoadsLabel">last 30 days</div>
+            </div>
+            <div class="total-card">
+                <div class="total-label">Tons (period)</div>
+                <div class="total-count" id="totalTons">—</div>
+                <div class="total-sub">total weight</div>
+            </div>
+            <div class="total-card">
+                <div class="total-label">Avg loads/driver</div>
+                <div class="total-count" id="avgLoads">—</div>
+                <div class="total-sub">in period</div>
+            </div>
+        </div>
+
+        <!-- Period selector + actions -->
+        <div class="actions-bar no-print">
+            <div class="period-chips">
+                <span class="chip" onclick="setPeriod('7d')">7 days</span>
+                <span class="chip active" onclick="setPeriod('30d')">30 days</span>
+                <span class="chip" onclick="setPeriod('90d')">90 days</span>
+                <span class="chip" onclick="setPeriod('all')">All time</span>
+            </div>
+            <button class="action-btn primary" onclick="copyPayReport()">📋 Copy Pay Report</button>
+            <button class="action-btn" onclick="window.print()">🖨️ Print</button>
+        </div>
+
+        <!-- Drivers table -->
+        <div class="drivers-section">
+            <div class="drivers-title">
+                <div class="drivers-title-text">Drivers · sorted by load count</div>
+            </div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Driver</th>
+                            <th class="num">Loads (period)</th>
+                            <th class="num">Tons (period)</th>
+                            <th class="num">All-Time Loads</th>
+                            <th class="num">Last Load</th>
+                            <th class="no-print">Loadbook</th>
+                        </tr>
+                    </thead>
+                    <tbody id="driversTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <p style="font-size:.7rem;color:var(--dim);text-align:center;font-style:italic;margin-top:20px">
+            Each driver's loadbook URL is private. Sharing it is at the driver's discretion.
+        </p>
+    </div>
+
+    <div id="errorState" class="error-state" style="display:none">
+        <h2>⚠️ Dispatcher Link Not Found</h2>
+        <p>This link doesn't match any dispatcher in our system. Contact Dalmex Recycling for a new link.</p>
+    </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+
+let dispatcherInfo = null;
+let allDrivers = [];
+let currentPeriod = '30d';
+
+async function sb(endpoint) {
+    const url = SUPABASE_URL + "/rest/v1/" + endpoint;
+    const res = await fetch(url, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if (!res.ok) return null;
+    const txt = await res.text();
+    return txt ? JSON.parse(txt) : [];
+}
+
+async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('t');
+
+    if (!token || token.length < 8) { showError(); return; }
+
+    const disps = await sb('dispatchers?dispatcher_token=eq.' + encodeURIComponent(token) + '&limit=1');
+    if (!disps || disps.length === 0) { showError(); return; }
+    dispatcherInfo = disps[0];
+
+    document.getElementById('haulerName').textContent = dispatcherInfo.hauler;
+    document.getElementById('dispatcherName').textContent = dispatcherInfo.dispatcher_name ? '👤 ' + dispatcherInfo.dispatcher_name : '';
+    document.title = dispatcherInfo.hauler + ' — Dispatcher';
+
+    const roster = await sb('v_dispatcher_roster?dispatcher_token=eq.' + encodeURIComponent(token)) || [];
+    allDrivers = roster;
+
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    setPeriod('30d');
+}
+
+function setPeriod(period) {
+    currentPeriod = period;
+    document.querySelectorAll('.chip').forEach(c => {
+        c.classList.toggle('active', c.textContent.trim().toLowerCase().replace(' ', '').includes(period.replace('d', '').replace('all', 'alltime')));
+    });
+    renderTable();
+}
+
+function renderTable() {
+    const driverDataMap = {};
+    // Group rows by driver_id (the view returns one row per driver+dispatcher combo)
+    allDrivers.forEach(d => {
+        if (d.driver_id) driverDataMap[d.driver_id] = d;
+    });
+    const drivers = Object.values(driverDataMap);
+
+    // Pick the right columns based on period
+    let loadsKey, tonsKey, periodLabel;
+    if (currentPeriod === '7d')      { loadsKey = 'loads_7d';  tonsKey = 'tons_7d';  periodLabel = 'last 7 days'; }
+    else if (currentPeriod === '30d'){ loadsKey = 'loads_30d'; tonsKey = 'tons_30d'; periodLabel = 'last 30 days'; }
+    else if (currentPeriod === '90d'){ loadsKey = 'loads_90d'; tonsKey = null;        periodLabel = 'last 90 days'; }
+    else                              { loadsKey = 'loads_all'; tonsKey = null;        periodLabel = 'all time'; }
+
+    // Sort by selected period's load count desc
+    drivers.sort((a, b) => (Number(b[loadsKey] || 0) - Number(a[loadsKey] || 0)));
+
+    // Totals
+    const totalLoads = drivers.reduce((s, d) => s + Number(d[loadsKey] || 0), 0);
+    const totalTons  = drivers.reduce((s, d) => s + Number(d[tonsKey || 'tons_30d'] || 0), 0);
+    const activeCount = drivers.filter(d => Number(d[loadsKey] || 0) > 0).length;
+
+    document.getElementById('totalDrivers').textContent = drivers.length;
+    document.getElementById('totalLoads').textContent = totalLoads;
+    document.getElementById('totalLoadsLabel').textContent = periodLabel;
+    document.getElementById('totalTons').textContent = totalTons.toFixed(1);
+    document.getElementById('avgLoads').textContent = activeCount > 0 ? (totalLoads / activeCount).toFixed(1) : '0';
+
+    // Driver rows
+    const tbody = document.getElementById('driversTable');
+    if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No drivers in roster yet</div></td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = drivers.map(d => {
+        const loads = Number(d[loadsKey] || 0);
+        const tons  = tonsKey ? Number(d[tonsKey] || 0).toFixed(2) : '—';
+        const lastLoadStr = d.last_load_at
+            ? new Date(d.last_load_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : '—';
+        const driverUrl = window.location.origin + window.location.pathname.replace('dispatcher.html', 'driver.html') + '?t=' + encodeURIComponent(d.driver_token);
+        return `
+            <tr>
+                <td class="name">
+                    ${d.driver_name}
+                    <span class="secondary">since ${new Date(d.driver_since).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
+                </td>
+                <td class="num"><span class="pay-cell">${loads}</span></td>
+                <td class="num">${tons}</td>
+                <td class="num">${d.loads_all || 0}</td>
+                <td class="num">${lastLoadStr}</td>
+                <td class="no-print"><a href="${driverUrl}" target="_blank" class="driver-link-btn">View</a></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function copyPayReport() {
+    const driverDataMap = {};
+    allDrivers.forEach(d => { if (d.driver_id) driverDataMap[d.driver_id] = d; });
+    const drivers = Object.values(driverDataMap);
+
+    let loadsKey, periodLabel;
+    if (currentPeriod === '7d')      { loadsKey = 'loads_7d';  periodLabel = 'Last 7 Days'; }
+    else if (currentPeriod === '30d'){ loadsKey = 'loads_30d'; periodLabel = 'Last 30 Days'; }
+    else if (currentPeriod === '90d'){ loadsKey = 'loads_90d'; periodLabel = 'Last 90 Days'; }
+    else                              { loadsKey = 'loads_all'; periodLabel = 'All Time'; }
+
+    drivers.sort((a, b) => Number(b[loadsKey] || 0) - Number(a[loadsKey] || 0));
+
+    let text = dispatcherInfo.hauler + ' — Pay Report (' + periodLabel + ')\n';
+    text += 'Generated: ' + new Date().toLocaleString() + '\n';
+    text += '─────────────────────────────\n';
+    let totalLoads = 0;
+    drivers.forEach(d => {
+        const loads = Number(d[loadsKey] || 0);
+        if (loads === 0) return;
+        text += d.driver_name + ': ' + loads + ' loads\n';
+        totalLoads += loads;
+    });
+    text += '─────────────────────────────\n';
+    text += 'TOTAL: ' + totalLoads + ' loads · ' + drivers.filter(d => Number(d[loadsKey] || 0) > 0).length + ' drivers\n';
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => alert('Pay report copied. Paste in a text or email.')).catch(() => fallback(text));
+    } else fallback(text);
+}
+
+function fallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); alert('Copied.'); } catch (e) { alert('Long-press to select.'); }
+    document.body.removeChild(ta);
+}
+
+function showError() {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
