@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Dalmex Scale — Print Poster</title>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
         :root {
             --green:#22c55e;--cyan:#00c9a7;--amber:#f59e0b;
@@ -135,7 +134,7 @@
 
         <div class="qr-side">
             <div class="qr-eyebrow">📱 Scan here</div>
-            <div id="qrcode"></div>
+            <div id="qrcode"><img id="qrImg" alt="QR Code to start scaling" style="display:block;width:260px;height:260px;background:#fff"></div>
             <div class="qr-label">Tap your phone camera<br>at this code</div>
             <div class="qr-url" id="qrUrl">divertscan.com/scale.html</div>
         </div>
@@ -157,24 +156,20 @@
 </div>
 
 <script>
-// Generate the QR code as canvas, pointing to scale.html
+// Build the URL the QR code should encode — points to scale.html on whatever domain we're served from
 const url = window.location.origin + window.location.pathname.replace(/print-poster\.html$/, '').replace(/[^/]*$/, '') + 'scale.html';
 document.getElementById('qrUrl').textContent = url.replace(/^https?:\/\//, '');
 
-QRCode.toCanvas(url, {
-    width: 260,
-    margin: 1,
-    color: { dark: '#000000', light: '#ffffff' },
-    errorCorrectionLevel: 'M'
-}, function(err, canvas) {
-    if (err) {
-        console.error('QR generation failed:', err);
-        document.getElementById('qrcode').innerHTML = '<div style="padding:20px;color:red;font-size:.8rem">QR generation failed — refresh the page</div>';
-    } else {
-        document.getElementById('qrcode').innerHTML = '';
-        document.getElementById('qrcode').appendChild(canvas);
-    }
-});
+// Use api.qrserver.com (goqr.me) — free, stable, returns PNG image directly. No JS library needed.
+// 500x500 PNG renders crisp on print. ecc=M is medium error correction (good for scanning).
+const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=M&margin=4&data=' + encodeURIComponent(url);
+document.getElementById('qrImg').src = qrSrc;
+
+// Fallback: if api.qrserver.com is blocked or down, show a visible error so admin knows to use a different printout
+document.getElementById('qrImg').onerror = function() {
+    const box = document.getElementById('qrcode');
+    box.innerHTML = '<div style="padding:30px;text-align:center;color:#c00;font-size:.9rem;background:#fff3f3;border:2px dashed #c00;border-radius:8px;">QR generator unreachable.<br><br>Direct URL:<br><strong style="font-family:monospace;font-size:.85rem;display:block;margin-top:6px;word-break:break-all;">' + url + '</strong></div>';
+};
 </script>
 
 </body>
