@@ -189,6 +189,13 @@
         <div class="driver-hint" id="driverHint">Tap your name (or "New" if not listed)</div>
         <div class="driver-buttons" id="driverButtons"></div>
         <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()" onblur="commitDriverName()">
+
+        <!-- Phase 2.4: Optional phone field for backup access -->
+        <div id="driverPhoneRow" style="display:none;margin-top:10px;">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px;">📱 Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-style:italic;">— optional, for backup access to your loadbook</span></div>
+            <input type="tel" class="driver-input show" id="driverPhone" placeholder="(555) 123-4567" autocomplete="tel" oninput="onDriverPhoneInput()" onblur="commitDriverPhone()" style="border-color:var(--border);">
+            <div id="driverPhoneStatus" style="font-size:.6rem;color:var(--dim);margin-top:4px;font-style:italic;"></div>
+        </div>
     </div>
 
     <!-- Project Selector -->
@@ -458,12 +465,15 @@ function changeHauler() {
     selectedZone = null;
     isWalkinMode = false;
     selectedDriverName = '';
+    selectedDriverToken = '';
+    selectedDriverId = '';
     localStorage.removeItem('ds_driver_hauler');
     document.getElementById('haulerSetup').style.display = 'block';
     document.getElementById('haulerBadge').style.display = 'none';
     document.getElementById('walkinBadge').style.display = 'none';
     document.getElementById('walkinSection').classList.remove('show');
     document.getElementById('driverSection').classList.remove('show');
+    hidePhoneRow();
     document.getElementById('projectSelect').style.display = 'none';
     document.getElementById('projectSelect').value = '';
     hideZoneSelector();
@@ -550,6 +560,8 @@ async function selectDriver(name) {
             selectedDriverId = driver.id;
             selectedDriverToken = driver.driver_token;
             localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + name, driver.driver_token);
+            // Phase 2.4: show phone field, prefill if we have one
+            showPhoneRow(driver);
         }
     }
 
@@ -623,6 +635,106 @@ async function commitDriverName() {
         selectedDriverId = driver.id;
         selectedDriverToken = driver.driver_token;
         localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + selectedDriverName, driver.driver_token);
+
+        // Show phone row, prefill if we have a saved number
+        showPhoneRow(driver);
+    }
+}
+
+// Phase 2.4: Phone capture
+function showPhoneRow(driver) {
+    const row = document.getElementById('driverPhoneRow');
+    const input = document.getElementById('driverPhone');
+    const status = document.getElementById('driverPhoneStatus');
+    if (!row || !input) return;
+
+    row.style.display = 'block';
+
+    // Prefill from driver record first, then localStorage as fallback
+    if (driver && driver.phone) {
+        input.value = formatPhoneDisplay(driver.phone);
+        status.textContent = '✓ Phone on file';
+        status.style.color = 'var(--green)';
+    } else {
+        const localPhone = localStorage.getItem('ds_driver_phone_' + (driver?.id || ''));
+        if (localPhone) {
+            input.value = formatPhoneDisplay(localPhone);
+            status.textContent = 'Saved locally — tap away to confirm';
+            status.style.color = 'var(--dim)';
+        } else {
+            input.value = '';
+            status.textContent = '';
+        }
+    }
+}
+
+function hidePhoneRow() {
+    const row = document.getElementById('driverPhoneRow');
+    if (row) row.style.display = 'none';
+}
+
+function normalizePhone(raw) {
+    // Strip everything except digits, then take last 10 (handles +1 prefix etc.)
+    const digits = (raw || '').replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('1')) return digits.substring(1);
+    if (digits.length === 10) return digits;
+    return digits; // return whatever we got; commit validates
+}
+
+function formatPhoneDisplay(raw) {
+    const d = normalizePhone(raw);
+    if (d.length === 10) return '(' + d.substring(0, 3) + ') ' + d.substring(3, 6) + '-' + d.substring(6);
+    return raw;
+}
+
+function onDriverPhoneInput() {
+    // Live-format as user types
+    const input = document.getElementById('driverPhone');
+    const status = document.getElementById('driverPhoneStatus');
+    const raw = input.value;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length === 10) {
+        input.value = formatPhoneDisplay(digits);
+        status.textContent = 'Looks good — tap away to save';
+        status.style.color = 'var(--green)';
+    } else if (digits.length > 0) {
+        status.textContent = digits.length + '/10 digits';
+        status.style.color = 'var(--dim)';
+    } else {
+        status.textContent = '';
+    }
+}
+
+async function commitDriverPhone() {
+    if (!selectedDriverId) return;  // no driver to attach to
+    const input = document.getElementById('driverPhone');
+    const status = document.getElementById('driverPhoneStatus');
+    const raw = input.value;
+    const normalized = normalizePhone(raw);
+
+    if (normalized.length === 0) {
+        // User cleared the field — null it out on the driver record
+        await sb('drivers?id=eq.' + selectedDriverId, 'PATCH', { phone: null });
+        localStorage.removeItem('ds_driver_phone_' + selectedDriverId);
+        status.textContent = '';
+        return;
+    }
+
+    if (normalized.length !== 10) {
+        status.textContent = 'Need 10 digits (US number)';
+        status.style.color = 'var(--amber)';
+        return;
+    }
+
+    // Save to DB and localStorage
+    const result = await sb('drivers?id=eq.' + selectedDriverId, 'PATCH', { phone: normalized });
+    if (result !== null) {
+        localStorage.setItem('ds_driver_phone_' + selectedDriverId, normalized);
+        status.textContent = '✓ Phone saved';
+        status.style.color = 'var(--green)';
+    } else {
+        status.textContent = 'Save failed — try again';
+        status.style.color = 'var(--red)';
     }
 }
 
