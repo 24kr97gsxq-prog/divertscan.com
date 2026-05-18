@@ -132,6 +132,14 @@
         <div class="wc-sub" id="tareTime"></div>
     </div>
 
+    <!-- Tare Estimate Options (NEW Phase 2.5) -->
+    <!-- Shows after gross is captured + driver is selected. Hidden once a real tare comes in. -->
+    <div id="tareEstimateBox" style="display:none;margin:0 0 14px;padding:14px;background:rgba(15,40,55,0.5);border:1px dashed var(--amber);border-radius:12px;">
+        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;">⏱️ Not waiting for tare? Pick an estimate</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px;line-height:1.4;">Best practice is to drive back over the scale empty. If you can't wait, pick the best estimate below.</div>
+        <div id="tareEstimateOptions" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
     <!-- Net Result -->
     <div class="net-card" id="netCard" style="display:none">
         <div class="net-label">Net Weight</div>
@@ -298,6 +306,11 @@ let haulerDrivers = [];          // recent drivers for selected hauler (from v_h
 let selectedDriverName = '';     // current driver name (from button tap or text input)
 let selectedDriverToken = '';    // driver_token from drivers table (Phase 2.3)
 let selectedDriverId = '';       // driver_id (UUID) from drivers table
+
+// Phase 2.5: tare estimate state
+let manualTareValue = null;      // tare value selected from estimate options (lb)
+let manualTareSource = null;     // 'fleet_default' | 'driver_avg' | 'today_first' (matches DB tare_source)
+let manualTareLabel = '';        // human-readable label shown in confirmation flow
 
 // ─────────────────────────────────────────────
 // ZONE SELECTOR
@@ -869,6 +882,12 @@ function showGross(reading) {
 }
 
 function showTare(reading) {
+    // Phase 2.5: real tare overrides any manual estimate
+    if (manualTareValue !== null) {
+        manualTareValue = null;
+        manualTareSource = null;
+        manualTareLabel = '';
+    }
     const card = document.getElementById('tareCard');
     card.classList.add('captured');
     card.classList.remove('waiting');
@@ -892,18 +911,158 @@ function showNet() {
     checkReady();
 }
 
+// ─────────────────────────────────────────────
+// PHASE 2.5: TARE ESTIMATE OPTIONS
+// ─────────────────────────────────────────────
+let _tareEstimateOptions = null;  // cached: [{value, source, label}]
+let _tareEstimateLastHauler = null;
+let _tareEstimateLastDriverId = null;
+
+async function loadTareEstimateOptions() {
+    // Build the list of estimate options for the currently selected hauler + driver.
+    // Returns array of {value, source, label}.
+    // Sources: 'fleet_default' (hauler avg), 'driver_avg' (this driver's avg), 'today_first' (most recent Jaguar tare today)
+    if (!selectedHauler) return [];
+
+    const options = [];
+    const haulerEnc = encodeURIComponent(selectedHauler);
+
+    // Option 1: Fleet average from v_fleet_tares (or computed live)
+    try {
+        const fleetRows = await sb('v_fleet_tares?hauler=eq.' + haulerEnc + '&limit=1');
+        if (fleetRows && fleetRows.length > 0 && fleetRows[0].avg_tare) {
+            options.push({
+                value: Math.round(Number(fleetRows[0].avg_tare)),
+                source: 'fleet_default',
+                label: 'Fleet Average (' + selectedHauler + ')'
+            });
+        }
+    } catch (e) { console.warn('Fleet tare fetch failed:', e); }
+
+    // Option 2: Driver's own historical tare average (if they have prior tickets)
+    if (selectedDriverId) {
+        try {
+            const driverTickets = await sb('tickets?driver_id=eq.' + selectedDriverId + '&select=tare_lbs&tare_lbs=not.is.null&limit=50');
+            if (driverTickets && driverTickets.length >= 3) {
+                const sum = driverTickets.reduce((s, t) => s + Number(t.tare_lbs || 0), 0);
+                const avg = Math.round(sum / driverTickets.length);
+                options.push({
+                    value: avg,
+                    source: 'driver_avg',
+                    label: 'Your Average (' + driverTickets.length + ' prior loads)'
+                });
+            }
+        } catch (e) { console.warn('Driver tare avg fetch failed:', e); }
+    }
+
+    // Option 3: Most recent tare captured today from this same hauler
+    try {
+        const todayISO = new Date().toISOString().split('T')[0];
+        const recentTares = await sb('scale_weights?weight_band=eq.tare_candidate&captured_at=gte.' + todayISO + '&order=captured_at.desc&limit=5');
+        if (recentTares && recentTares.length > 0) {
+            const mostRecent = recentTares[0];
+            options.push({
+                value: Math.round(Number(mostRecent.weight_lbs)),
+                source: 'today_first',
+                label: 'Most Recent Tare Today (' + new Date(mostRecent.captured_at).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) + ')'
+            });
+        }
+    } catch (e) { console.warn('Today tare fetch failed:', e); }
+
+    return options;
+}
+
+async function updateTareEstimateBox() {
+    const box = document.getElementById('tareEstimateBox');
+    const optsContainer = document.getElementById('tareEstimateOptions');
+    if (!box || !optsContainer) return;
+
+    // Hide the box if:
+    //   - Already have a real tare reading from Pi
+    //   - User already picked a manual tare (don't show options again)
+    //   - Prereqs not met (no gross, no hauler, no driver)
+    if (tareReading) { box.style.display = 'none'; return; }
+    if (manualTareValue !== null) { box.style.display = 'none'; return; }
+    if (!grossReading || !selectedHauler || !selectedDriverName) { box.style.display = 'none'; return; }
+
+    // Cache: only reload options if hauler or driver changed
+    if (selectedHauler !== _tareEstimateLastHauler || selectedDriverId !== _tareEstimateLastDriverId) {
+        _tareEstimateOptions = await loadTareEstimateOptions();
+        _tareEstimateLastHauler = selectedHauler;
+        _tareEstimateLastDriverId = selectedDriverId;
+    }
+
+    if (!_tareEstimateOptions || _tareEstimateOptions.length === 0) {
+        // No data available — hide
+        box.style.display = 'none';
+        return;
+    }
+
+    // Render buttons
+    optsContainer.innerHTML = _tareEstimateOptions.map((opt, idx) => (
+        '<button type="button" onclick="selectManualTare(' + idx + ')" style="padding:12px 14px;background:rgba(245,158,11,0.1);border:1px solid var(--amber);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+            '<span style="flex:1;">' + opt.label + '</span>' +
+            '<span style="font-family:var(--mono);font-weight:800;color:var(--amber);">' + Number(opt.value).toLocaleString() + ' lb</span>' +
+        '</button>'
+    )).join('');
+
+    box.style.display = 'block';
+}
+
+function selectManualTare(optIdx) {
+    if (!_tareEstimateOptions || !_tareEstimateOptions[optIdx]) return;
+    const opt = _tareEstimateOptions[optIdx];
+    manualTareValue = opt.value;
+    manualTareSource = opt.source;
+    manualTareLabel = opt.label;
+
+    // Update the tare card visually to show the estimate is in use
+    const card = document.getElementById('tareCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('tareValue').textContent = Number(opt.value).toLocaleString() + ' lbs';
+    document.getElementById('tareValue').classList.remove('empty');
+    document.getElementById('tareTime').innerHTML = '<span style="color:var(--amber);">⚠️ Estimated · ' + opt.label + '</span>';
+
+    // Hide the estimate box
+    document.getElementById('tareEstimateBox').style.display = 'none';
+
+    checkReady();
+}
+
+function clearManualTare() {
+    manualTareValue = null;
+    manualTareSource = null;
+    manualTareLabel = '';
+    // Reset tare card to waiting state
+    const card = document.getElementById('tareCard');
+    card.classList.remove('captured');
+    card.classList.add('waiting');
+    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
+    document.getElementById('tareValue').classList.add('empty');
+    document.getElementById('tareTime').textContent = '';
+    checkReady();
+}
+
 function checkReady() {
     const btn = document.getElementById('confirmBtn');
     const summary = document.getElementById('confirmSummary');
     let ready = false;
 
+    // Phase 2.5: either a real tare reading OR a manual tare estimate counts as "have a tare"
+    const haveTare = tareReading || manualTareValue;
+    const effectiveTareLbs = tareReading ? tareReading.weight_lbs : manualTareValue;
+
     if (isWalkinMode) {
         const walkinName = document.getElementById('walkinName').value.trim();
-        ready = grossReading && tareReading && walkinName && selectedDriverName;
+        ready = grossReading && haveTare && walkinName && selectedDriverName;
     } else {
         const projectId = document.getElementById('projectSelect').value;
-        ready = grossReading && tareReading && projectId && selectedHauler && selectedDriverName;
+        ready = grossReading && haveTare && projectId && selectedHauler && selectedDriverName;
     }
+
+    // Phase 2.5: show or hide tare estimate options based on prereqs
+    updateTareEstimateBox();
 
     if (ready) {
         btn.classList.remove('disabled');
@@ -911,7 +1070,7 @@ function checkReady() {
         btn.disabled = false;
         btn.textContent = '✅ CONFIRM TICKET';
 
-        const netLbs = grossReading.weight_lbs - tareReading.weight_lbs;
+        const netLbs = grossReading.weight_lbs - effectiveTareLbs;
         const netTons = (netLbs / 2000).toFixed(2);
         const ticketNum = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
 
@@ -945,14 +1104,14 @@ function checkReady() {
         summary.style.display = 'none';
         if (isWalkinMode) {
             if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
-            else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
+            else if (!haveTare) btn.textContent = 'WAITING FOR TARE — OR PICK ESTIMATE BELOW';
             else if (!document.getElementById('walkinName').value.trim()) btn.textContent = 'ENTER COMPANY NAME';
             else if (!selectedDriverName) btn.textContent = 'ENTER DRIVER NAME';
         } else {
             if (!selectedHauler) btn.textContent = 'SELECT YOUR COMPANY FIRST';
             else if (!selectedDriverName) btn.textContent = 'SELECT YOUR NAME';
             else if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
-            else if (!tareReading) btn.textContent = 'WAITING FOR TARE WEIGHT...';
+            else if (!haveTare) btn.textContent = 'WAITING FOR TARE — OR PICK ESTIMATE BELOW';
             else btn.textContent = 'SELECT A PROJECT';
         }
     }
@@ -974,7 +1133,10 @@ async function confirmTicket() {
 
     const driverName = selectedDriverName || 'Unknown';
     const grossLbs = grossReading.weight_lbs;
-    const tareLbs = tareReading.weight_lbs;
+    // Phase 2.5: use manual tare estimate if no real tare was captured
+    const tareLbs = tareReading ? tareReading.weight_lbs : manualTareValue;
+    const tareSource = tareReading ? 'pi_capture' : (manualTareSource || 'manual');
+    const tareNote = tareReading ? '' : ' | Tare: ' + tareSource + ' (' + manualTareLabel + ')';
     const netLbs = grossLbs - tareLbs;
     const netTons = +(netLbs / 2000).toFixed(4);
     const ticketNum = getTicketNumber();
@@ -1007,8 +1169,8 @@ async function confirmTicket() {
                 zone: selectedZone || null,
                 driver_name: driverName,
                 driver_id: selectedDriverId || null,
-                tare_source: 'pi_capture',
-                notes: 'Walk-in ticket (non-LEED) — ' + walkinName + ' — Driver: ' + driverName + zoneNote
+                tare_source: tareSource,
+                notes: 'Walk-in ticket (non-LEED) — ' + walkinName + ' — Driver: ' + driverName + zoneNote + tareNote
             };
         } else {
             const projectId = document.getElementById('projectSelect').value;
@@ -1045,8 +1207,8 @@ async function confirmTicket() {
                 zone: selectedZone || null,
                 driver_name: driverName,
                 driver_id: selectedDriverId || null,
-                tare_source: 'pi_capture',
-                notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ') — Driver: ' + driverName + zoneNote,
+                tare_source: tareSource,
+                notes: 'Auto-captured from Dalmex scale (' + DEVICE_ID + ') — Driver: ' + driverName + zoneNote + tareNote,
                 ...matData
             };
         }
@@ -1114,6 +1276,12 @@ function resetPage() {
     grossReading = null;
     tareReading = null;
     selectedZone = null;
+    // Phase 2.5: clear manual tare state
+    manualTareValue = null;
+    manualTareSource = null;
+    manualTareLabel = '';
+    const tareBox = document.getElementById('tareEstimateBox');
+    if (tareBox) tareBox.style.display = 'none';
     document.getElementById('successOverlay').classList.remove('show');
     document.getElementById('grossCard').classList.remove('captured', 'waiting');
     document.getElementById('grossValue').textContent = 'Waiting for truck...';
