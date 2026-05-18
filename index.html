@@ -454,6 +454,16 @@
                 </div>
                 <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Look up any driver's loadbook URL. Copy & text it to them if they lose their bookmark.</p>
 
+                <!-- Onboard a Driver row -->
+                <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:10px;margin-bottom:12px;">
+                    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:#60a5fa;font-weight:700;margin-bottom:6px;">📨 Onboard a New Driver</div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px;line-height:1.4;">Driver at the scale who hasn't been onboarded yet? Send them the welcome page so they can self-onboard on their phone.</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <a href="#" id="onboardSmsBtn" onclick="DS.openSmsOnboard(event)" style="flex:1;min-width:130px;padding:10px 14px;background:#60a5fa;color:#080f14;border:none;border-radius:8px;font-weight:700;font-size:.8rem;cursor:pointer;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;">📱 Open Messages</a>
+                        <button onclick="DS.copyOnboardLink()" style="flex:1;min-width:110px;padding:10px 14px;background:transparent;border:1px solid #60a5fa;color:#60a5fa;border-radius:8px;font-weight:700;font-size:.8rem;cursor:pointer;">📋 Copy Link</button>
+                    </div>
+                </div>
+
                 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
                     <input type="text" id="driversSearch" placeholder="Search by name..." oninput="DS.filterDrivers()" style="flex:1;min-width:140px;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
                     <select id="driversHaulerFilter" onchange="DS.filterDrivers()" style="padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
@@ -1576,6 +1586,62 @@ const DS = {
         // Base64 then convert to URL-safe
         let b64 = btoa(String.fromCharCode.apply(null, bytes));
         return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
+    // ============================================================
+    // ONBOARD A NEW DRIVER — text the welcome page to a driver
+    // ============================================================
+    _welcomeUrl() {
+        // Build absolute URL for welcome.html based on whatever domain we're on
+        const origin = window.location.origin;
+        const base = window.location.pathname.replace(/index\.html$/, '').replace(/[^/]*$/, '');
+        return origin + base + 'welcome.html';
+    },
+
+    _onboardMessage() {
+        // Standard onboarding message body. Driver-friendly, ~30 seconds to read.
+        return "Hey — this is Robert at Dalmex Recycling. We just switched to a digital scale system that gives every driver a personal loadbook on their phone. Takes 30 seconds to set up next time you're at the scale. Tap here: " + this._welcomeUrl() + " — Questions: 214-507-8899";
+    },
+
+    openSmsOnboard(event) {
+        // Use sms: link to open Messages app with body pre-filled
+        // event prevents default href="#" behavior
+        if (event) event.preventDefault();
+        const body = this._onboardMessage();
+        // iOS Messages: sms:?&body=... or sms:?body=... — both work; using sms:?&body= for compatibility
+        const smsUrl = 'sms:?&body=' + encodeURIComponent(body);
+        // Use window.location.href so iOS hands off to Messages app cleanly
+        window.location.href = smsUrl;
+        // After half a second, also copy to clipboard as fallback in case sms: didn't work
+        setTimeout(() => {
+            try {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(body).catch(() => {});
+                }
+            } catch (e) { /* silent */ }
+        }, 500);
+    },
+
+    copyOnboardLink() {
+        // Copy just the welcome URL to clipboard (not the whole message)
+        const url = this._welcomeUrl();
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => {
+                this.showToast('✅ Welcome link copied');
+            }).catch(() => this._fallbackCopyUrl(url));
+        } else {
+            this._fallbackCopyUrl(url);
+        }
+    },
+
+    _fallbackCopyUrl(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); this.showToast('✅ Welcome link copied'); }
+        catch (e) { this.showToast('Long-press to select'); }
+        document.body.removeChild(ta);
     },
 
     async openOrphanResolve(weightId) {
