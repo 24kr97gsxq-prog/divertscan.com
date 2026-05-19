@@ -1079,6 +1079,13 @@
             <div id="orphanDriverRecent" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;"></div>
         </div>
 
+        <!-- Step 1c: Paper ticket number (Phase 2.7a) — critical for paper↔digital reconciliation -->
+        <div class="form-group" id="orphanPaperTicketGroup">
+            <label class="form-label">Paper Ticket # <span style="font-weight:400;color:var(--text-dim)">(5-digit red number, e.g. 86445)</span></label>
+            <input type="text" class="form-input" id="orphanPaperTicketInput" placeholder="86445" autocomplete="off" inputmode="numeric" maxlength="6">
+            <div style="font-size:.65rem;color:var(--text-dim);margin-top:4px;">Leave blank if no paper ticket exists. System will use ORPH-### auto-number.</div>
+        </div>
+
         <!-- Step 2: Fleet default options (populated after hauler picked) -->
         <div id="orphanFleetSection" style="display:none;margin-bottom:14px;">
             <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600;">Fleet Default Tare</div>
@@ -1398,6 +1405,148 @@ const DS = {
     // Search/filter all drivers, copy their loadbook URL, regenerate token
     // ============================================================
     _allDriversCache: null,  // full driver list with stats
+
+    // ============================================================
+    // DRIVER FUZZY MATCH (Phase 2.7a)
+    // Match OCR'd driver names ("Willie G", "Wille G", "W Garcia")
+    // against the drivers table; create new row if no good match.
+    // ============================================================
+
+    // Normalize for comparison: lowercase, replace punctuation with space, collapse spaces
+    // Periods/commas inside names ("Willie.G") become word separators so tokenization works.
+    _normalizeDriverName(name) {
+        if (!name) return '';
+        return String(name)
+            .toLowerCase()
+            .replace(/[.,'"`]/g, ' ')         // punctuation → space (so "Willie.G" → "willie g")
+            .replace(/\s+/g, ' ')             // collapse whitespace
+            .trim();
+    },
+
+    // Score similarity 0-100. 100 = identical normalized.
+    // Combines: exact match, prefix match, token overlap (first name + initial heuristic)
+    _scoreDriverMatch(ocrName, dbName) {
+        const a = this._normalizeDriverName(ocrName);
+        const b = this._normalizeDriverName(dbName);
+        if (!a || !b) return 0;
+        if (a === b) return 100;
+
+        // First-name + last-initial pattern is dominant at Dalmex ("Willie G", "Alan", "Reggie")
+        const aTokens = a.split(' ');
+        const bTokens = b.split(' ');
+
+        // If first tokens match exactly, that's strong
+        if (aTokens[0] === bTokens[0]) {
+            // Same first name. Check if last-name initials align.
+            const aLast = aTokens[1] || '';
+            const bLast = bTokens[1] || '';
+            if (!aLast && !bLast) return 95;  // both single names — strong match
+            if (!aLast || !bLast) return 80;  // one has last initial, other doesn't — likely same
+            // Both have last component — check first letter
+            if (aLast.charAt(0) === bLast.charAt(0)) {
+                // Initials match. Could be "G" vs "Garcia" (great) or "G" vs "Green" (false positive)
+                // Length difference > 1 means one is initial, other is full name — assume same
+                if (Math.abs(aLast.length - bLast.length) > 1) return 90;
+                if (aLast === bLast) return 98;
+                return 75;  // both look like initials/short — moderate confidence
+            }
+            // Same first name, different last initial — different people
+            return 40;
+        }
+
+        // First names differ. Could be a typo (Willie vs Wille). Light Levenshtein-ish check.
+        if (aTokens[0].length >= 4 && bTokens[0].length >= 4) {
+            // Hamming-style on shared prefix
+            const len = Math.min(aTokens[0].length, bTokens[0].length);
+            let diff = 0;
+            for (let i = 0; i < len; i++) {
+                if (aTokens[0][i] !== bTokens[0][i]) diff++;
+            }
+            if (diff <= 1 && Math.abs(aTokens[0].length - bTokens[0].length) <= 1) {
+                // Likely typo of same first name. Recurse with normalized first names equal.
+                return Math.max(50, this._scoreDriverMatch(bTokens[0] + ' ' + (aTokens[1] || ''), dbName) - 10);
+            }
+        }
+
+        return 0;
+    },
+
+    // Find best match (above threshold) in the cached drivers list for a given hauler
+    // Returns: { driver, score } or null if no good match
+    _findDriverMatch(ocrName, hauler) {
+        if (!ocrName || !this._allDriversCache) return null;
+        const threshold = 70;  // below this we treat as "no match"
+        let best = null;
+        for (const d of this._allDriversCache) {
+            if (hauler && d.hauler && d.hauler !== hauler) continue;
+            const score = this._scoreDriverMatch(ocrName, d.driver_name);
+            if (score >= threshold && (!best || score > best.score)) {
+                best = { driver: d, score };
+            }
+        }
+        return best;
+    },
+
+    // Get-or-create driver. Returns driver_id (UUID) or null on failure.
+    // Caller passes OCR'd name + hauler. Strategy:
+    //   1. Try fuzzy match against cache
+    //   2. If match >= 70, return existing driver_id
+    //   3. If no match, create new drivers row, refresh cache, return new id
+    async _resolveDriverId(ocrName, hauler) {
+        if (!ocrName) return null;
+        const cleanName = String(ocrName).trim();
+        if (cleanName.length < 2) return null;
+
+        // Make sure cache is loaded
+        if (!this._allDriversCache) {
+            try {
+                const drivers = await this.supabase('drivers?select=*');
+                this._allDriversCache = drivers || [];
+            } catch(e) {
+                console.warn('Driver cache fetch failed:', e);
+                return null;
+            }
+        }
+
+        // 1. Fuzzy match
+        const match = this._findDriverMatch(cleanName, hauler);
+        if (match) {
+            console.log('[driver match] "' + cleanName + '" → "' + match.driver.driver_name + '" score=' + match.score);
+            return match.driver.id;
+        }
+
+        // 2. No match — create new driver row
+        try {
+            const newDriver = {
+                driver_name: cleanName,
+                hauler: hauler || 'Jaguar Waste Management'
+            };
+            const res = await fetch(this.state.supabaseUrl + '/rest/v1/drivers', {
+                method: 'POST',
+                headers: {
+                    'apikey': this.state.supabaseKey,
+                    'Authorization': 'Bearer ' + this.state.supabaseKey,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify(newDriver)
+            });
+            if (!res.ok) {
+                const errTxt = await res.text();
+                console.warn('Driver create failed:', res.status, errTxt);
+                return null;
+            }
+            const created = await res.json();
+            if (created && created.length > 0) {
+                this._allDriversCache.push(created[0]);  // keep cache fresh
+                console.log('[driver create] new driver "' + cleanName + '" id=' + created[0].id);
+                return created[0].id;
+            }
+        } catch(e) {
+            console.warn('Driver create error:', e);
+        }
+        return null;
+    },
 
     async loadDrivers() {
         const listEl = document.getElementById('driversList');
@@ -1804,6 +1953,10 @@ const DS = {
             }
             const recentEl = document.getElementById('orphanDriverRecent');
             if (recentEl) recentEl.innerHTML = '';  // Cleared until hauler picked
+
+            // Phase 2.7a: Clear paper ticket # input from prior session
+            const paperInput = document.getElementById('orphanPaperTicketInput');
+            if (paperInput) paperInput.value = '';
         }
 
         document.getElementById('orphanResolveModal').classList.add('show');
@@ -1993,8 +2146,18 @@ const DS = {
         const tareSource = this._orphanTareSource === 'fleet_default' ? 'fleet_default' : 'manual';
         this._orphanTareSource = null;  // reset
 
-        // Generate a ticket number — "ORPH-" + timestamp
-        const ticketNum = 'ORPH-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + ctx.id.substring(0, 6);
+        // Generate a ticket number — use paper ticket # if provided, otherwise auto-gen "ORPH-..."
+        // Phase 2.7a: paper ticket # is critical for cross-referencing during paper era
+        const paperInput = document.getElementById('orphanPaperTicketInput');
+        const paperTicketNum = paperInput ? paperInput.value.trim() : '';
+        let ticketNum;
+        if (paperTicketNum && /^\d{4,6}$/.test(paperTicketNum)) {
+            // Valid 4-6 digit paper number — use it directly so report shows real ticket #
+            ticketNum = paperTicketNum;
+        } else {
+            // No paper ticket — use ORPH auto-number as before
+            ticketNum = 'ORPH-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + ctx.id.substring(0, 6);
+        }
 
         const captured = new Date(ctx.captured_at);
         const ticketDate = captured.toISOString().slice(0, 10);
@@ -2019,7 +2182,9 @@ const DS = {
             tare_source: tareSource,
             source_weight_id: ctx.id,
             driver_name: driverName || null,
-            notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource + (driverName ? '. Driver: ' + driverName : '') + '.'
+            notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource +
+                   (paperTicketNum ? '. Paper ticket #' + paperTicketNum : '. No paper ticket — ORPH auto-number') +
+                   (driverName ? '. Driver: ' + driverName : '') + '.'
         };
 
         // Phase 2.6: Auto-apply realistic randomized material mix based on project name
@@ -5486,6 +5651,17 @@ const DS = {
                                 if (parsed.driver)    newTicket.driver_name   = String(parsed.driver).trim();
                                 if (parsed.zone)      newTicket.zone          = String(parsed.zone).trim().toUpperCase();
                                 if (parsed.container) newTicket.container_size = parseInt(parsed.container) || 30;
+
+                                // Phase 2.7a: Fuzzy-match driver against drivers table, or create new
+                                // Sets driver_id (FK) so reports/dashboards work; driver_name stays as OCR text
+                                if (parsed.driver) {
+                                    try {
+                                        const driverHauler = parsed.hauler || 'Jaguar Waste Management';
+                                        const driverId = await this._resolveDriverId(parsed.driver, driverHauler);
+                                        if (driverId) newTicket.driver_id = driverId;
+                                    } catch(dErr) { console.warn('Driver resolve failed:', dErr); }
+                                }
+
                                 // Stash project hint in notes — actual project_id is the current Scan-tab selection
                                 // If OCR's project text disagrees with selected project, that's visible info for review
                                 var ocrNoteParts = [];
