@@ -5290,14 +5290,38 @@ const DS = {
             }
 
             try {
-                // Compress image to max 800px wide for faster OCR
-                const compressedB64 = await this.compressImage(this._batchBase64[idx], 800);
+                // Phase 2.7a: 1600px compression (was 800px) — handwriting needs the resolution
+                const compressedB64 = await this.compressImage(this._batchBase64[idx], 1600);
 
-                const prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
-                    'The ticket has a RED PRINTED 5-digit ticket number (like 83434, 83467, etc). ' +
-                    'Read the ticket number, date, and handwritten weights. ' +
-                    'Return ONLY valid JSON, no other text:\n' +
-                    '{"ticket_number":"XXXXX","date":"YYYY-MM-DD","gross_lbs":XXXXX,"tare_lbs":XXXXX,"net_lbs":XXXXX}';
+                // Phase 2.7a: rich Dalmex-specific prompt — extracts driver/project/zone/container
+                // Mirrors the single-photo performOCR prompt for consistency
+                const prompt = 'You are an OCR system reading a HANDWRITTEN paper scale ticket from DALMEX RECYCLING INC (2828 Nagle St, Dallas TX).\n\n' +
+                    'TICKET LAYOUT NOTES:\n' +
+                    '- Ticket number: RED PREPRINTED 5-digit number at top right (e.g. 86445)\n' +
+                    '- Date: handwritten at top, year is always 2026\n' +
+                    '- Gross/Tare/Net: numbered weight rows, usually 30000-46000 lb range for trucks\n' +
+                    '- Hauler: stamped or written (typically "Jaguar Waste Management", "B&B", "Liberty", or "Ranger")\n' +
+                    '- Driver: handwritten name, often just first name + last initial (e.g. "Willie G", "Alan", "Reggie")\n' +
+                    '- Project/Job: handwritten site name (e.g. "Childrens Hospital", "Hayes", "Ross Building", may say "Hospital" or "CH")\n' +
+                    '- Zone: single letter A/B/D/E/F if present, often near project name\n' +
+                    '- Container: number, usually 20, 30, or 40 (cubic yards)\n\n' +
+                    'Return ONLY valid JSON with this exact structure:\n' +
+                    '{\n' +
+                    '  "ticket_number":"<string or null>",\n' +
+                    '  "date":"<YYYY-MM-DD or null>",\n' +
+                    '  "gross_lbs":<number or 0>,\n' +
+                    '  "tare_lbs":<number or 0>,\n' +
+                    '  "net_lbs":<number or 0>,\n' +
+                    '  "hauler":"<string or null>",\n' +
+                    '  "driver":"<string or null>",\n' +
+                    '  "project":"<string or null>",\n' +
+                    '  "zone":"<A|B|D|E|F or null>",\n' +
+                    '  "container":<number or null>,\n' +
+                    '  "confidence":<0-100>\n' +
+                    '}\n\n' +
+                    'RULES:\n' +
+                    '- If a field is unreadable or absent, use null (strings) or 0 (numbers). DO NOT GUESS.\n' +
+                    '- For driver: if handwriting is ambiguous, do your best but be honest about uncertainty.';
 
                 const data = await this.callOpenAI({
                     model: 'gpt-4o',
@@ -5308,7 +5332,7 @@ const DS = {
                             { type: 'image_url', image_url: { url: compressedB64, detail: 'high' } }
                         ]
                     }],
-                    max_tokens: 300,
+                    max_tokens: 500,
                     temperature: 0.1
                 });
 
@@ -5450,7 +5474,7 @@ const DS = {
                                     tare_lbs: photoTare2,
                                     net_lbs: photoNet2,
                                     net_tons: photoTons2,
-                                    hauler: 'Jaguar Waste Management',
+                                    hauler: parsed.hauler || 'Jaguar Waste Management',
                                     scan_type: 'batch_ocr',
                                     diversion_pct: divPct2,
                                     diverted_tons: divTons2,
@@ -5458,6 +5482,16 @@ const DS = {
                                     co2e_avoided: +co2e2.toFixed(4),
                                     captured_at: new Date().toISOString()
                                 };
+                                // Phase 2.7a: write OCR-extracted driver/zone/container to their columns
+                                if (parsed.driver)    newTicket.driver_name   = String(parsed.driver).trim();
+                                if (parsed.zone)      newTicket.zone          = String(parsed.zone).trim().toUpperCase();
+                                if (parsed.container) newTicket.container_size = parseInt(parsed.container) || 30;
+                                // Stash project hint in notes — actual project_id is the current Scan-tab selection
+                                // If OCR's project text disagrees with selected project, that's visible info for review
+                                var ocrNoteParts = [];
+                                if (parsed.project) ocrNoteParts.push('OCR project: ' + parsed.project);
+                                if (parsed.driver)  ocrNoteParts.push('Driver: ' + parsed.driver);
+                                if (ocrNoteParts.length > 0) newTicket.notes = '[batch OCR] ' + ocrNoteParts.join(' | ');
                                 if (scaleUrl) newTicket.scale_ticket_image = scaleUrl;
                                 Object.assign(newTicket, matData2);
 
@@ -5479,12 +5513,14 @@ const DS = {
                                         tickets.push(created[0]);
                                         this._batchProcessed[idx] = true;
                                         matched++;
+                                        // Phase 2.7a: show driver in success message when OCR'd
+                                        var driverBadge = parsed.driver ? ' • driver: ' + parsed.driver : '';
                                         if (statusEl) {
-                                            statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div)';
+                                            statusEl.innerHTML = '✅ <strong>#' + ticketNum + '</strong> — CREATED (' + photoGross2.toLocaleString() + '/' + photoTare2.toLocaleString() + '/' + photoNet2.toLocaleString() + ' lbs = ' + photoTons2 + ' T, ' + divPct2 + '% div' + driverBadge + ')';
                                             statusEl.style.color = 'var(--success)';
                                         }
                                         if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
-                                        this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T');
+                                        this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T' + (parsed.driver ? ' | driver: ' + parsed.driver : ''));
                                     }
                                 } else {
                                     var errText = await postRes.text();
