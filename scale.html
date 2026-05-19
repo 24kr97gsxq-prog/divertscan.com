@@ -1218,16 +1218,26 @@ async function confirmTicket() {
         const createdTicket = result[0];
 
         // Update scale_weights — confirmed_by carries driver name into raw scale records
-        await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
-            status: 'confirmed', weight_type: 'gross',
-            ticket_id: createdTicket.id, paired_with: tareReading.id,
-            confirmed_at: new Date().toISOString(), confirmed_by: driverName
-        });
-        await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
-            status: 'confirmed', weight_type: 'tare',
-            ticket_id: createdTicket.id, paired_with: grossReading.id,
-            confirmed_at: new Date().toISOString(), confirmed_by: driverName
-        });
+        // Phase 2.5 fix: only PATCH if we have a real Pi reading. Manual/fleet tares have no scale_weights row.
+        if (grossReading && grossReading.id) {
+            try {
+                await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
+                    status: 'confirmed', weight_type: 'gross',
+                    ticket_id: createdTicket.id,
+                    paired_with: (tareReading && tareReading.id) ? tareReading.id : null,
+                    confirmed_at: new Date().toISOString(), confirmed_by: driverName
+                });
+            } catch (e) { console.warn('Gross PATCH failed (non-fatal):', e); }
+        }
+        if (tareReading && tareReading.id) {
+            try {
+                await sb(`scale_weights?id=eq.${tareReading.id}`, 'PATCH', {
+                    status: 'confirmed', weight_type: 'tare',
+                    ticket_id: createdTicket.id, paired_with: grossReading.id,
+                    confirmed_at: new Date().toISOString(), confirmed_by: driverName
+                });
+            } catch (e) { console.warn('Tare PATCH failed (non-fatal):', e); }
+        }
 
         clearInterval(pollTimer);
         notifyConfirm();
