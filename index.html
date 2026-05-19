@@ -4263,15 +4263,44 @@ const DS = {
 
         this.showLoading('Compressing photo...');
 
-        // Compress image before sending to API
-        const compressed = await this.compressImage(base64, 800);
+        // Phase 2.7a: 1600px (was 800px) — handwriting needs more pixels to be readable
+        // Driver names and project text are tiny on paper tickets; 800px destroyed them
+        const compressed = await this.compressImage(base64, 1600);
 
         this.showLoading('AI reading scale ticket...');
 
-        const prompt = 'You are an OCR system for reading C&D waste scale tickets from DALMEX RECYCLING INC in Dallas TX. ' +
-            'Extract the following from this scale ticket image and return ONLY valid JSON:\n' +
-            '{"ticket_number":"<string>","date":"<YYYY-MM-DD>","gross_lbs":<number>,"tare_lbs":<number>,"net_lbs":<number>,"hauler":"<string or null>","facility":"<string or null>","confidence":<0-100>}\n' +
-            'The ticket number is the RED PRINTED 5-digit number. If a field is unreadable, use null for strings and 0 for numbers.';
+        // Phase 2.7a: Extended prompt — extracts driver, project, container, zone
+        // Each field has its own confidence so we can flag uncertain reads
+        // Specific to Dalmex paper ticket layout
+        const prompt = 'You are an OCR system reading a HANDWRITTEN paper scale ticket from DALMEX RECYCLING INC (2828 Nagle St, Dallas TX).\n\n' +
+            'TICKET LAYOUT NOTES:\n' +
+            '- Ticket number: RED PREPRINTED 5-digit number at top right (e.g. 86445)\n' +
+            '- Date: handwritten at top, year is always 2026\n' +
+            '- Gross/Tare/Net: numbered weight rows, usually 30000-46000 lb range for trucks\n' +
+            '- Hauler: stamped or written (typically "Jaguar Waste Management", "B&B", "Liberty", or "Ranger")\n' +
+            '- Driver: handwritten name, often just first name + last initial (e.g. "Willie G", "Alan", "Reggie")\n' +
+            '- Project/Job: handwritten site name (e.g. "Childrens Hospital", "Hayes", "Ross Building", may say "Hospital" or "CH")\n' +
+            '- Zone: single letter A/B/D/E/F if present, often near project name\n' +
+            '- Container: number, usually 20, 30, or 40 (cubic yards)\n\n' +
+            'Return ONLY valid JSON with this exact structure:\n' +
+            '{\n' +
+            '  "ticket_number":"<string or null>",\n' +
+            '  "date":"<YYYY-MM-DD or null>",\n' +
+            '  "gross_lbs":<number or 0>,\n' +
+            '  "tare_lbs":<number or 0>,\n' +
+            '  "net_lbs":<number or 0>,\n' +
+            '  "hauler":"<string or null>",\n' +
+            '  "driver":"<string or null>",\n' +
+            '  "project":"<string or null>",\n' +
+            '  "zone":"<A|B|D|E|F or null>",\n' +
+            '  "container":<number or null>,\n' +
+            '  "confidence":<0-100>,\n' +
+            '  "field_confidence":{"ticket_number":<0-100>,"gross_lbs":<0-100>,"tare_lbs":<0-100>,"driver":<0-100>,"project":<0-100>}\n' +
+            '}\n\n' +
+            'RULES:\n' +
+            '- If a field is unreadable or absent, use null (strings) or 0 (numbers). DO NOT GUESS.\n' +
+            '- If handwriting is ambiguous (e.g. could be Willie F or Willie G), pick best guess and set field_confidence below 70.\n' +
+            '- Overall confidence reflects how trustworthy the ENTIRE read is.';
 
         try {
             const data = await this.callOpenAI({
@@ -4283,7 +4312,7 @@ const DS = {
                         { type: 'image_url', image_url: { url: compressed, detail: 'high' } }
                     ]
                 }],
-                max_tokens: 300,
+                max_tokens: 500,
                 temperature: 0.1
             });
 
@@ -4327,7 +4356,28 @@ const DS = {
             document.getElementById('manualDate').value = d;
         }
         if (ocr.hauler) document.getElementById('manualHauler').value = ocr.hauler;
+        if (ocr.container) document.getElementById('manualContainer').value = ocr.container;
         this.calcNet();
+
+        // Phase 2.7a: Stash driver / project / zone in notes so info survives
+        // (manual form doesn't have these fields yet — will be wired in Phase 2.7 batch tool)
+        var notesEl = document.getElementById('manualNotes');
+        var notesParts = [];
+        if (ocr.driver)  notesParts.push('Driver: '  + ocr.driver);
+        if (ocr.project) notesParts.push('Project: ' + ocr.project);
+        if (ocr.zone)    notesParts.push('Zone: '    + ocr.zone);
+        if (notesParts.length > 0) {
+            var existing = notesEl.value.trim();
+            notesEl.value = (existing ? existing + '\n' : '') + '[OCR] ' + notesParts.join(' | ');
+        }
+
+        // Phase 2.7a: Per-field confidence visualization helper
+        function _conf(score) {
+            if (score === undefined || score === null) return '';
+            var color = score >= 80 ? '#22c55e' : score >= 60 ? '#fbbf24' : '#f87171';
+            return ' <span style="font-size:.6rem;color:' + color + '">(' + score + '%)</span>';
+        }
+        var fc = ocr.field_confidence || {};
 
         // Show OCR results
         const el = document.getElementById('ocrResults');
@@ -4335,16 +4385,21 @@ const DS = {
         el.innerHTML = `<div class="ai-result">
             <div class="ai-result-header">
                 <div class="card-title" style="margin:0;"><span class="icon">🔍</span> OCR Results</div>
-                <span class="ai-badge">Confidence: ${ocr.confidence || 0}%</span>
+                <span class="ai-badge">Overall: ${ocr.confidence || 0}%</span>
             </div>
             <div style="font-family:var(--mono); font-size:0.75rem; line-height:1.8;">
-                Ticket: ${ocr.ticket_number || '—'}<br>
+                Ticket: ${ocr.ticket_number || '—'}${_conf(fc.ticket_number)}<br>
                 Date: ${ocr.date || '—'}<br>
-                Gross: ${ocr.gross_lbs ? ocr.gross_lbs.toLocaleString() + ' lbs' : '—'}<br>
-                Tare: ${ocr.tare_lbs ? ocr.tare_lbs.toLocaleString() + ' lbs' : '—'}<br>
+                Gross: ${ocr.gross_lbs ? ocr.gross_lbs.toLocaleString() + ' lbs' : '—'}${_conf(fc.gross_lbs)}<br>
+                Tare: ${ocr.tare_lbs ? ocr.tare_lbs.toLocaleString() + ' lbs' : '—'}${_conf(fc.tare_lbs)}<br>
                 Net: ${ocr.net_lbs ? ocr.net_lbs.toLocaleString() + ' lbs' : '—'}<br>
                 Hauler: ${ocr.hauler || '—'}<br>
-                Facility: ${ocr.facility || '—'}
+                Driver: ${ocr.driver || '—'}${_conf(fc.driver)}<br>
+                Project: ${ocr.project || '—'}${_conf(fc.project)}<br>
+                Zone: ${ocr.zone || '—'} &nbsp; Container: ${ocr.container || '—'} cy
+            </div>
+            <div style="font-size:.65rem;color:var(--text-dim);margin-top:6px;padding:4px 8px;background:rgba(96,165,250,0.08);border-radius:6px;">
+                💡 Driver/Project/Zone saved to Notes — set Project dropdown before scanning if you want it on the ticket itself.
             </div>
         </div>`;
 
