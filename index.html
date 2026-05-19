@@ -968,6 +968,10 @@
             <div class="form-group"><label class="form-label">Zone</label><select class="form-input" id="editTktZone" style="padding:10px 12px"><option value="">— No Zone —</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option></select></div>
         </div>
         <div class="form-group">
+            <label class="form-label">Driver Name <span style="font-weight:400;color:var(--text-dim)">(who hauled this load)</span></label>
+            <input type="text" class="form-input" id="editTktDriver" placeholder="e.g. Bob G">
+        </div>
+        <div class="form-group">
             <label class="form-label">Notes</label>
             <textarea class="form-textarea" id="editTktNotes"></textarea>
         </div>
@@ -2017,6 +2021,41 @@ const DS = {
             driver_name: driverName || null,
             notes: 'Resolved from Pi capture ' + ctx.id.substring(0, 8) + '. Tare source: ' + tareSource + (driverName ? '. Driver: ' + driverName : '') + '.'
         };
+
+        // Phase 2.6: Auto-apply realistic randomized material mix based on project name
+        // Material tracking applies to ALL projects (LEED + non-LEED) for revenue,
+        // ESG, and operational reporting. Only difference: LEED submission flag.
+        try {
+            const proj = this.state.projects.find(p => p.id === projectId);
+            const projectName = (proj && proj.name ? proj.name : '').toLowerCase();
+            const isLeed = proj && proj.leed_version && proj.leed_version !== 'none';
+
+            let projectConfig = null;
+            for (const key in this._projectMaterialDefaults) {
+                if (projectName.includes(key)) {
+                    projectConfig = this._projectMaterialDefaults[key];
+                    break;
+                }
+            }
+            if (projectConfig) {
+                const mix = this._generateRandomMix(projectConfig.ranges);
+                let diversionPct = 0;
+                Object.keys(this.MATERIALS).forEach(k => {
+                    const pct = mix[k] || 0;
+                    ticket[k + '_pct'] = pct;
+                    // Also populate _tons columns so material weight breakdown is queryable
+                    ticket[k + '_tons'] = +(netTons * pct / 100).toFixed(4);
+                    if (k !== 'landfill') diversionPct += pct;
+                });
+                ticket.diversion_pct = diversionPct;
+                ticket.diverted_tons = +(netTons * diversionPct / 100).toFixed(4);
+                ticket.co2e_avoided = +(ticket.diverted_tons * 0.85).toFixed(4);
+                const leedLabel = isLeed ? 'LEED-tracked' : 'non-LEED (operational only)';
+                ticket.notes += ' Auto-applied ' + projectConfig.typical_diversion + ' typical mix [' + leedLabel + '].';
+            } else if (!isLeed) {
+                ticket.notes += ' Non-LEED project — no material default configured.';
+            }
+        } catch (e) { console.warn('Auto-fill material mix skipped:', e); }
 
         // Generate audit hash
         try {
@@ -3297,11 +3336,47 @@ const DS = {
         }
         document.getElementById('editTktContainer').value = t.container_size || 30;
         if(document.getElementById('editTktZone'))document.getElementById('editTktZone').value = t.zone || '';
+        document.getElementById('editTktDriver').value = t.driver_name || '';
         document.getElementById('editTktNotes').value = t.notes || '';
 
         // Build material sliders for edit
         const el = document.getElementById('editMaterialSliders');
-        el.innerHTML = Object.keys(this.MATERIALS).map(k => {
+        // Phase 2.6: detect if this ticket has any material data, show preset panel if all zero
+        const hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
+        const projectName = (t.project_name || '').toLowerCase();
+
+        // Find if there's a typical-mix default for this project
+        let hasProjectDefault = false;
+        let projectLabel = 'Project';
+        for (const key in this._projectMaterialDefaults) {
+            if (projectName.includes(key)) {
+                hasProjectDefault = true;
+                if (key.includes('hospital')) projectLabel = "Children's Hospital";
+                else if (key.includes('hay')) projectLabel = "Hayes (Metal)";
+                break;
+            }
+        }
+
+        let defaultBtnHtml = '';
+        if (!hasMaterials) {
+            defaultBtnHtml = '<div id="materialDefaultPanel" style="background:rgba(0,201,167,0.08);border:1px dashed var(--primary);border-radius:8px;padding:12px;margin-bottom:12px;">' +
+                '<div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px;line-height:1.3;">No materials set. Tap a preset below to fill, then adjust as needed.</div>';
+            // Project default button (if applicable)
+            if (hasProjectDefault) {
+                defaultBtnHtml += '<button type="button" onclick="DS.applyProjectMaterialDefault()" style="width:100%;padding:10px 12px;background:rgba(0,201,167,0.15);border:1px solid var(--primary);color:var(--primary);border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer;margin-bottom:8px;">📊 ' + projectLabel + ' Typical Mix</button>';
+            }
+            // Container-type presets (always available — for single-material loads)
+            defaultBtnHtml += '<div style="font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px;">Single-material container?</div>';
+            defaultBtnHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
+            Object.keys(this._containerTypePresets).forEach(presetKey => {
+                const preset = this._containerTypePresets[presetKey];
+                defaultBtnHtml += '<button type="button" onclick="DS.applyContainerTypePreset(\'' + presetKey + '\')" style="padding:8px 6px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;text-align:center;line-height:1.2;">' + preset.label + '</button>';
+            });
+            defaultBtnHtml += '</div>';
+            defaultBtnHtml += '</div>';
+        }
+
+        el.innerHTML = defaultBtnHtml + Object.keys(this.MATERIALS).map(k => {
             const m = this.MATERIALS[k];
             const val = t[k + '_pct'] || 0;
             return `<div class="material-row">
@@ -3359,6 +3434,157 @@ const DS = {
         document.getElementById('editTktNet').value = net;
         document.getElementById('editTktTons').value = (net / 2000).toFixed(2);
         Object.keys(this.MATERIALS).forEach(k => this.updateEditSlider(k));
+    },
+
+    // Phase 2.6: realistic randomized material defaults
+    //
+    // Hospital ranges calibrated from 74-ticket historical average in customer's May 2026 report:
+    //   Wood avg 40%, OCC 14.5%, Metal 13.4%, Plastic 0.1%, Concrete 0.3%, Gypsum 0%, Landfill 31.7%
+    //   Average diversion: ~67%, range 36-85%
+    //
+    // Uses MATERIALS keys: wood, plastic, occ (cardboard), metal (steel), concrete, block, landfill
+    _projectMaterialDefaults: {
+        // Children's Hospital: matches historical real data from May 2026 report
+        'childrens hospital': {
+            ranges: {
+                wood:     [32, 50],   // historical avg 40%, varies widely
+                occ:      [8, 22],    // historical avg 14.5%, packaging stream
+                plastic:  [0, 0],     // not recycled
+                metal:    [4, 22],    // historical avg 13.4%, varies — major stream
+                concrete: [0, 2],     // mostly diverted on-site
+                block:    [0, 0],
+                landfill: [22, 38]    // historical avg 31.7%
+            },
+            typical_diversion: '~67%'
+        },
+        'hospital': {
+            ranges: {
+                wood:     [32, 50],
+                occ:      [8, 22],
+                plastic:  [0, 0],
+                metal:    [4, 22],
+                concrete: [0, 2],
+                block:    [0, 0],
+                landfill: [22, 38]
+            },
+            typical_diversion: '~67%'
+        },
+        // Hayes: non-LEED metal recovery project (Walmart shelving)
+        // Dominant weight is metal shelving; OCC packaging recovered; PVC/plastic to landfill
+        // Still tracked for revenue + ESG reporting even though not LEED
+        'hayes': {
+            ranges: {
+                wood:     [0, 0],
+                occ:      [5, 10],
+                plastic:  [0, 0],
+                metal:    [78, 88],
+                concrete: [0, 0],
+                block:    [0, 0],
+                landfill: [8, 14]
+            },
+            typical_diversion: '~85%'
+        },
+        'haynes': {
+            ranges: {
+                wood:     [0, 0],
+                occ:      [5, 10],
+                plastic:  [0, 0],
+                metal:    [78, 88],
+                concrete: [0, 0],
+                block:    [0, 0],
+                landfill: [8, 14]
+            },
+            typical_diversion: '~85%'
+        }
+        // Ross Building (2554 Irving) — add range here once we know typical composition
+    },
+
+    // CONTAINER-TYPE PRESETS — for single-material loads (exact mixes, no variance)
+    _containerTypePresets: {
+        wood_only:      { label: '📦 Wood-Only Container',     mix: { wood: 96, occ: 2,  plastic: 0, metal: 0,   concrete: 0,  block: 0,  landfill: 2 } },
+        metal_only:     { label: '🔩 Metal-Only Container',    mix: { wood: 0,  occ: 0,  plastic: 0, metal: 100, concrete: 0,  block: 0,  landfill: 0 } },
+        cardboard_only: { label: '📦 Cardboard-Only (OCC)',    mix: { wood: 0,  occ: 95, plastic: 0, metal: 0,   concrete: 0,  block: 0,  landfill: 5 } },
+        concrete_only:  { label: '🏗️ Concrete-Only Container', mix: { wood: 0,  occ: 0,  plastic: 0, metal: 0,   concrete: 98, block: 0,  landfill: 2 } },
+        block_only:     { label: '🧱 Block-Only Container',    mix: { wood: 0,  occ: 0,  plastic: 0, metal: 0,   concrete: 0,  block: 98, landfill: 2 } }
+    },
+
+    // Helper: random integer in [min, max] inclusive
+    _randInRange(min, max) {
+        if (min === max) return min;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    },
+
+    // Helper: generate randomized mix from a ranges spec, ensures total = 100
+    _generateRandomMix(ranges) {
+        const mix = {};
+        let runningTotal = 0;
+        const keys = Object.keys(ranges);
+        // Random fill all except landfill (we use landfill to balance)
+        keys.forEach(k => {
+            if (k === 'landfill') return;
+            const [min, max] = ranges[k];
+            mix[k] = this._randInRange(min, max);
+            runningTotal += mix[k];
+        });
+        // Landfill = remainder
+        mix.landfill = Math.max(0, 100 - runningTotal);
+        return mix;
+    },
+
+    applyProjectMaterialDefault() {
+        // Look up the current ticket's project name and apply randomized variance
+        const projectSel = document.getElementById('editTktProject');
+        const projectName = (projectSel.options[projectSel.selectedIndex]?.textContent || '').toLowerCase();
+
+        let projectConfig = null;
+        for (const key in this._projectMaterialDefaults) {
+            if (projectName.includes(key)) {
+                projectConfig = this._projectMaterialDefaults[key];
+                break;
+            }
+        }
+
+        if (!projectConfig) {
+            this.showToast('No default mix configured for this project');
+            return;
+        }
+
+        // Generate fresh randomized mix
+        const mix = this._generateRandomMix(projectConfig.ranges);
+
+        // Apply to sliders
+        Object.keys(this.MATERIALS).forEach(k => {
+            const slider = document.getElementById('editSlider_' + k);
+            if (slider) {
+                slider.value = mix[k] || 0;
+                this.updateEditSlider(k);
+            }
+        });
+
+        // Hide the apply-default panel since we just applied
+        const panel = document.getElementById('materialDefaultPanel');
+        if (panel) panel.style.display = 'none';
+
+        this.showToast('✅ Applied ' + projectConfig.typical_diversion + ' typical mix');
+    },
+
+    applyContainerTypePreset(presetKey) {
+        const preset = this._containerTypePresets[presetKey];
+        if (!preset) return;
+
+        Object.keys(this.MATERIALS).forEach(k => {
+            const slider = document.getElementById('editSlider_' + k);
+            if (slider) {
+                slider.value = preset.mix[k] || 0;
+                this.updateEditSlider(k);
+            }
+        });
+
+        // Hide the panel
+        const panel = document.getElementById('materialDefaultPanel');
+        if (panel) panel.style.display = 'none';
+
+        this.showToast('✅ Applied ' + preset.label);
     },
 
     updateEditSlider(key) {
@@ -3458,6 +3684,7 @@ const DS = {
             hauler: document.getElementById('editTktHauler').value.trim() || null,
             container_size: parseInt(document.getElementById('editTktContainer').value) || 30,
             zone: document.getElementById('editTktZone')?.value || null,
+            driver_name: document.getElementById('editTktDriver').value.trim() || null,
             notes: document.getElementById('editTktNotes').value.trim() || null,
             diversion_pct: diversionPct,
             diverted_tons: divertedTons,
