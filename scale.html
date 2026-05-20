@@ -135,7 +135,7 @@
     <!-- Tare Estimate Options (NEW Phase 2.5) -->
     <!-- Shows after gross is captured + driver is selected. Hidden once a real tare comes in. -->
     <div id="tareEstimateBox" style="display:none;margin:0 0 14px;padding:14px;background:rgba(15,40,55,0.5);border:1px dashed var(--amber);border-radius:12px;">
-        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;">⏱️ Not waiting for tare? Pick an estimate</div>
+        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;">⏱️ Not waiting for tare? Pick or type</div>
         <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px;line-height:1.4;">Best practice is to drive back over the scale empty. If you can't wait, pick the best estimate below.</div>
         <div id="tareEstimateOptions" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
@@ -309,7 +309,7 @@ let selectedDriverId = '';       // driver_id (UUID) from drivers table
 
 // Phase 2.5: tare estimate state
 let manualTareValue = null;      // tare value selected from estimate options (lb)
-let manualTareSource = null;     // 'fleet_default' | 'driver_avg' | 'today_first' (matches DB tare_source)
+let manualTareSource = null;     // 'fleet_default' | 'driver_avg' | 'today_first' | 'manual_typed' (matches DB tare_source)
 let manualTareLabel = '';        // human-readable label shown in confirmation flow
 
 // ─────────────────────────────────────────────
@@ -995,9 +995,8 @@ async function updateTareEstimateBox() {
     }
 
     if (!_tareEstimateOptions || _tareEstimateOptions.length === 0) {
-        // No data available — hide
-        box.style.display = 'none';
-        return;
+        // No preset data available — still allow custom tare entry (Phase 2.7d)
+        _tareEstimateOptions = [];
     }
 
     // Render buttons
@@ -1006,9 +1005,49 @@ async function updateTareEstimateBox() {
             '<span style="flex:1;">' + opt.label + '</span>' +
             '<span style="font-family:var(--mono);font-weight:800;color:var(--amber);">' + Number(opt.value).toLocaleString() + ' lb</span>' +
         '</button>'
-    )).join('');
+    )).join('') +
+    // Phase 2.7d: Free-form tare entry (4th option)
+    '<button type="button" onclick="selectCustomTare()" style="padding:12px 14px;background:rgba(0,201,167,0.1);border:1px dashed var(--cyan);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+        '<span style="flex:1;">✏️ Type Custom Tare</span>' +
+        '<span style="font-family:var(--mono);font-weight:600;color:var(--cyan);font-size:.7rem;">Enter lb</span>' +
+    '</button>';
 
     box.style.display = 'block';
+}
+
+// Phase 2.7d: Allow driver to type a custom tare value (4th estimate option)
+function selectCustomTare() {
+    const raw = prompt('Enter tare weight in pounds (empty truck):', '');
+    if (raw === null) return; // user cancelled
+    const cleaned = String(raw).replace(/[^0-9.]/g, '');
+    const val = parseFloat(cleaned);
+    if (!isFinite(val) || val <= 0) {
+        alert('Please enter a valid number greater than 0.');
+        return;
+    }
+    if (val < 5000) {
+        if (!confirm('Tare of ' + val.toLocaleString() + ' lb seems very low for a hauler truck. Are you sure?')) return;
+    }
+    if (val > 80000) {
+        if (!confirm('Tare of ' + val.toLocaleString() + ' lb seems very high. Are you sure?')) return;
+    }
+    const tareLbs = Math.round(val);
+
+    manualTareValue = tareLbs;
+    manualTareSource = 'manual_typed';
+    manualTareLabel = 'Custom entry (typed)';
+
+    // Update tare card visually
+    const card = document.getElementById('tareCard');
+    card.classList.add('captured');
+    card.classList.remove('waiting');
+    document.getElementById('tareValue').textContent = tareLbs.toLocaleString() + ' lbs';
+    document.getElementById('tareValue').classList.remove('empty');
+    document.getElementById('tareTime').innerHTML = '<span style="color:var(--cyan);">✏️ Custom entry · driver-typed</span>';
+
+    // Hide the estimate box
+    document.getElementById('tareEstimateBox').style.display = 'none';
+    checkReady();
 }
 
 function selectManualTare(optIdx) {
