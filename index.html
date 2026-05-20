@@ -2204,13 +2204,16 @@ const DS = {
             }
             if (projectConfig) {
                 const mix = this._generateRandomMix(projectConfig.ranges);
+                // Phase 2.7b: materials in non_diverted list count toward landfill, not diversion
+                // Example: Hayes plastic isn't recycled, so it shouldn't inflate diversion %
+                const nonDiverted = new Set(projectConfig.non_diverted || []);
                 let diversionPct = 0;
                 Object.keys(this.MATERIALS).forEach(k => {
                     const pct = mix[k] || 0;
                     ticket[k + '_pct'] = pct;
                     // Also populate _tons columns so material weight breakdown is queryable
                     ticket[k + '_tons'] = +(netTons * pct / 100).toFixed(4);
-                    if (k !== 'landfill') diversionPct += pct;
+                    if (k !== 'landfill' && !nonDiverted.has(k)) diversionPct += pct;
                 });
                 ticket.diversion_pct = diversionPct;
                 ticket.diverted_tons = +(netTons * diversionPct / 100).toFixed(4);
@@ -3635,30 +3638,33 @@ const DS = {
             typical_diversion: '~67%'
         },
         // Hayes: non-LEED metal recovery project (Walmart shelving)
-        // Dominant weight is metal shelving; OCC packaging recovered; PVC/plastic to landfill
+        // Dominant weight is metal shelving; OCC packaging recovered;
+        // PVC/plastic is present but NOT recycled — counts toward landfill in diversion math
         // Still tracked for revenue + ESG reporting even though not LEED
         'hayes': {
             ranges: {
                 wood:     [0, 0],
-                occ:      [5, 10],
-                plastic:  [0, 0],
-                metal:    [78, 88],
+                occ:      [6, 12],      // packaging recovered
+                plastic:  [3, 8],       // PVC/film — NOT recycled
+                metal:    [72, 84],     // dominant stream
                 concrete: [0, 0],
                 block:    [0, 0],
-                landfill: [8, 14]
+                landfill: [4, 10]       // other debris
             },
+            non_diverted: ['plastic'],  // materials that go to landfill at Hayes
             typical_diversion: '~85%'
         },
         'haynes': {
             ranges: {
                 wood:     [0, 0],
-                occ:      [5, 10],
-                plastic:  [0, 0],
-                metal:    [78, 88],
+                occ:      [6, 12],
+                plastic:  [3, 8],
+                metal:    [72, 84],
                 concrete: [0, 0],
                 block:    [0, 0],
-                landfill: [8, 14]
+                landfill: [4, 10]
             },
+            non_diverted: ['plastic'],
             typical_diversion: '~85%'
         }
         // Ross Building (2554 Irving) — add range here once we know typical composition
@@ -4143,8 +4149,9 @@ const DS = {
     },
 
     _applyDefaultMaterials() {
-        // Realistic C&D mix based on project history (55-68% diversion range)
-        var defaults = this._getDefaultMaterials(this.state.tickets);
+        // Project-aware defaults — Hayes / Hospital have specific ranges, others fall back to averages
+        var projectName = this.state.currentProject && this.state.currentProject.name ? this.state.currentProject.name : '';
+        var defaults = this._getDefaultMaterials(this.state.tickets, projectName);
         var self = this;
         Object.keys(this.MATERIALS).forEach(function(k) {
             var slider = document.getElementById('slider_' + k);
@@ -4152,8 +4159,34 @@ const DS = {
         });
     },
 
-    _getDefaultMaterials(tickets) {
+    _getDefaultMaterials(tickets, projectName) {
         var matKeys = Object.keys(this.MATERIALS);
+
+        // Phase 2.7b: project-aware defaults
+        // If the project has a configured range in _projectMaterialDefaults, use that.
+        // Otherwise fall back to the legacy hauler-wide average logic.
+        if (projectName) {
+            var lcName = String(projectName).toLowerCase();
+            var projectConfig = null;
+            for (var key in this._projectMaterialDefaults) {
+                if (lcName.indexOf(key) >= 0) {
+                    projectConfig = this._projectMaterialDefaults[key];
+                    break;
+                }
+            }
+            if (projectConfig && projectConfig.ranges) {
+                // Generate one realistic mix from the project's ranges
+                var mix = this._generateRandomMix(projectConfig.ranges);
+                // Backfill any missing keys with 0 so downstream code is safe
+                matKeys.forEach(function(k) { if (mix[k] === undefined) mix[k] = 0; });
+                // Carry non_diverted so callers can compute diversion correctly
+                mix._non_diverted = projectConfig.non_diverted || [];
+                mix._project_config = true;  // flag so callers know this is project-specific
+                return mix;
+            }
+        }
+
+        // ── Legacy fallback: hauler-wide average defaults ──
         // Base defaults — plastic is 0 (not currently recycled at Dalmex)
         var base = { wood: 34, occ: 16, metal: 11, plastic: 0, landfill: 35, concrete: 2, block: 1, gypsum: 1, cardboard: 0, drywall: 0 };
         if (tickets && tickets.length >= 5) {
@@ -4171,7 +4204,7 @@ const DS = {
                 matKeys.forEach(function(k) { base[k] = Math.round(avg[k] / validCount); });
             }
         }
-        // Always force plastic to 0
+        // Always force plastic to 0 in legacy path
         base.plastic = 0;
 
         // Randomize with wider swing for natural variation (±6-10 points on major materials)
@@ -5126,6 +5159,7 @@ const DS = {
             '<thead><tr style="background:var(--bg-input); border-bottom:2px solid var(--border);">' +
             '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Date</th>' +
             '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Ticket#</th>' +
+            '<th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Driver</th>' +
             '<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Net Tons</th>' +
             (_isNL?'':'<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>') + (_isNL?'':'<th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>') +
             '<th style="padding:8px 6px; text-align:center; font-weight:700; color:var(--text-muted);">📷</th>' +
@@ -5146,6 +5180,7 @@ const DS = {
             tbl += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                 '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
+                '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
                 (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>') +
                 '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '🖼️' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
@@ -5156,7 +5191,7 @@ const DS = {
         var totalDivRate = sumTons > 0 ? Math.round(sumDiverted / sumTons * 100) : 0;
         tbl += '</tbody><tfoot>' +
             '<tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">' +
-            '<td style="padding:8px 6px; font-weight:800;" colspan="2">TOTALS</td>' +
+            '<td style="padding:8px 6px; font-weight:800;" colspan="3">TOTALS</td>' +
             '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800;">' + this.fmt(sumTons) + '</td>' +
             (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">' + totalDivRate + '%</td>') +
             (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700;">' + this.fmt(sumCo2e) + '</td>') +
@@ -5618,18 +5653,30 @@ const DS = {
                                     scaleUrl = await this.supabaseUpload('ticket-photos', photoPath, photoBlob);
                                 }
 
-                                var defaults2 = DS._getDefaultMaterials(tickets);
+                                // Phase 2.7b: pass project name so Hayes/Hospital get specific ranges
+                                var projName2 = this.state.currentProject && this.state.currentProject.name ? this.state.currentProject.name : '';
+                                var defaults2 = DS._getDefaultMaterials(tickets, projName2);
                                 var matData2 = {};
                                 var matKeys2 = Object.keys(DS.MATERIALS);
                                 matKeys2.forEach(function(k) {
                                     matData2[k + '_pct'] = defaults2[k] || 0;
                                     matData2[k + '_tons'] = +(photoTons2 * (defaults2[k] || 0) / 100).toFixed(4);
                                 });
-                                var lfPct2 = defaults2.landfill || 0;
-                                var divPct2 = 100 - lfPct2;
+                                // Phase 2.7b: honor non_diverted list (e.g. plastic at Hayes goes to landfill)
+                                var nonDiverted2 = new Set(defaults2._non_diverted || []);
+                                var divPct2 = 0;
+                                matKeys2.forEach(function(k) {
+                                    if (k !== 'landfill' && !nonDiverted2.has(k)) divPct2 += (defaults2[k] || 0);
+                                });
+                                var lfPct2 = 100 - divPct2;  // landfill = everything not diverted
                                 var divTons2 = +(photoTons2 * divPct2 / 100).toFixed(4);
                                 var co2e2 = 0;
-                                matKeys2.forEach(function(k) { if (k !== 'landfill') co2e2 += (matData2[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0); });
+                                matKeys2.forEach(function(k) {
+                                    // Only count toward CO2e avoided what we're actually diverting
+                                    if (k !== 'landfill' && !nonDiverted2.has(k)) {
+                                        co2e2 += (matData2[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0);
+                                    }
+                                });
 
                                 var newTicket = {
                                     project_id: projId,
@@ -7346,20 +7393,28 @@ const DS = {
                 debris_images: []
             };
 
-            // Apply default material percentages if no AI classification
-            var defaults = DS._getDefaultMaterials(projectTickets);
+            // Phase 2.7b: project-aware defaults — look up project name from current state
+            var projForDefaults = (this.state.projects || []).find(function(p) { return p.id === q0.project_id; });
+            var projNameForDefaults = projForDefaults ? projForDefaults.name : '';
+            var defaults = DS._getDefaultMaterials(projectTickets, projNameForDefaults);
             var matKeys = Object.keys(DS.MATERIALS);
+            // Phase 2.7b: honor non_diverted list (e.g. plastic at Hayes)
+            var nonDivertedB = new Set(defaults._non_diverted || []);
             matKeys.forEach(function(k) {
                 ticketData[k + '_pct'] = defaults[k] || 0;
                 ticketData[k + '_tons'] = +(netTons * (defaults[k] || 0) / 100).toFixed(4);
             });
-            var landfillPct = defaults.landfill || 0;
-            ticketData.diversion_pct = 100 - landfillPct;
-            ticketData.diverted_tons = +(netTons * (100 - landfillPct) / 100).toFixed(4);
-            ticketData.landfill_tons = +(netTons * landfillPct / 100).toFixed(4);
+            // Phase 2.7b: diversion excludes non_diverted materials (e.g. plastic at Hayes)
+            var divPctB = 0;
+            matKeys.forEach(function(k) {
+                if (k !== 'landfill' && !nonDivertedB.has(k)) divPctB += (defaults[k] || 0);
+            });
+            ticketData.diversion_pct = divPctB;
+            ticketData.diverted_tons = +(netTons * divPctB / 100).toFixed(4);
+            ticketData.landfill_tons = +(netTons * (100 - divPctB) / 100).toFixed(4);
             var co2e = 0;
             matKeys.forEach(function(k) {
-                if (k !== 'landfill') co2e += (ticketData[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0);
+                if (k !== 'landfill' && !nonDivertedB.has(k)) co2e += (ticketData[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0);
             });
             ticketData.co2e_avoided = +co2e.toFixed(4);
 
