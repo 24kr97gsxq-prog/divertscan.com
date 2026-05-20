@@ -42,6 +42,9 @@
         .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
         .wc-value.empty{color:var(--muted);font-size:1.2rem;font-weight:500}
         .wc-sub{font-size:.7rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+        /* Phase 2.7d: tap to change manual tare */
+        .change-tare-btn{display:inline-block;margin-left:8px;padding:3px 9px;font-family:var(--sans);font-size:.65rem;font-weight:700;background:rgba(0,201,167,0.12);border:1px solid var(--cyan);border-radius:6px;color:var(--cyan);cursor:pointer;text-decoration:none;vertical-align:middle}
+        .change-tare-btn:active{transform:scale(.97)}
 
         .net-card{background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(34,197,94,.06));border:2px solid var(--cyan);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px}
         .net-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-weight:700;margin-bottom:6px}
@@ -1043,7 +1046,8 @@ function selectCustomTare() {
     card.classList.remove('waiting');
     document.getElementById('tareValue').textContent = tareLbs.toLocaleString() + ' lbs';
     document.getElementById('tareValue').classList.remove('empty');
-    document.getElementById('tareTime').innerHTML = '<span style="color:var(--cyan);">✏️ Custom entry · driver-typed</span>';
+    document.getElementById('tareTime').innerHTML = '<span style="color:var(--cyan);">✏️ Custom entry · driver-typed</span>' +
+        '<span class="change-tare-btn" onclick="changeManualTare()">✏️ Change</span>';
 
     // Hide the estimate box
     document.getElementById('tareEstimateBox').style.display = 'none';
@@ -1063,7 +1067,8 @@ function selectManualTare(optIdx) {
     card.classList.remove('waiting');
     document.getElementById('tareValue').textContent = Number(opt.value).toLocaleString() + ' lbs';
     document.getElementById('tareValue').classList.remove('empty');
-    document.getElementById('tareTime').innerHTML = '<span style="color:var(--amber);">⚠️ Estimated · ' + opt.label + '</span>';
+    document.getElementById('tareTime').innerHTML = '<span style="color:var(--amber);">⚠️ Estimated · ' + opt.label + '</span>' +
+        '<span class="change-tare-btn" onclick="changeManualTare()">✏️ Change</span>';
 
     // Hide the estimate box
     document.getElementById('tareEstimateBox').style.display = 'none';
@@ -1083,6 +1088,22 @@ function clearManualTare() {
     document.getElementById('tareValue').classList.add('empty');
     document.getElementById('tareTime').textContent = '';
     checkReady();
+}
+
+// Phase 2.7d: Driver-initiated tare change (re-opens the picker)
+function changeManualTare() {
+    // Only meaningful if we're using a manual tare (not a real Pi capture)
+    if (tareReading) {
+        if (!confirm('A real scale reading was captured. Override with a manual entry?')) return;
+        // User explicitly wants to override — discard real reading
+        tareReading = null;
+    }
+    clearManualTare();
+    // Re-show the estimate box so they can pick or type again
+    // Force cache invalidation so options are refreshed
+    _tareEstimateLastHauler = null;
+    _tareEstimateLastDriverId = null;
+    updateTareEstimateBox();
 }
 
 function checkReady() {
@@ -1317,6 +1338,21 @@ async function confirmTicket() {
         btn.classList.add('ready');
         btn.textContent = '❌ ERROR — TAP TO RETRY';
         updateStatus('off', 'Error: ' + err.message);
+
+        // Phase 2.7d: Surface a Change Tare affordance even if it was previously hidden
+        // (the tare card already shows the change button if a manual tare is in use, but
+        // re-render to make sure it's visible after error)
+        try {
+            if (manualTareValue !== null) {
+                const tareTimeEl = document.getElementById('tareTime');
+                if (tareTimeEl && tareTimeEl.querySelector('.change-tare-btn') === null) {
+                    const label = manualTareSource === 'manual_typed'
+                        ? '<span style="color:var(--cyan);">✏️ Custom entry · driver-typed</span>'
+                        : '<span style="color:var(--amber);">⚠️ Estimated · ' + (manualTareLabel || 'manual') + '</span>';
+                    tareTimeEl.innerHTML = label + '<span class="change-tare-btn" onclick="changeManualTare()">✏️ Change</span>';
+                }
+            }
+        } catch(e) {}
     }
 }
 
