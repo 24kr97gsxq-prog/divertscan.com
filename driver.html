@@ -234,6 +234,17 @@ async function sb(endpoint) {
 async function init() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('t');
+    const projectsParam = params.get('projects');
+    const clientLabel = params.get('client') || ''; // optional label for banner
+
+    // Parse comma-separated project IDs (UUIDs) if present (Phase 2.7d - client portal scoping)
+    let projectFilter = null;
+    if (projectsParam) {
+        projectFilter = projectsParam.split(',').map(s => s.trim()).filter(s => s.length === 36); // UUID length
+        if (projectFilter.length === 0) projectFilter = null;
+    }
+    window._projectFilter = projectFilter;
+    window._clientLabel = clientLabel;
 
     if (!token || token.length < 8) {
         showError();
@@ -299,6 +310,33 @@ async function init() {
         } catch (err) {
             console.warn('Enrichment error (will show basic data):', err);
         }
+    }
+
+    // Phase 2.7d: Apply project filter if present (client portal scoping)
+    if (window._projectFilter && window._projectFilter.length > 0) {
+        const beforeCount = allLoads.length;
+        allLoads = allLoads.filter(l => l.project_id && window._projectFilter.includes(l.project_id));
+        console.log('[project filter] ' + beforeCount + ' loads → ' + allLoads.length + ' loads (filtered to ' + window._projectFilter.length + ' projects)');
+
+        // Show a banner indicating the loadbook is scoped
+        const hdr = document.querySelector('.hdr-row');
+        if (hdr && hdr.parentElement) {
+            const banner = document.createElement('div');
+            banner.style.cssText = 'margin-top:8px;padding:6px 10px;background:rgba(0,201,167,0.12);border:1px solid rgba(0,201,167,0.4);border-radius:6px;font-size:.65rem;color:var(--cyan);font-weight:600;text-align:center;';
+            const label = window._clientLabel ? window._clientLabel + ' projects only' : 'Showing scoped view (' + window._projectFilter.length + ' project' + (window._projectFilter.length === 1 ? '' : 's') + ')';
+            banner.textContent = '🔒 ' + label;
+            hdr.parentElement.appendChild(banner);
+        }
+
+        // Also suppress copy-for-dispatcher and share buttons since the scoped view shouldn't be shared as the driver's own loadbook
+        try {
+            document.querySelectorAll('.actions-row .action-btn').forEach(btn => {
+                const t = (btn.textContent || '').trim();
+                if (t.indexOf('Copy for Dispatcher') >= 0 || t.indexOf('Share Link') >= 0) {
+                    btn.style.display = 'none';
+                }
+            });
+        } catch(e) {}
     }
 
     document.getElementById('loadingState').style.display = 'none';
