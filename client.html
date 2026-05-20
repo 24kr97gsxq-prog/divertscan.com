@@ -219,6 +219,13 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 </select></div>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch" id="dTable"></div>
 </div>
+<div class="c" id="dDriversCard" style="display:none">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<div class="ct" style="margin:0">🧑‍🚛 Drivers <span id="dDriversCount" style="background:var(--primary);color:#fff;font-size:.55rem;padding:1px 6px;border-radius:6px;font-weight:700;vertical-align:middle">0</span></div>
+<div style="font-size:.55rem;color:var(--text-d);font-style:italic">Scoped to your projects</div>
+</div>
+<div id="dDriversList"></div>
+</div>
 </div>
 </div>
 
@@ -417,7 +424,90 @@ try{P.renderTrend();}catch(e){console.error('Trend error:',e);}
 try{P.renderComparison();}catch(e){console.error('Comparison error:',e);}
 try{P.renderNewBadge();}catch(e){console.error('Badge error:',e);}
 P.renderMonths();
-try{P.renderTbl(P.tx);}catch(e){var dtel=document.getElementById('dTable');if(dtel)dtel.innerHTML='<div style="color:red;padding:10px;font-size:.75rem">Render error: '+e.message+'</div>';console.error('Table error:',e);}},
+try{P.renderTbl(P.tx);}catch(e){var dtel=document.getElementById('dTable');if(dtel)dtel.innerHTML='<div style="color:red;padding:10px;font-size:.75rem">Render error: '+e.message+'</div>';console.error('Table error:',e);}
+try{P.loadClientDrivers();}catch(e){console.error('Drivers error:',e);}},
+
+// Phase 2.7d: Load drivers who hauled for the current project
+loadClientDrivers(){
+var card=document.getElementById('dDriversCard');
+var list=document.getElementById('dDriversList');
+var count=document.getElementById('dDriversCount');
+if(!card||!list||!P.cp||!P.tx)return;
+
+// Group tickets by driver_id, using only tickets from the current project (P.tx already filtered to current project)
+var driversMap={};
+P.tx.forEach(function(t){
+  if(!t.driver_id)return;
+  if(!driversMap[t.driver_id]){
+    driversMap[t.driver_id]={
+      driver_id:t.driver_id,
+      driver_name:t.driver_name||'(Unknown)',
+      hauler:t.hauler||'',
+      loads:0,
+      tons:0,
+      lastLoad:null
+    };
+  }
+  driversMap[t.driver_id].loads++;
+  driversMap[t.driver_id].tons+=Number(t.net_tons||0);
+  var cap=t.captured_at||t.created_at||t.ticket_date;
+  if(cap&&(!driversMap[t.driver_id].lastLoad||cap>driversMap[t.driver_id].lastLoad)){
+    driversMap[t.driver_id].lastLoad=cap;
+  }
+});
+
+var drivers=Object.values(driversMap).sort(function(a,b){return b.tons-a.tons;});
+count.textContent=drivers.length;
+
+if(drivers.length===0){
+  card.style.display='none';
+  return;
+}
+card.style.display='block';
+
+// Need driver_tokens to build loadbook URLs - fetch in batch
+var ids=drivers.map(function(d){return d.driver_id;});
+P.api('drivers?id=in.('+ids.join(',')+')&select=id,driver_token').then(function(rows){
+  var tokenMap={};
+  if(rows)rows.forEach(function(r){tokenMap[r.id]=r.driver_token;});
+
+  // Build comma-separated list of all this client's project IDs for scope-locking the loadbook
+  var clientProjIds=P.pj.map(function(p){return p.id;}).join(',');
+  var clientLabel=P.cl&&P.cl.name?P.cl.name:'Your';
+
+  list.innerHTML=drivers.map(function(d){
+    var token=tokenMap[d.driver_id];
+    var lastStr=d.lastLoad?P.fd(d.lastLoad.substring(0,10)):'—';
+    var tons=d.tons.toFixed(1);
+    var canView=!!token;
+    return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'+
+        '<div style="flex:1;min-width:120px">'+
+          '<div style="font-weight:700;color:var(--text);font-size:.85rem">'+P.esc(d.driver_name)+'</div>'+
+          '<div style="font-size:.6rem;color:var(--text-d)">🚛 '+P.esc(d.hauler)+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;min-width:80px">'+
+          '<div style="font-family:var(--mono);font-weight:700;color:var(--primary);font-size:.8rem">'+d.loads+' load'+(d.loads===1?'':'s')+'</div>'+
+          '<div style="font-size:.55rem;color:var(--text-d)">'+tons+' T · last '+lastStr+'</div>'+
+        '</div>'+
+      '</div>'+
+      (canView?'<div style="margin-top:8px"><div onclick="P.openDriverLoadbook(\''+token+'\')" class="b bsm bp" style="width:100%">📒 View Loadbook</div></div>':'<div style="margin-top:8px;font-size:.6rem;color:var(--text-d);font-style:italic;text-align:center">Loadbook unavailable</div>')+
+    '</div>';
+  }).join('');
+}).catch(function(){
+  list.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.7rem">Could not load driver tokens</div>';
+});
+},
+
+// Phase 2.7d: Open driver loadbook scoped to this client's projects
+openDriverLoadbook(token){
+if(!token){P.toast('No loadbook available');return;}
+var projIds=P.pj.map(function(p){return p.id;}).join(',');
+var label=P.cl&&P.cl.name?P.cl.name:'';
+var url='driver.html?t='+encodeURIComponent(token)+'&projects='+encodeURIComponent(projIds);
+if(label)url+='&client='+encodeURIComponent(label);
+window.open(url,'_blank');
+},
 
 renderMonths(){var months={},mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7){if(!months[k])months[k]=[];months[k].push(t);}});
