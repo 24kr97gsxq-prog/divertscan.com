@@ -325,6 +325,12 @@
                         <option value="F">Zone F</option>
                         <option value="none">No Zone</option>
                     </select>
+                    <select class="form-input" id="ticketSort" onchange="DS.setSortPref(this.value)" style="padding:8px;font-size:.75rem;flex:0 0 auto;width:auto;">
+                        <option value="added_desc">↓ Newest added</option>
+                        <option value="added_asc">↑ Oldest added</option>
+                        <option value="date_desc">↓ Date: newest</option>
+                        <option value="date_asc">↑ Date: oldest</option>
+                    </select>
                 </div>
                 <div id="ticketList"></div>
             </div>
@@ -2609,6 +2615,12 @@ const DS = {
         // Setup navigation
         this.setupNav();
 
+        // Restore sort preference dropdown (Phase 2.7c)
+        try {
+            const sortEl = document.getElementById('ticketSort');
+            if (sortEl) sortEl.value = this._getSortPref();
+        } catch(e) {}
+
         // Build material sliders
         this.buildMaterialSliders();
 
@@ -3031,8 +3043,8 @@ const DS = {
                 tickets = tickets.filter(function(t) { return t.zone === zv; });
             }
         }
-        // Sort newest scan first (by database entry time, not ticket date)
-        tickets.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+        // Apply user-selected sort preference (Phase 2.7c)
+        tickets = this._sortTickets(tickets);
 
         if (tickets.length === 0) {
             el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎫</div><div class="empty-text">No tickets</div></div>';
@@ -3055,7 +3067,7 @@ const DS = {
                 </div>
                 <div class="ticket-info">
                     <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}${projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : ''}</div>
-                    <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'} • ${this.state.currentProject?.leed_version === 'none' ? '' : ((t.diversion_pct || 0) + '% div')}${t.zone ? ' • Zone ' + t.zone : ''}</div>
+                    <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'}${t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(t.driver_name) + '</span>' : ''} • ${this.state.currentProject?.leed_version === 'none' ? '' : ((t.diversion_pct || 0) + '% div')}${t.zone ? ' • Zone ' + t.zone : ''}</div>
                     <div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">${uploadInfo}</div>
                 </div>
                 <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
@@ -3101,7 +3113,7 @@ const DS = {
                 '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                     (isComplete ? '✅' : '⚠️') + '</div>' +
                 '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
-                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
                 '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                 '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
         }).join('');
@@ -3113,6 +3125,8 @@ const DS = {
             el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No tickets found in database for "' + this.esc(q) + '"</div>';
             return;
         }
+        // Apply user-selected sort preference (Phase 2.7c)
+        results = this._sortTickets(results);
         el.innerHTML = '<div style="font-size:.65rem;color:var(--info);padding:4px 8px;margin-bottom:4px;">🔍 ' + results.length + ' result(s) from full database search</div>' +
         results.map(function(t) {
             var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
@@ -3127,7 +3141,7 @@ const DS = {
                 '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                     (isComplete ? '✅' : '⚠️') + '</div>' +
                 '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
-                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
                 '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                 '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
         }).join('');
@@ -3203,7 +3217,7 @@ const DS = {
 
         document.getElementById('ticketDetailContent').innerHTML = `
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
-                ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
+                ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''}${t.driver_name ? ' • Driver: <strong style="color:var(--primary)">' + this.esc(t.driver_name) + '</strong>' : ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
             </div>
             <div style="font-size:0.65rem; color:var(--text-dim); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap;">
                 ${t.created_at ? '<span>📤 Uploaded: ' + new Date(t.created_at).toLocaleString() + ' (' + this.timeAgo(t.created_at) + ')</span>' : ''}
@@ -5152,7 +5166,8 @@ const DS = {
         if (!tickets || tickets.length === 0) return '';
         var _isNL = this.state.currentProject && this.state.currentProject.leed_version === 'none';
 
-        var sorted = [...tickets].sort(function(a,b) { return (b.ticket_date||'').localeCompare(a.ticket_date||''); });
+        // Apply user-selected sort preference (Phase 2.7c)
+        var sorted = this._sortTickets(tickets);
 
         var tbl = '<div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">' +
             '<table style="width:100%; border-collapse:collapse; font-size:0.7rem; white-space:nowrap;">' +
@@ -5241,8 +5256,11 @@ const DS = {
         const [year, month] = monthKey.split('-');
         const monthName = monthNames[parseInt(month)] || month;
 
-        const tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
+        let tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
         if (tickets.length === 0) { this.showToast('No tickets for this month'); return; }
+
+        // Track for sort re-render (Phase 2.7c)
+        this._lastMonthDrillKey = monthKey;
 
         document.getElementById('monthDrillTitle').textContent = `${monthName} ${year} — ${tickets.length} Tickets`;
 
@@ -5253,6 +5271,7 @@ const DS = {
                 <tr style="background:var(--bg-input); border-bottom:2px solid var(--border);">
                     <th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Date</th>
                     <th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Ticket#</th>
+                    <th style="padding:8px 6px; text-align:left; font-weight:700; color:var(--text-muted);">Driver</th>
                     <th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Net Tons</th>
                     <th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">Div %</th>
                     <th style="padding:8px 6px; text-align:right; font-weight:700; color:var(--text-muted);">CO₂e</th>
@@ -5262,7 +5281,8 @@ const DS = {
             <tbody>`;
 
         let sumTons = 0, sumDiverted = 0, sumCo2e = 0;
-        tickets.sort((a,b) => (b.ticket_date || '').localeCompare(a.ticket_date || ''));
+        // Apply user-selected sort preference (Phase 2.7c)
+        tickets = this._sortTickets(tickets);
 
         tickets.forEach(t => {
             sumTons += parseFloat(t.net_tons) || 0;
@@ -5275,6 +5295,7 @@ const DS = {
             html += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketFromDrill(\'' + t.id + '\')">' +
                 '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
+                '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
                 (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>') +
                 '<td style="padding:8px 6px; text-align:center;">' + (hasPhotos ? '<span onclick="event.stopPropagation(); DS.showTicketPhotos(\'' + t.id + '\')" style="cursor:pointer;font-size:1rem;">🖼️</span>' : '<span style="color:var(--text-dim);font-size:0.65rem;">none</span>') + '</td>' +
@@ -5285,7 +5306,7 @@ const DS = {
         html += `</tbody>
             <tfoot>
                 <tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">
-                    <td style="padding:8px 6px; font-weight:800;" colspan="2">TOTALS</td>
+                    <td style="padding:8px 6px; font-weight:800;" colspan="3">TOTALS</td>
                     <td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800;">${this.fmt(sumTons)}</td>
                     <td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:800; color:var(--primary);">${totalDivRate}%</td>
                     <td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700;">${this.fmt(sumCo2e)}</td>
@@ -9131,6 +9152,65 @@ const DS = {
         if (isNaN(num)) return '0';
         if (Math.abs(num) >= 1000) return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
         return num.toFixed(2);
+    },
+
+    // === SORT HELPERS (added Phase 2.7c) ===
+    _getSortPref() {
+        try { return localStorage.getItem('ds_sort') || 'added_desc'; } catch(e) { return 'added_desc'; }
+    },
+
+    _sortTickets(tickets) {
+        if (!Array.isArray(tickets) || tickets.length === 0) return tickets || [];
+        const pref = this._getSortPref();
+        const arr = tickets.slice();
+        arr.sort(function(a, b) {
+            let av, bv;
+            if (pref === 'added_desc' || pref === 'added_asc') {
+                av = a.created_at || ''; bv = b.created_at || '';
+            } else {
+                av = a.ticket_date || ''; bv = b.ticket_date || '';
+            }
+            // Nulls sort to end always
+            if (!av && !bv) return 0;
+            if (!av) return 1;
+            if (!bv) return -1;
+            const cmp = av.localeCompare(bv);
+            return pref.endsWith('_desc') ? -cmp : cmp;
+        });
+        return arr;
+    },
+
+    _sortDropdownHTML(extraStyle) {
+        const cur = this._getSortPref();
+        const sel = function(v) { return v === cur ? ' selected' : ''; };
+        return '<select onchange="DS.setSortPref(this.value)" style="padding:6px 8px;font-size:.7rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;cursor:pointer;' + (extraStyle || '') + '">' +
+            '<option value="added_desc"' + sel('added_desc') + '>Newest added</option>' +
+            '<option value="added_asc"' + sel('added_asc') + '>Oldest added</option>' +
+            '<option value="date_desc"' + sel('date_desc') + '>Date: newest</option>' +
+            '<option value="date_asc"' + sel('date_asc') + '>Date: oldest</option>' +
+            '</select>';
+    },
+
+    setSortPref(val) {
+        try { localStorage.setItem('ds_sort', val); } catch(e) {}
+        // Sync any dropdown that didn't trigger this change
+        try {
+            const dd = document.getElementById('ticketSort');
+            if (dd && dd.value !== val) dd.value = val;
+        } catch(e) {}
+        // Re-render tickets list if function exists
+        try { if (typeof this.renderTickets === 'function') this.renderTickets(this._lastTicketFilter || 'all'); } catch(e) {}
+        // Re-render reports (monthly cards) if reports tab is visible
+        try {
+            const rt = document.getElementById('reportsTab');
+            if (rt && rt.classList.contains('active') && typeof this.renderReports === 'function') this.renderReports();
+        } catch(e) {}
+        // If month drill modal open, re-render
+        try {
+            const md = document.getElementById('monthDrillModal');
+            if (md && md.classList.contains('active') && this._lastMonthDrillKey) this.showMonthDrill(this._lastMonthDrillKey);
+        } catch(e) {}
+        this.showToast('Sorted: ' + ({added_desc:'Newest added',added_asc:'Oldest added',date_desc:'Date: newest',date_asc:'Date: oldest'}[val] || val));
     },
 
     fmtDate(dateStr) {
