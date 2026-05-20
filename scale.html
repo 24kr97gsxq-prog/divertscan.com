@@ -239,6 +239,7 @@
     <button class="confirm-btn disabled" id="confirmBtn" disabled onclick="confirmTicket()">
         SELECT YOUR COMPANY FIRST
     </button>
+    <div id="submitErrorMsg" style="display:none;margin-top:10px;padding:14px 16px;background:#7f1d1d;border:2px solid #ef4444;border-radius:10px;color:#fff;font-size:.85rem;line-height:1.5;word-break:break-word;box-shadow:0 4px 12px rgba(239,68,68,0.3);"></div>
 
     <!-- Recent Loads History -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
@@ -377,7 +378,14 @@ async function sb(endpoint, method = 'GET', body = null) {
     const opts = { method, headers };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
-    if (!res.ok) { console.error('SB error:', res.status, await res.text()); return null; }
+    if (!res.ok) {
+        // Phase 2.7d: capture and expose the actual error so callers can see what failed
+        const errText = await res.text();
+        console.error('SB error:', res.status, errText);
+        // Stash on a global so callers can read the last error
+        window._lastSbError = { status: res.status, body: errText, endpoint, method };
+        return null;
+    }
     if (res.status === 204) return [];
     const text = await res.text();
     return text ? JSON.parse(text) : [];
@@ -1199,6 +1207,12 @@ async function confirmTicket() {
     btn.disabled = true;
     btn.textContent = '⏳ Creating ticket...';
 
+    // Phase 2.7d: clear any previous error message
+    try {
+        const errEl = document.getElementById('submitErrorMsg');
+        if (errEl) errEl.style.display = 'none';
+    } catch(e) {}
+
     // Phase 2.3 safety: if driver typed name but debounce hadn't fired yet, commit now
     if (selectedDriverName && !selectedDriverToken) {
         clearTimeout(window._driverInputTimer);
@@ -1232,6 +1246,9 @@ async function confirmTicket() {
         if (isWalkinMode) {
             const walkinName = document.getElementById('walkinName').value.trim();
             ticket = {
+                // Phase 2.7d: walk-in tickets attach to the "Walk-in / Non-LEED Tickets" placeholder project
+                // (tickets.project_id is NOT NULL — see Walk-in Inbox in admin for re-assignment)
+                project_id: '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590',
                 ticket_number: ticketNum,
                 ticket_date: today, service_date: today,
                 gross_lbs: grossLbs, tare_lbs: tareLbs, net_lbs: netLbs, net_tons: netTons,
@@ -1288,7 +1305,21 @@ async function confirmTicket() {
         }
 
         const result = await sb('tickets', 'POST', ticket);
-        if (!result || result.length === 0) throw new Error('Failed to insert ticket');
+        if (!result || result.length === 0) {
+            // Phase 2.7d: surface actual error to the driver so we know what's wrong
+            const err = window._lastSbError;
+            if (err) {
+                let detail = err.body || '';
+                // Trim long bodies and parse JSON if present
+                try {
+                    const j = JSON.parse(detail);
+                    detail = (j.message || j.hint || detail).toString();
+                } catch(e) {}
+                if (detail.length > 220) detail = detail.substring(0, 220) + '…';
+                throw new Error('DB ' + err.status + ': ' + detail);
+            }
+            throw new Error('Failed to insert ticket (no response body)');
+        }
         const createdTicket = result[0];
 
         // Update scale_weights — confirmed_by carries driver name into raw scale records
@@ -1351,9 +1382,22 @@ async function confirmTicket() {
         btn.textContent = '❌ ERROR — TAP TO RETRY';
         updateStatus('off', 'Error: ' + err.message);
 
-        // Phase 2.7d: Surface a Change Tare affordance even if it was previously hidden
-        // (the tare card already shows the change button if a manual tare is in use, but
-        // re-render to make sure it's visible after error)
+        // Phase 2.7d: surface error to driver in a visible place (not just status bar)
+        try {
+            const errEl = document.getElementById('submitErrorMsg');
+            if (errEl) {
+                const safeMsg = String(err.message || err).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+                errEl.innerHTML =
+                    '<div style="font-weight:800;font-size:.95rem;margin-bottom:6px;">⚠️ Ticket submission failed</div>' +
+                    '<div style="font-family:var(--mono);font-size:.75rem;background:rgba(0,0,0,0.25);padding:8px 10px;border-radius:6px;margin-bottom:8px;">' + safeMsg + '</div>' +
+                    '<div style="font-size:.7rem;opacity:.95;">Tap ✏️ Change above to adjust the tare, or tap RETRY to resubmit with the same values.</div>';
+                errEl.style.display = 'block';
+                // Scroll error into view so it can't be missed
+                try { errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            }
+        } catch(e) {}
+
+        // Surface a Change Tare affordance even if it was previously hidden
         try {
             if (manualTareValue !== null) {
                 const tareTimeEl = document.getElementById('tareTime');
