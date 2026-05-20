@@ -926,11 +926,14 @@ let _tareEstimateLastDriverId = null;
 async function loadTareEstimateOptions() {
     // Build the list of estimate options for the currently selected hauler + driver.
     // Returns array of {value, source, label}.
-    // Sources: 'fleet_default' (hauler avg), 'driver_avg' (this driver's avg), 'today_first' (most recent Jaguar tare today)
-    if (!selectedHauler) return [];
+    // Sources: 'fleet_default' (hauler avg), 'driver_avg' (this driver's avg), 'today_first' (most recent tare today)
+    // Phase 2.7d: Works without a hauler too (walk-in mode) — just skips the fleet option.
 
     const options = [];
-    const haulerEnc = encodeURIComponent(selectedHauler);
+
+    // Option 1: Fleet average from v_fleet_tares (requires a hauler — skipped in walk-in mode)
+    if (selectedHauler) {
+        const haulerEnc = encodeURIComponent(selectedHauler);
 
     // Option 1: Fleet average from v_fleet_tares (or computed live)
     try {
@@ -943,6 +946,7 @@ async function loadTareEstimateOptions() {
             });
         }
     } catch (e) { console.warn('Fleet tare fetch failed:', e); }
+    } // end of if (selectedHauler)
 
     // Option 2: Driver's own historical tare average (if they have prior tickets)
     if (selectedDriverId) {
@@ -985,10 +989,18 @@ async function updateTareEstimateBox() {
     // Hide the box if:
     //   - Already have a real tare reading from Pi
     //   - User already picked a manual tare (don't show options again)
-    //   - Prereqs not met (no gross, no hauler, no driver)
+    //   - Prereqs not met (no gross, no driver, no project context yet)
+    // Phase 2.7d: Walk-in mode is allowed — selectedHauler may be null, but the box still shows
+    //             so the driver can use ✏️ Type Custom Tare (driver_avg + today_first may also appear).
     if (tareReading) { box.style.display = 'none'; return; }
     if (manualTareValue !== null) { box.style.display = 'none'; return; }
-    if (!grossReading || !selectedHauler || !selectedDriverName) { box.style.display = 'none'; return; }
+    if (!grossReading || !selectedDriverName) { box.style.display = 'none'; return; }
+    // For non-walkin scans, require a hauler. For walkin scans, require a typed walkin name.
+    if (!isWalkinMode && !selectedHauler) { box.style.display = 'none'; return; }
+    if (isWalkinMode) {
+        const walkinName = (document.getElementById('walkinName').value || '').trim();
+        if (!walkinName) { box.style.display = 'none'; return; }
+    }
 
     // Cache: only reload options if hauler or driver changed
     if (selectedHauler !== _tareEstimateLastHauler || selectedDriverId !== _tareEstimateLastDriverId) {
