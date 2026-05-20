@@ -78,6 +78,23 @@
         .walkin-toggle{text-align:center;margin-bottom:12px}
         .walkin-toggle a{color:var(--cyan);font-size:.8rem;text-decoration:none;cursor:pointer;opacity:.7}
         .walkin-toggle a:active{opacity:1}
+        /* Phase 2.7d: Mode-choice banner */
+        .mode-banner{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+        .mode-btn{padding:18px 16px;border-radius:14px;cursor:pointer;text-align:left;border:2px solid;display:flex;align-items:center;gap:14px;font-family:var(--sans);transition:all .15s;background:var(--card)}
+        .mode-btn:active{transform:scale(.985)}
+        .mode-btn-icon{font-size:2rem;flex-shrink:0;line-height:1}
+        .mode-btn-text{flex:1}
+        .mode-btn-title{font-size:1.05rem;font-weight:800;letter-spacing:-.01em;margin-bottom:2px}
+        .mode-btn-sub{font-size:.7rem;color:var(--muted);font-weight:500}
+        .mode-leed{border-color:rgba(0,201,167,.4);background:linear-gradient(135deg, var(--card) 0%, rgba(0,201,167,.06) 100%)}
+        .mode-leed .mode-btn-title{color:var(--cyan)}
+        .mode-leed:active{background:rgba(0,201,167,.12)}
+        .mode-walkin{border-color:rgba(59,130,246,.4);background:linear-gradient(135deg, var(--card) 0%, rgba(59,130,246,.06) 100%)}
+        .mode-walkin .mode-btn-title{color:var(--blue)}
+        .mode-walkin:active{background:rgba(59,130,246,.12)}
+        .mode-divider{text-align:center;font-size:.65rem;color:var(--muted);font-weight:600;letter-spacing:.15em;text-transform:uppercase;position:relative;padding:2px 0}
+        .mode-divider::before{content:'';position:absolute;left:0;right:60%;top:50%;height:1px;background:var(--border)}
+        .mode-divider::after{content:'';position:absolute;right:0;left:60%;top:50%;height:1px;background:var(--border)}
         .walkin-section{display:none;margin-bottom:12px;padding:14px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:10px}
         .walkin-section.show{display:block}
         .walkin-section label{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);font-weight:600;display:block;margin-bottom:6px}
@@ -152,13 +169,29 @@
         <div class="net-ticket" id="netTicket"></div>
     </div>
 
+    <!-- Phase 2.7d: Mode-choice banner (LEED vs Walk-in) -->
+    <div id="modeBanner" class="mode-banner">
+        <div class="mode-btn mode-leed" onclick="selectMode('leed')">
+            <div class="mode-btn-icon">🏗️</div>
+            <div class="mode-btn-text">
+                <div class="mode-btn-title">LEED Project Scan</div>
+                <div class="mode-btn-sub">Children's Hospital, Hayes, Calvert, etc.</div>
+            </div>
+        </div>
+        <div class="mode-divider">— or —</div>
+        <div class="mode-btn mode-walkin" onclick="selectMode('walkin')">
+            <div class="mode-btn-icon">📦</div>
+            <div class="mode-btn-text">
+                <div class="mode-btn-title">Walk-in / Other Ticket</div>
+                <div class="mode-btn-sub">Quick scan, no LEED project tracking</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Hauler Selector -->
     <div id="haulerSetup" style="display:none;">
         <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px;">Select your company</div>
         <div id="haulerButtons" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-        <div class="walkin-toggle">
-            <a onclick="activateWalkin()">Not listed? Tap here for walk-in ticket</a>
-        </div>
     </div>
 
     <!-- Active hauler badge -->
@@ -185,8 +218,12 @@
 
     <!-- Walk-in section -->
     <div class="walkin-section" id="walkinSection">
-        <label>Company or Job Name</label>
-        <input type="text" class="walkin-input" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="checkReady()">
+        <label>Hauling Company</label>
+        <select class="walkin-input" id="walkinHaulerSelect" onchange="onWalkinHaulerChange()" style="margin-bottom:8px;">
+            <option value="">— Select hauler —</option>
+            <option value="__other__">+ Other (type new hauler...)</option>
+        </select>
+        <input type="text" class="walkin-input" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="checkReady()" style="display:none;">
     </div>
 
     <!-- ====================================================
@@ -438,9 +475,13 @@ async function init() {
 
     const savedHauler = localStorage.getItem('ds_driver_hauler');
     if (savedHauler && haulers.includes(savedHauler)) {
+        // Driver already chose their hauler last time — skip mode banner, go straight to LEED flow
+        document.getElementById('modeBanner').style.display = 'none';
         await selectHauler(savedHauler);
     } else {
-        document.getElementById('haulerSetup').style.display = 'block';
+        // First time or after logout — show mode banner (LEED vs Walk-in choice)
+        document.getElementById('modeBanner').style.display = 'flex';
+        document.getElementById('haulerSetup').style.display = 'none';
     }
 
     await refreshNextTicketNum();
@@ -457,6 +498,9 @@ async function selectHauler(haulerName) {
     selectedHauler = haulerName;
     localStorage.setItem('ds_driver_hauler', haulerName);
 
+    // Phase 2.7d: hide mode banner once a hauler is picked
+    const mb = document.getElementById('modeBanner');
+    if (mb) mb.style.display = 'none';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('haulerBadge').style.display = 'block';
     document.getElementById('haulerBadgeName').textContent = haulerName;
@@ -492,7 +536,9 @@ function changeHauler() {
     selectedDriverToken = '';
     selectedDriverId = '';
     localStorage.removeItem('ds_driver_hauler');
-    document.getElementById('haulerSetup').style.display = 'block';
+    // Phase 2.7d: Show mode banner instead of jumping straight to hauler buttons
+    document.getElementById('modeBanner').style.display = 'flex';
+    document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('haulerBadge').style.display = 'none';
     document.getElementById('walkinBadge').style.display = 'none';
     document.getElementById('walkinSection').classList.remove('show');
@@ -772,6 +818,58 @@ function hideDriverSection() {
 // ─────────────────────────────────────────────
 // WALK-IN MODE
 // ─────────────────────────────────────────────
+
+// Phase 2.7d: Mode selection — driver picks LEED Project vs Walk-in at start
+function selectMode(mode) {
+    // Hide the mode banner once a choice is made
+    const banner = document.getElementById('modeBanner');
+    if (banner) banner.style.display = 'none';
+
+    if (mode === 'leed') {
+        // Normal flow — show hauler buttons (existing behavior)
+        isWalkinMode = false;
+        document.getElementById('haulerSetup').style.display = 'block';
+    } else if (mode === 'walkin') {
+        // Walk-in flow — open walk-in section with hauler dropdown
+        activateWalkin();
+    }
+}
+
+// Phase 2.7d: Populate walk-in hauler dropdown from known haulers
+function populateWalkinHaulerDropdown() {
+    const sel = document.getElementById('walkinHaulerSelect');
+    if (!sel) return;
+    // Build set of known haulers from already-loaded projects
+    const haulerSet = {};
+    (projects || []).forEach(p => {
+        if (p.waste_hauler && p.waste_hauler.trim()) haulerSet[p.waste_hauler.trim()] = true;
+    });
+    const haulers = Object.keys(haulerSet).sort();
+    const opts = ['<option value="">— Select hauler —</option>'];
+    haulers.forEach(h => {
+        opts.push('<option value="' + h.replace(/"/g, '&quot;') + '">' + h + '</option>');
+    });
+    opts.push('<option value="__other__">+ Other (type new hauler...)</option>');
+    sel.innerHTML = opts.join('');
+}
+
+// Phase 2.7d: Show/hide custom text input when driver picks "Other"
+function onWalkinHaulerChange() {
+    const sel = document.getElementById('walkinHaulerSelect');
+    const input = document.getElementById('walkinName');
+    if (!sel || !input) return;
+    if (sel.value === '__other__') {
+        input.style.display = 'block';
+        input.value = '';
+        input.focus();
+    } else {
+        input.style.display = 'none';
+        // For known haulers, copy the dropdown value into walkinName so existing code reads it
+        input.value = sel.value || '';
+    }
+    checkReady();
+}
+
 function activateWalkin() {
     isWalkinMode = true;
     selectedHauler = null;
@@ -779,10 +877,16 @@ function activateWalkin() {
     selectedDriverName = '';
     localStorage.removeItem('ds_driver_hauler');
 
+    // Phase 2.7d: hide mode banner once walk-in mode is entered
+    const mb = document.getElementById('modeBanner');
+    if (mb) mb.style.display = 'none';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('haulerBadge').style.display = 'none';
     document.getElementById('walkinBadge').style.display = 'block';
     document.getElementById('walkinSection').classList.add('show');
+
+    // Phase 2.7d: Populate the hauler dropdown when walk-in mode is entered
+    populateWalkinHaulerDropdown();
 
     // For walk-ins, show driver picker with NO recent drivers (force input)
     const section = document.getElementById('driverSection');
@@ -806,7 +910,13 @@ function deactivateWalkin() {
     document.getElementById('walkinBadge').style.display = 'none';
     document.getElementById('walkinSection').classList.remove('show');
     document.getElementById('walkinName').value = '';
-    document.getElementById('haulerSetup').style.display = 'block';
+    document.getElementById('walkinName').style.display = 'none';
+    // Phase 2.7d: Reset hauler dropdown too
+    const walkinSel = document.getElementById('walkinHaulerSelect');
+    if (walkinSel) walkinSel.value = '';
+    // Phase 2.7d: Show the mode banner again so driver can re-pick
+    document.getElementById('modeBanner').style.display = 'flex';
+    document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('driverSection').classList.remove('show');
     hideZoneSelector();
     document.getElementById('confirmBtn').className = 'confirm-btn disabled';
