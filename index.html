@@ -482,6 +482,22 @@
                 </div>
             </div>
 
+            <!-- Phase 2.7d: Walk-in Inbox - tickets needing project reassignment -->
+            <div class="card" id="walkinInboxCard" style="border-color:#3b82f6;background:linear-gradient(135deg,var(--bg-card) 0%,rgba(59,130,246,0.04) 100%);">
+                <div class="card-title">
+                    <span class="icon">📦</span> Walk-in Inbox
+                    <span id="walkinInboxCount" style="margin-left:8px;background:#3b82f6;color:#fff;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;">0</span>
+                    <button class="btn btn-sm btn-outline" onclick="DS.loadWalkinInbox()" style="margin-left:auto;width:auto;padding:4px 10px;font-size:.65rem;">🔄 Refresh</button>
+                </div>
+                <p style="font-size:.72rem;color:var(--text-muted);margin-bottom:10px;">
+                    Walk-in / non-LEED tickets that haven't been assigned to a real project.
+                    Reassign to move them out of the inbox into proper reporting.
+                </p>
+                <div id="walkinInboxList" style="font-size:.8rem;">
+                    <div style="text-align:center;padding:16px;color:var(--text-dim);">Tap 🔄 Refresh to load walk-in tickets</div>
+                </div>
+            </div>
+
             <div class="card" style="border-color:var(--primary);">
                 <div class="card-title"><span class="icon">⚖️</span> Scale Activity
                     <span id="scaleCount" style="margin-left:8px;background:var(--bg-input);color:var(--text-muted);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;">0</span>
@@ -1707,6 +1723,156 @@ const DS = {
         document.body.removeChild(ta);
     },
 
+    // ────────────────────────────────────────────────────────
+    // Phase 2.7d: WALK-IN INBOX
+    // Tickets in the walk-in placeholder project OR with scan_type=pi_scale_walkin
+    // ────────────────────────────────────────────────────────
+    async loadWalkinInbox() {
+        const listEl = document.getElementById('walkinInboxList');
+        const countEl = document.getElementById('walkinInboxCount');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">Loading walk-in tickets...</div>';
+
+        try {
+            const PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
+            // "Either condition" — broadest catch per design decision
+            // Use Supabase 'or' filter syntax
+            const url = "tickets?or=(project_id.eq." + PLACEHOLDER_ID + ",scan_type.eq.pi_scale_walkin)"
+                + "&select=id,ticket_number,ticket_date,captured_at,gross_lbs,tare_lbs,net_tons,hauler,driver_name,driver_id,project_id,scan_type,tare_source,zone,notes,audit_id,created_at"
+                + "&order=created_at.desc&limit=100";
+            const tickets = await this.supabase(url) || [];
+
+            countEl.textContent = tickets.length;
+
+            if (tickets.length === 0) {
+                listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:.8rem;">✅ No walk-in tickets needing review.</div>';
+                return;
+            }
+
+            // Cache for inline edits
+            this._walkinInboxCache = tickets;
+            this._renderWalkinInbox(tickets);
+        } catch (err) {
+            console.error('loadWalkinInbox error:', err);
+            listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--danger);font-size:.8rem;">Could not load walk-in inbox. ' + this.esc(String(err.message || err)) + '</div>';
+        }
+    },
+
+    _renderWalkinInbox(tickets) {
+        const listEl = document.getElementById('walkinInboxList');
+        if (!listEl) return;
+
+        // Build sorted project options (exclude the walk-in placeholder itself)
+        const PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
+        const projects = (this.state.projects || []).filter(p => p.id !== PLACEHOLDER_ID);
+        const projOptions = ['<option value="">— Select project to reassign —</option>'].concat(
+            projects.sort((a, b) => a.name.localeCompare(b.name)).map(p =>
+                '<option value="' + p.id + '">' + this.esc(p.name) + (p.waste_hauler ? ' (' + this.esc(p.waste_hauler) + ')' : '') + '</option>'
+            )
+        ).join('');
+
+        listEl.innerHTML = tickets.map((t, idx) => {
+            const dateStr = t.captured_at ? new Date(t.captured_at).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '—';
+            const tons = Number(t.net_tons || 0).toFixed(2);
+            const grossStr = Number(t.gross_lbs || 0).toLocaleString();
+            const tareStr = Number(t.tare_lbs || 0).toLocaleString();
+
+            return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg-card);">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;flex-wrap:wrap;">' +
+                    '<div style="flex:1;min-width:140px;">' +
+                        '<div style="font-weight:800;font-size:.95rem;color:var(--text);">' + this.esc(t.ticket_number) + '</div>' +
+                        '<div style="font-size:.65rem;color:var(--text-muted);">' + dateStr + ' · ' + (t.scan_type === 'pi_scale_walkin' ? '📦 Walk-in' : '🏗️ Misc') + (t.zone ? ' · Zone ' + t.zone : '') + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;min-width:80px;">' +
+                        '<div style="font-family:var(--mono);font-weight:700;color:var(--primary);font-size:.85rem;">' + tons + ' T</div>' +
+                        '<div style="font-size:.55rem;color:var(--text-muted);">' + grossStr + ' - ' + tareStr + ' lb</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">' +
+                    '<div style="font-size:.65rem;">' +
+                        '<label style="color:var(--text-muted);font-weight:600;display:block;margin-bottom:2px;">HAULER</label>' +
+                        '<input type="text" class="form-input" id="wiHauler_' + t.id + '" value="' + this.esc(t.hauler || '') + '" style="padding:5px 7px;font-size:.7rem;width:100%;">' +
+                    '</div>' +
+                    '<div style="font-size:.65rem;">' +
+                        '<label style="color:var(--text-muted);font-weight:600;display:block;margin-bottom:2px;">DRIVER</label>' +
+                        '<input type="text" class="form-input" id="wiDriver_' + t.id + '" value="' + this.esc(t.driver_name || '') + '" style="padding:5px 7px;font-size:.7rem;width:100%;">' +
+                    '</div>' +
+                '</div>' +
+                '<div style="font-size:.65rem;margin-bottom:8px;">' +
+                    '<label style="color:var(--text-muted);font-weight:600;display:block;margin-bottom:2px;">REASSIGN TO PROJECT</label>' +
+                    '<select class="form-input" id="wiProj_' + t.id + '" style="padding:5px 7px;font-size:.7rem;width:100%;">' + projOptions + '</select>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                    '<button class="btn btn-sm btn-primary" onclick="DS.reassignWalkinTicket(\'' + t.id + '\')" style="flex:1;min-width:120px;padding:6px 10px;font-size:.7rem;">💾 Save & Move</button>' +
+                    '<button class="btn btn-sm btn-outline" onclick="DS.openTicketDetailFromWalkinInbox(\'' + t.id + '\')" style="width:auto;padding:6px 10px;font-size:.7rem;">🔍 View</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    async reassignWalkinTicket(ticketId) {
+        const projEl = document.getElementById('wiProj_' + ticketId);
+        const haulerEl = document.getElementById('wiHauler_' + ticketId);
+        const driverEl = document.getElementById('wiDriver_' + ticketId);
+        if (!projEl) return;
+
+        const newProjectId = projEl.value;
+        const newHauler = (haulerEl ? haulerEl.value : '').trim();
+        const newDriver = (driverEl ? driverEl.value : '').trim();
+
+        if (!newProjectId) {
+            this.showToast('Pick a project to reassign to');
+            projEl.focus();
+            return;
+        }
+
+        // Find current ticket for diff/audit
+        const current = (this._walkinInboxCache || []).find(t => t.id === ticketId);
+        if (!current) { this.showToast('Ticket not found in cache'); return; }
+
+        const updates = {
+            project_id: newProjectId,
+            hauler: newHauler || current.hauler,
+            driver_name: newDriver || current.driver_name,
+            // Once reassigned to a real project, scan_type is no longer walk-in
+            scan_type: 'pi_scale',
+            notes: (current.notes || '') + ' [Reassigned from Walk-in Inbox on ' + new Date().toISOString().substring(0,10) + ']'
+        };
+
+        this.showLoading('Reassigning...');
+        const result = await this.supabase('tickets?id=eq.' + ticketId, 'PATCH', updates);
+        this.hideLoading();
+
+        if (result !== null) {
+            // Audit trail
+            const projName = (this.state.projects.find(p => p.id === newProjectId) || {}).name || newProjectId;
+            this.addAuditEntry('WALKIN_REASSIGN', current.ticket_number + ' → ' + projName + (newHauler !== current.hauler ? ' [hauler: ' + current.hauler + ' → ' + newHauler + ']' : '') + (newDriver !== current.driver_name ? ' [driver: ' + current.driver_name + ' → ' + newDriver + ']' : ''));
+            this.showToast('✅ ' + current.ticket_number + ' moved to ' + projName);
+            // Refresh the inbox (will drop the moved ticket)
+            this.loadWalkinInbox();
+            // Refresh ticket list if currently visible for that project
+            if (this.state.currentProject && this.state.currentProject.id === newProjectId) {
+                this.loadTickets(newProjectId);
+            }
+        } else {
+            this.showToast('Failed to reassign ticket');
+        }
+    },
+
+    openTicketDetailFromWalkinInbox(ticketId) {
+        // If there's an existing showTicketDetail / openTicketModal, use it.
+        // Fallback: just toast the ID so admin can search manually.
+        if (typeof this.showTicketDetail === 'function') {
+            this.showTicketDetail(ticketId);
+        } else if (typeof this.openTicketModal === 'function') {
+            this.openTicketModal(ticketId);
+        } else {
+            const t = (this._walkinInboxCache || []).find(x => x.id === ticketId);
+            this.showToast('Ticket ' + (t ? t.ticket_number : ticketId));
+        }
+    },
+
     async regenerateDriverToken(driverId) {
         const driver = (this._allDriversCache || []).find(d => d.id === driverId);
         if (!driver) return;
@@ -2672,7 +2838,7 @@ const DS = {
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'projectsTab') this.renderProjectList();
                 if (tab === 'auditTab') { this.loadPendingReview(); this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); this.loadHaulerMgmt(); }
-                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); }
+                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); this.loadWalkinInbox(); }
             });
         });
     },
@@ -3039,18 +3205,21 @@ const DS = {
             var hasDetails = [p.client, p.waste_hauler, p.location].filter(Boolean).length > 0;
             var isCurrent = this.state.currentProject && this.state.currentProject.id === p.id;
             var ticketCount = isCurrent ? this.state.tickets.length : null;
+            // Phase 2.7d: Visual marker for the walk-in placeholder + disable destructive actions
+            var WALKIN_PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
+            var isWalkinBucket = (p.id === WALKIN_PLACEHOLDER_ID);
 
-            return '<div class="ticket-item" style="position:relative;cursor:pointer;' + (isDupe ? 'border-left:3px solid var(--warning);' : '') + (isCurrent ? 'border-color:var(--primary);box-shadow:0 0 0 1px var(--primary);' : '') + '" onclick="DS.selectAndShowProject(\'' + p.id + '\')">' +
-                '<div class="ticket-icon" style="background:' + (isCurrent ? 'var(--success-glow)' : 'var(--primary-glow)') + ';">🏗️</div>' +
+            return '<div class="ticket-item" style="position:relative;cursor:pointer;' + (isDupe ? 'border-left:3px solid var(--warning);' : '') + (isCurrent ? 'border-color:var(--primary);box-shadow:0 0 0 1px var(--primary);' : '') + (isWalkinBucket ? 'border-left:3px solid var(--cyan);background:linear-gradient(135deg, var(--bg-card) 0%, rgba(0,201,167,0.04) 100%);' : '') + '" onclick="DS.selectAndShowProject(\'' + p.id + '\')">' +
+                '<div class="ticket-icon" style="background:' + (isWalkinBucket ? 'rgba(0,201,167,0.15)' : (isCurrent ? 'var(--success-glow)' : 'var(--primary-glow)')) + ';">' + (isWalkinBucket ? '📦' : '🏗️') + '</div>' +
                 '<div class="ticket-info">' +
-                    '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + '</div>' +
-                    '<div class="ticket-meta">' + ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>') + '</div>' +
+                    '<div class="ticket-title">' + this.esc(p.name) + (isDupe ? ' <span style="color:var(--warning);font-size:0.65rem;">⚠️ DUPLICATE</span>' : '') + (isWalkinBucket ? ' <span style="color:var(--cyan);font-size:0.6rem;font-weight:600;background:rgba(0,201,167,0.12);padding:1px 6px;border-radius:4px;">🗂️ SYSTEM BUCKET</span>' : '') + '</div>' +
+                    '<div class="ticket-meta">' + (isWalkinBucket ? '<span style="color:var(--cyan);">Walk-in tickets land here automatically. Never assign clients to this project.</span>' : ([p.client, p.waste_hauler, p.location].filter(Boolean).join(' • ') || '<span style="color:var(--text-dim);">No details</span>')) + '</div>' +
                     '<div class="ticket-meta">' + (p.leed_version === 'none' ? 'Non-LEED • Tracking Only' : 'LEED ' + (p.leed_version || 'v4') + ' • Target: ' + (p.leed_target != null ? p.leed_target : 50) + '%') +
                         (ticketCount !== null ? ' • ' + ticketCount + ' tickets' : '') + '</div>' +
                     '<div style="display:flex;gap:6px;margin-top:6px">' +
                         '<button class="btn btn-sm btn-primary" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.selectAndShowProject(\'' + p.id + '\')">📊 Reports</button>' +
-                        '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.showEditProject(\'' + p.id + '\')">✏️ Edit</button>' +
-                        '<button class="btn btn-sm" style="width:auto;padding:4px 10px;font-size:.6rem;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="event.stopPropagation();DS.quickDeleteProject(\'' + p.id + '\')">🗑️</button>' +
+                        (isWalkinBucket ? '' : '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 10px;font-size:.6rem" onclick="event.stopPropagation();DS.showEditProject(\'' + p.id + '\')">✏️ Edit</button>') +
+                        (isWalkinBucket ? '' : '<button class="btn btn-sm" style="width:auto;padding:4px 10px;font-size:.6rem;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="event.stopPropagation();DS.quickDeleteProject(\'' + p.id + '\')">🗑️</button>') +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -9026,7 +9195,10 @@ const DS = {
         document.getElementById('newClientPassword').value = '';
         document.getElementById('newClientCompany').value = '';
         var html = '';
+        // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
+        var WALKIN_PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
         this.state.projects.forEach(function(p) {
+            if (p.id === WALKIN_PLACEHOLDER_ID) return; // never expose to clients
             html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
                 '<input type="checkbox" value="' + p.id + '" class="newClientProjCb" style="width:18px;height:18px;">' +
                 '<div><div style="font-weight:700;font-size:.85rem;">' + DS.esc(p.name) + '</div>' +
@@ -9076,7 +9248,10 @@ const DS = {
         document.getElementById('editClientPassword').value = '';
         var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
         var html = '';
+        // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
+        var WALKIN_PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
         this.state.projects.forEach(function(p) {
+            if (p.id === WALKIN_PLACEHOLDER_ID) return; // never expose to clients
             var checked = assignedIds.indexOf(p.id) >= 0 ? 'checked' : '';
             html += '<label style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;">' +
                 '<input type="checkbox" value="' + p.id + '" class="editClientProjCb" ' + checked + ' style="width:18px;height:18px;">' +
