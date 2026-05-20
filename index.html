@@ -362,15 +362,6 @@
                     <button class="btn btn-sm btn-outline" id="viewAllBtn" onclick="DS.setReportView('all')">📊 All Time</button>
                     <button class="btn btn-sm btn-outline" id="viewCombinedBtn" onclick="window.location.href='all-projects-report.html'" style="background:var(--warning-glow);border-color:var(--warning);">🏢 All Projects Combined</button><button class="btn btn-sm btn-outline" onclick="window.location.href='hauler-report.html'" style="background:var(--info-glow);border-color:var(--info);">🚛 Hauler Report</button><button class="btn btn-sm btn-outline" onclick="window.location.href='ticket-audit.html'" style="background:var(--purple);border-color:var(--purple);color:#fff;">🔍 Photo Audit</button>
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-                    <span style="font-size:.7rem;color:var(--text-muted);font-weight:600;">Sort tickets:</span>
-                    <select class="form-input" id="reportSort" onchange="DS.setSortPref(this.value)" style="padding:6px 8px;font-size:.7rem;flex:0 0 auto;width:auto;">
-                        <option value="added_desc">↓ Newest added</option>
-                        <option value="added_asc">↑ Oldest added</option>
-                        <option value="date_desc">↓ Date: newest</option>
-                        <option value="date_asc">↑ Date: oldest</option>
-                    </select>
-                </div>
             </div>
 
             <!-- Project-Level Totals (All Time) -->
@@ -2628,8 +2619,6 @@ const DS = {
         try {
             const sortEl = document.getElementById('ticketSort');
             if (sortEl) sortEl.value = this._getSortPref();
-            const reportSortEl = document.getElementById('reportSort');
-            if (reportSortEl) reportSortEl.value = this._getSortPref();
         } catch(e) {}
 
         // Build material sliders
@@ -4967,12 +4956,6 @@ const DS = {
         const proj = this.state.currentProject;
         const tickets = this.state.tickets;
 
-        // Sync sort dropdown to current preference (Phase 2.7c)
-        try {
-            const rsEl = document.getElementById('reportSort');
-            if (rsEl) rsEl.value = this._getSortPref();
-        } catch(e) {}
-
         if (!proj) {
             document.getElementById('reportProjectName').textContent = 'Select a project';
             document.getElementById('reportProjectMeta').textContent = '';
@@ -5158,6 +5141,15 @@ const DS = {
                 ${this.renderMaterialBars(data.matTotals, data.totalTons)}
                 ${this.renderZoneSummary(months[key])}
                 <div class="divider"></div>
+                <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px;">
+                    <span style="font-size:.6rem;color:var(--text-muted);font-weight:600;">Sort:</span>
+                    <select class="form-input month-sort" onchange="DS.setSortPref(this.value)" style="padding:5px 7px;font-size:.65rem;width:auto;">
+                        <option value="added_desc"${this._getSortPref()==='added_desc'?' selected':''}>↓ Newest added</option>
+                        <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
+                        <option value="date_desc"${this._getSortPref()==='date_desc'?' selected':''}>↓ Date: newest</option>
+                        <option value="date_asc"${this._getSortPref()==='date_asc'?' selected':''}>↑ Date: oldest</option>
+                    </select>
+                </div>
                 ${this.renderMonthTicketTable(months[key])}
                 <div class="divider"></div>
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
@@ -9212,9 +9204,11 @@ const DS = {
         try { localStorage.setItem('ds_sort', val); } catch(e) {}
         // Sync all sort dropdowns across the UI
         try {
-            ['ticketSort', 'reportSort'].forEach(function(id) {
-                const dd = document.getElementById(id);
-                if (dd && dd.value !== val) dd.value = val;
+            const ticketDD = document.getElementById('ticketSort');
+            if (ticketDD && ticketDD.value !== val) ticketDD.value = val;
+            // All per-month-card sort dropdowns
+            document.querySelectorAll('select.month-sort').forEach(function(dd) {
+                if (dd.value !== val) dd.value = val;
             });
         } catch(e) {}
         // Re-render tickets list if function exists
