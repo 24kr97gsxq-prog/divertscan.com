@@ -808,8 +808,12 @@
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Waste Hauler <span style="font-weight:400;color:var(--text-dim)">(used for driver upload links)</span></label>
-                <input type="text" class="form-input" id="newProjHauler" placeholder="e.g. Jaguar Waste Management">
+                <label class="form-label">Waste Hauler <span style="color:var(--danger)">*</span> <span style="font-weight:400;color:var(--text-dim)">(required — controls driver visibility)</span></label>
+                <select class="form-input" id="newProjHauler" onchange="DS.onHaulerSelectChange('newProjHauler', 'newProjHaulerCustom')">
+                    <option value="">— Select Hauler —</option>
+                    <option value="__other__">+ Other (type new hauler...)</option>
+                </select>
+                <input type="text" class="form-input" id="newProjHaulerCustom" placeholder="Type new hauler name..." style="display:none;margin-top:6px;">
             </div>
             <div class="form-group">
                 <label class="form-label">LEED Version</label>
@@ -887,8 +891,12 @@
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Waste Hauler</label>
-                <input type="text" class="form-input" id="editProjHauler">
+                <label class="form-label">Waste Hauler <span style="color:var(--danger)">*</span></label>
+                <select class="form-input" id="editProjHauler" onchange="DS.onHaulerSelectChange('editProjHauler', 'editProjHaulerCustom')">
+                    <option value="">— Select Hauler —</option>
+                    <option value="__other__">+ Other (type new hauler...)</option>
+                </select>
+                <input type="text" class="form-input" id="editProjHaulerCustom" placeholder="Type new hauler name..." style="display:none;margin-top:6px;">
             </div>
             <div class="form-group">
                 <label class="form-label">LEED Version</label>
@@ -2905,19 +2913,83 @@ const DS = {
 
     showNewProjectModal() {
         this.closeModal('projectModal');
+        this.populateHaulerDropdown('newProjHauler');
+        // Reset custom field
+        const customEl = document.getElementById('newProjHaulerCustom');
+        if (customEl) { customEl.style.display = 'none'; customEl.value = ''; }
         this.openModal('newProjectModal');
+    },
+
+    // Phase 2.7d: Populate hauler <select> with distinct values from existing projects
+    populateHaulerDropdown(selectId, currentValue) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const haulerSet = {};
+        (this.state.projects || []).forEach(p => {
+            if (p.waste_hauler && p.waste_hauler.trim()) haulerSet[p.waste_hauler.trim()] = true;
+        });
+        const haulers = Object.keys(haulerSet).sort();
+        const opts = ['<option value="">— Select Hauler —</option>'];
+        haulers.forEach(h => {
+            const selected = (h === currentValue) ? ' selected' : '';
+            opts.push('<option value="' + this.esc(h) + '"' + selected + '>' + this.esc(h) + '</option>');
+        });
+        opts.push('<option value="__other__">+ Other (type new hauler...)</option>');
+        sel.innerHTML = opts.join('');
+        // If currentValue is set but NOT in the known list, treat it as a custom (show input pre-filled)
+        if (currentValue && !haulerSet[currentValue]) {
+            sel.value = '__other__';
+            const customId = selectId.replace('Hauler', 'HaulerCustom');
+            const customEl = document.getElementById(customId);
+            if (customEl) { customEl.style.display = 'block'; customEl.value = currentValue; }
+        }
+    },
+
+    // Show/hide the custom input when user toggles between known and "Other" in the dropdown
+    onHaulerSelectChange(selectId, customId) {
+        const sel = document.getElementById(selectId);
+        const customEl = document.getElementById(customId);
+        if (!sel || !customEl) return;
+        if (sel.value === '__other__') {
+            customEl.style.display = 'block';
+            customEl.focus();
+        } else {
+            customEl.style.display = 'none';
+            customEl.value = '';
+        }
+    },
+
+    // Phase 2.7d: Resolve the actual hauler value from a select + custom-input pair
+    // Returns trimmed string, or empty string if invalid
+    resolveHaulerValue(selectId, customId) {
+        const sel = document.getElementById(selectId);
+        const customEl = document.getElementById(customId);
+        if (!sel) return '';
+        if (sel.value === '__other__') {
+            return customEl ? (customEl.value || '').trim() : '';
+        }
+        return (sel.value || '').trim();
     },
 
     async createProject() {
         const name = document.getElementById('newProjName').value.trim();
         if (!name) { this.showToast('Project name required'); return; }
 
+        // Phase 2.7d: Waste hauler is now REQUIRED (prevents Calvert-style misconfiguration)
+        const hauler = this.resolveHaulerValue('newProjHauler', 'newProjHaulerCustom');
+        if (!hauler) {
+            this.showToast('Waste Hauler required — pick from list or type new one');
+            const sel = document.getElementById('newProjHauler');
+            if (sel) sel.focus();
+            return;
+        }
+
         const proj = {
             name,
             client: document.getElementById('newProjClient').value.trim() || null,
             general_contractor: document.getElementById('newProjGC').value.trim() || null,
             location: document.getElementById('newProjLocation').value.trim() || null,
-            waste_hauler: document.getElementById('newProjHauler').value.trim() || null,
+            waste_hauler: hauler,
             leed_version: document.getElementById('newProjLeedVersion').value || 'v4',
             leed_target: parseInt(document.getElementById('newProjTarget').value) >= 0 ? parseInt(document.getElementById('newProjTarget').value) : 50,
             access_code: this.generateAccessCode()
@@ -2933,9 +3005,11 @@ const DS = {
             this.closeModal('newProjectModal');
             this.showToast(`Project "${name}" created`);
             this.addAuditEntry('PROJECT_CREATE', `Created: ${name} [${result[0].id}]`);
-            // Clear form
-            ['newProjName','newProjClient','newProjGC','newProjLocation','newProjHauler'].forEach(id =>
+            // Clear form (Phase 2.7d: also reset hauler dropdown + custom input)
+            ['newProjName','newProjClient','newProjGC','newProjLocation','newProjHauler','newProjHaulerCustom'].forEach(id =>
                 document.getElementById(id).value = '');
+            const customEl = document.getElementById('newProjHaulerCustom');
+            if (customEl) customEl.style.display = 'none';
         } else {
             this.showToast('Failed to create project');
         }
@@ -3362,7 +3436,8 @@ const DS = {
         document.getElementById('editProjClient').value = p.client || '';
         document.getElementById('editProjGC').value = p.general_contractor || '';
         document.getElementById('editProjLocation').value = p.location || '';
-        document.getElementById('editProjHauler').value = p.waste_hauler || '';
+        // Phase 2.7d: hauler is now a dropdown — populate with known haulers, pre-select current
+        this.populateHaulerDropdown('editProjHauler', p.waste_hauler || '');
         document.getElementById('editProjLeedVersion').value = p.leed_version || 'v4';
         document.getElementById('editProjTarget').value = p.leed_target != null ? p.leed_target : 50;
         document.getElementById('editProjAccess').value = p.access_code || '';
@@ -3374,12 +3449,21 @@ const DS = {
         const name = document.getElementById('editProjName').value.trim();
         if (!name) { this.showToast('Project name required'); return; }
 
+        // Phase 2.7d: Waste hauler is now REQUIRED on edit too
+        const hauler = this.resolveHaulerValue('editProjHauler', 'editProjHaulerCustom');
+        if (!hauler) {
+            this.showToast('Waste Hauler required — pick from list or type new one');
+            const sel = document.getElementById('editProjHauler');
+            if (sel) sel.focus();
+            return;
+        }
+
         const updates = {
             name,
             client: document.getElementById('editProjClient').value.trim() || null,
             general_contractor: document.getElementById('editProjGC').value.trim() || null,
             location: document.getElementById('editProjLocation').value.trim() || null,
-            waste_hauler: document.getElementById('editProjHauler').value.trim() || null,
+            waste_hauler: hauler,
             leed_version: document.getElementById('editProjLeedVersion').value || 'v4',
             leed_target: parseInt(document.getElementById('editProjTarget').value) >= 0 ? parseInt(document.getElementById('editProjTarget').value) : 50,
             updated_at: new Date().toISOString()
