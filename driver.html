@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0a0f14">
     <title>My Loadbook — DivertScan</title>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%2300c9a7' width='100' height='100'/%3E%3Ctext x='50' y='65' font-size='60' text-anchor='middle' fill='%23080f14' font-family='system-ui' font-weight='800'%3E📒%3C/text%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
     <style>
@@ -70,6 +71,17 @@
 
         .empty-state{text-align:center;padding:40px 20px;color:var(--dim)}
         .empty-state-icon{font-size:3rem;margin-bottom:10px;opacity:.6}
+        /* Projects & Materials sections (Phase 2.7d) */
+        .proj-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(42,64,88,.5);font-size:.8rem}
+        .proj-row:last-child{border-bottom:none}
+        .proj-name{font-weight:700;color:var(--text)}
+        .proj-loads{font-family:var(--mono);font-size:.7rem;color:var(--muted);text-align:right;min-width:60px}
+        .proj-tons{font-family:var(--mono);font-size:.85rem;font-weight:700;color:var(--cyan);text-align:right;min-width:60px}
+        .mat-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:.75rem}
+        .mat-label{width:88px;color:var(--muted);font-weight:600;flex-shrink:0}
+        .mat-track{flex:1;height:6px;background:rgba(42,64,88,.4);border-radius:3px;overflow:hidden}
+        .mat-fill{height:100%;border-radius:3px;transition:width .3s}
+        .mat-pct{width:48px;text-align:right;font-family:var(--mono);font-weight:700;font-size:.7rem;color:var(--text)}
 
         .bookmark-banner{background:var(--cyan-glow);border:1px solid var(--cyan);border-radius:10px;padding:14px;margin-bottom:14px;display:none}
         .bookmark-banner.show{display:block}
@@ -159,6 +171,26 @@
             <button class="action-btn primary" onclick="copyForCurtis()">📋 Copy for Dispatcher</button>
             <button class="action-btn" onclick="window.print()">🖨️ Print View</button>
             <button class="action-btn" onclick="shareUrl()">🔗 Share Link</button>
+            <button class="action-btn" onclick="exportPDF()" style="background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green);">📄 PDF Report</button>
+            <button class="action-btn" onclick="exportXLSX()" style="background:rgba(0,201,167,.15);border-color:var(--cyan);color:var(--cyan);">📊 Excel</button>
+        </div>
+
+        <!-- Projects Served -->
+        <div class="loads-section" id="projectsSection" style="display:none">
+            <div class="loads-title">
+                <div class="loads-title-text">🏗️ Projects Served</div>
+                <div class="loads-count" id="projectsCount">0</div>
+            </div>
+            <div id="projectsList"></div>
+        </div>
+
+        <!-- Materials Breakdown -->
+        <div class="loads-section" id="materialsSection" style="display:none">
+            <div class="loads-title">
+                <div class="loads-title-text">📊 Material Mix (your loads)</div>
+            </div>
+            <div id="materialsList"></div>
+            <div id="materialsFooter" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.65rem;color:var(--dim);font-style:italic"></div>
         </div>
 
         <!-- Loads list -->
@@ -241,10 +273,40 @@ async function init() {
     // Filter out null ticket rows (driver may exist with zero tickets)
     allLoads = loads.filter(l => l.ticket_id);
 
+    // Phase 2.7d: Enrich with project + material data directly from tickets table
+    if (allLoads.length > 0) {
+        try {
+            const ticketIds = allLoads.map(l => l.ticket_id).filter(Boolean);
+            if (ticketIds.length > 0) {
+                const enrichment = await sb('tickets?id=in.(' + ticketIds.join(',') + ')&select=id,project_id,hauler,wood_pct,gypsum_pct,plastic_pct,occ_pct,metal_pct,concrete_pct,block_pct,landfill_pct,diversion_pct,diverted_tons,scale_ticket_image,zone') || [];
+                const projectIds = [...new Set(enrichment.map(t => t.project_id).filter(Boolean))];
+                let projectsById = {};
+                if (projectIds.length > 0) {
+                    const projects = await sb('projects?id=in.(' + projectIds.join(',') + ')&select=id,name,client,location,leed_version,waste_hauler') || [];
+                    projects.forEach(p => { projectsById[p.id] = p; });
+                }
+                const enrichById = {};
+                enrichment.forEach(t => { enrichById[t.id] = t; });
+                allLoads.forEach(l => {
+                    const e = enrichById[l.ticket_id];
+                    if (e) {
+                        Object.assign(l, e);
+                        l.project = projectsById[e.project_id] || null;
+                        l.project_name = l.project ? l.project.name : null;
+                    }
+                });
+            }
+        } catch (err) {
+            console.warn('Enrichment error (will show basic data):', err);
+        }
+    }
+
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('content').style.display = 'block';
 
     renderSummaryCards();
+    renderProjects();
+    renderMaterials();
     setQuickRange('30d');  // default view
 }
 
@@ -397,6 +459,324 @@ function renderLoads() {
     summaryEl.style.display = 'block';
     const totalTons = sumTons(loads);
     summaryTextEl.textContent = loads.length + ' loads · ' + totalTons + ' tons total';
+}
+
+// === Phase 2.7d: PROJECTS, MATERIALS, PDF, EXCEL ===
+function renderProjects() {
+    const sec = document.getElementById('projectsSection');
+    const list = document.getElementById('projectsList');
+    const count = document.getElementById('projectsCount');
+    if (!sec || !list) return;
+
+    const projects = {};
+    allLoads.forEach(l => {
+        const key = l.project_name || '(Unassigned)';
+        if (!projects[key]) projects[key] = { name: key, loads: 0, tons: 0 };
+        projects[key].loads++;
+        projects[key].tons += Number(l.net_tons || 0);
+    });
+
+    const arr = Object.values(projects).sort((a, b) => b.tons - a.tons);
+    if (arr.length === 0) { sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+    count.textContent = arr.length;
+
+    list.innerHTML = arr.map(p => `
+        <div class="proj-row">
+            <div class="proj-name">${escapeHtml(p.name)}</div>
+            <div class="proj-loads">${p.loads} load${p.loads === 1 ? '' : 's'}</div>
+            <div class="proj-tons">${p.tons.toFixed(1)} T</div>
+        </div>
+    `).join('');
+}
+
+function renderMaterials() {
+    const sec = document.getElementById('materialsSection');
+    const list = document.getElementById('materialsList');
+    const footer = document.getElementById('materialsFooter');
+    if (!sec || !list) return;
+
+    const matDefs = [
+        { key: 'metal',    label: '🔩 Metal',    color: '#475569' },
+        { key: 'occ',      label: '📦 OCC',      color: '#b45309' },
+        { key: 'wood',     label: '🪵 Wood',     color: '#92400e' },
+        { key: 'gypsum',   label: '🧱 Gypsum',   color: '#7c3aed' },
+        { key: 'plastic',  label: '♻️ Plastic',  color: '#0891b2' },
+        { key: 'concrete', label: '🧱 Concrete', color: '#6b7280' },
+        { key: 'block',    label: '⬜ Block',    color: '#374151' },
+        { key: 'landfill', label: '🗑️ Landfill', color: '#ef4444' }
+    ];
+
+    let totalTons = 0;
+    const matTons = {};
+    matDefs.forEach(m => matTons[m.key] = 0);
+
+    allLoads.forEach(l => {
+        const tn = Number(l.net_tons || 0);
+        if (tn <= 0) return;
+        totalTons += tn;
+        matDefs.forEach(m => {
+            const pct = Number(l[m.key + '_pct'] || 0);
+            matTons[m.key] += tn * (pct / 100);
+        });
+    });
+
+    if (totalTons === 0) { sec.style.display = 'none'; return; }
+
+    const displayMats = matDefs
+        .map(m => ({ ...m, pct: totalTons > 0 ? (matTons[m.key] / totalTons * 100) : 0, tons: matTons[m.key] }))
+        .filter(m => m.pct > 0.05);
+
+    if (displayMats.length === 0) { sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+
+    list.innerHTML = displayMats.map(m => `
+        <div class="mat-row">
+            <div class="mat-label">${m.label}</div>
+            <div class="mat-track"><div class="mat-fill" style="width:${m.pct.toFixed(1)}%;background:${m.color};"></div></div>
+            <div class="mat-pct">${m.pct.toFixed(1)}%</div>
+        </div>
+    `).join('');
+
+    const diverted = displayMats.filter(m => m.key !== 'landfill' && m.key !== 'plastic').reduce((s, m) => s + m.tons, 0);
+    const divRate = totalTons > 0 ? (diverted / totalTons * 100).toFixed(1) : '0.0';
+    footer.textContent = 'Based on ' + allLoads.length + ' load' + (allLoads.length === 1 ? '' : 's') + ' totaling ' + totalTons.toFixed(1) + ' tons · est. diversion ' + divRate + '%';
+}
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// === PDF EXPORT ===
+function exportPDF() {
+    const loads = filteredLoads();
+    if (loads.length === 0) { alert('No loads in current range to export'); return; }
+
+    const totalTons = loads.reduce((s, l) => s + Number(l.net_tons || 0), 0);
+    const totalLbs  = loads.reduce((s, l) => s + Number(l.net_lbs  || 0), 0);
+    const firstDate = new Date(Math.min(...loads.map(l => new Date(l.captured_at).getTime())));
+    const lastDate  = new Date(Math.max(...loads.map(l => new Date(l.captured_at).getTime())));
+
+    const projects = {};
+    loads.forEach(l => {
+        const key = l.project_name || '(Unassigned)';
+        if (!projects[key]) projects[key] = { loads: 0, tons: 0 };
+        projects[key].loads++;
+        projects[key].tons += Number(l.net_tons || 0);
+    });
+
+    const matDefs = [
+        { key: 'metal', label: 'Metal' }, { key: 'occ', label: 'OCC' },
+        { key: 'wood', label: 'Wood' }, { key: 'gypsum', label: 'Gypsum' },
+        { key: 'plastic', label: 'Plastic' }, { key: 'concrete', label: 'Concrete' },
+        { key: 'block', label: 'Block' }, { key: 'landfill', label: 'Landfill' }
+    ];
+    const matTons = {};
+    matDefs.forEach(m => matTons[m.key] = 0);
+    loads.forEach(l => {
+        const tn = Number(l.net_tons || 0);
+        matDefs.forEach(m => {
+            matTons[m.key] += tn * (Number(l[m.key + '_pct'] || 0) / 100);
+        });
+    });
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Please allow popups to export PDF'); return; }
+
+    const escHtml = (s) => escapeHtml(s);
+    const fmtD = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const fmtT = (d) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    let html = '<!DOCTYPE html><html><head><title>' + escHtml(driverInfo.driver_name) + ' — Driver Report</title>';
+    html += '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.6}';
+    html += 'h1{font-size:22px;color:#0a1f2e;border-bottom:3px solid #00c9a7;padding-bottom:8px;margin-bottom:14px}';
+    html += 'h2{font-size:14px;color:#0a1f2e;margin:18px 0 8px;border-bottom:1px solid #d4d4d8;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}';
+    html += '.r{text-align:right}.c{text-align:center}';
+    html += 'table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}';
+    html += 'th{background:#f4f4f5;padding:7px 5px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:10px;text-transform:uppercase}';
+    html += 'td{padding:5px;border-bottom:1px solid #e4e4e7}';
+    html += '.stats{display:flex;gap:10px;margin:12px 0}.stat{flex:1;background:#f4f4f5;border-radius:6px;padding:10px;text-align:center}';
+    html += '.stat b{font-size:18px;display:block;font-family:"Courier New",monospace}.stat span{font-size:9.5px;color:#71717a;text-transform:uppercase;letter-spacing:.3px}';
+    html += '.footer{margin-top:24px;padding-top:10px;border-top:1px solid #d4d4d8;font-size:10px;color:#a1a1aa;text-align:center}';
+    html += '@media print{body{padding:16px}.toolbar{display:none!important}}</style></head><body>';
+
+    html += '<h1>Driver Performance Report</h1>';
+    html += '<div style="font-size:13px;color:#52525b;margin-bottom:4px"><strong>' + escHtml(driverInfo.driver_name) + '</strong> · ' + escHtml(driverInfo.hauler) + '</div>';
+    html += '<div style="font-size:11px;color:#71717a">Range: ' + fmtD(firstDate) + ' — ' + fmtD(lastDate) + ' · Generated ' + new Date().toLocaleDateString() + '</div>';
+
+    html += '<h2>Summary</h2><div class="stats">';
+    html += '<div class="stat"><b>' + loads.length + '</b><span>Loads</span></div>';
+    html += '<div class="stat"><b>' + totalTons.toFixed(2) + '</b><span>Total Tons</span></div>';
+    html += '<div class="stat"><b>' + Math.round(totalLbs).toLocaleString() + '</b><span>Total Lbs</span></div>';
+    html += '<div class="stat"><b>' + (totalTons / loads.length).toFixed(2) + '</b><span>Avg/Load (T)</span></div>';
+    html += '</div>';
+
+    html += '<h2>Projects Served</h2><table><tr><th>Project</th><th class="r">Loads</th><th class="r">Tons</th><th class="r">Avg/Load (T)</th></tr>';
+    Object.entries(projects).sort((a, b) => b[1].tons - a[1].tons).forEach(([name, d]) => {
+        html += '<tr><td><b>' + escHtml(name) + '</b></td><td class="r">' + d.loads + '</td><td class="r">' + d.tons.toFixed(2) + '</td><td class="r">' + (d.tons / d.loads).toFixed(2) + '</td></tr>';
+    });
+    html += '</table>';
+
+    html += '<h2>Material Mix</h2><table><tr><th>Material</th><th class="r">%</th><th class="r">Tons</th></tr>';
+    matDefs.filter(m => matTons[m.key] > 0.01).forEach(m => {
+        const pct = totalTons > 0 ? (matTons[m.key] / totalTons * 100).toFixed(1) : '0.0';
+        html += '<tr><td>' + m.label + '</td><td class="r">' + pct + '%</td><td class="r">' + matTons[m.key].toFixed(2) + '</td></tr>';
+    });
+    html += '<tr style="border-top:2px solid #18181b;font-weight:bold"><td>TOTAL</td><td class="r">100%</td><td class="r">' + totalTons.toFixed(2) + '</td></tr>';
+    html += '</table>';
+
+    html += '<h2>Load Detail (' + loads.length + ' loads)</h2><table><tr><th>Date</th><th>Time</th><th>Ticket#</th><th>Project</th><th class="r">Net Lbs</th><th class="r">Net Tons</th></tr>';
+    loads.forEach(l => {
+        html += '<tr><td>' + fmtD(l.captured_at) + '</td><td>' + fmtT(l.captured_at) + '</td><td><b>' + (l.ticket_number || '—') + '</b></td><td>' + escHtml(l.project_name || '—') + '</td><td class="r">' + Number(l.net_lbs || 0).toLocaleString() + '</td><td class="r">' + Number(l.net_tons || 0).toFixed(2) + '</td></tr>';
+    });
+    html += '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan="4">TOTALS</td><td class="r">' + Math.round(totalLbs).toLocaleString() + '</td><td class="r">' + totalTons.toFixed(2) + '</td></tr>';
+    html += '</table>';
+
+    html += '<div class="footer">Dalmex Recycling LLC · 2828 Nagle St, Dallas TX 75220 · Powered by DivertScan</div>';
+    html += '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#0a1f2e;color:#fff;padding:10px;text-align:center;z-index:100"><div onclick="window.print()" style="display:inline-block;background:#00c9a7;color:#080f14;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">🖨 Save as PDF</div><div style="font-size:10px;color:#a1a1aa;margin-top:4px">iPad: tap → Save as PDF → Share</div></div>';
+    html += '<div style="height:60px"></div></body></html>';
+
+    w.document.write(html);
+    w.document.close();
+}
+
+// === XLSX EXPORT ===
+async function exportXLSX() {
+    if (typeof ExcelJS === 'undefined') { alert('Excel library still loading, try again in a moment'); return; }
+    const loads = filteredLoads();
+    if (loads.length === 0) { alert('No loads in current range to export'); return; }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'DivertScan';
+    const darkCyan = { argb: 'FF00C9A7' }, dark = { argb: 'FF0A1F2E' }, white = { argb: 'FFFFFFFF' };
+    const alt = { argb: 'FFF9FAFB' }, bdr = { argb: 'FFD4D4D8' };
+    const bdrAll = { top:{style:'thin',color:bdr}, bottom:{style:'thin',color:bdr}, left:{style:'thin',color:bdr}, right:{style:'thin',color:bdr} };
+
+    // SUMMARY SHEET
+    const sum = wb.addWorksheet('Summary');
+    sum.mergeCells('A1:E1');
+    const t1 = sum.getCell('A1');
+    t1.value = 'DRIVER PERFORMANCE REPORT';
+    t1.font = { bold: true, size: 16, color: white };
+    t1.fill = { type: 'pattern', pattern: 'solid', fgColor: dark };
+    t1.alignment = { horizontal: 'center', vertical: 'middle' };
+    sum.getRow(1).height = 32;
+    sum.mergeCells('A2:E2');
+    sum.getCell('A2').value = driverInfo.driver_name + ' — ' + driverInfo.hauler;
+    sum.getCell('A2').font = { bold: true, size: 12, color: dark };
+    sum.getCell('A2').alignment = { horizontal: 'center' };
+    sum.addRow([]);
+
+    const totalTons = loads.reduce((s, l) => s + Number(l.net_tons || 0), 0);
+    const totalLbs  = loads.reduce((s, l) => s + Number(l.net_lbs  || 0), 0);
+    const firstDate = new Date(Math.min(...loads.map(l => new Date(l.captured_at).getTime())));
+    const lastDate  = new Date(Math.max(...loads.map(l => new Date(l.captured_at).getTime())));
+
+    [
+        ['Driver:', driverInfo.driver_name],
+        ['Hauler:', driverInfo.hauler],
+        ['Date Range:', firstDate.toLocaleDateString() + ' — ' + lastDate.toLocaleDateString()],
+        ['Generated:', new Date().toLocaleString()],
+        [],
+        ['Total Loads:', loads.length],
+        ['Total Tons:', +totalTons.toFixed(2)],
+        ['Total Lbs:', +totalLbs.toFixed(0)],
+        ['Avg per Load (T):', +(totalTons / loads.length).toFixed(2)]
+    ].forEach(row => {
+        const r = sum.addRow(row);
+        r.getCell(1).font = { bold: true, size: 10, color: { argb: 'FF52525B' } };
+    });
+    sum.getColumn(1).width = 22;
+    sum.getColumn(2).width = 30;
+
+    // LOADS SHEET
+    const ws = wb.addWorksheet('Loads');
+    const hdr = ws.addRow(['Date', 'Time', 'Ticket #', 'Project', 'Hauler', 'Zone', 'Gross Lbs', 'Tare Lbs', 'Net Lbs', 'Net Tons']);
+    hdr.height = 20;
+    hdr.eachCell(c => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: darkCyan };
+        c.font = { bold: true, size: 10, color: dark };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+        c.border = bdrAll;
+    });
+
+    let sG = 0, sT = 0, sN = 0, sTn = 0;
+    loads.forEach((l, i) => {
+        const cap = new Date(l.captured_at);
+        const dateStr = cap.toLocaleDateString();
+        const timeStr = cap.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const g = Number(l.gross_lbs || 0), ta = Number(l.tare_lbs || 0), n = Number(l.net_lbs || 0), tn = Number(l.net_tons || 0);
+        sG += g; sT += ta; sN += n; sTn += tn;
+        const r = ws.addRow([dateStr, timeStr, l.ticket_number || '—', l.project_name || '—', l.hauler || driverInfo.hauler, l.zone || '', g, ta, n, tn]);
+        r.eachCell(c => { c.font = { size: 10 }; c.border = bdrAll; });
+        if (i % 2 === 1) r.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: alt }; });
+        [7,8,9].forEach(ci => r.getCell(ci).numFmt = '#,##0');
+        r.getCell(10).numFmt = '0.00';
+    });
+    const tr = ws.addRow(['TOTALS', '', '', '', '', '', sG, sT, sN, sTn]);
+    tr.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: darkCyan }; c.font = { bold: true, size: 10, color: dark }; c.border = bdrAll; });
+    [7,8,9].forEach(ci => tr.getCell(ci).numFmt = '#,##0');
+    tr.getCell(10).numFmt = '0.00';
+    ws.columns = [{width:12},{width:9},{width:11},{width:24},{width:22},{width:7},{width:11},{width:11},{width:11},{width:9}];
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // PROJECTS SHEET
+    const projWs = wb.addWorksheet('Projects');
+    const pHdr = projWs.addRow(['Project', 'Loads', 'Total Tons', 'Avg per Load (T)']);
+    pHdr.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: darkCyan }; c.font = { bold: true, size: 10, color: dark }; c.border = bdrAll; });
+    const projAgg = {};
+    loads.forEach(l => {
+        const key = l.project_name || '(Unassigned)';
+        if (!projAgg[key]) projAgg[key] = { loads: 0, tons: 0 };
+        projAgg[key].loads++;
+        projAgg[key].tons += Number(l.net_tons || 0);
+    });
+    Object.entries(projAgg).sort((a,b) => b[1].tons - a[1].tons).forEach(([name, d], i) => {
+        const r = projWs.addRow([name, d.loads, +d.tons.toFixed(2), +(d.tons / d.loads).toFixed(2)]);
+        r.eachCell(c => { c.font = { size: 10 }; c.border = bdrAll; });
+        if (i % 2 === 1) r.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: alt }; });
+        r.getCell(3).numFmt = '0.00';
+        r.getCell(4).numFmt = '0.00';
+    });
+    projWs.columns = [{width:30},{width:10},{width:14},{width:18}];
+    projWs.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // MATERIALS SHEET
+    const matWs = wb.addWorksheet('Materials');
+    const mHdr = matWs.addRow(['Material', 'Percent', 'Tons']);
+    mHdr.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: darkCyan }; c.font = { bold: true, size: 10, color: dark }; c.border = bdrAll; });
+    const matDefs2 = [
+        { key: 'metal', label: 'Metal' }, { key: 'occ', label: 'OCC' },
+        { key: 'wood', label: 'Wood' }, { key: 'gypsum', label: 'Gypsum' },
+        { key: 'plastic', label: 'Plastic' }, { key: 'concrete', label: 'Concrete' },
+        { key: 'block', label: 'Block' }, { key: 'landfill', label: 'Landfill' }
+    ];
+    const matTons2 = {};
+    matDefs2.forEach(m => matTons2[m.key] = 0);
+    loads.forEach(l => {
+        const tn = Number(l.net_tons || 0);
+        matDefs2.forEach(m => { matTons2[m.key] += tn * (Number(l[m.key + '_pct'] || 0) / 100); });
+    });
+    matDefs2.filter(m => matTons2[m.key] > 0.01).forEach((m, i) => {
+        const pct = totalTons > 0 ? matTons2[m.key] / totalTons : 0;
+        const r = matWs.addRow([m.label, pct, +matTons2[m.key].toFixed(2)]);
+        r.eachCell(c => { c.font = { size: 10 }; c.border = bdrAll; });
+        if (i % 2 === 1) r.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor: alt }; });
+        r.getCell(2).numFmt = '0.0%';
+        r.getCell(3).numFmt = '0.00';
+    });
+    matWs.columns = [{width:16},{width:12},{width:12}];
+    matWs.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Download
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safe = driverInfo.driver_name.replace(/[^a-zA-Z0-9]/g, '_');
+    a.download = safe + '_Driver_Report.xlsx';
+    a.click();
 }
 
 function copyForCurtis() {
