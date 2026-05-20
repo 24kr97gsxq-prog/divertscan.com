@@ -523,7 +523,9 @@ async function loadDriverPicker(haulerName) {
         hint.textContent = 'Tap your name below (or "New" if not listed)';
         html = drivers.map(d => {
             const safeName = d.driver_name.replace(/'/g, "\\'");
-            return `<button class="driver-btn" onclick="selectDriver('${safeName}')">${d.driver_name}</button>`;
+            const tokenAttr = d.driver_token ? d.driver_token.replace(/'/g, "\\'") : '';
+            // Driver button + loadbook icon (Phase 2.7d - entry from selection screen)
+            return `<div class="driver-btn-wrap" style="display:flex;align-items:stretch;gap:4px"><button class="driver-btn" onclick="selectDriver('${safeName}')" style="flex:1">${d.driver_name}</button>${tokenAttr ? `<button class="driver-btn-loadbook" onclick="openLoadbookFor('${tokenAttr}', event)" title="View Loadbook" style="padding:0 12px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--cyan);font-family:var(--sans);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .15s;min-height:42px;flex-shrink:0">📒</button>` : ''}</div>`;
         }).join('');
         html += '<button class="driver-btn driver-btn-new" onclick="showNewDriverInput()">+ New driver</button>';
     }
@@ -1502,6 +1504,14 @@ function loadbookUrl() {
 function openLoadbook() {
     const url = loadbookUrl();
     if (url) window.open(url, '_blank');
+}
+
+// Phase 2.7d: Open loadbook for any driver from selection screen (no scan needed)
+function openLoadbookFor(token, event) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    if (!token) { alert('Loadbook link not available for this driver yet'); return; }
+    const url = window.location.origin + '/driver.html?t=' + encodeURIComponent(token);
+    window.open(url, '_blank');
 }
 
 function copyLoadbookUrl() {
