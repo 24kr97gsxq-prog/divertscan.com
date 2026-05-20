@@ -213,6 +213,9 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <input type="text" class="fi" id="dSearch" placeholder="Search ticket #..." oninput="P.searchTix(this.value)" style="padding:8px 10px;font-size:.8rem;flex:1">
 <select class="fi" id="dZoneFilter" onchange="P.searchTix(document.getElementById('dSearch').value)" style="padding:8px;font-size:.75rem;width:auto;flex:0 0 auto">
 <option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
+</select>
+<select class="fi" id="dSort" onchange="P.setSortPref(this.value)" style="padding:8px;font-size:.7rem;width:auto;flex:0 0 auto">
+<option value="added_desc">↓ Newest added</option><option value="added_asc">↑ Oldest added</option><option value="date_desc">↓ Date: newest</option><option value="date_asc">↑ Date: oldest</option>
 </select></div>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch" id="dTable"></div>
 </div>
@@ -324,7 +327,9 @@ async loadPj(){var a=await P.api('client_project_access?client_id=eq.'+P.cl.id+'
 if(!a||!a.length){P.pj=[];return;}var ids=a.map(function(x){return x.project_id;});
 P.pj=await P.api('projects?id=in.('+ids.join(',')+')&order=name')||[];},
 
-showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';P.go('dash');P.loadBadge();},
+showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';
+try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
+P.go('dash');P.loadBadge();},
 
 logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];try{localStorage.removeItem('ds_cid');}catch(x){}
 document.getElementById('nav').style.display='none';['vDash','vUpload','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
@@ -429,6 +434,7 @@ document.getElementById('dMonthly').innerHTML=html;},
 
 renderTbl(list){var el=document.getElementById('dTable');if(!el)return;
 if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
+list=this._sortTix(list);
 try{
 var _nl=P.cp&&P.cp.leed_version==='none';
 var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+(_nl?'':'<th class="r">CO₂e</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
@@ -473,7 +479,7 @@ if(navigator.share)navigator.share({title:'Ticket #'+t.ticket_number,text:txt}).
 else{try{navigator.clipboard.writeText(txt);P.toast('Copied!');}catch(x){prompt('Copy:',txt);}}},
 
 // MONTH DETAIL
-openMo(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
+openMo(key){var tix=(P._mg[key]||[]).slice();
 P._mtx=tix;var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0,co2=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
@@ -503,12 +509,15 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
 '<div style="font-size:.6rem;color:var(--text-m)">LEED '+(P.cp?P.cp.leed_version||'v4':'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>')+
 (mh?'<div class="ct" style="margin-top:6px">📊 Materials</div>'+mh:'')+P.renderZoneSummary(tix)+'</div>'+
-'<div class="c" style="padding:8px"><div style="display:flex;gap:6px"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px;flex:1">'+
-'<select class="fi" id="moZoneFilter" onchange="P.filterMo(document.getElementById(\'moSearch\').value)" style="padding:7px;font-size:.75rem;width:auto;flex:0 0 auto"><option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option></select></div></div>'+
+'<div class="c" style="padding:8px"><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px;flex:1;min-width:120px">'+
+'<select class="fi" id="moZoneFilter" onchange="P.filterMo(document.getElementById(\'moSearch\').value)" style="padding:7px;font-size:.75rem;width:auto;flex:0 0 auto"><option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option></select>'+
+'<select class="fi" id="moSort" onchange="P.setSortPref(this.value)" style="padding:7px;font-size:.7rem;width:auto;flex:0 0 auto"><option value="added_desc"'+(P._getSortPref()==='added_desc'?' selected':'')+'>↓ Newest added</option><option value="added_asc"'+(P._getSortPref()==='added_asc'?' selected':'')+'>↑ Oldest added</option><option value="date_desc"'+(P._getSortPref()==='date_desc'?' selected':'')+'>↓ Date: newest</option><option value="date_asc"'+(P._getSortPref()==='date_asc'?' selected':'')+'>↑ Date: oldest</option></select>'+
+'</div></div>'+
 '<div id="moList"></div></div>';
 document.body.appendChild(el);P.renderMoTix(tix);},
 renderMoTix(tix){var el=document.getElementById('moList');if(!el)return;
 if(!tix.length){el.innerHTML='<div class="c" style="text-align:center;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
+tix=this._sortTix(tix);
 var _nl2=P.cp&&P.cp.leed_version==='none';
 var h='<div class="c" style="padding:8px"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="t"><thead><tr>';
 h+='<th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Net Tons</th>'+(_nl2?'':'<th class="r">Div%</th>')+(_nl2?'':'<th class="r">CO₂e</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th>';
@@ -945,6 +954,24 @@ f(n){if(n==null)return'0';var v=+n;if(isNaN(v))return'0';if(Math.abs(v)>=1000)re
 fd(d){if(!d)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var p=d.split('-');return p.length<3?d:m[+p[1]-1]+' '+parseInt(p[2])+', '+p[0];},
 ago(d){if(!d)return'';var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';},
 esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
+
+// === SORT HELPERS (Phase 2.7c) ===
+_getSortPref(){try{return localStorage.getItem('ds_client_sort')||'added_desc';}catch(e){return 'added_desc';}},
+_sortTix(tix){if(!Array.isArray(tix)||tix.length===0)return tix||[];var pref=this._getSortPref();var arr=tix.slice();
+arr.sort(function(a,b){var av,bv;
+if(pref==='added_desc'||pref==='added_asc'){av=a.created_at||'';bv=b.created_at||'';}
+else{av=a.ticket_date||'';bv=b.ticket_date||'';}
+if(!av&&!bv)return 0;if(!av)return 1;if(!bv)return -1;
+var cmp=av.localeCompare(bv);return pref.endsWith('_desc')?-cmp:cmp;});
+return arr;},
+setSortPref(val){try{localStorage.setItem('ds_client_sort',val);}catch(e){}
+// Sync any dropdown
+['dSort','moSort'].forEach(function(id){var el=document.getElementById(id);if(el&&el.value!==val)el.value=val;});
+// Re-render dashboard table if visible
+try{if(P.cp&&P.tx&&document.getElementById('dTable'))P.renderTbl(P.tx);}catch(e){}
+// Re-render month modal if open
+try{if(document.getElementById('moList')&&P._mtx)P.renderMoTix(P._mtx);}catch(e){}
+P.toast('Sorted: '+({added_desc:'Newest added',added_asc:'Oldest added',date_desc:'Date: newest',date_asc:'Date: oldest'}[val]||val));},
 toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
 async init(){P.loadTheme();document.getElementById('nav').style.display='none';
