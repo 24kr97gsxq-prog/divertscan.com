@@ -226,10 +226,14 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <!-- ═══ DRIVERS ═══ -->
 <div id="vDrivers" class="hidden">
 <div class="c">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
 <div>
 <div style="font-weight:700;font-size:1.05rem;letter-spacing:-.02em">🧑‍🚛 Drivers</div>
 <div style="font-size:.65rem;color:var(--text-d);margin-top:2px" id="vDriversSubtitle">Loading...</div>
+</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+<div class="b bsm bp" onclick="P.exportDriversPDF()" style="font-size:.7rem">📄 PDF</div>
+<div class="b bsm bp" onclick="P.exportDriversXLSX()" style="font-size:.7rem">📊 XLSX</div>
 </div>
 </div>
 <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -1026,6 +1030,297 @@ var pts=key.split('-');P._buildEJ(wb,tix,mf[+pts[1]],pts[0],proj);});
 wb.xlsx.writeBuffer().then(function(buf){var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 var a=document.createElement('a');a.href=URL.createObjectURL(blob);
 a.download=proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_Report.xlsx';a.click();P.toast('Downloaded!');});},
+
+// Phase 2.7d: Drivers tab — PDF report (summary + per-driver detail)
+// Scoped to client's projects only. Uses cached _vDriversCache for summary,
+// then fetches each driver's tickets to build the detail section.
+async exportDriversPDF(){
+var all=P._vDriversCache||[];
+if(all.length===0){P.toast('No driver data \u2014 wait for it to load');return;}
+P.toast('Building PDF...');
+
+// Build driverId -> tickets map by fetching all tickets across client's projects with driver_id
+var allowedProjIds=P.pj.map(function(p){return p.id;});
+if(!allowedProjIds.length){P.toast('No projects assigned');return;}
+var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
+  '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone'+
+  '&order=ticket_date.desc';
+var tickets=await P.api(tixUrl)||[];
+
+// Group tickets by driver_id, scoped to allowed projects
+var byDriver={};
+tickets.forEach(function(t){
+  if(allowedProjIds.indexOf(t.project_id)<0)return;
+  if(!byDriver[t.driver_id])byDriver[t.driver_id]=[];
+  byDriver[t.driver_id].push(t);
+});
+
+// Build project name lookup
+var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
+
+// Sort drivers by tons desc (use cached summary data)
+var drivers=all.slice().sort(function(a,b){return b.tons-a.tons;});
+
+// Generate HTML
+var clientName=P.cl&&P.cl.name?P.cl.name:'Client';
+var today=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+var totalLoads=drivers.reduce(function(s,d){return s+d.loads;},0);
+var totalTons=drivers.reduce(function(s,d){return s+d.tons;},0);
+
+var html='<!DOCTYPE html><html><head><title>'+P.esc(clientName)+' — Driver Report</title>';
+html+='<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.5}';
+html+='h1{font-size:22px;color:#0a1f2e;border-bottom:3px solid #00c9a7;padding-bottom:8px;margin-bottom:6px}';
+html+='h2{font-size:15px;color:#0a1f2e;margin:20px 0 8px;border-bottom:1px solid #d4d4d8;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}';
+html+='h3{font-size:13px;color:#0a1f2e;margin:14px 0 4px;font-weight:700}';
+html+='.r{text-align:right}.c{text-align:center}';
+html+='table{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:11px}';
+html+='th{background:#f4f4f5;padding:6px 5px;text-align:left;border-bottom:2px solid #d4d4d8;font-size:10px;text-transform:uppercase}';
+html+='td{padding:4px 5px;border-bottom:1px solid #e4e4e7}';
+html+='.subtitle{font-size:11px;color:#71717a;margin-bottom:14px}';
+html+='.stats{display:flex;gap:8px;margin:10px 0 14px}';
+html+='.stat{flex:1;background:#f4f4f5;border-radius:6px;padding:10px;text-align:center}';
+html+='.stat b{font-size:18px;display:block;font-family:"Courier New",monospace}';
+html+='.stat span{font-size:9.5px;color:#71717a;text-transform:uppercase;letter-spacing:.3px}';
+html+='.driver-section{page-break-inside:avoid;margin-top:20px;border-top:2px solid #00c9a7;padding-top:10px}';
+html+='.footer{margin-top:24px;padding-top:10px;border-top:1px solid #d4d4d8;font-size:10px;color:#a1a1aa;text-align:center}';
+html+='@media print{body{padding:16px}.toolbar{display:none!important}}</style></head><body>';
+
+html+='<h1>Driver Performance Report</h1>';
+html+='<div class="subtitle"><strong>'+P.esc(clientName)+'</strong> \u00b7 '+P.pj.length+' project'+(P.pj.length===1?'':'s')+' \u00b7 Generated '+today+'</div>';
+
+// Summary stats
+html+='<div class="stats">';
+html+='<div class="stat"><b>'+drivers.length+'</b><span>Drivers</span></div>';
+html+='<div class="stat"><b>'+totalLoads+'</b><span>Total Loads</span></div>';
+html+='<div class="stat"><b>'+totalTons.toFixed(2)+'</b><span>Total Tons</span></div>';
+html+='<div class="stat"><b>'+(totalLoads>0?(totalTons/totalLoads).toFixed(2):'0.00')+'</b><span>Avg/Load (T)</span></div>';
+html+='</div>';
+
+// Summary table
+html+='<h2>All Drivers Summary</h2>';
+html+='<table><tr><th>Driver</th><th>Hauler</th><th class="r">Loads</th><th class="r">Tons</th><th>Last Load</th></tr>';
+drivers.forEach(function(d){
+  var lastStr=d.lastLoad?P.fd(d.lastLoad.substring(0,10)):'—';
+  html+='<tr><td><b>'+P.esc(d.driver_name)+'</b></td><td>'+P.esc(d.hauler)+'</td><td class="r">'+d.loads+'</td><td class="r">'+d.tons.toFixed(2)+'</td><td>'+lastStr+'</td></tr>';
+});
+html+='</table>';
+
+// Per-driver detail sections
+html+='<h2>Driver Details</h2>';
+drivers.forEach(function(d){
+  var dTix=(byDriver[d.driver_id]||[]).slice().sort(function(a,b){return(b.ticket_date||'').localeCompare(a.ticket_date||'');});
+  html+='<div class="driver-section">';
+  html+='<h3>'+P.esc(d.driver_name)+' \u2014 '+d.loads+' load'+(d.loads===1?'':'s')+' \u00b7 '+d.tons.toFixed(2)+' T</h3>';
+  html+='<div style="font-size:10.5px;color:#71717a;margin-bottom:6px">\ud83d\ude9b '+P.esc(d.hauler)+'</div>';
+  if(dTix.length===0){
+    html+='<div style="font-size:11px;color:#a1a1aa;font-style:italic">No ticket detail available for this driver in current scope.</div>';
+  }else{
+    html+='<table><tr><th>Date</th><th>Ticket #</th><th>Project</th><th>Zone</th><th class="r">Gross</th><th class="r">Tare</th><th class="r">Net (T)</th></tr>';
+    dTix.forEach(function(t){
+      html+='<tr><td>'+P.fdt(t)+'</td><td><b>'+P.esc(t.ticket_number||'')+'</b></td><td>'+P.esc(projNameById[t.project_id]||'')+'</td><td>'+P.esc(t.zone||'')+'</td><td class="r">'+Number(t.gross_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.tare_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.net_tons||0).toFixed(2)+'</td></tr>';
+    });
+    html+='</table>';
+  }
+  html+='</div>';
+});
+
+html+='<div class="footer">Dalmex Recycling LLC \u00b7 2828 Nagle St, Dallas TX 75220 \u00b7 Powered by DivertScan</div>';
+html+='<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#0a1f2e;color:#fff;padding:10px;text-align:center;z-index:100">';
+html+='<div onclick="window.print()" style="display:inline-block;background:#00c9a7;color:#080f14;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">\ud83d\udda8 Save as PDF</div>';
+html+='<div style="font-size:10px;color:#a1a1aa;margin-top:4px">iPad: tap \u2192 Save as PDF \u2192 Share</div></div><div style="height:60px"></div></body></html>';
+
+var w=window.open('','_blank');
+if(!w){P.toast('Please allow popups to export PDF');return;}
+w.document.write(html);w.document.close();
+P.toast('PDF report opened');
+},
+
+// Phase 2.7d: Drivers tab — Excel workbook (summary sheet + one sheet per driver)
+async exportDriversXLSX(){
+if(typeof ExcelJS==='undefined'){P.toast('Excel library loading...');return;}
+var all=P._vDriversCache||[];
+if(all.length===0){P.toast('No driver data \u2014 wait for it to load');return;}
+P.toast('Building Excel...');
+
+var allowedProjIds=P.pj.map(function(p){return p.id;});
+if(!allowedProjIds.length){P.toast('No projects assigned');return;}
+
+// Fetch tickets for detail sheets
+var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
+  '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone'+
+  '&order=ticket_date.desc';
+var tickets=await P.api(tixUrl)||[];
+
+var byDriver={};
+tickets.forEach(function(t){
+  if(allowedProjIds.indexOf(t.project_id)<0)return;
+  if(!byDriver[t.driver_id])byDriver[t.driver_id]=[];
+  byDriver[t.driver_id].push(t);
+});
+
+var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
+
+var clientName=P.cl&&P.cl.name?P.cl.name:'Client';
+var drivers=all.slice().sort(function(a,b){return b.tons-a.tons;});
+var totalLoads=drivers.reduce(function(s,d){return s+d.loads;},0);
+var totalTons=drivers.reduce(function(s,d){return s+d.tons;},0);
+
+var wb=new ExcelJS.Workbook();
+wb.creator='DivertScan';
+var darkCyan={argb:'FF00C9A7'},dark={argb:'FF0A1F2E'},white={argb:'FFFFFFFF'};
+var alt={argb:'FFF9FAFB'},bdr={argb:'FFD4D4D8'};
+var bdrAll={top:{style:'thin',color:bdr},bottom:{style:'thin',color:bdr},left:{style:'thin',color:bdr},right:{style:'thin',color:bdr}};
+
+// ===== SUMMARY SHEET =====
+var sum=wb.addWorksheet('Summary');
+sum.mergeCells('A1:E1');
+var t1=sum.getCell('A1');
+t1.value='DRIVER PERFORMANCE REPORT';
+t1.font={bold:true,size:16,color:white};
+t1.fill={type:'pattern',pattern:'solid',fgColor:dark};
+t1.alignment={horizontal:'center',vertical:'middle'};
+sum.getRow(1).height=32;
+sum.mergeCells('A2:E2');
+sum.getCell('A2').value=clientName+' \u2014 '+P.pj.length+' project'+(P.pj.length===1?'':'s');
+sum.getCell('A2').font={bold:true,size:12,color:dark};
+sum.getCell('A2').alignment={horizontal:'center'};
+sum.addRow([]);
+
+[['Client:',clientName],
+ ['Projects:',P.pj.length],
+ ['Generated:',new Date().toLocaleString()],
+ [],
+ ['Total Drivers:',drivers.length],
+ ['Total Loads:',totalLoads],
+ ['Total Tons:',+totalTons.toFixed(2)],
+ ['Avg per Load (T):',totalLoads>0?+(totalTons/totalLoads).toFixed(2):0]
+].forEach(function(row){
+  var r=sum.addRow(row);
+  r.getCell(1).font={bold:true,size:10,color:{argb:'FF52525B'}};
+});
+sum.getColumn(1).width=22;
+sum.getColumn(2).width=30;
+
+sum.addRow([]);
+sum.addRow([]);
+
+// All Drivers table header
+var allHdr=sum.addRow(['Driver','Hauler','Loads','Total Tons','Avg/Load (T)','Last Load']);
+allHdr.eachCell(function(c){
+  c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};
+  c.font={bold:true,size:10,color:dark};
+  c.alignment={horizontal:'center',vertical:'middle'};
+  c.border=bdrAll;
+});
+allHdr.height=20;
+
+drivers.forEach(function(d,i){
+  var lastStr=d.lastLoad?d.lastLoad.substring(0,10):'';
+  var r=sum.addRow([d.driver_name,d.hauler,d.loads,+d.tons.toFixed(2),d.loads>0?+(d.tons/d.loads).toFixed(2):0,lastStr]);
+  r.eachCell(function(c){c.font={size:10};c.border=bdrAll;});
+  if(i%2===1)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:alt};});
+  r.getCell(4).numFmt='0.00';
+  r.getCell(5).numFmt='0.00';
+});
+
+// Totals row
+var tr=sum.addRow(['TOTALS','',totalLoads,+totalTons.toFixed(2),totalLoads>0?+(totalTons/totalLoads).toFixed(2):0,'']);
+tr.eachCell(function(c){
+  c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};
+  c.font={bold:true,size:10,color:dark};
+  c.border=bdrAll;
+});
+tr.getCell(4).numFmt='0.00';
+tr.getCell(5).numFmt='0.00';
+
+sum.getColumn(1).width=24;
+sum.getColumn(2).width=24;
+sum.getColumn(3).width=10;
+sum.getColumn(4).width=12;
+sum.getColumn(5).width=14;
+sum.getColumn(6).width=12;
+
+// ===== PER-DRIVER SHEETS =====
+// Note: Excel sheet name limited to 31 chars, no special chars
+function safeSheetName(name,idx){
+  var safe=(name||'Driver').replace(/[\\\/\?\*\[\]:]/g,'_').substring(0,28);
+  return safe+(idx?'_'+idx:'');
+}
+
+drivers.forEach(function(d,idx){
+  var dTix=(byDriver[d.driver_id]||[]).slice().sort(function(a,b){return(b.ticket_date||'').localeCompare(a.ticket_date||'');});
+  if(dTix.length===0)return;
+
+  var sheetName=safeSheetName(d.driver_name,idx>0?idx+1:0);
+  var ws;
+  try{ws=wb.addWorksheet(sheetName);}
+  catch(e){ws=wb.addWorksheet('Driver_'+(idx+1));}
+
+  // Header band
+  ws.mergeCells('A1:G1');
+  var h1=ws.getCell('A1');
+  h1.value=d.driver_name;
+  h1.font={bold:true,size:14,color:white};
+  h1.fill={type:'pattern',pattern:'solid',fgColor:dark};
+  h1.alignment={horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height=28;
+
+  ws.mergeCells('A2:G2');
+  ws.getCell('A2').value=d.hauler+' \u00b7 '+d.loads+' loads \u00b7 '+d.tons.toFixed(2)+' T';
+  ws.getCell('A2').font={bold:true,size:11,color:dark};
+  ws.getCell('A2').alignment={horizontal:'center'};
+
+  ws.addRow([]);
+
+  var hdr=ws.addRow(['Date','Ticket #','Project','Zone','Gross Lbs','Tare Lbs','Net Tons']);
+  hdr.height=20;
+  hdr.eachCell(function(c){
+    c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};
+    c.font={bold:true,size:10,color:dark};
+    c.alignment={horizontal:'center',vertical:'middle'};
+    c.border=bdrAll;
+  });
+
+  var sumG=0,sumT=0,sumN=0;
+  dTix.forEach(function(t,i){
+    var g=Number(t.gross_lbs||0),ta=Number(t.tare_lbs||0),tn=Number(t.net_tons||0);
+    sumG+=g;sumT+=ta;sumN+=tn;
+    var r=ws.addRow([
+      t.ticket_date||'',
+      t.ticket_number||'',
+      projNameById[t.project_id]||'',
+      t.zone||'',
+      g,ta,tn
+    ]);
+    r.eachCell(function(c){c.font={size:10};c.border=bdrAll;});
+    if(i%2===1)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:alt};});
+    r.getCell(5).numFmt='#,##0';
+    r.getCell(6).numFmt='#,##0';
+    r.getCell(7).numFmt='0.00';
+  });
+
+  var totalR=ws.addRow(['TOTALS','','','',sumG,sumT,sumN]);
+  totalR.eachCell(function(c){
+    c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};
+    c.font={bold:true,size:10,color:dark};
+    c.border=bdrAll;
+  });
+  totalR.getCell(5).numFmt='#,##0';
+  totalR.getCell(6).numFmt='#,##0';
+  totalR.getCell(7).numFmt='0.00';
+
+  ws.columns=[{width:12},{width:11},{width:24},{width:7},{width:11},{width:11},{width:10}];
+  ws.views=[{state:'frozen',ySplit:4}];
+});
+
+// Download
+var buf=await wb.xlsx.writeBuffer();
+var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+var safe=clientName.replace(/[^a-zA-Z0-9]/g,'_');
+a.download=safe+'_Driver_Report.xlsx';a.click();
+P.toast('Downloaded!');
+},
 
 cycleTheme(){var html=document.documentElement;var cur=html.dataset.theme||'default';
 var themes=['default','dark','green'];var next=themes[(themes.indexOf(cur)+1)%themes.length];
