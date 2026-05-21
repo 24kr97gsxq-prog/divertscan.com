@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>DivertScan · Constraint Smoke Test</title>
+<style>
+:root{
+    --bg:#0a1f2e;
+    --card:#142b3d;
+    --border:#2a4058;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --dim:#64748b;
+    --cyan:#00c9a7;
+    --green:#22c55e;
+    --red:#ef4444;
+    --amber:#f59e0b;
+    --blue:#3b82f6;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'SF Pro',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;max-width:900px;margin:0 auto;line-height:1.45;font-size:.85rem}
+h1{font-size:1.3rem;margin-bottom:6px;letter-spacing:-.02em}
+.subtitle{color:var(--muted);font-size:.75rem;margin-bottom:18px}
+.section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.section-title{font-size:.95rem;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px;letter-spacing:-.01em}
+.section-desc{color:var(--muted);font-size:.72rem;margin-bottom:10px}
+button.run{padding:10px 18px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer}
+button.run:active{transform:scale(.98)}
+button.run:disabled{opacity:.5;cursor:wait}
+button.back{padding:6px 12px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:.7rem;cursor:pointer;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.75rem}
+th{text-align:left;padding:8px 10px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:.65rem}
+td{padding:8px 10px;border-bottom:1px solid rgba(42,64,88,.5);vertical-align:top}
+td.value{font-family:var(--mono);font-weight:600;font-size:.75rem}
+.status{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.65rem;font-weight:700;letter-spacing:.05em;font-family:var(--mono)}
+.status-pass{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.status-fail{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.status-pending{background:rgba(148,163,184,.1);color:var(--muted);border:1px solid var(--border)}
+.error-detail{font-family:var(--mono);font-size:.65rem;color:var(--red);background:rgba(239,68,68,.08);padding:6px 8px;border-radius:5px;margin-top:4px;word-break:break-word;line-height:1.4}
+.summary{margin-top:14px;padding:12px;border-radius:8px;text-align:center;font-weight:700;font-size:.85rem}
+.summary-ok{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.summary-fail{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.log{font-family:var(--mono);font-size:.65rem;color:var(--muted);background:rgba(0,0,0,.2);padding:8px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+.log-line{padding:1px 0;border-bottom:1px solid rgba(42,64,88,.3)}
+.log-line:last-child{border-bottom:none}
+.muted{color:var(--muted)}
+.warn{color:var(--amber)}
+</style>
+</head>
+<body>
+
+<button class="back" onclick="window.location.href='index.html'">← Back to Admin</button>
+
+<h1>🧪 Constraint Smoke Test</h1>
+<div class="subtitle">
+    Probes every <code>tare_source</code> and <code>scan_type</code> value the app code uses, by attempting a real INSERT to the <code>tickets</code> table.
+    Pass = the database accepts that value. Fail = constraint mismatch (which would silently break a driver scan in production).
+    All test tickets are inserted into the <strong>Test project</strong> and <strong>deleted after the test completes</strong>.
+</div>
+
+<div class="section">
+    <div class="section-title">⚙️ Run Test</div>
+    <div class="section-desc">
+        Test takes 5-15 seconds. It inserts ~15 test tickets, records which ones pass the CHECK constraints,
+        then deletes them all. The test ticket project is the placeholder "Test project" (UUID 278d4428-...).
+    </div>
+    <button class="run" id="runBtn" onclick="runSmokeTest()">▶ Run Smoke Test</button>
+    <button class="run" id="cleanupBtn" onclick="cleanupOrphans()" style="background:var(--amber);margin-left:8px;display:none;">🧹 Cleanup Orphan Test Tickets</button>
+    <div class="log" id="log" style="display:none;"></div>
+</div>
+
+<div class="section" id="tareSourceSection" style="display:none;">
+    <div class="section-title">📦 tare_source CHECK constraint</div>
+    <div class="section-desc">
+        These values are written to <code>tickets.tare_source</code> by scale.html. Each value must be accepted by the database.
+    </div>
+    <table>
+        <thead>
+            <tr><th style="width:40%">Value (from app code)</th><th style="width:15%">Status</th><th>Detail</th></tr>
+        </thead>
+        <tbody id="tareSourceTable"></tbody>
+    </table>
+</div>
+
+<div class="section" id="scanTypeSection" style="display:none;">
+    <div class="section-title">🏷️ scan_type CHECK constraint</div>
+    <div class="section-desc">
+        These values are written to <code>tickets.scan_type</code> from scale.html, admin manual entry, OCR batch, and orphan resolve flows.
+    </div>
+    <table>
+        <thead>
+            <tr><th style="width:40%">Value (from app code)</th><th style="width:15%">Status</th><th>Detail</th></tr>
+        </thead>
+        <tbody id="scanTypeTable"></tbody>
+    </table>
+</div>
+
+<div class="section" id="summarySection" style="display:none;">
+    <div id="summary"></div>
+</div>
+
+<script>
+// =====================================================
+// CONFIG
+// =====================================================
+const SUPABASE_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMzM2OTEsImV4cCI6MjA3MjkwOTY5MX0.cgvFmcrV-T-fyZUiBkVOIcWzbbz0w-IfNwxqDtMlw1g';
+
+// Project used for test tickets (Test project UUID — already exists)
+const TEST_PROJECT_ID = '278d4428-93ba-428e-8626-7cd3e21163c2';
+
+// All tare_source values used in app code as of Phase 2.7d
+const TARE_SOURCES = [
+    'pi_capture',     // real scale reading
+    'fleet_default',  // fleet average estimate
+    'driver_avg',     // driver's historical average
+    'today_first',    // most recent tare today
+    'manual',         // legacy manual entry
+    'manual_typed',   // Phase 2.7d custom typed by driver
+    'ocr'             // OCR-extracted from paper ticket
+];
+
+// All scan_type values used in app code as of Phase 2.7d
+const SCAN_TYPES = [
+    'pi_scale',           // normal scale capture
+    'pi_scale_walkin',    // walk-in mode scan
+    'pi_orphan_resolve',  // admin resolved orphan capture
+    'batch_ocr',          // OCR batch upload
+    'batch_queue',        // queued OCR
+    'ocr_queue',          // alt OCR queue
+    'ocr',                // single-ticket OCR
+    'manual'              // admin manual entry
+];
+
+// =====================================================
+// LOGGING
+// =====================================================
+const logEl = document.getElementById('log');
+function log(msg, level) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    if (level === 'warn') line.classList.add('warn');
+    if (level === 'muted') line.classList.add('muted');
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+    line.textContent = '[' + ts + '] ' + msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log('[smoke]', msg);
+}
+
+// =====================================================
+// SUPABASE HELPER
+// =====================================================
+async function sb(path, method, body) {
+    const opts = {
+        method: method || 'GET',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
+        }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
+    if (!res.ok) {
+        const errBody = await res.text();
+        const err = new Error(res.status + ': ' + errBody);
+        err.status = res.status;
+        err.body = errBody;
+        throw err;
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+}
+
+// =====================================================
+// TEST EXECUTION
+// =====================================================
+const insertedIds = [];
+
+function buildTestTicket(extras) {
+    // Each test ticket gets a unique number so they don't collide
+    const rnd = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return Object.assign({
+        ticket_number: 'SMOKE-' + Date.now() + '-' + rnd,
+        ticket_date: new Date().toISOString().substring(0, 10),
+        service_date: new Date().toISOString().substring(0, 10),
+        project_id: TEST_PROJECT_ID,
+        hauler: 'SMOKE TEST',
+        driver_name: 'SMOKE TEST',
+        gross_lbs: 30000,
+        tare_lbs: 25000,
+        net_lbs: 5000,
+        net_tons: 2.5,
+        container_size: 30,
+        diversion_pct: 0,
+        diverted_tons: 0,
+        landfill_tons: 2.5,
+        co2e_avoided: 0,
+        captured_at: new Date().toISOString(),
+        notes: '[SMOKE TEST — will be deleted automatically]'
+    }, extras || {});
+}
+
+async function testOneValue(column, value) {
+    const extras = {};
+    extras[column] = value;
+    // scan_type must be set whether or not we're testing it (column probably NOT NULL with default)
+    // For the tare_source test, set scan_type to a known-good value
+    if (column === 'tare_source') extras.scan_type = 'pi_scale';
+    if (column === 'scan_type') extras.tare_source = 'pi_capture';
+    const ticket = buildTestTicket(extras);
+    try {
+        const result = await sb('tickets', 'POST', ticket);
+        if (result && result[0] && result[0].id) {
+            insertedIds.push(result[0].id);
+            return { ok: true };
+        }
+        return { ok: false, error: 'No row returned' };
+    } catch (err) {
+        return { ok: false, error: err.body || err.message };
+    }
+}
+
+async function deleteInserted() {
+    if (insertedIds.length === 0) return 0;
+    let deleted = 0;
+    log('🧹 Cleaning up ' + insertedIds.length + ' test ticket(s)...', 'muted');
+    for (const id of insertedIds) {
+        try {
+            await sb('tickets?id=eq.' + id, 'DELETE');
+            deleted++;
+        } catch (err) {
+            log('⚠️ Could not delete ' + id + ': ' + (err.body || err.message), 'warn');
+        }
+    }
+    insertedIds.length = 0;
+    return deleted;
+}
+
+function renderResult(tbodyId, value, result) {
+    const tbody = document.getElementById(tbodyId);
+    const row = document.createElement('tr');
+    const statusClass = result.ok ? 'status-pass' : 'status-fail';
+    const statusText = result.ok ? '✓ PASS' : '✗ FAIL';
+    let detailHtml = '<span class="muted">accepted</span>';
+    if (!result.ok) {
+        const safe = (result.error || '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+        detailHtml = '<div class="error-detail">' + safe + '</div>';
+    }
+    row.innerHTML =
+        '<td class="value">' + value + '</td>' +
+        '<td><span class="status ' + statusClass + '">' + statusText + '</span></td>' +
+        '<td>' + detailHtml + '</td>';
+    tbody.appendChild(row);
+}
+
+async function runSmokeTest() {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Running...';
+
+    logEl.style.display = 'block';
+    logEl.innerHTML = '';
+    document.getElementById('tareSourceSection').style.display = 'block';
+    document.getElementById('scanTypeSection').style.display = 'block';
+    document.getElementById('summarySection').style.display = 'none';
+    document.getElementById('tareSourceTable').innerHTML = '';
+    document.getElementById('scanTypeTable').innerHTML = '';
+    document.getElementById('cleanupBtn').style.display = 'none';
+
+    let totalPass = 0, totalFail = 0;
+    const failures = [];
+
+    try {
+        // First — sanity check the Test project exists
+        log('Checking Test project exists (UUID ' + TEST_PROJECT_ID + ')...');
+        const projRows = await sb('projects?id=eq.' + TEST_PROJECT_ID + '&select=id,name');
+        if (!projRows || projRows.length === 0) {
+            log('❌ Test project not found! Cannot run smoke test without a target project.', 'warn');
+            btn.disabled = false;
+            btn.textContent = '▶ Run Smoke Test';
+            return;
+        }
+        log('✓ Test project found: "' + projRows[0].name + '"');
+
+        // ==== tare_source ====
+        log('Testing tare_source values (' + TARE_SOURCES.length + ' total)...');
+        for (const val of TARE_SOURCES) {
+            const result = await testOneValue('tare_source', val);
+            renderResult('tareSourceTable', val, result);
+            if (result.ok) { totalPass++; log('  ✓ tare_source = "' + val + '" accepted'); }
+            else { totalFail++; failures.push('tare_source=' + val); log('  ✗ tare_source = "' + val + '" REJECTED: ' + result.error.substring(0, 120), 'warn'); }
+        }
+
+        // ==== scan_type ====
+        log('Testing scan_type values (' + SCAN_TYPES.length + ' total)...');
+        for (const val of SCAN_TYPES) {
+            const result = await testOneValue('scan_type', val);
+            renderResult('scanTypeTable', val, result);
+            if (result.ok) { totalPass++; log('  ✓ scan_type = "' + val + '" accepted'); }
+            else { totalFail++; failures.push('scan_type=' + val); log('  ✗ scan_type = "' + val + '" REJECTED: ' + result.error.substring(0, 120), 'warn'); }
+        }
+
+        // ==== Cleanup ====
+        const deleted = await deleteInserted();
+        log('✓ Deleted ' + deleted + ' test ticket(s)');
+    } catch (err) {
+        log('💥 Smoke test crashed: ' + (err.message || err), 'warn');
+        // Show cleanup button so user can manually trigger
+        document.getElementById('cleanupBtn').style.display = 'inline-block';
+    } finally {
+        // Render summary
+        const summary = document.getElementById('summary');
+        if (totalFail === 0) {
+            summary.className = 'summary summary-ok';
+            summary.textContent = '✅ All ' + totalPass + ' constraint values pass — database accepts everything app code sends.';
+        } else {
+            summary.className = 'summary summary-fail';
+            summary.innerHTML = '❌ ' + totalFail + ' constraint mismatch(es) detected: <br><span style="font-family:var(--mono);font-size:.7rem;">' + failures.join(', ') + '</span><br><span style="font-size:.7rem;font-weight:500;">Run an ALTER CONSTRAINT migration to add these values.</span>';
+        }
+        document.getElementById('summarySection').style.display = 'block';
+
+        btn.disabled = false;
+        btn.textContent = '▶ Run Again';
+    }
+}
+
+async function cleanupOrphans() {
+    // Manual cleanup — finds and deletes any tickets with notes matching the smoke marker
+    const btn = document.getElementById('cleanupBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Searching...';
+    try {
+        const rows = await sb('tickets?notes=like.*SMOKE TEST*&select=id,ticket_number');
+        if (!rows || rows.length === 0) {
+            log('✓ No orphan smoke-test tickets found in DB');
+            btn.style.display = 'none';
+            return;
+        }
+        log('Found ' + rows.length + ' orphan smoke-test ticket(s) — deleting...');
+        let deleted = 0;
+        for (const r of rows) {
+            try { await sb('tickets?id=eq.' + r.id, 'DELETE'); deleted++; }
+            catch (err) { log('  ⚠️ Could not delete ' + r.ticket_number + ': ' + err.body); }
+        }
+        log('✓ Deleted ' + deleted + ' orphan ticket(s)');
+        btn.style.display = 'none';
+    } catch (err) {
+        log('💥 Cleanup error: ' + err.message, 'warn');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🧹 Cleanup Orphan Test Tickets';
+    }
+}
+</script>
+
+</body>
+</html>
