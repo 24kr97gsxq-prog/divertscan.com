@@ -350,7 +350,11 @@ try{localStorage.setItem('ds_cid',P.cl.id);}catch(x){}await P.loadPj();P.showApp
 
 async loadPj(){var a=await P.api('client_project_access?client_id=eq.'+P.cl.id+'&select=project_id');
 if(!a||!a.length){P.pj=[];return;}var ids=a.map(function(x){return x.project_id;});
-P.pj=await P.api('projects?id=in.('+ids.join(',')+')&order=name')||[];},
+P.pj=await P.api('projects?id=in.('+ids.join(',')+')&order=name')||[];
+// Phase 2.7d: defense-in-depth — never expose the walk-in placeholder project to clients
+// even if a client_project_access row somehow points to it.
+var WALKIN_PLACEHOLDER_ID='6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
+P.pj=P.pj.filter(function(p){return p.id!==WALKIN_PLACEHOLDER_ID;});},
 
 showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';
 try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
@@ -628,7 +632,7 @@ var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><
 list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
 var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
-h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td>'+P.fd(t.ticket_date)+'</td><td class="bld">'+t.ticket_number+'</td>'+
+h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td style="white-space:nowrap">'+P.fdt(t)+'</td><td class="bld">'+t.ticket_number+'</td>'+
 '<td>'+(t.driver_name||'<span style="color:var(--text-d)">—</span>')+'</td>'+
 '<td class="r m">'+P.f(t.net_tons)+'</td>'+(_nl?'':'<td class="r m bld" style="'+dc+'">'+dp+'%</td>')+(_nl?'':'<td class="r m" style="color:var(--text-m)">'+P.f(t.co2e_avoided)+'</td>')+'<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td><td class="ctr">'+pi+'</td></tr>';});
 h+='</tbody></table>';el.innerHTML=h;}catch(e){el.innerHTML='<div style="color:var(--danger);font-size:.75rem;padding:10px">Table error: '+e.message+'</div>';}},
@@ -652,7 +656,7 @@ el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overfl
 el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:800;font-size:.85rem;color:#fff">Ticket '+t.ticket_number+'</div>'+
 '<div class="topnav-right"><div class="b bsm" onclick="P.shareTk(\''+t.id+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.6rem">📤 Share</div>'+
 '<div onclick="document.getElementById(\'tkDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
-'<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fd(t.ticket_date)+' • '+(t.hauler||'')+(t.driver_name?' • Driver: <strong>'+P.esc(t.driver_name)+'</strong>':'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
+'<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fdt(t)+' • '+(t.hauler||'')+(t.driver_name?' • Driver: <strong>'+P.esc(t.driver_name)+'</strong>':'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
 '<div class="sg"><div class="sc"><div class="sv">'+P.f(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
 '<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
@@ -661,7 +665,7 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
 document.body.appendChild(el);},
 shareTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
-var txt='Ticket #'+t.ticket_number+'\nDate: '+P.fd(t.ticket_date)+'\nProject: '+(P.cp?P.cp.name:'')+(t.driver_name?'\nDriver: '+t.driver_name:'')+'\nGross: '+P.f(t.gross_lbs)+' lbs\nTare: '+P.f(t.tare_lbs)+' lbs\nNet: '+P.f(t.net_tons)+' tons\nDiversion: '+(t.diversion_pct||0)+'%'+(t.scale_ticket_image?'\nPhoto: '+t.scale_ticket_image:'');
+var txt='Ticket #'+t.ticket_number+'\nDate: '+P.fdt(t)+'\nProject: '+(P.cp?P.cp.name:'')+(t.driver_name?'\nDriver: '+t.driver_name:'')+'\nGross: '+P.f(t.gross_lbs)+' lbs\nTare: '+P.f(t.tare_lbs)+' lbs\nNet: '+P.f(t.net_tons)+' tons\nDiversion: '+(t.diversion_pct||0)+'%'+(t.scale_ticket_image?'\nPhoto: '+t.scale_ticket_image:'');
 if(navigator.share)navigator.share({title:'Ticket #'+t.ticket_number,text:txt}).catch(function(){});
 else{try{navigator.clipboard.writeText(txt);P.toast('Copied!');}catch(x){prompt('Copy:',txt);}}},
 
@@ -717,7 +721,7 @@ sumTons+=tn;sumDiv+=dv;sumCo2+=co2;
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
 var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
 h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer">';
-h+='<td style="white-space:nowrap">'+P.fd(t.ticket_date)+'</td>';
+h+='<td style="white-space:nowrap">'+P.fdt(t)+'</td>';
 h+='<td class="bld">'+t.ticket_number+'</td>';
 h+='<td>'+(t.driver_name||'<span style="color:var(--text-d)">—</span>')+'</td>';
 h+='<td class="r m">'+P.f(t.net_tons)+'</td>';
@@ -1139,6 +1143,10 @@ return h+'</div></div>';},
 
 f(n){if(n==null)return'0';var v=+n;if(isNaN(v))return'0';if(Math.abs(v)>=1000)return v.toLocaleString(undefined,{maximumFractionDigits:2});return v.toFixed(2);},
 fd(d){if(!d)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var p=d.split('-');return p.length<3?d:m[+p[1]-1]+' '+parseInt(p[2])+', '+p[0];},
+// Phase 2.7d: Format ticket date + time. Date is ALWAYS from ticket_date (authoritative).
+// Time only shown if captured_at falls on same calendar day as ticket_date (real-time scan).
+// For OCR'd paper tickets / manual entries backdated to a prior day: no time shown.
+fdt(t){if(!t||!t.ticket_date)return'';var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var p=t.ticket_date.split('-');if(p.length<3)return t.ticket_date;var ty=+p[0],tm=+p[1],td=+p[2];var cy=new Date().getFullYear();var ds=m[tm-1]+' '+td+(ty!==cy?', '+ty:'');var iso=t.captured_at;if(iso){var dt=new Date(iso);if(!isNaN(dt.getTime())&&dt.getFullYear()===ty&&(dt.getMonth()+1)===tm&&dt.getDate()===td){var h=dt.getHours();var mn=dt.getMinutes();var ap=h>=12?'PM':'AM';h=h%12;if(h===0)h=12;return ds+' \u00b7 '+h+':'+(mn<10?'0'+mn:mn)+' '+ap;}}return ds;},
 ago(d){if(!d)return'';var s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';},
 esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 
