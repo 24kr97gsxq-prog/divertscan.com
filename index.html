@@ -433,6 +433,57 @@
              ============================================================ -->
         <div id="scaleTab" class="tab-content">
             <!-- ============================================================
+                 OPERATIONAL PULSE — 7-day summary card (Phase 2.7d)
+                 Shows counts for: photos pending, OCR queue, orphan captures,
+                 recent tickets, recent logins, walk-in inbox.
+                 ============================================================ -->
+            <div class="card" id="pulseCard" style="border-color:var(--cyan);background:linear-gradient(135deg,var(--bg-card) 0%,rgba(0,201,167,0.04) 100%);">
+                <div class="card-title">
+                    <span class="icon">📊</span> Last 7 Days · Operational Pulse
+                    <button onclick="DS.loadOperationalPulse()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.7rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
+                </div>
+                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:12px;">Tap any tile to jump to the detailed view.</p>
+                <div id="pulseGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+                    <!-- Photo Review -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('photos')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">📸</div>
+                        <div id="pulsePhotos" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--cyan);margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Photos Pending<br>Review</div>
+                    </div>
+                    <!-- OCR Queue -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('ocr')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">📥</div>
+                        <div id="pulseOcr" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--amber);margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">OCR Queue<br>Awaiting Process</div>
+                    </div>
+                    <!-- Orphan Pi Captures -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('orphans')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">⚠️</div>
+                        <div id="pulseOrphans" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--warning);margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Orphan Scale<br>Captures</div>
+                    </div>
+                    <!-- Tickets last 7d -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('tickets')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">🎫</div>
+                        <div id="pulseTickets" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--primary);margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Tickets Created<br>(7d)</div>
+                    </div>
+                    <!-- Client Logins last 7d -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('logins')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">👥</div>
+                        <div id="pulseLogins" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:#60a5fa;margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Client Logins<br>(7d)</div>
+                    </div>
+                    <!-- Walk-in Inbox -->
+                    <div class="pulse-tile" onclick="DS.jumpToPulseDetail('walkin')" style="padding:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;">
+                        <div style="font-size:1.6rem;line-height:1;">📦</div>
+                        <div id="pulseWalkin" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:#3b82f6;margin-top:4px;line-height:1;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Walk-in Inbox<br>Total</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================
                  PI SCALE CAPTURES — Raw weight readings from WI-127 (NEW)
                  ============================================================ -->
             <div class="card" id="piCapturesCard" style="border-color:var(--warning);background:linear-gradient(135deg,var(--bg-card) 0%,rgba(245,158,11,0.04) 100%);">
@@ -1579,6 +1630,111 @@ const DS = {
             console.warn('Driver create error:', e);
         }
         return null;
+    },
+
+    // ────────────────────────────────────────────────────────
+    // Phase 2.7d: OPERATIONAL PULSE (7-day summary card at top of Scale tab)
+    // ────────────────────────────────────────────────────────
+    async loadOperationalPulse() {
+        const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+        const PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
+
+        // Helper: count rows quickly via Prefer: count=exact
+        const countQuery = async (path) => {
+            try {
+                const res = await fetch(this.state.supabaseUrl + '/rest/v1/' + path + '&select=id&limit=1', {
+                    method: 'HEAD',
+                    headers: {
+                        'apikey': this.state.supabaseKey,
+                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                        'Prefer': 'count=exact'
+                    }
+                });
+                const range = res.headers.get('content-range') || '';
+                const m = range.match(/\/(\d+|\*)$/);
+                if (m && m[1] !== '*') return parseInt(m[1], 10);
+                return 0;
+            } catch (e) {
+                console.warn('countQuery failed for', path, e);
+                return null;
+            }
+        };
+
+        // Helper: simple fetch with limit, count length
+        const lengthQuery = async (path) => {
+            try {
+                const rows = await this.supabase(path);
+                return (rows || []).length;
+            } catch (e) { console.warn('lengthQuery failed:', e); return null; }
+        };
+
+        // 1. Photos pending review (photo_queue.status = 'pending', last 7d)
+        const photosPromise = lengthQuery('photo_queue?status=eq.pending&created_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
+
+        // 2. OCR queue (photo_queue with OCR-related statuses)
+        const ocrPromise = lengthQuery('photo_queue?status=in.(processing,ocr_pending,queued)&created_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
+
+        // 3. Orphan scale captures (scale_weights with no ticket_id, last 7d)
+        const orphansPromise = lengthQuery('scale_weights?ticket_id=is.null&status=eq.pending&captured_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
+
+        // 4. Tickets created (last 7d)
+        const ticketsPromise = lengthQuery('tickets?created_at=gte.' + sevenDaysAgo + '&select=id&limit=10000');
+
+        // 5. Client logins (last 7d)
+        const loginsPromise = lengthQuery('client_logins?logged_in_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
+
+        // 6. Walk-in inbox total (any time — these accumulate until reassigned)
+        const walkinPromise = lengthQuery('tickets?or=(project_id.eq.' + PLACEHOLDER_ID + ',scan_type.eq.pi_scale_walkin)&select=id&limit=1000');
+
+        // Run in parallel for speed
+        const [photos, ocr, orphans, tickets, logins, walkin] = await Promise.all([
+            photosPromise, ocrPromise, orphansPromise, ticketsPromise, loginsPromise, walkinPromise
+        ]);
+
+        const fmt = (n) => (n === null || n === undefined) ? '—' : String(n);
+        document.getElementById('pulsePhotos').textContent = fmt(photos);
+        document.getElementById('pulseOcr').textContent = fmt(ocr);
+        document.getElementById('pulseOrphans').textContent = fmt(orphans);
+        document.getElementById('pulseTickets').textContent = fmt(tickets);
+        document.getElementById('pulseLogins').textContent = fmt(logins);
+        document.getElementById('pulseWalkin').textContent = fmt(walkin);
+    },
+
+    // Tap a pulse tile to jump to relevant detail view
+    jumpToPulseDetail(tile) {
+        const scrollTo = (id) => {
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+        switch (tile) {
+            case 'photos':
+                // Photo Review lives in Audit tab — switch tab then scroll to queue card
+                document.querySelector('[data-tab=auditTab]')?.click();
+                setTimeout(() => scrollTo('queueContent'), 200);
+                break;
+            case 'ocr':
+                document.querySelector('[data-tab=auditTab]')?.click();
+                setTimeout(() => scrollTo('queueContent'), 200);
+                break;
+            case 'orphans':
+                // Pi Captures lives in Scale tab — just scroll
+                scrollTo('piCapturesCard');
+                this.loadPiCaptures();
+                break;
+            case 'tickets':
+                // Tickets tab
+                document.querySelector('[data-tab=ticketsTab]')?.click();
+                break;
+            case 'logins':
+                document.querySelector('[data-tab=auditTab]')?.click();
+                setTimeout(() => scrollTo('loginLogContent'), 200);
+                this.loadLoginLog();
+                break;
+            case 'walkin':
+                scrollTo('walkinInboxCard');
+                this.loadWalkinInbox();
+                break;
+        }
     },
 
     async loadDrivers() {
@@ -2841,7 +2997,7 @@ const DS = {
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'projectsTab') this.renderProjectList();
                 if (tab === 'auditTab') { this.loadPendingReview(); this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); this.loadHaulerMgmt(); }
-                if (tab === 'scaleTab') { this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); this.loadWalkinInbox(); }
+                if (tab === 'scaleTab') { this.loadOperationalPulse(); this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); this.loadWalkinInbox(); }
             });
         });
     },
@@ -3313,7 +3469,7 @@ const DS = {
                 </div>
                 <div class="ticket-info">
                     <div class="ticket-title">${scanBadge}${this.esc(t.ticket_number)}${projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : ''}</div>
-                    <div class="ticket-meta">${this.fmtDate(t.ticket_date)} • ${t.hauler || 'Unknown hauler'}${t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(t.driver_name) + '</span>' : ''} • ${this.state.currentProject?.leed_version === 'none' ? '' : ((t.diversion_pct || 0) + '% div')}${t.zone ? ' • Zone ' + t.zone : ''}</div>
+                    <div class="ticket-meta">${this.fmtDateTime(t)} • ${t.hauler || 'Unknown hauler'}${t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + this.esc(t.driver_name) + '</span>' : ''} • ${this.state.currentProject?.leed_version === 'none' ? '' : ((t.diversion_pct || 0) + '% div')}${t.zone ? ' • Zone ' + t.zone : ''}</div>
                     <div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">${uploadInfo}</div>
                 </div>
                 <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
@@ -3359,7 +3515,7 @@ const DS = {
                 '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                     (isComplete ? '✅' : '⚠️') + '</div>' +
                 '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
-                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
                 '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                 '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
         }).join('');
@@ -3387,7 +3543,7 @@ const DS = {
                 '<div class="ticket-icon" style="background:' + (isComplete ? 'var(--success-glow)' : 'var(--warning-glow)') + ';">' +
                     (isComplete ? '✅' : '⚠️') + '</div>' +
                 '<div class="ticket-info"><div class="ticket-title">' + scanBadge + DS.esc(t.ticket_number) + (projLabel ? ' <span style="color:var(--primary);font-size:.7rem;font-weight:600">• ' + projLabel + '</span>' : '') + '</div>' +
-                '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
+                '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' • ' + (t.hauler || 'Unknown') + (t.driver_name ? ' • <span style="color:var(--primary);font-weight:600">' + DS.esc(t.driver_name) + '</span>' : '') + ' • ' + (t.diversion_pct || 0) + '% div</div>' +
                 '<div style="font-size:.6rem;color:var(--text-dim);margin-top:2px">' + uploadInfo + '</div></div>' +
                 '<div class="ticket-tons">' + DS.fmt(t.net_tons) + ' T</div></div>';
         }).join('');
@@ -3463,7 +3619,7 @@ const DS = {
 
         document.getElementById('ticketDetailContent').innerHTML = `
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
-                ${this.fmtDate(t.ticket_date)} • ${t.hauler || ''}${t.driver_name ? ' • Driver: <strong style="color:var(--primary)">' + this.esc(t.driver_name) + '</strong>' : ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
+                ${this.fmtDateTime(t)} • ${t.hauler || ''}${t.driver_name ? ' • Driver: <strong style="color:var(--primary)">' + this.esc(t.driver_name) + '</strong>' : ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
             </div>
             <div style="font-size:0.65rem; color:var(--text-dim); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap;">
                 ${t.created_at ? '<span>📤 Uploaded: ' + new Date(t.created_at).toLocaleString() + ' (' + this.timeAgo(t.created_at) + ')</span>' : ''}
@@ -5458,7 +5614,7 @@ const DS = {
             var divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
 
             tbl += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
-                '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
+                '<td style="padding:8px 6px; color:var(--text-muted);white-space:nowrap;">' + this.fmtDateTime(t) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
                 '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
@@ -5558,7 +5714,7 @@ const DS = {
             const divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
 
             html += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketFromDrill(\'' + t.id + '\')">' +
-                '<td style="padding:8px 6px; color:var(--text-muted);">' + this.fmtDate(t.ticket_date) + '</td>' +
+                '<td style="padding:8px 6px; color:var(--text-muted);white-space:nowrap;">' + this.fmtDateTime(t) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
                 '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
@@ -7225,7 +7381,9 @@ const DS = {
         var el = document.getElementById('queueContent');
         el.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted);">Loading...</div>';
 
-        var data = await this.supabase('photo_queue?order=created_at.desc&limit=100');
+        // Phase 2.7d: Only show last 7 days of photo queue items (avoid burying admin in old uploads)
+        var sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+        var data = await this.supabase('photo_queue?created_at=gte.' + sevenDaysAgo + '&order=created_at.desc&limit=100');
         if (!data) { el.innerHTML = '<div style="color:var(--danger);">Failed to load queue</div>'; return; }
 
         this._photoQueue = data;
@@ -8884,7 +9042,7 @@ const DS = {
                 html += '<div class="ticket-item" style="padding:6px 0;cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                     '<div class="ticket-icon" style="background:var(--danger-light);font-size:.8rem;">\u274C</div>' +
                     '<div class="ticket-info"><div class="ticket-title" style="font-size:.75rem;">' + DS.esc(t.ticket_number) + (proj ? ' <span style="color:var(--primary);font-size:.65rem;">\u2022 ' + proj + '</span>' : '') + '</div>' +
-                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' \u2022 ' + (t.hauler || 'No hauler') + ' \u2022 0 lbs</div></div></div>';
+                    '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' \u2022 ' + (t.hauler || 'No hauler') + ' \u2022 0 lbs</div></div></div>';
             });
             if (noWeight.length > 10) html += '<div style="font-size:.65rem;color:var(--text-dim);padding:4px 0;">...and ' + (noWeight.length - 10) + ' more</div>';
             html += '</div>';
@@ -8897,7 +9055,7 @@ const DS = {
                 html += '<div class="ticket-item" style="padding:6px 0;cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                     '<div class="ticket-icon" style="background:var(--warning-light);font-size:.8rem;">\u26A0\uFE0F</div>' +
                     '<div class="ticket-info"><div class="ticket-title" style="font-size:.75rem;">' + DS.esc(t.ticket_number) + (proj ? ' <span style="color:var(--primary);font-size:.65rem;">\u2022 ' + proj + '</span>' : '') + '</div>' +
-                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' \u2022 ' + DS.fmt(t.net_tons) + ' T \u2022 No material %</div></div></div>';
+                    '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' \u2022 ' + DS.fmt(t.net_tons) + ' T \u2022 No material %</div></div></div>';
             });
             if (noMaterials.length > 10) html += '<div style="font-size:.65rem;color:var(--text-dim);padding:4px 0;">...and ' + (noMaterials.length - 10) + ' more</div>';
             html += '</div>';
@@ -8910,7 +9068,7 @@ const DS = {
                 html += '<div class="ticket-item" style="padding:6px 0;cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                     '<div class="ticket-icon" style="background:var(--info-glow);font-size:.8rem;">\uD83D\uDCF7</div>' +
                     '<div class="ticket-info"><div class="ticket-title" style="font-size:.75rem;">' + DS.esc(t.ticket_number) + (proj ? ' <span style="color:var(--primary);font-size:.65rem;">\u2022 ' + proj + '</span>' : '') + '</div>' +
-                    '<div class="ticket-meta">' + DS.fmtDate(t.ticket_date) + ' \u2022 ' + DS.fmt(t.net_tons) + ' T \u2022 No photo</div></div></div>';
+                    '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' \u2022 ' + DS.fmt(t.net_tons) + ' T \u2022 No photo</div></div></div>';
             });
             if (noPhoto.length > 8) html += '<div style="font-size:.65rem;color:var(--text-dim);padding:4px 0;">...and ' + (noPhoto.length - 8) + ' more</div>';
             html += '</div>';
@@ -9169,12 +9327,14 @@ const DS = {
     async loadLoginLog() {
         var el = document.getElementById('loginLogContent');
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
-        var logs = await this.supabase('client_logins?order=logged_in_at.desc&limit=50');
+        // Phase 2.7d: Only show last 7 days of login history (keep view focused on recent activity)
+        var sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+        var logs = await this.supabase('client_logins?logged_in_at=gte.' + sevenDaysAgo + '&order=logged_in_at.desc&limit=50');
         if (!logs || !logs.length) {
-            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No login history yet. Run create_login_log.sql in Supabase first.</div>';
+            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No logins in the last 7 days.</div>';
             return;
         }
-        var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' recent logins</div>';
+        var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' login' + (logs.length===1?'':'s') + ' · last 7 days</div>';
         logs.forEach(function(log) {
             var dt = log.logged_in_at ? new Date(log.logged_in_at) : null;
             var timeStr = dt ? dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
@@ -9496,6 +9656,46 @@ const DS = {
         const m = parseInt(parts[1]) - 1;
         const d = parseInt(parts[2]);
         return months[m] + ' ' + d + ', ' + parts[0];
+    },
+
+    // Phase 2.7d: Format a ticket's date AND time inline.
+    // CRITICAL: the date is ALWAYS ticket_date (the authoritative date, often from paper ticket).
+    // The time from captured_at is ONLY shown if captured_at falls on the same calendar day as ticket_date
+    // (i.e. a real-time scan, not a backdated paper ticket entry).
+    // For OCR'd paper tickets or manual entries with backdated ticket_date, no time is shown.
+    fmtDateTime(t) {
+        if (!t) return '';
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        // The authoritative date — always shown
+        if (!t.ticket_date) return '';
+        const dateParts = t.ticket_date.split('-');
+        if (dateParts.length < 3) return t.ticket_date;
+        const tdYear = parseInt(dateParts[0]);
+        const tdMonth = parseInt(dateParts[1]); // 1-12
+        const tdDay = parseInt(dateParts[2]);
+        const currentYear = new Date().getFullYear();
+        const dateStr = months[tdMonth - 1] + ' ' + tdDay + (tdYear !== currentYear ? ', ' + tdYear : '');
+
+        // Try to show time — only if captured_at exists AND falls on the same calendar day as ticket_date
+        const iso = t.captured_at;
+        if (iso) {
+            const dt = new Date(iso);
+            if (!isNaN(dt.getTime())) {
+                // Compare local-time year/month/day to ticket_date components
+                if (dt.getFullYear() === tdYear && (dt.getMonth() + 1) === tdMonth && dt.getDate() === tdDay) {
+                    let hours = dt.getHours();
+                    const mins = dt.getMinutes();
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12;
+                    if (hours === 0) hours = 12;
+                    const minsStr = mins < 10 ? '0' + mins : mins;
+                    return dateStr + ' · ' + hours + ':' + minsStr + ' ' + ampm;
+                }
+            }
+        }
+        // No matching time — return date only (preserves backdated paper-ticket dates)
+        return dateStr;
     },
 
     esc(str) {
