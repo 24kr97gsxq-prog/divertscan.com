@@ -1812,6 +1812,15 @@ const DS = {
             return;
         }
 
+        // Phase 2.7d: detect duplicate driver names (case-insensitive, trimmed) across the FULL cache
+        // so we flag even when search/filter would hide the other instance
+        const nameCount = {};
+        (this._allDriversCache || []).forEach(d => {
+            const key = (d.driver_name || '').toLowerCase().trim();
+            if (!key) return;
+            nameCount[key] = (nameCount[key] || 0) + 1;
+        });
+
         const baseUrl = window.location.origin + window.location.pathname.replace(/index\.html$/, '').replace(/[^/]*$/, '');
 
         listEl.innerHTML = filtered.map(d => {
@@ -1821,23 +1830,30 @@ const DS = {
                 : '—';
             const url = baseUrl + 'driver.html?t=' + encodeURIComponent(d.driver_token);
             const isInactive = !d.is_active;
+            const dupeKey = (d.driver_name || '').toLowerCase().trim();
+            const isDupe = nameCount[dupeKey] > 1;
+            const loadCount = d._loadCount || 0;
 
-            return '<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--bg-input);' + (isInactive ? 'opacity:0.5;' : '') + '">' +
+            return '<div style="padding:10px;border:1px solid ' + (isDupe ? 'var(--warning)' : 'var(--border)') + ';border-radius:8px;margin-bottom:6px;background:' + (isDupe ? 'rgba(245,158,11,0.06)' : 'var(--bg-input)') + ';' + (isInactive ? 'opacity:0.5;' : '') + '">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">' +
                     '<div style="flex:1;min-width:140px;">' +
-                        '<div style="font-weight:700;color:var(--text);font-size:.9rem;">' + d.driver_name + '</div>' +
-                        '<div style="font-size:.65rem;color:var(--text-muted);">🚛 ' + d.hauler + '</div>' +
+                        '<div style="font-weight:700;color:var(--text);font-size:.9rem;">' + this.esc(d.driver_name) +
+                            (isDupe ? ' <span style="background:var(--warning);color:#080f14;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:4px;vertical-align:middle">⚠ DUPLICATE x' + nameCount[dupeKey] + '</span>' : '') +
+                        '</div>' +
+                        '<div style="font-size:.65rem;color:var(--text-muted);">🚛 ' + this.esc(d.hauler) + '</div>' +
                         (phoneFmt ? '<div style="font-size:.65rem;color:#60a5fa;margin-top:2px;">📱 ' + phoneFmt + '</div>' : '') +
                     '</div>' +
                     '<div style="text-align:right;min-width:80px;">' +
-                        '<div style="font-family:monospace;font-weight:700;color:var(--primary);font-size:.85rem;">' + d._loadCount + ' loads</div>' +
-                        '<div style="font-size:.6rem;color:var(--text-muted);">' + d._totalTons.toFixed(1) + ' T · last ' + lastLoadStr + '</div>' +
+                        '<div style="font-family:monospace;font-weight:700;color:var(--primary);font-size:.85rem;">' + loadCount + ' loads</div>' +
+                        '<div style="font-size:.6rem;color:var(--text-muted);">' + (d._totalTons || 0).toFixed(1) + ' T · last ' + lastLoadStr + '</div>' +
                     '</div>' +
                 '</div>' +
                 '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
-                    '<button onclick="DS.copyDriverUrl(\'' + d.id + '\')" style="flex:1;min-width:90px;padding:6px 10px;background:rgba(0,201,167,0.15);border:1px solid var(--primary);color:var(--primary);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">📋 Copy URL</button>' +
+                    '<button onclick="DS.copyDriverUrl(\'' + d.id + '\')" style="flex:1;min-width:80px;padding:6px 10px;background:rgba(0,201,167,0.15);border:1px solid var(--primary);color:var(--primary);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">📋 Copy</button>' +
                     '<button onclick="DS.openDriverUrl(\'' + d.id + '\')" style="flex:1;min-width:70px;padding:6px 10px;background:rgba(96,165,250,0.15);border:1px solid #60a5fa;color:#60a5fa;border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">🔍 View</button>' +
-                    '<button onclick="DS.regenerateDriverToken(\'' + d.id + '\')" style="flex:1;min-width:90px;padding:6px 10px;background:rgba(245,158,11,0.15);border:1px solid var(--warning);color:var(--warning);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">🔄 Regenerate</button>' +
+                    '<button onclick="DS.regenerateDriverToken(\'' + d.id + '\')" style="flex:1;min-width:90px;padding:6px 10px;background:rgba(245,158,11,0.15);border:1px solid var(--warning);color:var(--warning);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;">🔄 Regen</button>' +
+                    '<button onclick="DS.openMergeDriver(\'' + d.id + '\')" style="flex:1;min-width:85px;padding:6px 10px;background:' + (isDupe ? 'var(--warning)' : 'rgba(168,85,247,0.15)') + ';border:1px solid ' + (isDupe ? 'var(--warning)' : '#a855f7') + ';color:' + (isDupe ? '#080f14' : '#a855f7') + ';border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;">🔀 Merge</button>' +
+                    '<button onclick="DS.deleteDriver(\'' + d.id + '\')" style="padding:6px 10px;background:rgba(239,68,68,0.15);border:1px solid var(--danger);color:var(--danger);border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;" title="Delete this driver">🗑️</button>' +
                 '</div>' +
             '</div>';
         }).join('');
@@ -2030,6 +2046,225 @@ const DS = {
             const t = (this._walkinInboxCache || []).find(x => x.id === ticketId);
             this.showToast('Ticket ' + (t ? t.ticket_number : ticketId));
         }
+    },
+
+    // ────────────────────────────────────────────────────────
+    // Phase 2.7d: DRIVER MERGE + DELETE
+    // Cleanup tooling for duplicate driver rows (often caused by hauler name variants
+    // or OCR creating a new driver row each time a name appears slightly different)
+    // ────────────────────────────────────────────────────────
+
+    // Open the merge picker for a source driver
+    openMergeDriver(sourceDriverId) {
+        const source = (this._allDriversCache || []).find(d => d.id === sourceDriverId);
+        if (!source) { this.showToast('Driver not found'); return; }
+
+        // Build list of candidates: all OTHER drivers, prioritizing same-name (case-insensitive) matches
+        const srcName = (source.driver_name || '').toLowerCase().trim();
+        const candidates = (this._allDriversCache || [])
+            .filter(d => d.id !== sourceDriverId)
+            .map(d => {
+                const nm = (d.driver_name || '').toLowerCase().trim();
+                let score = 0;
+                if (nm === srcName) score = 100;
+                else if (nm && srcName && (nm.indexOf(srcName) >= 0 || srcName.indexOf(nm) >= 0)) score = 50;
+                return { d, score };
+            })
+            .sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return (b.d._loadCount || 0) - (a.d._loadCount || 0);
+            });
+
+        // Build modal
+        const existing = document.getElementById('mergeDriverModal');
+        if (existing) existing.remove();
+
+        const exactMatches = candidates.filter(c => c.score === 100);
+        const otherMatches = candidates.filter(c => c.score < 100);
+
+        const srcLoads = source._loadCount || 0;
+        const srcTons = (source._totalTons || 0).toFixed(2);
+
+        const exactRows = exactMatches.map(c => this._renderMergeCandidateRow(c.d, sourceDriverId, true)).join('');
+        const otherRows = otherMatches.slice(0, 30).map(c => this._renderMergeCandidateRow(c.d, sourceDriverId, false)).join('');
+
+        const html =
+            '<div class="modal-overlay show" id="mergeDriverModal" onclick="if(event.target.id===\'mergeDriverModal\')document.getElementById(\'mergeDriverModal\').remove()">' +
+                '<div class="modal" style="max-width:600px">' +
+                    '<div class="modal-title">🔀 Merge Driver: ' + this.esc(source.driver_name) + '</div>' +
+                    '<p style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">' +
+                        'Pick the driver you want to <strong>keep</strong>. All ' + srcLoads + ' load' + (srcLoads === 1 ? '' : 's') +
+                        ' (' + srcTons + ' T) currently linked to <strong>' + this.esc(source.driver_name) + ' (' + this.esc(source.hauler) + ')</strong> will be reassigned to the chosen driver. ' +
+                        'Then this duplicate row will be permanently deleted.' +
+                    '</p>' +
+                    (exactRows ?
+                        '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--warning);font-weight:700;margin:8px 0 6px">⚠️ Exact Name Matches</div>' + exactRows
+                    : '') +
+                    (otherRows ?
+                        '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:700;margin:12px 0 6px">Other Drivers</div>' + otherRows
+                    : '') +
+                    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+                        '<button class="btn btn-outline" onclick="document.getElementById(\'mergeDriverModal\').remove()" style="flex:1">Cancel</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        document.body.insertAdjacentHTML('beforeend', html);
+    },
+
+    _renderMergeCandidateRow(d, sourceId, isExact) {
+        const loads = d._loadCount || 0;
+        const tons = (d._totalTons || 0).toFixed(2);
+        const bgColor = isExact ? 'rgba(245,158,11,0.08)' : 'var(--bg-input)';
+        const borderColor = isExact ? 'var(--warning)' : 'var(--border)';
+        return '<div style="padding:8px 10px;border:1px solid ' + borderColor + ';border-radius:6px;margin-bottom:6px;background:' + bgColor + ';display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<div style="flex:1;min-width:140px">' +
+                '<div style="font-weight:700;font-size:.85rem;color:var(--text)">' + this.esc(d.driver_name) + '</div>' +
+                '<div style="font-size:.65rem;color:var(--text-muted)">🚛 ' + this.esc(d.hauler) + ' · ' + loads + ' loads · ' + tons + ' T</div>' +
+            '</div>' +
+            '<button onclick="DS.performMerge(\'' + sourceId + '\',\'' + d.id + '\')" style="padding:6px 12px;background:var(--primary);color:#080f14;border:none;border-radius:6px;font-size:.7rem;font-weight:700;cursor:pointer;white-space:nowrap">✅ Keep this one</button>' +
+        '</div>';
+    },
+
+    // Perform the merge: reassign all tickets from sourceId to targetId, then delete source
+    async performMerge(sourceId, targetId) {
+        const source = (this._allDriversCache || []).find(d => d.id === sourceId);
+        const target = (this._allDriversCache || []).find(d => d.id === targetId);
+        if (!source || !target) { this.showToast('Driver not found'); return; }
+
+        const confirmed = confirm(
+            '⚠️ MERGE — CANNOT BE UNDONE\n\n' +
+            'Reassign all tickets from:\n' +
+            '  "' + source.driver_name + '" (' + source.hauler + ', ' + (source._loadCount || 0) + ' loads)\n\n' +
+            'To target driver:\n' +
+            '  "' + target.driver_name + '" (' + target.hauler + ', ' + (target._loadCount || 0) + ' loads)\n\n' +
+            'Then permanently delete the source driver row.\n\nProceed?'
+        );
+        if (!confirmed) return;
+
+        const overlay = document.getElementById('mergeDriverModal');
+        if (overlay) overlay.remove();
+
+        this.showLoading('Reassigning tickets...');
+        try {
+            // Step 1: reassign tickets (PATCH driver_id + driver_name)
+            const ticketUpdate = await this.supabase('tickets?driver_id=eq.' + sourceId, 'PATCH', {
+                driver_id: targetId,
+                driver_name: target.driver_name
+            });
+            if (ticketUpdate === null) throw new Error('Failed to reassign tickets');
+
+            // Step 2: delete the source driver row
+            const deleteResp = await this.supabase('drivers?id=eq.' + sourceId, 'DELETE');
+            if (deleteResp === null) throw new Error('Tickets moved, but failed to delete source driver row');
+
+            this.addAuditEntry('DRIVER_MERGE',
+                source.driver_name + ' (' + (source._loadCount || 0) + ' loads) → ' + target.driver_name +
+                ' [source ' + sourceId.substring(0, 8) + ' deleted]'
+            );
+
+            this.hideLoading();
+            this.showToast('✅ Merged ' + source.driver_name + ' → ' + target.driver_name);
+
+            // Refresh
+            await this.loadDrivers();
+        } catch (err) {
+            this.hideLoading();
+            console.error('Merge error:', err);
+            this.showToast('❌ ' + (err.message || 'Merge failed'));
+        }
+    },
+
+    // Delete a driver. If they have tickets, warn and offer to merge instead.
+    async deleteDriver(driverId) {
+        const driver = (this._allDriversCache || []).find(d => d.id === driverId);
+        if (!driver) { this.showToast('Driver not found'); return; }
+
+        const loads = driver._loadCount || 0;
+
+        if (loads > 0) {
+            const choice = confirm(
+                '⚠️ "' + driver.driver_name + '" has ' + loads + ' ticket' + (loads === 1 ? '' : 's') + '.\n\n' +
+                'Deleting will UNLINK these tickets from any driver (driver_id and driver_name will be cleared).\n' +
+                'The tickets will remain in the database — only the driver association is removed.\n\n' +
+                'If you actually want to MERGE this into another driver, cancel and use the 🔀 Merge button instead.\n\n' +
+                'Proceed with unlink + delete?'
+            );
+            if (!choice) return;
+        } else {
+            const confirmed = confirm(
+                'Delete driver "' + driver.driver_name + '" (' + driver.hauler + ')?\n\nThis driver has no tickets. Safe to delete.'
+            );
+            if (!confirmed) return;
+        }
+
+        this.showLoading('Deleting...');
+        try {
+            // If they have tickets, unlink first
+            if (loads > 0) {
+                const unlink = await this.supabase('tickets?driver_id=eq.' + driverId, 'PATCH', {
+                    driver_id: null,
+                    driver_name: null
+                });
+                if (unlink === null) throw new Error('Failed to unlink tickets');
+            }
+
+            // Now delete the driver
+            const deleteResp = await this.supabase('drivers?id=eq.' + driverId, 'DELETE');
+            if (deleteResp === null) throw new Error('Failed to delete driver row');
+
+            this.addAuditEntry('DRIVER_DELETE',
+                driver.driver_name + ' (' + driver.hauler + ', ' + loads + ' loads)' +
+                (loads > 0 ? ' [tickets unlinked]' : '')
+            );
+
+            this.hideLoading();
+            this.showToast('✅ Deleted ' + driver.driver_name);
+            await this.loadDrivers();
+        } catch (err) {
+            this.hideLoading();
+            console.error('Delete error:', err);
+            this.showToast('❌ ' + (err.message || 'Delete failed'));
+        }
+    },
+
+    // Phase 2.7d: Rename a driver master record. If the new name collides with an existing
+    // driver row (same hauler), offer to merge instead.
+    async _renameDriverMasterRecord(driverId, newName, oldName) {
+        const driver = (this._allDriversCache || []).find(d => d.id === driverId);
+        if (!driver) { this.showToast('Driver not found'); return; }
+
+        // Check for an existing driver with the new name under same hauler
+        const conflict = (this._allDriversCache || []).find(d =>
+            d.id !== driverId &&
+            d.hauler === driver.hauler &&
+            (d.driver_name || '').trim().toLowerCase() === newName.toLowerCase()
+        );
+
+        if (conflict) {
+            const wantMerge = confirm(
+                'A driver named "' + newName + '" already exists under ' + driver.hauler + '.\n\n' +
+                'Existing driver: "' + conflict.driver_name + '" with ' + (conflict._loadCount || 0) + ' loads.\n' +
+                'This driver: "' + oldName + '" with ' + (driver._loadCount || 0) + ' loads.\n\n' +
+                'OK = MERGE this driver into the existing "' + newName + '" (recommended)\n' +
+                'Cancel = leave as-is (will keep "' + oldName + '" on the master record)'
+            );
+            if (wantMerge) {
+                await this.performMerge(driverId, conflict.id);
+            }
+            return;
+        }
+
+        // No conflict — simple rename
+        this.showLoading('Renaming driver...');
+        const updateRes = await this.supabase('drivers?id=eq.' + driverId, 'PATCH', { driver_name: newName });
+        this.hideLoading();
+        if (updateRes === null) {
+            this.showToast('❌ Failed to rename driver');
+            return;
+        }
+        this.addAuditEntry('DRIVER_RENAME', oldName + ' → ' + newName + ' [' + driver.hauler + ']');
+        this.showToast('✅ Renamed driver: ' + oldName + ' → ' + newName);
+        await this.loadDrivers();
     },
 
     async regenerateDriverToken(driverId) {
@@ -4306,6 +4541,36 @@ const DS = {
             this.showToast('❌ Save failed — check connection');
             return;
         }
+
+        // Phase 2.7d: Detect driver_name drift between tickets.driver_name and drivers.driver_name
+        // This catches the common case where OCR misreads a driver name, user edits the ticket,
+        // but the linked drivers-table row still has the wrong name.
+        try {
+            const editedTicket = result[0];
+            if (editedTicket && editedTicket.driver_id && editedTicket.driver_name) {
+                const linkedDriver = (this._allDriversCache || []).find(d => d.id === editedTicket.driver_id);
+                if (linkedDriver && linkedDriver.driver_name &&
+                    linkedDriver.driver_name.trim().toLowerCase() !== editedTicket.driver_name.trim().toLowerCase()) {
+                    // Drift detected. Show a follow-up prompt.
+                    setTimeout(() => {
+                        const newName = editedTicket.driver_name.trim();
+                        const oldName = linkedDriver.driver_name.trim();
+                        const choice = confirm(
+                            '⚠️ Driver name drift detected\n\n' +
+                            'You changed the ticket\'s driver to: "' + newName + '"\n' +
+                            'But the linked driver record still says: "' + oldName + '"\n\n' +
+                            'They\'re the same person (same driver_id) but the names disagree.\n' +
+                            'This means the Drivers list and reports will keep showing "' + oldName + '".\n\n' +
+                            'Tap OK to also rename the driver master record to "' + newName + '".\n' +
+                            'Tap Cancel to leave the driver record alone (e.g., if the ticket should be linked to a different existing driver instead).'
+                        );
+                        if (choice) {
+                            this._renameDriverMasterRecord(editedTicket.driver_id, newName, oldName);
+                        }
+                    }, 200);
+                }
+            }
+        } catch (err) { console.warn('drift check failed:', err); }
 
         // Always reload tickets from database to ensure clean state
         if (this.state.currentProject) {
