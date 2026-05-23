@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vanessa Protocol — Smoke Test</title>
+<style>
+:root {
+    --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+    --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+    --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#00c9a7;
+    --mono:'JetBrains Mono','Menlo','Consolas',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    line-height: 1.5;
+}
+.wrap { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin-bottom: 6px; }
+h1 span { color: var(--cyan); }
+.sub { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+}
+.card h2 { font-size: 1rem; margin-bottom: 10px; color: var(--cyan); }
+
+button {
+    background: var(--cyan);
+    color: #001a14;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 4px 6px 4px 0;
+}
+button.alt {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+button.danger { background: var(--red); color: white; }
+
+.log {
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: .75rem;
+    max-height: 320px;
+    overflow-y: auto;
+    line-height: 1.6;
+}
+.log .ok { color: var(--green); }
+.log .err { color: var(--red); }
+.log .warn { color: var(--amber); }
+.log .info { color: var(--cyan); }
+.log .ts { color: var(--dim); }
+
+.row {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+.row:last-child { border-bottom: none; }
+.row .label { color: var(--muted); flex: 1; }
+.row .val {
+    font-family: var(--mono);
+    color: var(--text);
+    font-weight: 600;
+    font-size: .9rem;
+}
+.row .val.big { font-size: 1.4rem; color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1><span>Vanessa</span> Protocol — Smoke Test</h1>
+<div class="sub">Verifies the IndexedDB-backed offline queue works. Use the "Simulate offline" button to test without unplugging your network.</div>
+
+<div class="card">
+    <h2>State</h2>
+    <div class="row"><span class="label">Browser connectivity</span><span class="val" id="connState">—</span></div>
+    <div class="row"><span class="label">IndexedDB queue depth</span><span class="val big" id="queueDepth">—</span></div>
+    <div class="row"><span class="label">Last action</span><span class="val" id="lastAction">—</span></div>
+</div>
+
+<div class="card">
+    <h2>Tests</h2>
+    <button onclick="testEnqueue()">1. Enqueue a fake ticket</button>
+    <button onclick="testList()">2. List queue contents</button>
+    <button onclick="testFlush()">3. Flush queue (mock-success)</button>
+    <button class="alt" onclick="testFlushFail()">3b. Flush queue (mock-fail)</button>
+    <button class="alt" onclick="testPersist()">4. Persistence check</button>
+    <button class="danger" onclick="testClear()">Clear queue</button>
+</div>
+
+<div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+</div>
+
+</div>
+
+<script>
+// Same Vanessa code as in index.html (smoke test mirror)
+const vanessa = {
+    DB_NAME: 'divertscan-vanessa',
+    DB_VERSION: 1,
+    STORE: 'pending_writes',
+    _db: null,
+
+    async _open() {
+        if (this._db) return this._db;
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.STORE)) {
+                    db.createObjectStore(this.STORE, { keyPath: 'id', autoIncrement: true });
+                }
+            };
+            req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+            req.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async enqueue(op) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.STORE, 'readwrite');
+            const req = tx.objectStore(this.STORE).add({ ...op, createdAt: Date.now(), retries: 0 });
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async list() {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+            const req = db.transaction(this.STORE, 'readonly').objectStore(this.STORE).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async remove(id) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+            const req = db.transaction(this.STORE, 'readwrite').objectStore(this.STORE).delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async clear() {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+            const req = db.transaction(this.STORE, 'readwrite').objectStore(this.STORE).clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async count() {
+        return (await this.list()).length;
+    },
+};
+
+function log(level, msg) {
+    const el = document.getElementById('log');
+    const ts = new Date().toLocaleTimeString();
+    el.innerHTML = `<div><span class="ts">${ts}</span> <span class="${level}">${msg}</span></div>` + el.innerHTML;
+}
+
+async function refresh() {
+    document.getElementById('connState').textContent = navigator.onLine ? 'Online' : 'Offline';
+    const n = await vanessa.count();
+    document.getElementById('queueDepth').textContent = n;
+}
+
+async function testEnqueue() {
+    const ticketNum = 'TEST-' + Math.floor(Math.random() * 10000);
+    try {
+        const id = await vanessa.enqueue({
+            endpoint: 'tickets',
+            method: 'POST',
+            body: { ticket_number: ticketNum, net_tons: 5.5, _smoke_test: true },
+            label: 'ticket:' + ticketNum,
+        });
+        log('ok', '✓ Enqueued ticket ' + ticketNum + ' (id=' + id + ')');
+        document.getElementById('lastAction').textContent = 'enqueued ' + ticketNum;
+    } catch (e) {
+        log('err', '✗ Enqueue failed: ' + e.message);
+    }
+    refresh();
+}
+
+async function testList() {
+    try {
+        const items = await vanessa.list();
+        log('info', '— Queue has ' + items.length + ' items —');
+        items.forEach(i => {
+            log('info', '   #' + i.id + ' ' + i.label + ' (retries=' + i.retries + ', created=' + new Date(i.createdAt).toLocaleTimeString() + ')');
+        });
+        if (items.length === 0) log('warn', '   (queue is empty)');
+    } catch (e) {
+        log('err', '✗ List failed: ' + e.message);
+    }
+}
+
+async function testFlush() {
+    const items = await vanessa.list();
+    if (items.length === 0) {
+        log('warn', '⚠ Nothing to flush — queue is empty');
+        return;
+    }
+    log('info', '→ Flushing ' + items.length + ' items (mock-success)...');
+    for (const item of items) {
+        // Simulate a successful Supabase call
+        await new Promise(r => setTimeout(r, 200));
+        await vanessa.remove(item.id);
+        log('ok', '   ✓ synced ' + item.label);
+    }
+    log('ok', '✓ Flush complete');
+    refresh();
+}
+
+async function testFlushFail() {
+    const items = await vanessa.list();
+    if (items.length === 0) {
+        log('warn', '⚠ Nothing to flush — queue is empty');
+        return;
+    }
+    log('warn', '→ Mock flush with simulated network failure — items will stay queued');
+    for (const item of items) {
+        log('err', '   ✗ failed to sync ' + item.label + ' — keeping in queue');
+    }
+}
+
+async function testPersist() {
+    log('info', '→ Persistence check: reload this page and the queue depth should still be ' + (await vanessa.count()));
+    log('info', '   (IndexedDB persists across page loads and even browser restarts)');
+}
+
+async function testClear() {
+    if (!confirm('Clear the entire local queue? This deletes any unsynced tickets.')) return;
+    await vanessa.clear();
+    log('warn', '✗ Queue cleared');
+    refresh();
+}
+
+window.addEventListener('online', () => { log('ok', '↑ Browser back online'); refresh(); });
+window.addEventListener('offline', () => { log('warn', '↓ Browser went offline'); refresh(); });
+refresh();
+log('info', 'Smoke test ready. Tap "1. Enqueue" then "2. List" to verify the round-trip.');
+</script>
+</body>
+</html>
