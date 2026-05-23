@@ -159,9 +159,17 @@
                     <span class="status-dot"></span>
                     <span>Online</span>
                 </span>
-                <span class="status-pill online" style="cursor:pointer;" onclick="document.querySelector('[data-tab=scaleTab]').click()">
+                <span class="status-pill online" id="liveScalePill" style="cursor:pointer;gap:6px;" onclick="DS.toggleLiveScalePanel(event)" title="Click for last 10 weighments · long-press to open Scale tab" oncontextmenu="event.preventDefault();document.querySelector('[data-tab=scaleTab]').click();return false;">
                     <span class="status-dot"></span>
-                    <span>⚖️ Scale</span>
+                    <span style="font-size:.6rem;letter-spacing:.06em;color:rgba(34,197,94,.7);font-weight:700">SCALE</span>
+                    <span id="liveScaleWeight" style="font-family:'Space Mono',monospace;font-weight:700;font-size:.78rem;color:var(--success);font-variant-numeric:tabular-nums;min-width:42px;text-align:right">—</span>
+                    <span style="font-size:.55rem;color:rgba(34,197,94,.6)">lb</span>
+                    <span id="liveScalePhase" style="font-size:.55rem;letter-spacing:.06em;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text-muted);font-family:'Space Mono',monospace;font-weight:700">IDLE</span>
+                    <span style="font-size:.55rem;color:var(--text-dim)">▾</span>
+                </span>
+                <span class="status-pill" style="cursor:pointer;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--warning);" onclick="window.open('divertscan-demo.html', '_blank')" title="Open the DivertScan sales demo in a new tab">
+                    <span style="font-size:.7rem">🎬</span>
+                    <span style="font-weight:700;letter-spacing:.04em">Demo</span>
                 </span>
                 <span class="status-pill" id="projectBadge" onclick="DS.showProjectSelector()">
                     <span id="currentProjectName">No Project</span>
@@ -169,6 +177,28 @@
                 </span>
             </div>
         </header>
+
+        <!-- LIVE SCALE DROPDOWN — anchored to header, last 10 weighments -->
+        <div id="liveScaleDropdown" style="display:none;position:fixed;top:90px;right:12px;left:12px;max-width:520px;margin-left:auto;background:linear-gradient(135deg,#0f1311 0%,#1A1F1C 100%);border:1px solid rgba(34,197,94,.3);border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.5);z-index:200;overflow:hidden;animation:fadeIn .2s ease-out">
+            <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <div style="color:#fff;font-weight:700;font-size:.9rem">⚖️ Live Scale · Last 10</div>
+                    <div style="font-size:.6rem;color:var(--text-muted);letter-spacing:.05em;text-transform:uppercase;font-weight:600;margin-top:1px">Real-time captures from WI-127</div>
+                </div>
+                <button onclick="DS.toggleLiveScalePanel(null,true)" style="background:transparent;border:none;color:var(--text-muted);font-size:1rem;cursor:pointer;padding:4px 8px">✕</button>
+            </div>
+            <div id="liveScaleStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 16px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.04)">
+                <div><div style="font-size:.55rem;letter-spacing:.1em;color:var(--text-muted);text-transform:uppercase;font-weight:600">Today</div><div id="lsdToday" style="font-family:'Space Mono',monospace;font-size:.95rem;color:#fff;font-weight:700;margin-top:2px">—</div></div>
+                <div><div style="font-size:.55rem;letter-spacing:.1em;color:var(--text-muted);text-transform:uppercase;font-weight:600">Total Tons</div><div id="lsdTons" style="font-family:'Space Mono',monospace;font-size:.95rem;color:#fff;font-weight:700;margin-top:2px">—</div></div>
+                <div><div style="font-size:.55rem;letter-spacing:.1em;color:var(--text-muted);text-transform:uppercase;font-weight:600">Avg lb</div><div id="lsdAvg" style="font-family:'Space Mono',monospace;font-size:.95rem;color:#fff;font-weight:700;margin-top:2px">—</div></div>
+            </div>
+            <div id="liveScaleList" style="max-height:360px;overflow-y:auto;padding:6px 8px">
+                <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:.8rem">Loading…</div>
+            </div>
+            <div style="padding:8px 16px;border-top:1px solid rgba(255,255,255,.04);background:rgba(0,0,0,.15);font-size:.6rem;color:var(--text-dim);text-align:center">
+                Tap any row to open in Scale tab · long-press header pill for full Scale view
+            </div>
+        </div>
 
 ```
     <!-- ============================================================
@@ -686,7 +716,10 @@
             <div class="card">
                 <div class="card-title"><span class="icon">🏢</span> Client Portal Access</div>
                 <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Create client accounts and assign projects. Each client gets a portal code to view their project data, scale tickets, and download reports.</p>
-                <button class="btn btn-sm btn-primary mb-12" onclick="DS.showNewClientModal()">+ New Client</button>
+                <div class="btn-row mb-12">
+                    <button class="btn btn-sm btn-primary" onclick="DS.showNewClientModal()" style="flex:1">+ New Client</button>
+                    <a href="reset-client.html" target="_blank" class="btn btn-sm" style="flex:1;background:rgba(245,158,11,.15);border:1px solid var(--warning);color:var(--warning);font-weight:700;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">🔑 Reset Client Login</a>
+                </div>
                 <div id="clientList">
                     <button class="btn btn-sm btn-outline" onclick="DS.loadClients()">🔄 Load Clients</button>
                 </div>
@@ -3698,6 +3731,180 @@ const DS = {
 
         this.addAuditEntry('INIT', `DivertScan v${this.VERSION} ready`);
         console.log('DivertScan ready');
+
+        // Start live scale poller (only if Supabase configured)
+        if (this.state.supabaseUrl && this.state.supabaseKey) {
+            this.startLiveScalePoller();
+        }
+    },
+
+    // ============================================================
+    // LIVE SCALE — top-bar pill + last-10 dropdown
+    // ============================================================
+    _liveScaleTimer: null,
+    _liveScaleLastRows: [],
+
+    startLiveScalePoller() {
+        // Initial fetch immediately, then every 6 seconds
+        this.refreshLiveScale();
+        if (this._liveScaleTimer) clearInterval(this._liveScaleTimer);
+        this._liveScaleTimer = setInterval(() => this.refreshLiveScale(), 6000);
+    },
+
+    async refreshLiveScale() {
+        try {
+            // Pull last 10 from v_admin_review (same view loadPiCaptures uses)
+            const rows = await this.supabase('v_admin_review?order=captured_at.desc&limit=10');
+            if (!rows || !Array.isArray(rows)) return;
+            this._liveScaleLastRows = rows;
+            this._renderLiveScalePill(rows);
+            // If dropdown is open, refresh it too
+            const dd = document.getElementById('liveScaleDropdown');
+            if (dd && dd.style.display === 'block') {
+                this._renderLiveScaleDropdown(rows);
+            }
+        } catch (e) {
+            // Silent fail — header just shows last good value
+            console.warn('Live scale refresh:', e.message);
+        }
+    },
+
+    _renderLiveScalePill(rows) {
+        const wEl = document.getElementById('liveScaleWeight');
+        const pEl = document.getElementById('liveScalePhase');
+        if (!wEl || !pEl) return;
+
+        if (!rows || rows.length === 0) {
+            wEl.textContent = '—';
+            pEl.textContent = 'IDLE';
+            return;
+        }
+
+        const latest = rows[0];
+        const weight = Math.round(Number(latest.weight_lbs) || 0);
+        const ageSeconds = (Date.now() - new Date(latest.captured_at).getTime()) / 1000;
+
+        wEl.textContent = weight.toLocaleString();
+
+        // Phase = how fresh + classification
+        let phase, color, bg;
+        if (ageSeconds < 30) {
+            phase = (latest.weight_band === 'gross_candidate') ? 'LOCKED' :
+                    (latest.weight_band === 'tare_candidate')  ? 'TARE' :
+                    'LIVE';
+            color = '#22c55e'; bg = 'rgba(34,197,94,.14)';
+        } else if (ageSeconds < 300) {
+            phase = 'RECENT';
+            color = '#f59e0b'; bg = 'rgba(245,158,11,.14)';
+        } else {
+            phase = 'IDLE';
+            color = '#94a3b8'; bg = 'rgba(255,255,255,.06)';
+        }
+
+        pEl.textContent = phase;
+        pEl.style.color = color;
+        pEl.style.background = bg;
+        wEl.style.color = ageSeconds < 30 ? '#22c55e' : (ageSeconds < 300 ? '#f59e0b' : '#64748b');
+    },
+
+    toggleLiveScalePanel(ev, forceClose) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        const dd = document.getElementById('liveScaleDropdown');
+        if (!dd) return;
+        const isOpen = dd.style.display === 'block';
+        if (forceClose || isOpen) {
+            dd.style.display = 'none';
+            document.removeEventListener('click', this._liveScaleOutsideClick);
+            return;
+        }
+        dd.style.display = 'block';
+        // Refresh data + render
+        this.refreshLiveScale();
+        this._renderLiveScaleDropdown(this._liveScaleLastRows);
+        // Set up outside-click handler
+        if (!this._liveScaleOutsideClick) {
+            this._liveScaleOutsideClick = (e) => {
+                if (!dd.contains(e.target) && !document.getElementById('liveScalePill').contains(e.target)) {
+                    dd.style.display = 'none';
+                    document.removeEventListener('click', this._liveScaleOutsideClick);
+                }
+            };
+        }
+        setTimeout(() => document.addEventListener('click', this._liveScaleOutsideClick), 0);
+    },
+
+    _renderLiveScaleDropdown(rows) {
+        const listEl = document.getElementById('liveScaleList');
+        const todayEl = document.getElementById('lsdToday');
+        const tonsEl = document.getElementById('lsdTons');
+        const avgEl = document.getElementById('lsdAvg');
+        if (!listEl) return;
+
+        if (!rows || rows.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:.8rem">No recent captures</div>';
+            if (todayEl) todayEl.textContent = '0';
+            if (tonsEl)  tonsEl.textContent = '0.0';
+            if (avgEl)   avgEl.textContent = '—';
+            return;
+        }
+
+        // Stats
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const todays = rows.filter(r => new Date(r.captured_at) >= todayStart);
+        const totalLbs = rows.reduce((s,r) => s + (Number(r.weight_lbs)||0), 0);
+        const avgLbs = Math.round(totalLbs / rows.length);
+        if (todayEl) todayEl.textContent = todays.length;
+        if (tonsEl)  tonsEl.textContent = (totalLbs / 2000).toFixed(1);
+        if (avgEl)   avgEl.textContent = avgLbs.toLocaleString();
+
+        // Rows
+        listEl.innerHTML = rows.map((r, i) => {
+            const captured = new Date(r.captured_at);
+            const time = captured.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const dateStr = captured.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const weight = Math.round(Number(r.weight_lbs)||0).toLocaleString();
+            const band = r.weight_band || 'unclassified';
+
+            let bandColor, bandLabel;
+            if (band === 'gross_candidate') { bandColor = 'var(--success)'; bandLabel = 'GROSS'; }
+            else if (band === 'tare_candidate') { bandColor = '#60a5fa'; bandLabel = 'TARE'; }
+            else if (band === 'noise') { bandColor = '#9ca3af'; bandLabel = 'NOISE'; }
+            else { bandColor = 'var(--warning)'; bandLabel = '?'; }
+
+            let statusBadge = '';
+            if (r.status === 'confirmed') statusBadge = '<span style="color:var(--success);font-size:.6rem">✓ ticket</span>';
+            else if (r.status === 'ignored') statusBadge = '<span style="color:var(--text-dim);font-size:.6rem">ignored</span>';
+            else if (r.weight_band === 'gross_candidate') statusBadge = '<span style="color:var(--warning);font-size:.6rem">⏳ pending</span>';
+
+            const liveRing = (i === 0 && (Date.now() - captured.getTime()) < 30000)
+                ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);animation:pd 1.5s infinite;margin-right:6px;vertical-align:middle"></span>'
+                : '';
+
+            return '<div onclick="DS._openLiveScaleRow(\'' + r.id + '\')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.03)\'" onmouseout="this.style.background=\'transparent\'">' +
+                '<div style="min-width:24px;text-align:center;font-family:Space Mono,monospace;font-size:.65rem;color:var(--text-dim);font-weight:700">' + String(i+1).padStart(2,'0') + '</div>' +
+                '<div style="min-width:50px">' +
+                    '<div style="font-size:.65rem;color:var(--text);font-weight:600;line-height:1.1">' + liveRing + time + '</div>' +
+                    '<div style="font-size:.55rem;color:var(--text-dim);line-height:1">' + dateStr + '</div>' +
+                '</div>' +
+                '<div style="flex:1">' +
+                    '<div style="font-family:Space Mono,monospace;font-size:.9rem;font-weight:700;color:' + bandColor + '">' + weight + ' <span style="font-size:.6rem;color:var(--text-dim);font-weight:400">lb</span></div>' +
+                    '<div style="font-size:.55rem;color:var(--text-dim);letter-spacing:.05em">' + bandLabel + (r.device_id ? ' · ' + r.device_id : '') + '</div>' +
+                '</div>' +
+                '<div style="text-align:right">' + statusBadge + '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    _openLiveScaleRow(captureId) {
+        // Close dropdown and jump to Scale tab + open the orphan resolve modal for this row
+        const dd = document.getElementById('liveScaleDropdown');
+        if (dd) dd.style.display = 'none';
+        document.querySelector('[data-tab=scaleTab]')?.click();
+        setTimeout(() => {
+            if (typeof this.openOrphanResolve === 'function') {
+                this.openOrphanResolve(captureId);
+            }
+        }, 250);
     },
 
     // ============================================================
@@ -10541,6 +10748,7 @@ const DS = {
             this.updateDbStatus('Connected ✓', 'success');
             this.showToast('Supabase connected');
             await this.loadProjects();
+            this.startLiveScalePoller();
         } else {
             this.updateDbStatus('Connection failed', 'danger');
         }
