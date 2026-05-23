@@ -4132,9 +4132,15 @@ const DS = {
                     ${recentLines}
                 </div>
 
+                <div id="sullivanVanessaSection" style="margin-bottom:14px">
+                    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:700;margin-bottom:6px">VANESSA QUEUE (pending writes)</div>
+                    <div id="sullivanVanessaContents" style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.7rem;color:var(--text-muted);font-style:italic">Loading...</div>
+                </div>
+
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <button onclick="DS.copySullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">📋 Copy raw JSON</button>
+                    <button onclick="DS.copySullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">📋 Copy JSON</button>
                     <button onclick="DS.sullivanStats={timeouts:0,errors:0,ok:0,recent:[]};DS.showSullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🔄 Reset counters</button>
+                    <button onclick="DS.purgeVanessaQueue()" style="flex:1;padding:8px 12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#ef4444;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🗑 Purge queue</button>
                 </div>
             </div>
         `;
@@ -4150,6 +4156,55 @@ const DS = {
             <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;padding:6px 10px;z-index:2">✕</button>
             ${html}
         </div>`;
+
+        // Populate Vanessa queue contents asynchronously
+        this._renderVanessaQueueInReport();
+    },
+
+    async _renderVanessaQueueInReport() {
+        const el = document.getElementById('sullivanVanessaContents');
+        if (!el) return;
+        try {
+            const items = await this.vanessa.list();
+            if (items.length === 0) {
+                el.innerHTML = '<span style="color:#22c55e">✓ Queue empty — all writes have synced.</span>';
+                return;
+            }
+            const lines = items.slice(0, 10).map(item => {
+                const ageS = Math.round((Date.now() - item.createdAt) / 1000);
+                const ageStr = ageS < 60 ? ageS + 's' : ageS < 3600 ? Math.floor(ageS/60) + 'm' : Math.floor(ageS/3600) + 'h';
+                const stuckBadge = item.retries >= 5 ? '<span style="background:rgba(239,68,68,.15);color:#ef4444;padding:1px 5px;border-radius:3px;font-size:.6rem;font-weight:700;margin-left:6px">STUCK</span>' : '';
+                const retryBadge = item.retries > 0 ? `<span style="color:#f59e0b;font-size:.65rem;margin-left:6px">×${item.retries}</span>` : '';
+                return `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);font-family:'Space Mono',monospace;font-size:.68rem;color:#cbd5e1">
+                    <span style="color:var(--text-muted)">${ageStr} ago</span>
+                    <span style="margin-left:6px">${item.method || '?'} ${(item.endpoint || '').substring(0, 40)}</span>
+                    ${retryBadge}${stuckBadge}
+                </div>`;
+            }).join('');
+            const more = items.length > 10 ? `<div style="padding:6px 0;color:var(--text-muted);font-size:.65rem;font-style:italic">…and ${items.length - 10} more</div>` : '';
+            el.style.fontStyle = 'normal';
+            el.innerHTML = `<div style="color:#f59e0b;font-weight:700;margin-bottom:6px;font-size:.7rem">${items.length} pending</div>${lines}${more}`;
+        } catch (e) {
+            el.innerHTML = '<span style="color:#ef4444">IndexedDB not available: ' + e.message + '</span>';
+        }
+    },
+
+    async purgeVanessaQueue() {
+        if (!confirm('Purge all pending writes from the local queue?\n\nThis deletes any unsynced records. Only use this if records are stuck and you have confirmed the data is not needed.')) return;
+        try {
+            const db = await this.vanessa._open();
+            await new Promise((resolve, reject) => {
+                const req = db.transaction(this.vanessa.STORE, 'readwrite').objectStore(this.vanessa.STORE).clear();
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+            this.showToast('Vanessa queue purged');
+            this._updateVanessaBadge();
+            this.showSullivanReport(); // refresh
+        } catch (e) {
+            console.error('Purge failed:', e);
+            this.showToast('Purge failed: ' + e.message);
+        }
     },
 
     copySullivanReport() {
