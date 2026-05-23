@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DivertScan — Reset Client Login</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#080f14; --card:#0d1a24; --input:#0a1520; --border:#1a3044;
+    --text:#e2e8f0; --muted:#94a3b8; --dim:#64748b;
+    --primary:#00c9a7; --success:#22c55e; --warning:#f59e0b; --danger:#ef4444;
+    --info:#3b82f6;
+    --font:'DM Sans',system-ui,sans-serif; --mono:'Space Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto}
+  header{margin-bottom:24px}
+  h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  h1 span{color:var(--primary)}
+  .sub{font-size:.85rem;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;position:relative}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),transparent);opacity:.6;border-radius:12px 12px 0 0}
+  .card-title{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .field{margin-bottom:14px}
+  label{display:block;font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:5px}
+  .hint{font-size:.7rem;color:var(--dim);margin-top:4px;line-height:1.4}
+  input,select{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:.9rem;color:var(--text);background:var(--input);-webkit-appearance:none;transition:border-color .15s}
+  input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(0,201,167,.12)}
+  input[readonly]{color:var(--muted);background:rgba(255,255,255,.02)}
+  select.form-input{-webkit-appearance:menulist;appearance:menulist;padding-right:12px}
+  .row{display:flex;gap:10px}
+  .row > *{flex:1}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 18px;border:none;border-radius:8px;font-family:var(--font);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .12s;width:100%}
+  .btn:active{transform:scale(.98)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-primary{background:var(--primary);color:#080f14}
+  .btn-primary:hover:not(:disabled){background:#00a88a}
+  .btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .btn-outline:hover{border-color:var(--muted);color:var(--text)}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+  .btn-row{display:flex;gap:8px;margin-top:6px}
+  .log{font-family:var(--mono);font-size:.7rem;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:280px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+  .log-line{padding:2px 0}
+  .log-line.ok{color:var(--success)}
+  .log-line.warn{color:var(--warning)}
+  .log-line.err{color:var(--danger)}
+  .log-line.info{color:var(--info)}
+  .log-line.dim{color:var(--dim)}
+  .status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;font-size:.65rem;font-weight:600}
+  .status-pill.ok{background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.3)}
+  .status-pill.warn{background:rgba(245,158,11,.12);color:var(--warning);border:1px solid rgba(245,158,11,.3)}
+  .status-pill.err{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+  #hashPreview{font-family:var(--mono);font-size:.65rem;color:var(--dim);background:rgba(0,0,0,.2);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;display:none}
+  #hashPreview.show{display:block}
+  .gen-pw{font-family:var(--mono);font-size:.7rem;color:var(--primary);cursor:pointer;text-decoration:underline;display:inline-block;margin-top:4px}
+  .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--primary);color:var(--primary);padding:12px 24px;border-radius:10px;font-weight:600;font-size:.85rem;z-index:999;display:none;animation:slideDown .25s ease}
+  .toast.show{display:block}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
+  @keyframes slideDown{from{transform:translate(-50%,-12px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+  .empty{text-align:center;padding:24px;color:var(--dim);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1><span>DivertScan</span> · Reset Client Login</h1>
+  <div class="sub">Direct admin tool — change a client's email/username and/or password in one shot.</div>
+</header>
+
+<!-- ============ CONNECTION ============ -->
+<div class="card" id="connCard">
+  <div class="card-title">
+    🔌 Connection
+    <span style="margin-left:auto" class="status-pill warn" id="connPill">Not Connected</span>
+  </div>
+  <div class="field">
+    <label>Supabase URL</label>
+    <input type="text" id="supaUrl" placeholder="https://xxx.supabase.co">
+  </div>
+  <div class="field">
+    <label>Supabase Anon Key</label>
+    <input type="password" id="supaKey" placeholder="eyJ...">
+  </div>
+  <button class="btn btn-primary" id="connectBtn">Connect & Load Clients</button>
+  <div class="hint" id="connHint">Credentials are stored locally in your browser (localStorage) — never sent anywhere except Supabase.</div>
+</div>
+
+<!-- ============ PICK CLIENT ============ -->
+<div class="card" id="pickCard" style="display:none">
+  <div class="card-title">👤 Pick Client to Edit</div>
+  <div class="field">
+    <input type="text" id="search" placeholder="🔍 Filter by name, email, or company..." autocomplete="off">
+  </div>
+  <div class="field">
+    <select id="clientSel" size="8" style="font-family:var(--mono);font-size:.8rem;padding:8px"></select>
+  </div>
+  <button class="btn btn-outline" id="refreshBtn">↻ Refresh Client List</button>
+</div>
+
+<!-- ============ EDIT FORM ============ -->
+<div class="card" id="editCard" style="display:none">
+  <div class="card-title">✏️ Edit Credentials</div>
+
+  <div class="row">
+    <div class="field">
+      <label>Client ID</label>
+      <input type="text" id="curId" readonly>
+    </div>
+    <div class="field">
+      <label>Contact Name</label>
+      <input type="text" id="curName">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Email (login / username)</label>
+    <input type="email" id="curEmail" autocomplete="off">
+    <div class="hint">This is what the client types in the email field on the login page. Will be normalized to lowercase.</div>
+  </div>
+
+  <div class="field">
+    <label>Company</label>
+    <input type="text" id="curCompany">
+  </div>
+
+  <div class="field">
+    <label>New Password <span style="color:var(--dim);font-weight:400">(leave blank to keep current)</span></label>
+    <input type="text" id="newPw" autocomplete="off" placeholder="Type a new password or leave blank">
+    <span class="gen-pw" id="genPwBtn">⚡ Generate random 12-char password</span>
+    <div id="hashPreview"></div>
+    <div class="hint">SHA-256 hash with <code>divertscan_salt_</code> prefix — matches the format your app expects.</div>
+  </div>
+
+  <button class="btn btn-primary" id="saveBtn">💾 Save Changes</button>
+  <div class="btn-row">
+    <button class="btn btn-outline" id="cancelBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- ============ ACTIVITY LOG ============ -->
+<div class="card">
+  <div class="card-title">📋 Activity Log</div>
+  <div class="log" id="log"></div>
+</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SALT = 'divertscan_salt_';
+const STORE = { url: 'ds_supabase_url', key: 'ds_supabase_key' };
+
+const $ = id => document.getElementById(id);
+const state = { url: null, key: null, clients: [], current: null };
+
+// ============ LOGGING ============
+function log(msg, cls) {
+  const line = document.createElement('div');
+  line.className = 'log-line ' + (cls || 'dim');
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = '[' + ts + '] ' + msg;
+  $('log').appendChild(line);
+  $('log').scrollTop = $('log').scrollHeight;
+}
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============ HASH ============
+async function hashPassword(pw) {
+  const data = new TextEncoder().encode(SALT + pw);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ============ SUPABASE CALLS ============
+async function supabase(endpoint, method = 'GET', body = null) {
+  if (!state.url || !state.key) throw new Error('Not connected');
+  const url = state.url.replace(/\/$/, '') + '/rest/v1/' + endpoint;
+  const headers = {
+    apikey: state.key,
+    Authorization: 'Bearer ' + state.key,
+    'Content-Type': 'application/json'
+  };
+  if (method === 'POST' || method === 'PATCH') headers.Prefer = 'return=representation';
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  if (!res.ok) {
+    const e = new Error(`HTTP ${res.status}: ${text}`);
+    e.status = res.status;
+    e.body = text;
+    throw e;
+  }
+  if (method === 'DELETE' || res.status === 204) return [];
+  return text ? JSON.parse(text) : [];
+}
+
+// ============ CONNECT ============
+$('connectBtn').addEventListener('click', async () => {
+  const url = $('supaUrl').value.trim();
+  const key = $('supaKey').value.trim();
+  if (!url || !key) { toast('Enter URL and key', true); return; }
+
+  state.url = url;
+  state.key = key;
+  try {
+    localStorage.setItem(STORE.url, url);
+    localStorage.setItem(STORE.key, key);
+  } catch (e) {}
+
+  log('Connecting to ' + url + '...', 'info');
+  await loadClients();
+});
+
+async function loadClients() {
+  try {
+    const data = await supabase('client_accounts?select=id,name,email,company,is_active,last_login,updated_at&order=name.asc');
+    state.clients = data || [];
+    log('✓ Loaded ' + state.clients.length + ' clients', 'ok');
+    $('connPill').textContent = '✓ Connected';
+    $('connPill').className = 'status-pill ok';
+    $('pickCard').style.display = 'block';
+    renderClientList();
+  } catch (err) {
+    log('✗ ' + err.message, 'err');
+    $('connPill').textContent = '✗ Failed';
+    $('connPill').className = 'status-pill err';
+    if (err.status === 401 || err.status === 403) {
+      toast('Auth failed — check URL and anon key', true);
+    } else if (err.message.includes('client_accounts')) {
+      toast('Table client_accounts not found', true);
+    } else {
+      toast(err.message, true);
+    }
+  }
+}
+
+$('refreshBtn').addEventListener('click', loadClients);
+
+// ============ CLIENT LIST ============
+function renderClientList() {
+  const filter = $('search').value.toLowerCase();
+  const sel = $('clientSel');
+  sel.innerHTML = '';
+  const filtered = state.clients.filter(c =>
+    !filter ||
+    (c.name||'').toLowerCase().includes(filter) ||
+    (c.email||'').toLowerCase().includes(filter) ||
+    (c.company||'').toLowerCase().includes(filter)
+  );
+  if (filtered.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = '— No matches —';
+    opt.disabled = true;
+    sel.appendChild(opt);
+    return;
+  }
+  filtered.forEach(c => {
+    const opt = document.createElement('option');
+    const status = c.is_active === false ? ' [INACTIVE]' : '';
+    const last = c.last_login ? ' (last: ' + new Date(c.last_login).toLocaleDateString() + ')' : '';
+    opt.value = c.id;
+    opt.textContent = (c.name||'(no name)') + ' · ' + (c.email||'(no email)') + (c.company?' · '+c.company:'') + status + last;
+    sel.appendChild(opt);
+  });
+}
+$('search').addEventListener('input', renderClientList);
+$('clientSel').addEventListener('change', () => {
+  const id = $('clientSel').value;
+  const c = state.clients.find(x => x.id === id);
+  if (c) openEdit(c);
+});
+
+// ============ EDIT FORM ============
+function openEdit(c) {
+  state.current = c;
+  $('curId').value = c.id;
+  $('curName').value = c.name || '';
+  $('curEmail').value = c.email || '';
+  $('curCompany').value = c.company || '';
+  $('newPw').value = '';
+  $('hashPreview').classList.remove('show');
+  $('editCard').style.display = 'block';
+  $('editCard').scrollIntoView({ behavior: 'smooth' });
+  log('Editing: ' + c.name + ' <' + c.email + '>', 'info');
+}
+
+$('genPwBtn').addEventListener('click', () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random()*chars.length)];
+  $('newPw').value = pw;
+  updateHashPreview();
+});
+
+$('newPw').addEventListener('input', updateHashPreview);
+async function updateHashPreview() {
+  const pw = $('newPw').value;
+  if (!pw) { $('hashPreview').classList.remove('show'); return; }
+  const h = await hashPassword(pw);
+  $('hashPreview').textContent = 'hash: ' + h;
+  $('hashPreview').classList.add('show');
+}
+
+$('cancelBtn').addEventListener('click', () => {
+  $('editCard').style.display = 'none';
+  state.current = null;
+});
+
+// ============ SAVE ============
+$('saveBtn').addEventListener('click', async () => {
+  const c = state.current;
+  if (!c) return;
+
+  const newName = $('curName').value.trim();
+  const newEmail = $('curEmail').value.trim().toLowerCase();
+  const newCompany = $('curCompany').value.trim();
+  const newPw = $('newPw').value;
+
+  if (!newName) { toast('Name required', true); return; }
+  if (!newEmail) { toast('Email required', true); return; }
+  if (newPw && newPw.length < 4) { toast('Password must be 4+ characters', true); return; }
+
+  const updates = {
+    name: newName,
+    email: newEmail,
+    company: newCompany || null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (newPw) {
+    updates.password_hash = await hashPassword(newPw);
+  }
+
+  $('saveBtn').disabled = true;
+  $('saveBtn').textContent = 'Saving...';
+
+  log('PATCH /client_accounts?id=eq.' + c.id, 'info');
+
+  try {
+    const result = await supabase('client_accounts?id=eq.' + c.id, 'PATCH', updates);
+
+    if (!Array.isArray(result) || result.length === 0) {
+      log('⚠ PATCH returned empty array — RLS may have filtered the row. Update did NOT happen.', 'err');
+      toast('Update silently filtered — RLS issue. Check log for fix.', true);
+      logRlsHelp();
+      return;
+    }
+
+    const updated = result[0];
+    log('✓ Email is now: ' + updated.email, 'ok');
+    log('✓ Name is now: ' + updated.name, 'ok');
+    if (newPw) {
+      log('✓ Password hash updated', 'ok');
+      log('✓ NEW PASSWORD: ' + newPw + '   ← write this down!', 'ok');
+    } else {
+      log('  (password unchanged)', 'dim');
+    }
+
+    // Update local cache
+    Object.assign(c, updated);
+    renderClientList();
+    toast(newPw ? 'Saved — new password: ' + newPw : 'Saved');
+
+    // Re-open with refreshed data
+    openEdit(c);
+
+  } catch (err) {
+    log('✗ ' + err.message, 'err');
+    if (err.status === 401 || err.status === 403) {
+      log('  → Row-Level Security is blocking the UPDATE.', 'err');
+      logRlsHelp();
+      toast('RLS is blocking — check log for SQL fix', true);
+    } else if (err.body && err.body.includes('duplicate')) {
+      toast('That email is already used by another client', true);
+    } else {
+      toast(err.message, true);
+    }
+  } finally {
+    $('saveBtn').disabled = false;
+    $('saveBtn').textContent = '💾 Save Changes';
+  }
+});
+
+function logRlsHelp() {
+  log('', 'dim');
+  log('═══ FIX: run this SQL in Supabase SQL Editor ═══', 'warn');
+  log('  ALTER TABLE client_accounts ENABLE ROW LEVEL SECURITY;', 'warn');
+  log('  CREATE POLICY "anon_can_manage_clients" ON client_accounts', 'warn');
+  log('    FOR ALL TO anon USING (true) WITH CHECK (true);', 'warn');
+  log('  (or: ALTER TABLE client_accounts DISABLE ROW LEVEL SECURITY;', 'warn');
+  log('   if you want no RLS at all — only safe for admin-only access)', 'warn');
+  log('═════════════════════════════════════════════════', 'warn');
+}
+
+// ============ INIT ============
+(function init() {
+  log('Reset tool loaded. Enter Supabase credentials to begin.', 'info');
+  try {
+    const url = localStorage.getItem(STORE.url);
+    const key = localStorage.getItem(STORE.key);
+    if (url) $('supaUrl').value = url;
+    if (key) $('supaKey').value = key;
+    if (url && key) {
+      log('Restored saved credentials. Click Connect to load clients.', 'dim');
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
