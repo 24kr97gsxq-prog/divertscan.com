@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DivertScan — LEED Compliance Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#080f14; --card:#0d1a24; --card2:#102230; --input:#0a1520; --border:#1a3044;
+    --text:#e2e8f0; --muted:#94a3b8; --dim:#64748b;
+    --primary:#00c9a7; --primary-d:#00b394;
+    --success:#22c55e; --warning:#f59e0b; --danger:#ef4444; --info:#3b82f6;
+    --crit-bg:rgba(239,68,68,0.12); --crit-bd:rgba(239,68,68,0.35);
+    --high-bg:rgba(245,158,11,0.12); --high-bd:rgba(245,158,11,0.35);
+    --med-bg:rgba(59,130,246,0.10); --med-bd:rgba(59,130,246,0.30);
+    --font:'DM Sans',system-ui,sans-serif; --mono:'Space Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1200px;margin:0 auto}
+  header{margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .h-left h1{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  .h-left h1 span{color:var(--primary)}
+  .h-left .sub{font-size:.85rem;color:var(--muted)}
+  .h-right{display:flex;gap:8px;flex-wrap:wrap}
+  .back-link{font-size:.8rem;color:var(--muted);text-decoration:none;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);transition:.15s}
+  .back-link:hover{background:var(--card2);color:var(--text);border-color:var(--primary)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;position:relative}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),transparent);opacity:.6;border-radius:12px 12px 0 0}
+  .card-title{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .connect-card{display:none}
+  .connect-card.show{display:block}
+  .field{margin-bottom:12px}
+  label{display:block;font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:5px}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:.88rem;color:var(--text);background:var(--input);-webkit-appearance:none;transition:border-color .15s}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(0,201,167,.12)}
+  textarea{font-family:var(--mono);font-size:.78rem;resize:vertical;min-height:60px}
+  .hint{font-size:.7rem;color:var(--dim);margin-top:4px;line-height:1.4}
+  .btn{padding:10px 16px;border:none;border-radius:8px;font-family:var(--font);font-size:.85rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  .btn-primary{background:var(--primary);color:#001a14}
+  .btn-primary:hover{background:var(--primary-d)}
+  .btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+  .btn-secondary:hover{border-color:var(--primary)}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .btn-ghost:hover{color:var(--text);border-color:var(--primary)}
+  .btn-sm{padding:6px 11px;font-size:.78rem}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .status-bar{display:flex;align-items:center;gap:10px;font-size:.78rem;color:var(--muted);padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card2);margin-bottom:14px}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0}
+  .status-dot.ok{background:var(--success);box-shadow:0 0 8px rgba(34,197,94,.5)}
+  .status-dot.err{background:var(--danger)}
+
+  /* Project picker bar */
+  .proj-bar{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--primary);border-radius:10px;background:linear-gradient(90deg,rgba(0,201,167,.08),transparent);margin-bottom:14px;flex-wrap:wrap}
+  .proj-bar-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--primary);font-weight:700}
+  .proj-bar select{width:auto;min-width:280px;flex:1;font-weight:600;background:var(--input)}
+  .proj-bar .proj-info{font-size:.75rem;color:var(--muted);font-family:var(--mono)}
+  .proj-bar .scope-badge{background:rgba(0,201,167,.15);color:var(--primary);padding:4px 10px;border-radius:6px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .proj-bar .scope-badge.platform{background:rgba(59,130,246,.15);color:var(--info)}
+
+  .dash{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;position:relative;overflow:hidden}
+  .stat-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:600}
+  .stat-value{font-size:1.8rem;font-weight:700;font-family:var(--mono);line-height:1}
+  .stat.pass{border-color:rgba(34,197,94,.4)} .stat.pass .stat-value{color:var(--success)}
+  .stat.partial{border-color:rgba(245,158,11,.4)} .stat.partial .stat-value{color:var(--warning)}
+  .stat.fail{border-color:rgba(239,68,68,.4)} .stat.fail .stat-value{color:var(--danger)}
+  .stat.nb{border-color:rgba(100,116,139,.4)} .stat.nb .stat-value{color:var(--dim)}
+  .stat.nt .stat-value{color:var(--muted)}
+  .verdict{padding:16px 20px;border-radius:10px;font-size:1rem;font-weight:600;text-align:center;margin-bottom:16px;border:1px solid var(--border);background:var(--card)}
+  .verdict.ready{background:rgba(34,197,94,.10);color:var(--success);border-color:rgba(34,197,94,.4)}
+  .verdict.conditional{background:rgba(245,158,11,.10);color:var(--warning);border-color:rgba(245,158,11,.4)}
+  .verdict.notready{background:rgba(239,68,68,.10);color:var(--danger);border-color:rgba(239,68,68,.4)}
+  .verdict-sub{font-size:.78rem;font-weight:400;color:var(--muted);margin-top:4px}
+
+  .filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .filter-pill{padding:6px 12px;border:1px solid var(--border);border-radius:999px;font-size:.75rem;color:var(--muted);background:var(--card);cursor:pointer;transition:.15s;font-family:var(--font);font-weight:500}
+  .filter-pill:hover{border-color:var(--primary);color:var(--text)}
+  .filter-pill.active{background:var(--primary);color:#001a14;border-color:var(--primary)}
+  .filter-search{flex:1;min-width:200px;padding:8px 12px;font-size:.82rem}
+  .filter-label{font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-right:4px;font-weight:600}
+
+  .test-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;transition:.15s}
+  .test-card.crit{border-left:3px solid var(--danger)}
+  .test-card.high{border-left:3px solid var(--warning)}
+  .test-card.med{border-left:3px solid var(--info)}
+  .test-card.passed{background:rgba(34,197,94,.04);border-color:rgba(34,197,94,.3)}
+  .test-card.failed{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.3)}
+  .test-card.partial{background:rgba(245,158,11,.04);border-color:rgba(245,158,11,.3)}
+  .test-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .test-id{font-family:var(--mono);font-size:.75rem;color:var(--muted);font-weight:700;letter-spacing:.04em}
+  .test-cat{display:inline-block;padding:2px 8px;font-size:.65rem;font-weight:600;background:rgba(0,201,167,.10);color:var(--primary);border-radius:4px;text-transform:uppercase;letter-spacing:.06em;margin-left:6px}
+  .test-claim{font-size:.95rem;font-weight:600;color:var(--text);margin:4px 0 8px 0;line-height:1.35}
+  .test-meta{display:flex;gap:8px;font-size:.7rem;color:var(--muted);flex-wrap:wrap;margin-bottom:8px;align-items:center}
+  .test-sev{padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.65rem}
+  .sev-crit{background:var(--crit-bg);color:var(--danger);border:1px solid var(--crit-bd)}
+  .sev-high{background:var(--high-bg);color:var(--warning);border:1px solid var(--high-bd)}
+  .sev-med{background:var(--med-bg);color:var(--info);border:1px solid var(--med-bd)}
+  .test-ver{padding:2px 7px;border-radius:4px;background:var(--card2);color:var(--muted);font-size:.65rem;font-weight:600}
+  .test-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .test-controls select{width:auto;min-width:130px;padding:6px 10px;font-size:.78rem;font-weight:600}
+  .verifier-chip{font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+  .test-detail{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);display:none}
+  .test-detail.open{display:block}
+  .detail-grid{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-bottom:10px}
+  .detail-label{font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-top:4px}
+  .detail-text{font-size:.82rem;color:var(--text);line-height:1.5;white-space:pre-wrap}
+  .toggle-btn{font-size:.72rem;color:var(--primary);background:none;border:none;cursor:pointer;font-family:var(--font);font-weight:600;padding:4px 0;margin-top:4px;display:flex;align-items:center;gap:4px}
+  .toggle-btn:hover{color:var(--primary-d)}
+  .save-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+  .save-status{font-size:.7rem;font-family:var(--mono)}
+  .save-status.ok{color:var(--success)}
+  .save-status.err{color:var(--danger)}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:680px;width:100%;max-height:85vh;overflow-y:auto}
+  .modal h3{font-size:1.15rem;margin-bottom:8px}
+  .modal pre{background:var(--input);padding:14px;border-radius:8px;font-family:var(--mono);font-size:.72rem;color:#bee9d9;overflow-x:auto;border:1px solid var(--border);line-height:1.5;margin:10px 0}
+  .modal-close{float:right;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1}
+
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:.9rem}
+
+  /* ============= PRINT STYLES ============= */
+  @media print {
+    body{background:white;color:#111;padding:0;font-size:10pt}
+    .wrap{max-width:none}
+    header, .status-bar, .proj-bar, .filter-row, .h-right, .back-link, .modal-bg,
+    .test-controls, .toggle-btn, .save-row, .save-btn, .evidence-input,
+    #settingsBtn, #schemaBtn, .connect-card{display:none !important}
+    .card, .test-card{background:white !important;border:1px solid #ccc !important;color:#111 !important;break-inside:avoid;page-break-inside:avoid;margin-bottom:8pt;padding:8pt;box-shadow:none}
+    .card::before, .test-card::before{display:none}
+    .test-card.crit{border-left:3px solid #b91c1c !important}
+    .test-card.high{border-left:3px solid #d97706 !important}
+    .test-card.med{border-left:3px solid #2563eb !important}
+    .test-claim{color:#111 !important;font-size:11pt}
+    .test-id, .test-cat, .test-ver, .verifier-chip{color:#555 !important}
+    .test-cat{background:#e6fbf6 !important;color:#0d6655 !important}
+    .test-sev{background:white !important}
+    .sev-crit{color:#b91c1c !important;border-color:#b91c1c !important}
+    .sev-high{color:#d97706 !important;border-color:#d97706 !important}
+    .sev-med{color:#2563eb !important;border-color:#2563eb !important}
+    .test-detail{display:block !important;border-top:1px dashed #ccc !important}
+    .detail-label{color:#666 !important}
+    .detail-text{color:#111 !important}
+    .stat{background:white !important;border:1px solid #ccc !important}
+    .stat-label{color:#666 !important}
+    .stat-value{color:#111 !important}
+    .stat.pass .stat-value{color:#15803d !important}
+    .stat.partial .stat-value{color:#a16207 !important}
+    .stat.fail .stat-value{color:#b91c1c !important}
+    .verdict{background:#f8fafc !important;color:#111 !important;border:2px solid #111 !important;padding:10pt}
+    .verdict.ready{background:#dcfce7 !important;color:#15803d !important;border-color:#15803d !important}
+    .verdict.conditional{background:#fef3c7 !important;color:#a16207 !important;border-color:#a16207 !important}
+    .verdict.notready{background:#fee2e2 !important;color:#b91c1c !important;border-color:#b91c1c !important}
+    .dash{grid-template-columns:repeat(5,1fr) !important}
+    .print-only{display:block !important}
+    .print-header{display:block !important;margin-bottom:12pt;padding-bottom:6pt;border-bottom:2px solid #00c9a7}
+    .print-header h1{font-size:18pt;color:#0d6655 !important;margin-bottom:2pt}
+    .print-header .meta{font-size:9pt;color:#555}
+    .print-evidence{display:block !important;margin-top:6pt;padding:6pt;background:#f8fafc !important;border-left:2px solid #00c9a7;font-size:9pt;color:#111}
+    .print-evidence-label{font-size:8pt;text-transform:uppercase;color:#666;font-weight:700;letter-spacing:.05em;margin-bottom:2pt}
+    .print-sig-block{display:block !important;margin-top:18pt;padding-top:8pt;border-top:2px solid #111;page-break-inside:avoid}
+    .print-sig-row{display:flex;justify-content:space-between;margin-top:30pt;font-size:9pt;color:#111}
+    .print-sig-cell{flex:1;border-top:1px solid #111;padding-top:4pt;margin:0 8pt}
+    @page{margin:0.6in 0.5in 0.7in 0.5in;size:letter}
+  }
+  .print-only{display:none}
+  .print-header{display:none}
+  .print-evidence{display:none}
+  .print-sig-block{display:none}
+
+  @media (max-width:768px){
+    .dash{grid-template-columns:repeat(2,1fr)}
+    .detail-grid{grid-template-columns:1fr}
+    .detail-label{padding-top:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Print-only header (replaces interactive header) -->
+<div class="print-header print-only">
+  <h1>DivertScan — LEED Compliance Audit</h1>
+  <div class="meta" id="printMeta">Generated: <span id="printDate"></span></div>
+</div>
+
+<header>
+  <div class="h-left">
+    <h1>DivertScan <span>LEED Compliance Audit</span></h1>
+    <div class="sub">35 acceptance tests · self-verify your platform against LEED v4 / v4.1 / v5</div>
+  </div>
+  <div class="h-right">
+    <a href="index.html" class="back-link">← Back to Admin</a>
+    <button class="btn btn-ghost btn-sm" id="schemaBtn">⚙ DB Schema</button>
+    <button class="btn btn-ghost btn-sm" id="printBtn">🖨 Print PDF</button>
+    <button class="btn btn-ghost btn-sm" id="exportBtn">⬇ Export CSV</button>
+  </div>
+</header>
+
+<div class="status-bar" id="connStatus">
+  <span class="status-dot" id="connDot"></span>
+  <span id="connText">Not connected — open Settings below to connect to Supabase</span>
+  <button class="btn btn-ghost btn-sm" id="settingsBtn" style="margin-left:auto">⚙ Settings</button>
+</div>
+
+<div class="card connect-card" id="connectCard">
+  <div class="card-title">⚡ Supabase Connection</div>
+  <div class="field">
+    <label>Supabase URL</label>
+    <input type="text" id="supaUrl" placeholder="https://xxx.supabase.co">
+  </div>
+  <div class="field">
+    <label>Anon Key</label>
+    <input type="text" id="supaKey" placeholder="eyJ...">
+    <div class="hint">Same credentials your admin uses. Stored only in this browser's localStorage.</div>
+  </div>
+  <div class="field">
+    <label>Your name (verifier)</label>
+    <input type="text" id="auditUser" placeholder="e.g., Robert Sullivan">
+    <div class="hint">Recorded on every test you verify. Required by LEED for audit defensibility.</div>
+  </div>
+  <button class="btn btn-primary" id="connectBtn">Connect & Load Results</button>
+</div>
+
+<div id="mainContent" style="display:none">
+
+  <!-- Project picker -->
+  <div class="proj-bar" id="projBar">
+    <span class="proj-bar-label">📋 Audit Scope:</span>
+    <select id="projSelect">
+      <option value="__platform__">Platform-wide (audit DivertScan itself)</option>
+    </select>
+    <span class="scope-badge" id="scopeBadge">Loading…</span>
+    <span class="proj-info" id="projInfo"></span>
+  </div>
+
+  <div class="dash">
+    <div class="stat pass"><div class="stat-label">✓ Pass</div><div class="stat-value" id="cPass">0</div></div>
+    <div class="stat partial"><div class="stat-label">⚠ Partial</div><div class="stat-value" id="cPartial">0</div></div>
+    <div class="stat fail"><div class="stat-label">✗ Fail</div><div class="stat-value" id="cFail">0</div></div>
+    <div class="stat nb"><div class="stat-label">○ Not Built</div><div class="stat-value" id="cNB">0</div></div>
+    <div class="stat nt"><div class="stat-label">— Not Tested</div><div class="stat-value" id="cNT">0</div></div>
+  </div>
+
+  <div class="verdict" id="verdict">— Awaiting test results —</div>
+
+  <div class="filter-row">
+    <span class="filter-label">View:</span>
+    <button class="filter-pill active" data-filter="all">All</button>
+    <button class="filter-pill" data-filter="crit">Critical only</button>
+    <button class="filter-pill" data-filter="open">Open (not Pass)</button>
+    <button class="filter-pill" data-filter="passed">Passed</button>
+    <input type="text" class="filter-search" id="searchBox" placeholder="🔍 Search tests…">
+    <select id="catFilter" style="width:auto;min-width:160px;padding:7px 10px;font-size:.78rem">
+      <option value="">All categories</option>
+    </select>
+  </div>
+
+  <div id="testList"></div>
+
+  <!-- Print-only signature block -->
+  <div class="print-sig-block print-only">
+    <div style="font-size:9pt;color:#111"><strong>Attestation:</strong> The undersigned parties confirm the verification results recorded above were obtained by direct testing of the DivertScan platform against the documented Pass Criteria. Evidence references are stored in the DivertScan Supabase database (<span class="mono">leed_audit_results</span> table) and are reproducible.</div>
+    <div class="print-sig-row">
+      <div class="print-sig-cell">Verifier (DivertScan): <span id="printVerifier"></span></div>
+      <div class="print-sig-cell">Reviewer / Consultant: ___________________</div>
+      <div class="print-sig-cell">Date: ___________________</div>
+    </div>
+  </div>
+</div>
+
+<!-- Schema modal -->
+<div class="modal-bg" id="schemaModal">
+  <div class="modal">
+    <button class="modal-close" data-close="schemaModal">×</button>
+    <h3>One-Time Setup: Create Audit Results Table</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin:8px 0 12px 0">Run this SQL once in your Supabase SQL Editor before first use. This creates the table with <strong>per-project</strong> tracking — same test ID can be verified separately for each LEED project.</p>
+    <pre id="schemaSql">CREATE TABLE IF NOT EXISTS leed_audit_results (
+  id           BIGSERIAL PRIMARY KEY,
+  project_id   UUID,
+  test_id      TEXT NOT NULL,
+  status       TEXT,
+  evidence     TEXT,
+  verified_by  TEXT,
+  verified_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE NULLS NOT DISTINCT (project_id, test_id)
+);
+
+ALTER TABLE leed_audit_results ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin_manage_leed_audit" ON leed_audit_results
+  FOR ALL TO anon
+  USING (true) WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_leed_audit_project ON leed_audit_results(project_id);
+CREATE INDEX IF NOT EXISTS idx_leed_audit_test ON leed_audit_results(test_id);</pre>
+    <p style="font-size:.75rem;color:var(--muted);margin-top:10px"><strong>Already created the v1 (single-project) table?</strong> Run this migration instead:</p>
+    <pre id="migrateSql">-- Migration from v1 (single-project) to v2 (per-project)
+ALTER TABLE leed_audit_results
+  ADD COLUMN IF NOT EXISTS id BIGSERIAL,
+  ADD COLUMN IF NOT EXISTS project_id UUID;
+
+-- Drop old primary key if it was test_id only
+ALTER TABLE leed_audit_results DROP CONSTRAINT IF EXISTS leed_audit_results_pkey;
+ALTER TABLE leed_audit_results ADD PRIMARY KEY (id);
+
+-- Unique on (project_id, test_id) — treating NULL project_id as platform-wide
+ALTER TABLE leed_audit_results
+  ADD CONSTRAINT leed_audit_proj_test_uq UNIQUE NULLS NOT DISTINCT (project_id, test_id);
+
+CREATE INDEX IF NOT EXISTS idx_leed_audit_project ON leed_audit_results(project_id);
+CREATE INDEX IF NOT EXISTS idx_leed_audit_test ON leed_audit_results(test_id);</pre>
+    <button class="btn btn-secondary btn-sm" id="copySqlBtn">📋 Copy SQL</button>
+    <button class="btn btn-secondary btn-sm" id="copyMigrateBtn">📋 Copy Migration</button>
+    <button class="btn btn-ghost btn-sm" data-close="schemaModal" style="margin-left:8px">Close</button>
+  </div>
+</div>
+
+<script>
+
+const TESTS = [{"id": "T-001", "category": "Material Streams", "claim": "Material streams defined by end-market (not just material type)", "setup": "1. Create test project \"WMP-Audit-2026\" with weight unit = tons.\n2. Add 2 haulers: \"Recycler A\" (destination = wood-to-reuse facility), \"Recycler B\" (destination = wood-to-biofuel facility).\n3. Add 3 wood tickets to Hauler A (5T, 4T, 3T) and 3 wood tickets to Hauler B (2T, 2T, 2T).", "action": "Generate MRc5 stream-count report for project.", "expected": "Report shows 2 distinct material streams for wood (wood-to-reuse and wood-to-biofuel), not 1 combined \"wood\" stream.", "pass_criteria": "Stream count for wood = 2. Stream list shows both destinations separately. Each stream has its own weight total.", "suggested_evidence": "Screenshot of MRc5 report stream breakdown.", "leed_versions": "v4, v4.1", "severity": "CRITICAL"}, {"id": "T-002", "category": "Material Streams", "claim": "Source-separated dumpsters auto-counted from ticket origin", "setup": "1. Project setup: define 4 dumpster types: concrete, metals, wood, drywall.\n2. Log 5 tickets each, one ticket per dumpster type, source-separated (not commingled).", "action": "Generate stream-count report.", "expected": "4 source-separated streams counted automatically. No manual stream assignment required.", "pass_criteria": "Stream count = 4. Each stream shows source-separated origin. All ticket weights captured.", "suggested_evidence": "Project setup screenshot + report stream list.", "leed_versions": "v4, v4.1", "severity": "CRITICAL"}, {"id": "T-003", "category": "Material Streams", "claim": "v4 — 4 streams + 75% diversion threshold (2 pts)", "setup": "1. Project registered as LEED v4 BD+C.\n2. Log tickets totaling: 100T total, 80T diverted, across 4 distinct material streams.", "action": "Generate MRc5 report for v4.", "expected": "Report shows 80% diversion ≥ 75% threshold + 4 streams ≥ 4 required = 2 points earned.", "pass_criteria": "Points column shows \"2 pts\" with green checkmark. Threshold + stream count both displayed.", "suggested_evidence": "PDF export of LEED submittal page.", "leed_versions": "v4", "severity": "HIGH"}, {"id": "T-004", "category": "Material Streams", "claim": "v4.1 — 2-3 streams threshold (simplified)", "setup": "1. Project registered as LEED v4.1 BD+C.\n2. Log tickets: 100T total, 75T diverted, across 3 streams (1 commingled + 2 source-separated).", "action": "Generate MRc5 report for v4.1.", "expected": "Report shows 75% diversion + 3 streams = qualifies for 2 pts under v4.1 Path 1 (commingled + 2 streams) OR equivalent.", "pass_criteria": "Points column shows correct v4.1 path. Differs from v4 logic.", "suggested_evidence": "PDF export showing v4.1 logic applied.", "leed_versions": "v4.1", "severity": "HIGH"}, {"id": "T-005", "category": "Material Streams", "claim": "v5 — material stream count optional but documented", "setup": "1. Project registered as LEED v5 BD+C.\n2. Log tickets totaling 100T diverted of 200T total.", "action": "Generate v5 MRc5 report.", "expected": "Report computes diversion % per v5 rules (no minimum stream count required). Stream breakdown still shown for narrative.", "pass_criteria": "No stream-count threshold enforced for v5. Streams listed for narrative quality.", "suggested_evidence": "v5 report PDF.", "leed_versions": "v5", "severity": "HIGH"}, {"id": "T-010", "category": "Commingled Recycling", "claim": "Commingled = 1 stream rule enforced (no per-material data)", "setup": "1. Add hauler \"ABC MRF\" as commingled facility (no project-specific weighed data).\n2. Log 3 tickets to ABC MRF: 5T, 3T, 2T (total 10T).\n3. Add a separate source-separated metals ticket: 2T.", "action": "Generate stream-count report.", "expected": "Commingled load counts as 1 stream (not 3). Plus 1 metals stream = 2 streams total.", "pass_criteria": "Stream count = 2 (commingled + metals). NOT 4. Warning visible: \"Commingled facility — project-specific weights recommended for stream credit.\"", "suggested_evidence": "Stream-count screen + warning banner screenshot.", "leed_versions": "v4, v4.1", "severity": "CRITICAL"}, {"id": "T-011", "category": "Commingled Recycling", "claim": "Commingled with project-specific weighed data = multiple streams", "setup": "1. Add hauler \"XYZ MRF\" with project-specific diversion data enabled.\n2. Log a commingled ticket of 10T with sort breakdown: 4T concrete, 3T wood, 2T metal, 1T trash (provided by facility, weighed not estimated).", "action": "Generate stream-count report.", "expected": "Commingled load with sorted breakdown counts as 3 diversion streams (concrete, wood, metal). Trash counted as waste.", "pass_criteria": "Stream count = 3 from this load alone. Each material has its own weight. Trash bucketed as waste, not diversion.", "suggested_evidence": "Ticket detail view showing sort breakdown + stream-count report.", "leed_versions": "v4, v4.1", "severity": "HIGH"}, {"id": "T-012", "category": "Commingled Recycling", "claim": "Facility-average diversion rate (regulated authority required)", "setup": "1. Add hauler \"DEF Recycling\" with facility-average diversion rate = 65%, regulator = TCEQ (Texas state authority).\n2. Log a commingled ticket: 10T to DEF Recycling.", "action": "Generate report.", "expected": "System applies 65% facility-average to the 10T (6.5T diverted, 3.5T waste). Regulator name appears on report.", "pass_criteria": "Diversion math uses 65%. Report footer shows \"Facility-average rate verified by TCEQ\".", "suggested_evidence": "Hauler config screenshot + report calculation row.", "leed_versions": "v4, v4.1", "severity": "HIGH"}, {"id": "T-013", "category": "Commingled Recycling", "claim": "Visual inspection NOT acceptable — flagged", "setup": "1. Add hauler \"VisualInspect MRF\" with diversion rate source = \"visual inspection\".", "action": "Try to save the hauler / generate a report using its data.", "expected": "System rejects or warns: visual inspection not acceptable for LEED. Must be either project-specific weighed data OR regulated facility-average.", "pass_criteria": "Save fails with error OR report displays prominent \"non-compliant data source\" warning.", "suggested_evidence": "Error message screenshot.", "leed_versions": "v4, v4.1", "severity": "CRITICAL"}, {"id": "T-014", "category": "Commingled Recycling", "claim": "RCI certification status tracked + expiry monitored", "setup": "1. Add hauler with RCI cert # = \"RCI-12345\", expiry = 90 days from today.\n2. Add second hauler with RCI cert expiry = 5 days ago (expired).", "action": "View hauler list and any report referencing these haulers.", "expected": "Active hauler shows green RCI badge with expiry date. Expired hauler shows red warning. Reports flag tickets from expired-cert haulers.", "pass_criteria": "Hauler list shows both badges correctly. Expired-cert tickets appear in pre-submittal review queue.", "suggested_evidence": "Hauler list screenshot + pre-submittal warning screen.", "leed_versions": "v4.1+", "severity": "HIGH"}, {"id": "T-020", "category": "Material Exclusions", "claim": "ADC counted as waste, not diversion", "setup": "1. Log a ticket with material destination tagged as \"ADC\" (Alternative Daily Cover): 5T.\n2. Also log a recycled metals ticket: 5T.", "action": "Generate diversion % calculation.", "expected": "ADC 5T appears in \"Total Waste Generated\" but NOT in \"Diverted\". Metals 5T appears in both. Diversion = 5T/10T = 50%.", "pass_criteria": "Diversion math shows ADC explicitly excluded. Audit log shows the exclusion event with reason.", "suggested_evidence": "Report breakdown row showing ADC = waste.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-021", "category": "Material Exclusions", "claim": "Wood-to-biofuel counted as diversion", "setup": "1. Log a wood ticket with destination tagged as \"wood-to-biofuel\": 5T.", "action": "Generate diversion calculation.", "expected": "The 5T wood counts as diversion (per LEED rules — wood-to-fuel is the one waste-to-energy path that counts).", "pass_criteria": "5T appears in \"Diverted\" total. Report narrative explains the wood-to-fuel exception.", "suggested_evidence": "Report row showing wood-to-fuel marked as diversion.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-022", "category": "Material Exclusions", "claim": "Non-wood waste-to-energy NOT counted as diversion", "setup": "1. Log a ticket with destination = \"waste-to-energy / not wood\": 5T.", "action": "Generate calculation.", "expected": "The 5T counted as waste, NOT diversion (per LEED rules — only wood-to-biofuel qualifies as diversion among WTE paths).", "pass_criteria": "5T in \"Waste\" total. Report narrative explains WTE exclusion.", "suggested_evidence": "Report row showing WTE = waste.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-023", "category": "Material Exclusions", "claim": "Excavated soil + land-clearing debris auto-excluded", "setup": "1. Log a ticket with material tag = \"excavated soil\": 50T.\n2. Log a ticket with material tag = \"land-clearing debris\": 30T.\n3. Log normal C&D tickets: 100T total, 75T diverted.", "action": "Generate diversion calculation.", "expected": "Total Waste Generated = 100T (NOT 180T). The 50T soil + 30T land-clearing excluded from both numerator and denominator.", "pass_criteria": "Math uses 100T base, NOT 180T. Excluded materials shown in separate \"excluded from calculation\" section.", "suggested_evidence": "Report calculation breakdown.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-024", "category": "Material Exclusions", "claim": "Hazardous materials excluded", "setup": "1. Log a ticket tagged \"hazardous (asbestos)\": 2T.\n2. Log normal tickets: 100T, 75T diverted.", "action": "Generate diversion calculation.", "expected": "Hazardous 2T excluded from both numerator and denominator. Diversion = 75/100 = 75% (not 75/102).", "pass_criteria": "Hazardous shown in separate excluded section. Calc base = 100T.", "suggested_evidence": "Calculation breakdown screenshot.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-025", "category": "Material Exclusions", "claim": "On-site reused materials excluded", "setup": "1. Log a \"reused on-site\" ticket: 8T concrete reused for fill on site.", "action": "Generate report.", "expected": "On-site reuse excluded from generation numbers per LEED rules. Captured in narrative as a source-reduction achievement.", "pass_criteria": "Diversion % calc does not include the 8T. Source-reduction narrative mentions the 8T separately.", "suggested_evidence": "Report narrative + diversion breakdown.", "leed_versions": "All versions", "severity": "MEDIUM"}, {"id": "T-030", "category": "Phase Tracking", "claim": "Demolition tracked separately from construction", "setup": "1. Tag tickets with project phase: 5 demolition tickets (50T total, 35T diverted) and 5 construction tickets (60T total, 50T diverted).", "action": "Generate report.", "expected": "Report shows demolition totals AND construction totals as separate sections, AND combined total. v4.1 Option 2 path uses construction-only.", "pass_criteria": "Three columns/sections: Demolition (50T/35T), Construction (60T/50T), Combined (110T/85T).", "suggested_evidence": "Multi-phase report screenshot.", "leed_versions": "v4.1, v5", "severity": "HIGH"}, {"id": "T-031", "category": "Phase Tracking", "claim": "Phase tag enforced on every ticket", "setup": "1. Try to create a ticket without selecting a phase.", "action": "Attempt to save.", "expected": "Save blocked or ticket flagged for review until phase set. Phase defaults to project-current-phase if configured.", "pass_criteria": "Cannot save without phase, OR ticket appears in review queue with phase missing.", "suggested_evidence": "Ticket entry screen + validation error.", "leed_versions": "All versions", "severity": "MEDIUM"}, {"id": "T-040", "category": "Units (weight or volume)", "claim": "Unit locked at project setup", "setup": "1. Create project with unit = tons.\n2. Try to import a ticket with weight in cubic yards.", "action": "Attempt the import.", "expected": "Import rejected or flagged. System enforces consistency.", "pass_criteria": "Either: import blocked with clear error, OR ticket added to review queue with unit mismatch warning.", "suggested_evidence": "Import error or review queue screenshot.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-041", "category": "Units (weight or volume)", "claim": "Mixed-unit reports refuse to generate", "setup": "1. Force-mix units in test project (developer override).\n2. Try to generate a LEED report.", "action": "Generate report.", "expected": "Report generation blocked. Error explains: \"Mixed units detected — LEED requires consistency throughout project.\"", "pass_criteria": "Generate button disabled or error message shown. Audit log records the prevented action.", "suggested_evidence": "Error message screenshot.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-050", "category": "Thresholds", "claim": "v4.1 Path 2 — 7.5 lbs/sf (BD+C) threshold", "setup": "1. Project: LEED v4.1 BD+C, certified floor area = 50,000 sf.\n2. Log total construction waste = 350,000 lb (7.0 lbs/sf, under threshold).", "action": "Generate v4.1 Path 2 report.", "expected": "Report shows 7.0 lbs/sf < 7.5 lbs/sf threshold = qualifies for points. Real-time waste density on dashboard.", "pass_criteria": "Points qualified. Dashboard shows live density tracking.", "suggested_evidence": "Dashboard + report screenshot.", "leed_versions": "v4.1", "severity": "HIGH"}, {"id": "T-051", "category": "Thresholds", "claim": "v4.1 Path 2 — 2.5 lbs/sf (C&S) threshold", "setup": "1. Project: LEED v4.1 ID+C (Core & Shell), floor area = 30,000 sf.\n2. Log construction waste = 70,000 lb (2.33 lbs/sf).", "action": "Generate v4.1 Path 2 report for C&S.", "expected": "Report shows 2.33 lbs/sf < 2.5 lbs/sf C&S threshold = qualifies for points.", "pass_criteria": "Correct C&S threshold applied (2.5 not 7.5).", "suggested_evidence": "Report screenshot.", "leed_versions": "v4.1", "severity": "MEDIUM"}, {"id": "T-060", "category": "WMP (v4 MRp2)", "claim": "WMP auto-generated from project setup", "setup": "1. Set up new v4 BD+C project with: diversion goal 75%, 4 target streams, list of haulers, list of recycling facilities, data collection cadence.", "action": "Click \"Generate WMP\" before construction starts.", "expected": "Produces submittal-ready PDF with all LEED v4 WMP required sections.", "pass_criteria": "PDF contains: waste prevention strategies, diversion goals, identified streams (≥4), hauler list with facilities, expected diversion rates per material, reporting procedures.", "suggested_evidence": "Generated WMP PDF.", "leed_versions": "v4", "severity": "CRITICAL"}, {"id": "T-061", "category": "WMP (v4 MRp2)", "claim": "WMP signed off before construction starts", "setup": "1. Try to log first scale ticket on a project where WMP has not been signed off.", "action": "Attempt to log ticket.", "expected": "Warning shown: \"WMP not finalized — log ticket anyway?\". Audit log captures the override if user proceeds.", "pass_criteria": "Warning visible. Override captured in audit log.", "suggested_evidence": "Warning screenshot.", "leed_versions": "v4", "severity": "MEDIUM"}, {"id": "T-062", "category": "WMP (v5 MRp1)", "claim": "v5 Zero-Waste Operations Plan auto-generated", "setup": "1. Set up new v5 BD+C project. Configure haulers, material flows, and zero-waste targets.", "action": "Generate MRp1 plan.", "expected": "PDF assembled with v5-specific zero-waste operations content (different from v4 WMP).", "pass_criteria": "PDF references \"Planning for Zero Waste Operations\" (MRp1 language), not v4 \"C&D Waste Management Planning\".", "suggested_evidence": "Generated MRp1 PDF.", "leed_versions": "v5", "severity": "HIGH"}, {"id": "T-070", "category": "Embodied Carbon (v5 MRp2)", "claim": "CO₂e calculated per material stream with documented emission factors", "setup": "1. Project: LEED v5 BD+C.\n2. Log: 100T concrete (factor ~0.103 tCO2e/T), 20T steel (factor ~1.85 tCO2e/T), 10T wood (factor ~0.040 tCO2e/T).", "action": "Generate v5 MRp2 embodied-carbon report.", "expected": "Per-material CO₂e shown with the emission factor next to each calc. Total = sum of weighted factors.", "pass_criteria": "Each row shows: material × tons × emission factor = CO₂e tons. Source for factor cited (e.g., \"EPA WARM 2024\", \"Athena IE\").", "suggested_evidence": "MRp2 report PDF.", "leed_versions": "v5", "severity": "CRITICAL"}, {"id": "T-071", "category": "Embodied Carbon (v5 MRp2)", "claim": "Emission factors editable for jurisdiction overrides", "setup": "1. Go to project settings → emission factors.", "action": "Edit factor for \"concrete\" from 0.103 to a custom regional value, save, regenerate report.", "expected": "Custom factor applied. Audit log captures the change with timestamp and user.", "pass_criteria": "Report uses new factor. Audit log entry visible.", "suggested_evidence": "Settings + audit log screenshot.", "leed_versions": "v5", "severity": "MEDIUM"}, {"id": "T-080", "category": "Facility Records", "claim": "Facility regulatory authority tracked", "setup": "1. Open any hauler/facility record.", "action": "View the record schema.", "expected": "Fields visible: regulatory authority (free text or dropdown for state/local agency), facility type (single-stream / commingled MRF / landfill / WTE / reuse), RCI cert # + expiry, certifying body.", "pass_criteria": "All five fields present and editable. Required-field validation in place.", "suggested_evidence": "Hauler record screenshot.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-081", "category": "Facility Records", "claim": "Pre-submittal review surfaces facility issues", "setup": "1. On a project ready for submittal, ensure at least one ticket from a facility with expired RCI cert or missing regulatory authority.", "action": "Open pre-submittal review.", "expected": "Issues surfaced before user can hit \"Generate LEED submittal\". Each issue shows hauler, problem, recommendation.", "pass_criteria": "Issue list visible. Submittal blocked or warning required before proceeding.", "suggested_evidence": "Pre-submittal review screen.", "leed_versions": "All versions", "severity": "HIGH"}, {"id": "T-090", "category": "Reporting", "claim": "Monthly diversion report auto-emailed", "setup": "1. Set up project with email recipients (GC, owner, consultant).", "action": "Wait for next monthly trigger (or manually trigger via admin).", "expected": "Email sent to all recipients on cadence. PDF attached with diversion%, stream count, MTD totals.", "pass_criteria": "Email arrives. PDF opens and contains required sections.", "suggested_evidence": "Email + PDF.", "leed_versions": "All versions", "severity": "MEDIUM"}, {"id": "T-091", "category": "Reporting", "claim": "Final waste management report — complete LEED narrative", "setup": "1. Complete project (mark as ready for submittal).", "action": "Click \"Generate Final Report\" → \"MRc5 Submittal Package\".", "expected": "PDF includes: total waste, diversion rate, full stream list with end markets, hauler list with regulatory status, narrative explaining diversion strategy, SHA-256 hash manifest. XLSX export for raw data.", "pass_criteria": "All sections present and complete. Ready to upload to LEED Online.", "suggested_evidence": "Final PDF + XLSX.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-092", "category": "Reporting", "claim": "SHA-256 hash manifest re-derivable from source data", "setup": "1. Open the final report's hash manifest.", "action": "Take any 3 hashes. Independently re-compute SHA-256 from the source data (ticket # + weight + timestamp + hauler).", "expected": "Each of the 3 hashes matches the manifest exactly.", "pass_criteria": "3/3 matches. Reviewer can re-derive from documented hash inputs.", "suggested_evidence": "Manifest + 3 independent hash recomputations.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-100", "category": "Audit Trail", "claim": "Every record signed by named human verifier", "setup": "1. Look at any \"Verified\" ticket in the system.", "action": "Open the ticket detail.", "expected": "Ticket shows: verifier name, verifier timestamp, \"verified\" status, edit history.", "pass_criteria": "Verifier name visible on every Verified ticket. No anonymous verifications.", "suggested_evidence": "Ticket detail screenshot.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-101", "category": "Audit Trail", "claim": "No AI-only path to Verified status", "setup": "1. Create a ticket via AI/OCR.\n2. Try to mark as \"Verified\" without a human approval step.", "action": "Attempt programmatic / API-level mark-as-verified.", "expected": "System blocks the transition. \"Verified\" status requires a human user ID and timestamp.", "pass_criteria": "API returns error. UI button disabled until reviewer clicks Approve.", "suggested_evidence": "API response + UI state screenshots.", "leed_versions": "All versions", "severity": "CRITICAL"}, {"id": "T-102", "category": "Audit Trail", "claim": "Edits create new records, never overwrite", "setup": "1. Edit any committed ticket (e.g., change weight from 5.12T to 5.18T).", "action": "View ticket history.", "expected": "Edit shows as a new audit log entry with: old value, new value, editor, timestamp, reason. Original preserved with its hash.", "pass_criteria": "Audit log entry has all 5 fields. Original hash matches original input data.", "suggested_evidence": "Edit history screenshot.", "leed_versions": "All versions", "severity": "CRITICAL"}];
+const CATEGORIES = ["Material Streams", "Commingled Recycling", "Material Exclusions", "Phase Tracking", "Units (weight or volume)", "Thresholds", "WMP (v4 MRp2)", "WMP (v5 MRp1)", "Embodied Carbon (v5 MRp2)", "Facility Records", "Reporting", "Audit Trail"];
+
+const state = {
+  url: localStorage.getItem('ds_supabase_url') || '',
+  key: localStorage.getItem('ds_supabase_key') || '',
+  user: localStorage.getItem('ds_audit_user') || '',
+  projectId: localStorage.getItem('ds_audit_project') || '__platform__',
+  projects: [],          // [{id, name, leed_version, leed_target, ...}]
+  resultsByScope: {},    // { '__platform__': {test_id: row}, '<uuid>': {test_id: row} }
+  filter: 'all',
+  category: '',
+  search: '',
+  schemaVersion: 'v2',   // 'v1' (test_id PK only) or 'v2' (per-project)
+};
+
+const $ = id => document.getElementById(id);
+
+async function supabase(endpoint, method='GET', body=null) {
+  if (!state.url || !state.key) throw new Error('Not connected');
+  const opts = {
+    method,
+    headers: {
+      'apikey': state.key,
+      'Authorization': 'Bearer ' + state.key,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(state.url + '/rest/v1/' + endpoint, opts);
+  if (!res.ok) {
+    const txt = await res.text();
+    const err = new Error('HTTP ' + res.status + ': ' + txt);
+    err.status = res.status;
+    err.body = txt;
+    throw err;
+  }
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : [];
+}
+
+function setConnStatus(stateClass, text) {
+  $('connDot').className = 'status-dot ' + stateClass;
+  $('connText').textContent = text;
+}
+
+// Detect schema version (v1 = no project_id column, v2 = has it)
+async function detectSchema() {
+  try {
+    // Try selecting project_id — if it works, we have v2
+    await supabase('leed_audit_results?select=project_id&limit=1');
+    state.schemaVersion = 'v2';
+    return 'v2';
+  } catch (e) {
+    if (e.body && e.body.includes('project_id')) {
+      state.schemaVersion = 'v1';
+      return 'v1';
+    }
+    throw e;
+  }
+}
+
+async function loadProjects() {
+  try {
+    const projs = await supabase('projects?select=id,name,leed_version,leed_target,location,client,general_contractor&order=name.asc');
+    state.projects = projs || [];
+  } catch (e) {
+    console.warn('Could not load projects:', e.message);
+    state.projects = [];
+  }
+}
+
+async function loadResultsForScope(scopeKey) {
+  // scopeKey is '__platform__' or a project UUID
+  let endpoint;
+  if (state.schemaVersion === 'v1') {
+    // v1 schema has no project_id, all results are "platform"
+    endpoint = 'leed_audit_results?select=*';
+  } else if (scopeKey === '__platform__') {
+    endpoint = 'leed_audit_results?select=*&project_id=is.null';
+  } else {
+    endpoint = 'leed_audit_results?select=*&project_id=eq.' + encodeURIComponent(scopeKey);
+  }
+  try {
+    const rows = await supabase(endpoint);
+    const byTest = {};
+    (rows || []).forEach(r => { byTest[r.test_id] = r; });
+    state.resultsByScope[scopeKey] = byTest;
+    return byTest;
+  } catch (e) {
+    console.error('Load results failed:', e);
+    state.resultsByScope[scopeKey] = {};
+    return {};
+  }
+}
+
+function currentResults() {
+  return state.resultsByScope[state.projectId] || {};
+}
+
+function currentProject() {
+  if (state.projectId === '__platform__') return null;
+  return state.projects.find(p => p.id === state.projectId) || null;
+}
+
+async function connect() {
+  const url = $('supaUrl').value.trim().replace(/\/$/, '');
+  const key = $('supaKey').value.trim();
+  const user = $('auditUser').value.trim();
+  if (!url || !key) { alert('URL and key required'); return; }
+  if (!user) { alert('Your name (verifier) is required for audit defensibility'); return; }
+
+  state.url = url; state.key = key; state.user = user;
+  localStorage.setItem('ds_supabase_url', url);
+  localStorage.setItem('ds_supabase_key', key);
+  localStorage.setItem('ds_audit_user', user);
+
+  setConnStatus('', 'Connecting…');
+  try {
+    // Probe schema
+    try {
+      await detectSchema();
+    } catch (e) {
+      if (e.status === 404 || (e.body && (e.body.includes('does not exist') || e.body.includes('leed_audit_results')))) {
+        setConnStatus('err', 'Table "leed_audit_results" not found — click ⚙ DB Schema for setup SQL');
+        $('schemaModal').classList.add('show');
+        return;
+      }
+      if (e.status === 401 || e.status === 403) {
+        setConnStatus('err', 'Auth failed — check URL and anon key');
+        return;
+      }
+      throw e;
+    }
+
+    // Load projects in parallel with results
+    await Promise.all([
+      loadProjects(),
+      loadResultsForScope(state.projectId),
+    ]);
+
+    populateProjectPicker();
+    const cnt = Object.keys(currentResults()).length;
+    const schemaNote = state.schemaVersion === 'v1' ? ' · v1 schema (run migration for per-project)' : '';
+    setConnStatus('ok', 'Connected · ' + cnt + ' results in current scope · ' + state.projects.length + ' projects loaded · verifier: ' + user + schemaNote);
+    $('connectCard').classList.remove('show');
+    $('mainContent').style.display = 'block';
+    renderAll();
+  } catch (e) {
+    setConnStatus('err', 'Connection failed: ' + e.message.substring(0, 120));
+    console.error(e);
+  }
+}
+
+function populateProjectPicker() {
+  const sel = $('projSelect');
+  // Preserve the platform option, add projects
+  sel.innerHTML = '<option value="__platform__">📦 Platform-wide (audit DivertScan itself)</option>';
+  if (state.projects.length > 0) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = '— LEED Projects —';
+    state.projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      const ver = p.leed_version ? ' · ' + p.leed_version : '';
+      opt.textContent = p.name + ver;
+      optgroup.appendChild(opt);
+    });
+    sel.appendChild(optgroup);
+  }
+  sel.value = state.projectId;
+  updateProjectInfo();
+}
+
+function updateProjectInfo() {
+  const proj = currentProject();
+  const badge = $('scopeBadge');
+  const info = $('projInfo');
+  if (state.projectId === '__platform__') {
+    badge.textContent = 'Platform Audit';
+    badge.className = 'scope-badge platform';
+    info.textContent = 'Verifying DivertScan platform capabilities (not tied to a specific project)';
+  } else if (proj) {
+    badge.textContent = 'Project Audit';
+    badge.className = 'scope-badge';
+    const bits = [];
+    if (proj.leed_version) bits.push(proj.leed_version);
+    if (proj.leed_target) bits.push('target: ' + proj.leed_target);
+    if (proj.general_contractor) bits.push('GC: ' + proj.general_contractor);
+    if (proj.location) bits.push(proj.location);
+    info.textContent = bits.join(' · ');
+  } else {
+    badge.textContent = 'Project Audit';
+    badge.className = 'scope-badge';
+    info.textContent = '';
+  }
+}
+
+async function switchProject(newScope) {
+  state.projectId = newScope;
+  localStorage.setItem('ds_audit_project', newScope);
+  updateProjectInfo();
+  if (!state.resultsByScope[newScope]) {
+    setConnStatus('ok', 'Loading results for new scope…');
+    await loadResultsForScope(newScope);
+  }
+  const cnt = Object.keys(currentResults()).length;
+  setConnStatus('ok', 'Connected · ' + cnt + ' results in current scope · verifier: ' + state.user);
+  renderAll();
+}
+
+function counts() {
+  const c = { pass:0, partial:0, fail:0, nb:0, nt:0 };
+  const results = currentResults();
+  TESTS.forEach(t => {
+    const r = results[t.id];
+    if (!r || !r.status || r.status === '—') c.nt++;
+    else if (r.status.includes('Pass')) c.pass++;
+    else if (r.status.includes('Partial')) c.partial++;
+    else if (r.status.includes('Fail')) c.fail++;
+    else if (r.status.includes('Not Built')) c.nb++;
+    else c.nt++;
+  });
+  return c;
+}
+
+function severityCounts() {
+  const sev = {
+    CRITICAL: { total:0, pass:0 },
+    HIGH:     { total:0, pass:0 },
+    MEDIUM:   { total:0, pass:0 },
+  };
+  const results = currentResults();
+  TESTS.forEach(t => {
+    sev[t.severity].total++;
+    const r = results[t.id];
+    if (r && r.status && r.status.includes('Pass')) sev[t.severity].pass++;
+  });
+  return sev;
+}
+
+function renderDashboard() {
+  const c = counts();
+  $('cPass').textContent = c.pass;
+  $('cPartial').textContent = c.partial;
+  $('cFail').textContent = c.fail;
+  $('cNB').textContent = c.nb;
+  $('cNT').textContent = c.nt;
+
+  const sev = severityCounts();
+  const v = $('verdict');
+  const critPass = sev.CRITICAL.pass === sev.CRITICAL.total;
+  const highPass = sev.HIGH.pass === sev.HIGH.total;
+  const totalDone = c.pass + c.partial + c.fail + c.nb;
+
+  if (totalDone === 0) {
+    v.className = 'verdict';
+    v.innerHTML = '— Awaiting test results — <div class="verdict-sub">Start with the CRITICAL tests below</div>';
+  } else if (critPass && highPass) {
+    v.className = 'verdict ready';
+    v.innerHTML = '✓ READY FOR LEED SUBMITTAL <div class="verdict-sub">All Critical + High tests pass · ' + c.pass + '/' + TESTS.length + ' tests verified</div>';
+  } else if (critPass) {
+    v.className = 'verdict conditional';
+    v.innerHTML = '⚠ CONDITIONAL <div class="verdict-sub">All Critical pass · ' + (sev.HIGH.total - sev.HIGH.pass) + ' High-severity gap(s) remain</div>';
+  } else {
+    const critGaps = sev.CRITICAL.total - sev.CRITICAL.pass;
+    v.className = 'verdict notready';
+    v.innerHTML = '✗ NOT READY <div class="verdict-sub">' + critGaps + ' Critical-severity gap(s) must be closed before LEED submittal</div>';
+  }
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusClass(s) {
+  if (!s) return '';
+  if (s.includes('Pass')) return 'passed';
+  if (s.includes('Partial')) return 'partial';
+  if (s.includes('Fail')) return 'failed';
+  return '';
+}
+
+function severityClass(sev) {
+  if (sev === 'CRITICAL') return 'crit';
+  if (sev === 'HIGH') return 'high';
+  return 'med';
+}
+
+function matchesFilter(t) {
+  const results = currentResults();
+  const r = results[t.id];
+  const status = (r && r.status) || '';
+
+  if (state.filter === 'crit' && t.severity !== 'CRITICAL') return false;
+  if (state.filter === 'open' && status.includes('Pass')) return false;
+  if (state.filter === 'passed' && !status.includes('Pass')) return false;
+
+  if (state.category && t.category !== state.category) return false;
+
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    const hay = (t.id + ' ' + t.category + ' ' + t.claim + ' ' + t.setup + ' ' + t.action + ' ' + t.expected + ' ' + t.pass_criteria).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function renderTestList() {
+  const list = $('testList');
+  const visible = TESTS.filter(matchesFilter);
+  const results = currentResults();
+
+  if (visible.length === 0) {
+    list.innerHTML = '<div class="empty-state">No tests match the current filter.</div>';
+    return;
+  }
+
+  list.innerHTML = visible.map(t => {
+    const r = results[t.id] || {};
+    const status = r.status || '—';
+    const evidence = r.evidence || '';
+    const verifiedBy = r.verified_by || '';
+    const verifiedAt = r.verified_at ? new Date(r.verified_at).toLocaleDateString() : '';
+
+    const sevClass = severityClass(t.severity);
+    const stClass = statusClass(status);
+    const sevPill = 'sev-' + (t.severity === 'CRITICAL' ? 'crit' : t.severity === 'HIGH' ? 'high' : 'med');
+
+    return '<div class="test-card ' + sevClass + ' ' + stClass + '" data-id="' + t.id + '">' +
+      '<div class="test-head">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div>' +
+            '<span class="test-id">' + t.id + '</span>' +
+            '<span class="test-cat">' + escHtml(t.category) + '</span>' +
+          '</div>' +
+          '<div class="test-claim">' + escHtml(t.claim) + '</div>' +
+          '<div class="test-meta">' +
+            '<span class="test-sev ' + sevPill + '">' + t.severity + '</span>' +
+            '<span class="test-ver">' + escHtml(t.leed_versions) + '</span>' +
+            '<span class="test-ver" style="background:transparent;border:1px solid var(--border)">' + escHtml(status) + '</span>' +
+            (verifiedBy ? '<span class="verifier-chip">Verified by ' + escHtml(verifiedBy) + (verifiedAt ? ' · ' + verifiedAt : '') + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="test-controls">' +
+          '<select class="status-select" data-id="' + t.id + '">' +
+            ['—','✓ Pass','⚠ Partial','✗ Fail','○ Not Built'].map(s =>
+              '<option value="' + s + '"' + (status === s ? ' selected' : '') + '>' + s + '</option>'
+            ).join('') +
+          '</select>' +
+          '<button class="toggle-btn" data-toggle="' + t.id + '">▾ Details</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="test-detail" id="detail-' + t.id + '">' +
+        '<div class="detail-grid">' +
+          '<div class="detail-label">Setup</div><div class="detail-text">' + escHtml(t.setup) + '</div>' +
+          '<div class="detail-label">Action</div><div class="detail-text">' + escHtml(t.action) + '</div>' +
+          '<div class="detail-label">Expected</div><div class="detail-text">' + escHtml(t.expected) + '</div>' +
+          '<div class="detail-label">Pass Criteria</div><div class="detail-text">' + escHtml(t.pass_criteria) + '</div>' +
+          '<div class="detail-label">Suggested Evidence</div><div class="detail-text" style="color:var(--muted)">' + escHtml(t.suggested_evidence) + '</div>' +
+        '</div>' +
+        '<label style="font-size:.7rem;color:var(--muted);margin-top:8px;display:block">Your Evidence / Notes</label>' +
+        '<textarea class="evidence-input" data-id="' + t.id + '" placeholder="Paste screenshot path, observed behavior, hash, query result…">' + escHtml(evidence) + '</textarea>' +
+        // Print-only evidence block (shown when interactive textarea is hidden)
+        (evidence ? '<div class="print-evidence print-only"><div class="print-evidence-label">Evidence / Verifier Notes</div>' + escHtml(evidence) + '</div>' : '') +
+        '<div class="save-row">' +
+          '<button class="btn btn-primary btn-sm save-btn" data-id="' + t.id + '">💾 Save</button>' +
+          '<span class="save-status" id="save-' + t.id + '"></span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderAll() {
+  renderDashboard();
+  renderTestList();
+}
+
+// ============= SAVE =============
+async function saveTest(testId) {
+  const select = document.querySelector('.status-select[data-id="' + testId + '"]');
+  const textarea = document.querySelector('.evidence-input[data-id="' + testId + '"]');
+  const status = select ? select.value : '—';
+  const evidence = textarea ? textarea.value : '';
+  const saveStatus = $('save-' + testId);
+
+  saveStatus.textContent = 'Saving…';
+  saveStatus.className = 'save-status';
+
+  const nowIso = new Date().toISOString();
+  const payload = {
+    test_id: testId,
+    status: status,
+    evidence: evidence,
+    verified_by: state.user,
+    verified_at: nowIso,
+    updated_at: nowIso,
+  };
+  if (state.schemaVersion === 'v2') {
+    payload.project_id = (state.projectId === '__platform__') ? null : state.projectId;
+  }
+
+  try {
+    let result;
+    // Build the filter to match the existing row for this (project, test)
+    let matchFilter;
+    if (state.schemaVersion === 'v1') {
+      matchFilter = 'test_id=eq.' + encodeURIComponent(testId);
+    } else if (state.projectId === '__platform__') {
+      matchFilter = 'test_id=eq.' + encodeURIComponent(testId) + '&project_id=is.null';
+    } else {
+      matchFilter = 'test_id=eq.' + encodeURIComponent(testId) + '&project_id=eq.' + encodeURIComponent(state.projectId);
+    }
+
+    // Try PATCH first
+    try {
+      result = await supabase('leed_audit_results?' + matchFilter, 'PATCH', payload);
+    } catch (e) {
+      result = null;
+    }
+
+    // If no row updated, INSERT
+    if (!result || result.length === 0) {
+      result = await supabase('leed_audit_results', 'POST', payload);
+    }
+
+    const saved = Array.isArray(result) ? result[0] : result;
+    if (!state.resultsByScope[state.projectId]) state.resultsByScope[state.projectId] = {};
+    state.resultsByScope[state.projectId][testId] = saved || payload;
+    saveStatus.textContent = '✓ Saved ' + new Date().toLocaleTimeString();
+    saveStatus.className = 'save-status ok';
+    renderDashboard();
+    const card = document.querySelector('.test-card[data-id="' + testId + '"]');
+    if (card) {
+      card.classList.remove('passed','failed','partial');
+      const cls = statusClass(status);
+      if (cls) card.classList.add(cls);
+    }
+    // Update the inline status pill
+    const statusPill = card ? card.querySelector('.test-meta .test-ver:nth-of-type(2)') : null;
+    if (statusPill) statusPill.textContent = status;
+  } catch (e) {
+    saveStatus.textContent = '✗ Save failed: ' + e.message.substring(0, 80);
+    saveStatus.className = 'save-status err';
+    console.error(e);
+  }
+}
+
+// ============= PRINT =============
+function preparePrint() {
+  // Expand all detail sections for printing
+  document.querySelectorAll('.test-detail').forEach(d => d.classList.add('open'));
+
+  // Set print metadata
+  const proj = currentProject();
+  const scope = state.projectId === '__platform__' ? 'Platform-Wide Audit' : (proj ? 'Project: ' + proj.name : 'Project Audit');
+  const ver = proj && proj.leed_version ? ' · LEED ' + proj.leed_version : '';
+  const tgt = proj && proj.leed_target ? ' · Target: ' + proj.leed_target : '';
+  $('printDate').textContent = new Date().toLocaleString() + ' · ' + scope + ver + tgt;
+  $('printVerifier').textContent = state.user || '________________';
+
+  setTimeout(() => {
+    window.print();
+  }, 100);
+}
+
+// ============= EXPORT CSV =============
+function exportCsv() {
+  const results = currentResults();
+  const proj = currentProject();
+  const scopeName = state.projectId === '__platform__' ? 'Platform' : (proj ? proj.name.replace(/[^a-z0-9]/gi,'_') : 'Project');
+  const rows = [['Test ID','Category','Claim','LEED Versions','Severity','Status','Evidence','Verified By','Verified At']];
+  TESTS.forEach(t => {
+    const r = results[t.id] || {};
+    rows.push([t.id, t.category, t.claim, t.leed_versions, t.severity, r.status||'—', r.evidence||'', r.verified_by||'', r.verified_at||'']);
+  });
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'DivertScan_LEED_Audit_' + scopeName + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============= EVENT WIRING =============
+$('connectBtn').addEventListener('click', connect);
+
+$('settingsBtn').addEventListener('click', () => {
+  $('connectCard').classList.toggle('show');
+  if ($('connectCard').classList.contains('show')) {
+    $('supaUrl').value = state.url;
+    $('supaKey').value = state.key;
+    $('auditUser').value = state.user;
+  }
+});
+
+$('schemaBtn').addEventListener('click', () => $('schemaModal').classList.add('show'));
+$('exportBtn').addEventListener('click', exportCsv);
+$('printBtn').addEventListener('click', preparePrint);
+
+$('copySqlBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('schemaSql').textContent);
+    $('copySqlBtn').textContent = '✓ Copied!';
+    setTimeout(() => $('copySqlBtn').textContent = '📋 Copy SQL', 1500);
+  } catch (e) { alert('Copy failed. Select and copy manually.'); }
+});
+
+$('copyMigrateBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('migrateSql').textContent);
+    $('copyMigrateBtn').textContent = '✓ Copied!';
+    setTimeout(() => $('copyMigrateBtn').textContent = '📋 Copy Migration', 1500);
+  } catch (e) { alert('Copy failed. Select and copy manually.'); }
+});
+
+// Project picker
+$('projSelect').addEventListener('change', e => switchProject(e.target.value));
+
+// Modal close
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.addEventListener('click', () => $(el.dataset.close).classList.remove('show'));
+});
+document.querySelectorAll('.modal-bg').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+});
+
+// Filter pills
+document.querySelectorAll('.filter-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.filter = btn.dataset.filter;
+    renderTestList();
+  });
+});
+
+$('searchBox').addEventListener('input', e => {
+  state.search = e.target.value;
+  renderTestList();
+});
+
+const catSelect = $('catFilter');
+CATEGORIES.forEach(c => {
+  const opt = document.createElement('option');
+  opt.value = c; opt.textContent = c;
+  catSelect.appendChild(opt);
+});
+catSelect.addEventListener('change', e => {
+  state.category = e.target.value;
+  renderTestList();
+});
+
+// Delegated handlers
+document.addEventListener('click', e => {
+  if (e.target.matches('.toggle-btn')) {
+    const id = e.target.dataset.toggle;
+    const detail = $('detail-' + id);
+    if (detail) {
+      detail.classList.toggle('open');
+      e.target.textContent = detail.classList.contains('open') ? '▴ Hide' : '▾ Details';
+    }
+  }
+  if (e.target.matches('.save-btn') || e.target.closest('.save-btn')) {
+    const btn = e.target.matches('.save-btn') ? e.target : e.target.closest('.save-btn');
+    saveTest(btn.dataset.id);
+  }
+});
+
+// ============= INIT =============
+(function init() {
+  if (state.url && state.key && state.user) {
+    $('supaUrl').value = state.url;
+    $('supaKey').value = state.key;
+    $('auditUser').value = state.user;
+    connect();
+  } else {
+    $('connectCard').classList.add('show');
+    setConnStatus('', 'Not connected — enter Supabase credentials below');
+  }
+})();
+</script>
+</body>
+</html>
