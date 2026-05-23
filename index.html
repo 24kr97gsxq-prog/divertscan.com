@@ -3759,9 +3759,18 @@ const DS = {
 
         // Vanessa: periodic flush + initial badge render
         this._updateVanessaBadge();
-        setInterval(() => { if (navigator.onLine) this.flushVanessa(); }, 30000);
+        setInterval(() => {
+            // Don't try to flush when tab is hidden — no point burning network
+            if (navigator.onLine && !document.hidden) this.flushVanessa();
+        }, 30000);
         // First flush after a short delay so initial page load isn't blocked
-        setTimeout(() => { if (navigator.onLine) this.flushVanessa(); }, 3000);
+        setTimeout(() => { if (navigator.onLine && !document.hidden) this.flushVanessa(); }, 3000);
+        // Also try a flush right after the tab becomes visible (covers being offline + away)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && navigator.onLine) {
+                setTimeout(() => this.flushVanessa(), 500);
+            }
+        });
 
         this.addAuditEntry('INIT', `DivertScan v${this.VERSION} ready`);
         console.log('DivertScan ready');
@@ -3777,29 +3786,73 @@ const DS = {
     // ============================================================
     _liveScaleTimer: null,
     _liveScaleLastRows: [],
+    _liveScaleCurrentInterval: 6000,
+    _liveScaleVisibilityHooked: false,
+
+    // Adaptive poll interval based on scale activity
+    // - Active (last reading < 60s): poll every 6s
+    // - Idle (1-15 min): poll every 30s
+    // - Dormant (>15 min): poll every 2 min
+    // This saves ~14,000 Supabase calls/day when the scale isn't being used
+    _computePollInterval(rows) {
+        if (!rows || rows.length === 0) return 30000; // No data: check periodically
+        const latest = rows[0];
+        if (!latest.captured_at) return 30000;
+        const ageS = (Date.now() - new Date(latest.captured_at).getTime()) / 1000;
+        if (ageS < 60) return 6000;       // Active
+        if (ageS < 900) return 30000;     // Idle (1-15 min)
+        return 120000;                     // Dormant (> 15 min)
+    },
 
     startLiveScalePoller() {
-        // Initial fetch immediately, then every 6 seconds
+        // Hook tab visibility once — pause when tab is hidden, resume when visible
+        if (!this._liveScaleVisibilityHooked) {
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    // Tab hidden — stop polling entirely. No CPU, no network.
+                    if (this._liveScaleTimer) {
+                        clearTimeout(this._liveScaleTimer);
+                        this._liveScaleTimer = null;
+                    }
+                } else {
+                    // Tab visible again — fetch fresh data immediately and resume
+                    this.refreshLiveScale();
+                }
+            });
+            this._liveScaleVisibilityHooked = true;
+        }
+
+        // Initial fetch immediately, then adaptive scheduling
         this.refreshLiveScale();
-        if (this._liveScaleTimer) clearInterval(this._liveScaleTimer);
-        this._liveScaleTimer = setInterval(() => this.refreshLiveScale(), 6000);
+    },
+
+    _scheduleNextPoll() {
+        if (this._liveScaleTimer) clearTimeout(this._liveScaleTimer);
+        if (document.hidden) return; // No polling while tab is hidden
+        const interval = this._liveScaleCurrentInterval;
+        this._liveScaleTimer = setTimeout(() => this.refreshLiveScale(), interval);
     },
 
     async refreshLiveScale() {
         try {
             // Pull last 10 from v_admin_review (same view loadPiCaptures uses)
             const rows = await this.supabase('v_admin_review?order=captured_at.desc&limit=10');
-            if (!rows || !Array.isArray(rows)) return;
-            this._liveScaleLastRows = rows;
-            this._renderLiveScalePill(rows);
-            // If dropdown is open, refresh it too
-            const dd = document.getElementById('liveScaleDropdown');
-            if (dd && dd.style.display === 'block') {
-                this._renderLiveScaleDropdown(rows);
+            if (rows && Array.isArray(rows)) {
+                this._liveScaleLastRows = rows;
+                this._renderLiveScalePill(rows);
+                // If dropdown is open, refresh it too
+                const dd = document.getElementById('liveScaleDropdown');
+                if (dd && dd.style.display === 'block') {
+                    this._renderLiveScaleDropdown(rows);
+                }
+                // Adaptive: pick next interval based on current activity
+                this._liveScaleCurrentInterval = this._computePollInterval(rows);
             }
         } catch (e) {
             // Silent fail — header just shows last good value
             console.warn('Live scale refresh:', e.message);
+        } finally {
+            this._scheduleNextPoll();
         }
     },
 
@@ -3967,8 +4020,29 @@ const DS = {
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'driversTab') this.loadDriversTab();
                 if (tab === 'projectsTab') this.renderProjectList();
-                if (tab === 'auditTab') { this.loadPendingReview(); this.updateFieldLink(); this.loadPhotoQueue(); this.loadClients(); this.loadLoginLog(); this.populateAuditProjectSelect(); this.loadHaulerMgmt(); }
-                if (tab === 'scaleTab') { this.loadOperationalPulse(); this.loadScaleFeed(); this.loadPiCaptures(); this.loadDrivers(); this.loadWalkinInbox(); }
+                // Audit + Scale tabs each fire several Supabase queries. Run them in
+                // parallel via Promise.all (these don't depend on each other) so the
+                // tab paints faster instead of waiting for queries sequentially.
+                if (tab === 'auditTab') {
+                    this.updateFieldLink();
+                    this.populateAuditProjectSelect();
+                    Promise.all([
+                        this.loadPendingReview(),
+                        this.loadPhotoQueue(),
+                        this.loadClients(),
+                        this.loadLoginLog(),
+                        this.loadHaulerMgmt(),
+                    ]).catch(e => console.warn('Audit tab partial load:', e));
+                }
+                if (tab === 'scaleTab') {
+                    Promise.all([
+                        this.loadOperationalPulse(),
+                        this.loadScaleFeed(),
+                        this.loadPiCaptures(),
+                        this.loadDrivers(),
+                        this.loadWalkinInbox(),
+                    ]).catch(e => console.warn('Scale tab partial load:', e));
+                }
             });
         });
     },
@@ -4301,6 +4375,43 @@ const DS = {
             this.showToast('Configure Supabase in Audit > Settings');
             return null;
         }
+
+        // ============================================================
+        // LIGHT CACHE — speed up repeat reads on slow-changing tables
+        // ----------------------------------------------------------------
+        // Some tables (projects, client_accounts, drivers, etc.) get queried
+        // many times during a session but rarely change. We cache GETs on a
+        // whitelist of endpoints for 60s, and invalidate the entire cache
+        // on any write (POST/PATCH/DELETE). Conservative but correct.
+        // ============================================================
+        const CACHE_TTL_MS = 60000;
+        if (!this._supaCache) this._supaCache = new Map();
+        const isCacheable = method === 'GET' && (
+            endpoint.startsWith('projects?') ||
+            endpoint.startsWith('projects&') ||
+            endpoint === 'projects' ||
+            endpoint.startsWith('client_accounts?') ||
+            endpoint === 'client_accounts' ||
+            endpoint.startsWith('client_project_access?') ||
+            endpoint === 'client_project_access' ||
+            endpoint.startsWith('drivers?order=') ||
+            endpoint === 'drivers' ||
+            endpoint.startsWith('haulers?') ||
+            endpoint === 'haulers'
+        );
+        if (isCacheable) {
+            const hit = this._supaCache.get(endpoint);
+            if (hit && (Date.now() - hit.t) < CACHE_TTL_MS) {
+                // Cache hit — record as ok for visibility but don't hit the network
+                this._sullivanRecord('ok', { endpoint, method, status: 200, duration: 0 });
+                return hit.data;
+            }
+        }
+        // Any write invalidates the cache
+        if (method !== 'GET') {
+            this._supaCache.clear();
+        }
+
         const url = `${this.state.supabaseUrl}/rest/v1/${endpoint}`;
         const headers = {
             'apikey': this.state.supabaseKey,
@@ -4334,7 +4445,12 @@ const DS = {
             this._sullivanRecord('ok', { endpoint, method, status: res.status, duration });
             if (res.status === 204 || method === 'DELETE') return [];
             const text = await res.text();
-            return text ? JSON.parse(text) : [];
+            const parsed = text ? JSON.parse(text) : [];
+            // Cache successful GETs for cacheable endpoints
+            if (isCacheable && parsed) {
+                this._supaCache.set(endpoint, { t: Date.now(), data: parsed });
+            }
+            return parsed;
         } catch (e) {
             clearTimeout(timeoutId);
             const duration = Date.now() - startTime;
