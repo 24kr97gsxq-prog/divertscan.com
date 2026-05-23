@@ -1,0 +1,4388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DivertScan APEX V1 — Live Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --green:        #1F7A3A;
+    --green-deep:   #155027;
+    --green-light:  #E8F3EC;
+    --green-glow:   rgba(31,122,58,0.12);
+    --ink:          #0F1311;
+    --ink-2:        #1A1F1C;
+    --paper:        #FAFAF7;
+    --paper-2:      #F4F5F1;
+    --line:         #E2E3DE;
+    --muted:        #6B7A6F;
+    --gold:         #B8941F;
+    --amber:        #C9A227;
+    --red:          #B83A2E;
+    --shadow:       0 1px 2px rgba(15,19,17,0.04), 0 8px 24px rgba(15,19,17,0.06);
+    --shadow-lg:    0 4px 12px rgba(15,19,17,0.08), 0 24px 48px rgba(15,19,17,0.10);
+    --radius:       12px;
+    --radius-sm:    8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-feature-settings: "tnum" 1; }
+  .display { font-family: 'Fraunces', Georgia, serif; font-weight: 700; letter-spacing: -0.02em; }
+
+  /* ============ DEMO BANNER ============ */
+  .demo-banner {
+    background: linear-gradient(90deg, var(--ink) 0%, var(--ink-2) 100%);
+    color: #fff;
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--green);
+  }
+  .demo-banner strong { color: var(--green-light); font-weight: 700; }
+  .demo-banner .pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #38d97b;
+    border-radius: 50%;
+    margin-right: 8px;
+    box-shadow: 0 0 0 0 #38d97b;
+    animation: pulse 2s infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(56,217,123,0.7); }
+    70%  { box-shadow: 0 0 0 10px rgba(56,217,123,0); }
+    100% { box-shadow: 0 0 0 0 rgba(56,217,123,0); }
+  }
+
+  /* ============ APP CHROME ============ */
+  .app {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: var(--shadow-lg);
+    min-height: 100vh;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-mark {
+    width: 36px; height: 36px;
+    background: var(--green);
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-family: 'Fraunces', serif;
+    font-weight: 900;
+    font-size: 18px;
+    box-shadow: 0 4px 12px var(--green-glow);
+    position: relative;
+  }
+  .brand-mark::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    opacity: 0.25;
+  }
+  .brand-name {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .brand-name span { color: var(--green); }
+  .brand-sub {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .top-pill {
+    background: var(--green-light);
+    color: var(--green-deep);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(31,122,58,0.18);
+  }
+  .top-user {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+  }
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2c8e4b, #155027);
+    color: #fff;
+    display: grid; place-items: center;
+    font-weight: 700;
+    font-size: 11px;
+  }
+  .top-user-info { line-height: 1.1; }
+  .top-user-name { font-size: 12px; font-weight: 600; }
+  .top-user-role { font-size: 10px; color: var(--muted); }
+
+  /* ============ TABS ============ */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 32px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+  .tab {
+    background: none;
+    border: none;
+    padding: 14px 18px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.15s;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    color: var(--green-deep);
+    border-bottom-color: var(--green);
+  }
+  .tab-count {
+    background: var(--line);
+    color: var(--muted);
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .tab.active .tab-count {
+    background: var(--green-light);
+    color: var(--green-deep);
+  }
+
+  /* ============ TAB PANELS ============ */
+  .panel { display: none; padding: 28px 32px; }
+  .panel.active { display: block; }
+
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .panel-title {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+  .panel-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ============ BUTTONS ============ */
+  .btn {
+    font-family: inherit;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--paper-2); border-color: #c8cac3; }
+  .btn-primary {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+  }
+  .btn-primary:hover { background: var(--green-deep); border-color: var(--green-deep); }
+  .btn-ghost { background: transparent; border-color: transparent; }
+  .btn-ghost:hover { background: var(--paper-2); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  /* ============ KPI GRID ============ */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .kpi {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--green);
+  }
+  .kpi-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .kpi-unit { font-size: 14px; color: var(--muted); margin-left: 4px; font-family: 'Inter Tight'; font-weight: 500; }
+  .kpi-delta {
+    font-size: 11px;
+    margin-top: 6px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .kpi-delta.up { color: var(--green-deep); }
+  .kpi-delta.down { color: var(--red); }
+  .kpi-delta.neu { color: var(--muted); }
+
+  /* ============ CARDS ============ */
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+  }
+  .card-title-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .card-actions { display: flex; gap: 6px; }
+
+  /* ============ DASHBOARD LAYOUT ============ */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 980px) {
+    .kpi-grid { grid-template-columns: repeat(2,1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* ============ CHARTS ============ */
+  .chart-wrap {
+    position: relative;
+    height: 280px;
+  }
+  .chart-wrap-sm { height: 200px; }
+
+  /* ============ TABLES ============ */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--paper);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+  }
+  td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  tr:hover td { background: var(--paper); }
+  .num { font-family: 'IBM Plex Mono', monospace; text-align: right; font-feature-settings: "tnum" 1; }
+
+  /* ============ BADGES ============ */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .badge.green   { background: var(--green-light); color: var(--green-deep); }
+  .badge.amber   { background: #FBF3D9; color: #7A6418; }
+  .badge.red     { background: #FBE3DF; color: #8C2A1F; }
+  .badge.grey    { background: var(--paper-2); color: var(--muted); }
+  .badge.outline { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .badge.hash { font-family: 'IBM Plex Mono', monospace; font-size: 10px; background: var(--ink); color: #d8e7dd; padding: 2px 6px; }
+
+  /* ============ DIVERSION BAR ============ */
+  .divbar {
+    height: 6px;
+    background: var(--paper-2);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    min-width: 80px;
+  }
+  .divbar-fill {
+    background: var(--green);
+    height: 100%;
+  }
+
+  /* ============ MATERIAL CHIPS ============ */
+  .mat-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .mat-name { width: 95px; font-size: 12px; font-weight: 600; }
+  .mat-bar {
+    flex: 1;
+    height: 22px;
+    background: var(--paper-2);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .mat-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), #2c8e4b);
+    transition: width 1s ease-out;
+  }
+  .mat-val { width: 80px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+
+  /* ============ AUDIT LOG ============ */
+  .audit-row {
+    display: grid;
+    grid-template-columns: 110px 80px 1fr auto;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: center;
+    font-size: 12px;
+  }
+  .audit-time { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .audit-action { font-weight: 600; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .audit-detail { color: var(--ink); font-size: 12px; }
+  .audit-hash {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  /* ============ QUEUE CARDS ============ */
+  .queue-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .queue-item {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .queue-thumb {
+    height: 140px;
+    background: linear-gradient(135deg, #1f2421 0%, #2a322d 100%);
+    position: relative;
+    display: grid;
+    place-items: center;
+    color: #6c8a76;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+  }
+  .queue-thumb-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+  }
+  .queue-body { padding: 14px; flex: 1; }
+  .queue-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .queue-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .queue-foot {
+    border-top: 1px solid var(--line);
+    padding: 10px 14px;
+    display: flex;
+    gap: 6px;
+  }
+
+  /* ============ REPORT PREVIEW ============ */
+  .report-preview {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    font-family: 'Inter Tight';
+  }
+  .report-letterhead {
+    border-bottom: 2px solid var(--green);
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .report-title-block .label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .report-title-block h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    margin-top: 2px;
+  }
+  .report-stamp {
+    text-align: right;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .report-stamp strong { color: var(--green-deep); font-size: 12px; }
+  .report-section { margin-bottom: 22px; }
+  .report-section h4 {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--green-deep);
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: 14px;
+  }
+  .meta-cell .meta-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .meta-cell .meta-value {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* ============ FEATURE TILES (Why DivertScan) ============ */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .feature {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: all 0.2s;
+  }
+  .feature:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--green);
+  }
+  .feature-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--green-light);
+    color: var(--green-deep);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .feature h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: -0.005em;
+  }
+  .feature p { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+  /* ============ HERO ============ */
+  .hero {
+    background:
+      radial-gradient(circle at 80% 20%, rgba(31,122,58,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 20% 80%, rgba(31,122,58,0.05) 0%, transparent 50%),
+      linear-gradient(180deg, #fff 0%, var(--paper) 100%);
+    padding: 48px 32px 36px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-tag {
+    display: inline-block;
+    background: var(--green-light);
+    color: var(--green-deep);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    border: 1px solid rgba(31,122,58,0.2);
+  }
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin-bottom: 14px;
+    max-width: 800px;
+  }
+  .hero h1 .accent { color: var(--green); font-style: italic; }
+  .hero p {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 640px;
+    line-height: 1.5;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 40px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .hero-stat .num {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    text-align: left;
+  }
+  .hero-stat .lab {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* ============ AI ANALYSIS BLOCK ============ */
+  .ai-block {
+    background: linear-gradient(135deg, #0f1311 0%, #1A1F1C 100%);
+    color: #d8e7dd;
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ai-block::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -20%;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(31,122,58,0.3) 0%, transparent 70%);
+  }
+  .ai-block-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .ai-title {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6c8a76;
+    font-weight: 700;
+  }
+  .ai-conf {
+    background: var(--green);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .ai-mat-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 50px;
+    gap: 12px;
+    margin-bottom: 8px;
+    align-items: center;
+    position: relative;
+  }
+  .ai-mat-name { font-size: 12px; font-weight: 500; }
+  .ai-mat-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .ai-mat-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2c8e4b, #38d97b);
+    border-radius: 3px;
+    transition: width 1s ease-out;
+  }
+  .ai-mat-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-align: right;
+    color: #fff;
+  }
+
+  /* ============ HOTSPOTS ============ */
+  .hotspot {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .hotspot:last-child { border-bottom: none; }
+  .hotspot-rank {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green);
+    width: 32px;
+    text-align: center;
+    line-height: 1;
+  }
+  .hotspot-info { flex: 1; }
+  .hotspot-name { font-weight: 700; font-size: 13.5px; }
+  .hotspot-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .hotspot-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--green-deep);
+    text-align: right;
+  }
+  .hotspot-val-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ============ CTA FOOTER ============ */
+  .cta {
+    background: linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
+    color: #fff;
+    padding: 64px 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 800px;
+    background: radial-gradient(circle, rgba(31,122,58,0.18) 0%, transparent 60%);
+  }
+  .cta h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 44px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 14px;
+    position: relative;
+    line-height: 1.05;
+    max-width: 700px;
+    margin-left: auto; margin-right: auto;
+  }
+  .cta h2 .accent { color: #38d97b; font-style: italic; }
+  .cta p {
+    color: #98a8a0;
+    font-size: 16px;
+    max-width: 540px;
+    margin: 0 auto 28px;
+    position: relative;
+  }
+  .cta-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; position: relative; }
+  .cta .btn-primary {
+    background: #38d97b;
+    color: var(--ink);
+    border-color: #38d97b;
+    padding: 12px 22px;
+    font-size: 13px;
+  }
+  .cta .btn-primary:hover { background: #2c8e4b; color: #fff; }
+  .cta .btn {
+    background: transparent;
+    color: #fff;
+    border-color: rgba(255,255,255,0.2);
+    padding: 12px 22px;
+    font-size: 13px;
+  }
+  .cta .btn:hover { background: rgba(255,255,255,0.08); }
+
+  .footer-credits {
+    background: var(--ink);
+    color: #6c8a76;
+    padding: 20px 32px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    border-top: 1px solid #1A1F1C;
+  }
+  .footer-credits a { color: #38d97b; text-decoration: none; }
+
+  /* ============ Animations ============ */
+  .fade-in { animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============ Small ============ */
+  .row-flex { display: flex; gap: 8px; align-items: center; }
+  .muted { color: var(--muted); }
+  .right { text-align: right; }
+  .small { font-size: 11px; }
+
+  /* iPad screenshot mock */
+  .ipad-mock {
+    background: linear-gradient(135deg, #1a1f1c 0%, #0f1311 100%);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 20px 50px rgba(15,19,17,0.25);
+    position: relative;
+  }
+  .ipad-screen {
+    background: #fff;
+    border-radius: 6px;
+    padding: 18px;
+    min-height: 280px;
+  }
+  .scan-line {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 12px;
+  }
+  .scan-line:last-child { border-bottom: none; font-weight: 700; }
+  .scan-stamp {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 10px;
+    background: var(--green-light);
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--green-deep);
+  }
+
+  /* ============ SHARE MODAL ============ */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,19,17,0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease-out; }
+  .modal {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: 0 30px 80px rgba(15,19,17,0.35);
+    overflow: hidden;
+    animation: modalIn 0.25s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-head {
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .modal-head h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .modal-head p { color: var(--muted); font-size: 12.5px; }
+  .modal-close {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: var(--paper-2); color: var(--ink); }
+  .modal-body { padding: 22px 24px; }
+
+  .share-link-box {
+    display: flex;
+    gap: 8px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px;
+    margin-bottom: 18px;
+  }
+  .share-link-box input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink);
+    padding: 8px 10px;
+    outline: none;
+  }
+  .copy-btn {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { background: var(--green-deep); }
+  .copy-btn.copied { background: #38d97b; color: var(--ink); }
+
+  .share-section-label {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 10px;
+    margin-top: 6px;
+  }
+
+  .role-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .role-btn {
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 12px 14px;
+    border-radius: 9px;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .role-btn:hover {
+    border-color: var(--green);
+    background: var(--green-light);
+  }
+  .role-btn.active {
+    border-color: var(--green);
+    background: var(--green-light);
+    box-shadow: 0 0 0 3px rgba(31,122,58,0.12);
+  }
+  .role-icon {
+    width: 28px; height: 28px;
+    background: var(--green-light);
+    color: var(--green-deep);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .role-btn.active .role-icon { background: var(--green); color: #fff; }
+  .role-info { line-height: 1.2; }
+  .role-name { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .role-desc { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+  .share-channels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .ch-btn {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    transition: all 0.15s;
+    text-decoration: none;
+    display: block;
+  }
+  .ch-btn:hover {
+    background: var(--green-light);
+    border-color: var(--green);
+    color: var(--green-deep);
+  }
+  .ch-icon {
+    font-size: 18px;
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .modal-foot {
+    background: var(--paper);
+    padding: 12px 24px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-foot .lock-icon { font-size: 13px; }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--ink);
+    color: #fff;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(15,19,17,0.3);
+    z-index: 300;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(.2,.9,.3,1.2);
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast .check {
+    color: #38d97b;
+    margin-right: 8px;
+  }
+
+  /* ============ TOP-BAR LIVE SCALE DISPLAY ============ */
+  .top-live-scale {
+    background: linear-gradient(135deg, #0f1311 0%, #1A1F1C 100%);
+    border: 1px solid rgba(56,217,123,0.25);
+    color: #d8e7dd;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-family: 'Inter Tight', sans-serif;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+    font-size: 12px;
+    box-shadow: 0 0 0 0 rgba(56,217,123,0);
+    position: relative;
+  }
+  .top-live-scale:hover {
+    border-color: rgba(56,217,123,0.5);
+    box-shadow: 0 0 0 3px rgba(56,217,123,0.08);
+  }
+  .top-live-scale.open { background: var(--green-deep); border-color: var(--green); }
+  .tls-pulse {
+    width: 7px; height: 7px;
+    background: #38d97b;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 #38d97b;
+    animation: pulse 1.8s infinite;
+    flex-shrink: 0;
+  }
+  .tls-label {
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    color: #6c8a76;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .tls-weight {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: #38d97b;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    min-width: 52px;
+    text-align: right;
+    transition: color 0.2s;
+  }
+  .tls-weight.settling { color: #e8c94d; }
+  .tls-unit { font-size: 10px; color: #6c8a76; margin-left: -3px; }
+  .tls-phase {
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+    color: #6c8a76;
+    background: rgba(255,255,255,0.06);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+  }
+  .tls-phase.locked { color: #38d97b; background: rgba(56,217,123,0.14); }
+  .tls-phase.rising, .tls-phase.settling { color: #e8c94d; background: rgba(201,162,39,0.14); }
+  .tls-chev { font-size: 10px; color: #6c8a76; transition: transform 0.2s; }
+  .top-live-scale.open .tls-chev { transform: rotate(180deg); }
+
+  /* Dropdown panel anchored to top-bar */
+  .tls-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 540px;
+    max-width: 92vw;
+    background: linear-gradient(135deg, #0f1311 0%, #1A1F1C 100%);
+    border: 1px solid rgba(56,217,123,0.25);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(15,19,17,0.4);
+    z-index: 150;
+    display: none;
+    animation: fadeIn 0.2s ease-out;
+    overflow: hidden;
+  }
+  .tls-dropdown.open { display: block; }
+  .tls-dd-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tls-dd-head h4 {
+    color: #fff;
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .tls-dd-head-sub {
+    font-size: 10px;
+    color: #6c8a76;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .tls-dd-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 12px 18px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .tls-stat .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #6c8a76;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .tls-stat .stat-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    color: #fff;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .tls-dd-list { padding: 8px 6px; max-height: 380px; overflow-y: auto; }
+  .tls-row {
+    display: grid;
+    grid-template-columns: 22px 50px 1fr 80px 90px 20px;
+    gap: 10px;
+    padding: 8px 12px;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 12px;
+    transition: background 0.1s;
+  }
+  .tls-row:hover { background: rgba(255,255,255,0.03); }
+  .tls-row:last-child { border-bottom: none; }
+  .tls-rank {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: #6c8a76;
+    text-align: right;
+  }
+  .tls-row-time { font-family: 'IBM Plex Mono', monospace; color: #6c8a76; font-size: 10.5px; }
+  .tls-row-driver { color: #d8e7dd; }
+  .tls-row-driver .driver-sub { font-size: 10px; color: #6c8a76; }
+  .tls-row-ticket { font-family: 'IBM Plex Mono', monospace; color: #6c8a76; font-size: 10.5px; }
+  .tls-row-weight { font-family: 'IBM Plex Mono', monospace; color: #38d97b; font-weight: 600; text-align: right; }
+  .tls-row.is-live .tls-row-weight {
+    color: #fff;
+    background: rgba(56,217,123,0.15);
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+  .tls-row.is-live .tls-row-time { color: #38d97b; font-weight: 600; }
+  .tls-row-status {
+    font-size: 9px;
+    color: #6c8a76;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+
+  /* ============ DEMO SHARE POPUP (anchored to Demo button) ============ */
+  .demo-share-popup {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    max-width: 92vw;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(15,19,17,0.18);
+    z-index: 150;
+    display: none;
+    animation: fadeIn 0.2s ease-out;
+    overflow: hidden;
+  }
+  .demo-share-popup.open { display: block; }
+  .dsp-head {
+    padding: 14px 18px;
+    background: var(--green-light);
+    border-bottom: 1px solid var(--line);
+  }
+  .dsp-head h4 {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 2px;
+  }
+  .dsp-head-sub { font-size: 11px; color: var(--muted); }
+  .dsp-body { padding: 14px 18px; }
+  .dsp-link-box {
+    display: flex;
+    gap: 6px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 10px;
+  }
+  .dsp-link-box input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+    padding: 6px 8px;
+    outline: none;
+  }
+  .dsp-link-box button {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .dsp-link-box button.copied { background: #38d97b; color: var(--ink); }
+  .dsp-channels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .dsp-channels a {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .dsp-channels a:hover { background: var(--green-light); border-color: var(--green); color: var(--green-deep); }
+  .dsp-channels .ch-i { font-size: 15px; display: block; margin-bottom: 2px; }
+  .dsp-foot {
+    padding: 10px 18px;
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ============ LIVE SCALE STRIP (always visible) ============ */
+  .scale-strip {
+    background: linear-gradient(90deg, #0f1311 0%, #1A1F1C 100%);
+    color: #d8e7dd;
+    padding: 10px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    gap: 24px;
+    align-items: center;
+    border-bottom: 1px solid #1A1F1C;
+    position: relative;
+    overflow: hidden;
+  }
+  .scale-strip::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: 0.5;
+  }
+  .strip-section { display: flex; align-items: center; gap: 10px; }
+
+  .strip-status .pulse-dot {
+    width: 8px; height: 8px;
+    background: #38d97b;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 #38d97b;
+    animation: pulse 1.8s infinite;
+    flex-shrink: 0;
+  }
+  .strip-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: #38d97b;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .strip-sub {
+    font-size: 10.5px;
+    color: #6c8a76;
+    letter-spacing: 0.06em;
+  }
+
+  .strip-readout {
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .strip-weight {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: #38d97b;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.2s;
+    min-width: 90px;
+  }
+  .strip-weight.settling { color: #C9A227; }
+  .strip-unit {
+    font-size: 12px;
+    color: #6c8a76;
+    margin-left: 2px;
+    margin-right: 12px;
+  }
+  .strip-phase {
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: #6c8a76;
+    background: rgba(255,255,255,0.05);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+  }
+  .strip-phase.locked { color: #38d97b; background: rgba(56,217,123,0.12); }
+  .strip-phase.rising, .strip-phase.settling { color: #e8c94d; background: rgba(201,162,39,0.12); }
+
+  .strip-graph {
+    height: 36px;
+    align-items: stretch;
+  }
+  .strip-graph svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: rgba(255,255,255,0.02);
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .strip-meta {
+    gap: 18px;
+    justify-content: flex-end;
+  }
+  .strip-meta > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+  .strip-meta-label {
+    font-size: 9px;
+    color: #6c8a76;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .strip-meta-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: #fff;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  @media (max-width: 900px) {
+    .scale-strip { grid-template-columns: auto 1fr; gap: 14px; }
+    .strip-graph, .strip-meta { display: none; }
+  }
+
+  /* ============ DASHBOARD SCALE CARD (richer view on dashboard tab) ============ */
+  .scale-card {
+    background: linear-gradient(135deg, #0f1311 0%, #1A1F1C 100%);
+    color: #d8e7dd;
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .scale-card::before {
+    content: '';
+    position: absolute;
+    top: -40%; right: -10%;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(31,122,58,0.25) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .scale-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .scale-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.005em;
+  }
+  .scale-card-sub {
+    font-size: 10.5px;
+    color: #6c8a76;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .scale-card-readout {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .scale-card-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 48px;
+    font-weight: 600;
+    color: #38d97b;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.2s;
+  }
+  .scale-card-value.settling { color: #C9A227; }
+  .scale-card-unit {
+    font-family: 'Inter Tight';
+    font-size: 18px;
+    color: #6c8a76;
+    font-weight: 500;
+  }
+  .scale-card-phase {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: #6c8a76;
+    background: rgba(255,255,255,0.05);
+  }
+  .scale-card-phase.locked { color: #38d97b; background: rgba(56,217,123,0.12); }
+  .scale-card-phase.rising, .scale-card-phase.settling { color: #e8c94d; background: rgba(201,162,39,0.12); }
+
+  .scale-card-graph {
+    height: 80px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 6px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .scale-card-graph svg { width: 100%; height: 100%; display: block; }
+
+  .scale-card-recent {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 12px;
+    position: relative;
+  }
+  .scale-card-recent-label {
+    font-size: 10px;
+    color: #6c8a76;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .scale-card-row {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 11.5px;
+    color: #d8e7dd;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    align-items: center;
+  }
+  .scale-card-row:last-child { border-bottom: none; }
+  .scale-card-row-time { color: #6c8a76; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
+  .scale-card-row-hauler { color: #fff; }
+  .scale-card-row-weight { font-family: 'IBM Plex Mono', monospace; color: #38d97b; font-weight: 600; }
+
+  /* ============ TOUR BUTTON (special accent) ============ */
+  .btn-tour {
+    background: linear-gradient(135deg, #C9A227 0%, #B8941F 100%);
+    color: #fff;
+    border-color: #B8941F;
+    box-shadow: 0 2px 8px rgba(201,162,39,0.3);
+    font-weight: 700;
+  }
+  .btn-tour:hover {
+    background: linear-gradient(135deg, #d4ae35 0%, #C9A227 100%);
+    color: #fff;
+    border-color: #C9A227;
+    box-shadow: 0 4px 14px rgba(201,162,39,0.4);
+  }
+  .btn-tour.running {
+    background: linear-gradient(135deg, #B83A2E 0%, #8C2A1F 100%);
+    border-color: #8C2A1F;
+    box-shadow: 0 2px 8px rgba(184,58,46,0.3);
+  }
+
+  /* ============ TOUR OVERLAY ============ */
+  .tour-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(90deg, #0f1311 0%, #1A1F1C 100%);
+    color: #fff;
+    padding: 14px 24px;
+    display: none;
+    align-items: center;
+    gap: 16px;
+    z-index: 150;
+    box-shadow: 0 8px 24px rgba(15,19,17,0.2);
+    border-bottom: 2px solid #C9A227;
+    animation: slideDown 0.4s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .tour-banner.show { display: flex; }
+  @keyframes slideDown {
+    from { transform: translateY(-100%); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+  .tour-progress {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid rgba(201,162,39,0.3);
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .tour-progress svg {
+    position: absolute;
+    inset: -2px;
+    transform: rotate(-90deg);
+  }
+  .tour-progress-num {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #C9A227;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+  }
+  .tour-progress-tot {
+    font-size: 9px;
+    color: #6c8a76;
+    letter-spacing: 0.1em;
+    margin-top: 1px;
+    position: relative;
+    z-index: 1;
+  }
+  .tour-text { flex: 1; min-width: 0; }
+  .tour-step-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #C9A227;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .tour-step-title {
+    font-family: 'Fraunces', serif;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: #fff;
+    line-height: 1.2;
+  }
+  .tour-step-desc {
+    font-size: 12px;
+    color: #98a8a0;
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .tour-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .tour-btn {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tour-btn:hover { background: rgba(255,255,255,0.15); }
+  .tour-btn.primary {
+    background: #C9A227;
+    color: #0f1311;
+    border-color: #C9A227;
+  }
+  .tour-btn.primary:hover { background: #d4ae35; }
+  .tour-btn.danger {
+    background: rgba(184,58,46,0.2);
+    color: #ff8b7d;
+    border-color: rgba(184,58,46,0.3);
+  }
+  .tour-btn.danger:hover { background: rgba(184,58,46,0.3); }
+
+  .tour-share {
+    display: flex;
+    gap: 6px;
+    padding-left: 12px;
+    margin-left: 4px;
+    border-left: 1px solid rgba(255,255,255,0.12);
+  }
+  .tour-share-btn {
+    width: 34px; height: 34px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .tour-share-btn:hover {
+    background: #38d97b;
+    color: #0f1311;
+    border-color: #38d97b;
+  }
+
+  /* ============ TOUR SPOTLIGHT (highlights the current panel) ============ */
+  .tour-spotlight {
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.6), 0 0 40px rgba(201,162,39,0.3);
+    border-radius: 8px;
+    transition: box-shadow 0.5s;
+    position: relative;
+    z-index: 50;
+  }
+
+  /* ============ LIVE SCALE EXPANDABLE PANEL ============ */
+  .scale-panel {
+    background: linear-gradient(180deg, #0f1311 0%, #1A1F1C 100%);
+    color: #d8e7dd;
+    border-bottom: 1px solid #1A1F1C;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(.2,.9,.3,1);
+  }
+  .scale-panel.open { max-height: 620px; }
+  .scale-panel-inner {
+    padding: 18px 24px 22px;
+  }
+  .scale-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .scale-panel-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.015em;
+  }
+  .scale-panel-sub {
+    font-size: 10.5px;
+    color: #6c8a76;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 2px;
+    font-weight: 600;
+  }
+  .scale-panel-close {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #d8e7dd;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .scale-panel-close:hover { background: rgba(255,255,255,0.12); }
+
+  .scale-list {
+    display: grid;
+    gap: 4px;
+  }
+  .scale-list-header {
+    display: grid;
+    grid-template-columns: 35px 90px 1fr 120px 110px 110px 90px;
+    gap: 12px;
+    padding: 8px 12px;
+    font-size: 9.5px;
+    color: #6c8a76;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .scale-list-row {
+    display: grid;
+    grid-template-columns: 35px 90px 1fr 120px 110px 110px 90px;
+    gap: 12px;
+    padding: 9px 12px;
+    font-size: 12px;
+    align-items: center;
+    border-radius: 4px;
+    transition: background 0.12s;
+  }
+  .scale-list-row:hover { background: rgba(255,255,255,0.03); }
+  .scale-list-row:nth-child(2) {
+    background: rgba(56,217,123,0.06);
+    box-shadow: inset 3px 0 0 #38d97b;
+  }
+  .scale-rank {
+    font-family: 'IBM Plex Mono', monospace;
+    color: #6c8a76;
+    font-size: 10.5px;
+  }
+  .scale-list-row:nth-child(2) .scale-rank { color: #38d97b; font-weight: 700; }
+  .scale-time { color: #6c8a76; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .scale-hauler { color: #fff; }
+  .scale-ticket { color: #d8e7dd; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+  .scale-weight { font-family: 'IBM Plex Mono', monospace; color: #38d97b; font-weight: 600; text-align: right; }
+  .scale-list-row:nth-child(2) .scale-weight { color: #38d97b; font-weight: 700; }
+  .scale-hash {
+    font-family: 'IBM Plex Mono', monospace;
+    color: #6c8a76;
+    font-size: 10px;
+    background: rgba(255,255,255,0.04);
+    padding: 3px 6px;
+    border-radius: 3px;
+    text-align: center;
+  }
+  .scale-status-badge {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    background: rgba(56,217,123,0.12);
+    color: #38d97b;
+    font-weight: 600;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .scale-panel-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 11px;
+    color: #6c8a76;
+  }
+  .scale-panel-footer-stats { display: flex; gap: 20px; }
+  .scale-panel-footer-stats strong { color: #fff; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+
+  /* Make live-scale button stand out when panel is open */
+  #liveScaleBtn.active {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+  }
+
+    /* ============ QR in share modal ============ */
+  .qr-block {
+    display: flex;
+    gap: 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 18px;
+    align-items: center;
+  }
+  .qr-svg {
+    width: 110px;
+    height: 110px;
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .qr-text {
+    flex: 1;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .qr-text strong { color: var(--ink); font-weight: 700; display: block; font-size: 13px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<!-- DEMO BANNER -->
+<div class="demo-banner">
+  <span class="pulse"></span>
+  <strong>LIVE DEMO</strong>  ·  All data, hashes, projects, and haulers shown below are illustrative. Production deployments are encrypted at rest and SHA-256 hashed per scan.
+</div>
+
+<div class="app">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">D</div>
+      <div>
+        <div class="brand-name">Divert<span>Scan</span></div>
+        <div class="brand-sub">APEX V1 · Carbon Engine</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="top-pill">✓ GBCI Sync OK</span>
+
+      <div style="position:relative;">
+        <button class="top-live-scale" id="liveScaleBtn" title="Click to view last 10 driver tickets">
+          <span class="tls-pulse"></span>
+          <span class="tls-label">SCALE</span>
+          <span class="tls-weight" id="topLiveWeight">0</span>
+          <span class="tls-unit">lb</span>
+          <span class="tls-phase" id="topLivePhase">IDLE</span>
+          <span class="tls-chev">▾</span>
+        </button>
+        <div class="tls-dropdown" id="tlsDropdown">
+          <div class="tls-dd-head">
+            <div>
+              <h4>Live Scale · Bay 1</h4>
+              <div class="tls-dd-head-sub">Last 10 driver tickets · TS-9000</div>
+            </div>
+            <span class="tls-phase" id="ddPhase" style="font-size:10px;">IDLE</span>
+          </div>
+          <div class="tls-dd-stats">
+            <div class="tls-stat">
+              <div class="stat-label">Today</div>
+              <div class="stat-val" id="ddTodayCount">18</div>
+            </div>
+            <div class="tls-stat">
+              <div class="stat-label">Total Tons</div>
+              <div class="stat-val" id="ddTodayTons">94.2</div>
+            </div>
+            <div class="tls-stat">
+              <div class="stat-label">Avg Weight</div>
+              <div class="stat-val" id="ddAvgWeight">19,840 lb</div>
+            </div>
+          </div>
+          <div class="tls-dd-list" id="tlsList"></div>
+        </div>
+      </div>
+
+      <div style="position:relative;">
+        <button class="btn btn-tour" id="tourBtn" style="font-size:12px;" title="Start auto-tour · click again for shareable link">
+          ▶ Demo
+        </button>
+        <div class="demo-share-popup" id="demoSharePopup">
+          <div class="dsp-head">
+            <h4>Shareable Demo Tour</h4>
+            <div class="dsp-head-sub">Recipients land on a tour that auto-starts.</div>
+          </div>
+          <div class="dsp-body">
+            <div class="dsp-link-box">
+              <input type="text" id="demoShareLink" readonly value="">
+              <button id="demoShareCopy">Copy</button>
+            </div>
+            <div class="dsp-channels">
+              <a id="demoShareEmail" href="#" target="_blank"><span class="ch-i">✉</span>Email</a>
+              <a id="demoShareSms" href="#"><span class="ch-i">💬</span>Text</a>
+              <a id="demoShareLi" href="#" target="_blank"><span class="ch-i">in</span>LinkedIn</a>
+              <a id="demoShareWa" href="#" target="_blank"><span class="ch-i">⌬</span>WhatsApp</a>
+            </div>
+          </div>
+          <div class="dsp-foot">
+            <span>🔗</span>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+              <span>View-only · auto-starts the tour · no login required.</span>
+              <span style="color:var(--green-deep);font-weight:600">
+                Questions? <a href="tel:+12145078899" style="color:var(--green-deep);text-decoration:none">📞 (214) 507-8899</a>
+                · <a href="sms:+12145078899" style="color:var(--green-deep);text-decoration:none">💬 Text</a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn" id="resetBtn" style="font-size:12px;" title="Re-randomize hashes and timestamps">
+        ↻ Reset
+      </button>
+      <a href="DivertScan_Spec_Sheet.pdf" target="_blank" class="btn" style="font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;border-color:var(--green);color:var(--green);">
+        📄 Spec Sheet
+      </a>
+      <button class="btn btn-primary" id="shareBtn" style="font-size:12px;">
+        ↗ Share
+      </button>
+      <div class="top-user">
+        <div class="avatar">AD</div>
+        <div class="top-user-info">
+          <div class="top-user-name">Admin User</div>
+          <div class="top-user-role">Recycling Facility</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LIVE SCALE STRIP — always visible, every tab -->
+  <div class="scale-strip" id="scaleStrip">
+    <div class="strip-section strip-status">
+      <span class="pulse-dot"></span>
+      <span class="strip-label">LIVE SCALE</span>
+      <span class="strip-sub">Bay 1 · TS-9000</span>
+    </div>
+    <div class="strip-section strip-readout">
+      <span class="strip-weight" id="stripWeight">0</span>
+      <span class="strip-unit">lb</span>
+      <span class="strip-phase" id="stripPhase">IDLE</span>
+    </div>
+    <div class="strip-section strip-graph">
+      <svg id="stripGraph" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="strip-section strip-meta">
+      <div><span class="strip-meta-label">Last Ticket</span><span class="strip-meta-val" id="stripLastTicket">#86241</span></div>
+      <div><span class="strip-meta-label">Today</span><span class="strip-meta-val" id="stripTodayCount">18</span></div>
+    </div>
+  </div>
+
+  <!-- TOUR BANNER (auto-tour overlay) -->
+  <div class="tour-banner" id="tourBanner">
+    <div class="tour-progress">
+      <svg viewBox="0 0 60 60">
+        <circle cx="30" cy="30" r="27" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3"/>
+        <circle id="tourProgressRing" cx="30" cy="30" r="27" fill="none" stroke="#C9A227" stroke-width="3" stroke-dasharray="169.6" stroke-dashoffset="169.6" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="tour-progress-num" id="tourStepNum">1</div>
+        <div class="tour-progress-tot" id="tourStepTot">/ 8</div>
+      </div>
+    </div>
+    <div class="tour-text">
+      <div class="tour-step-label" id="tourStepLabel">NOW SHOWING</div>
+      <div class="tour-step-title" id="tourStepTitle">Dashboard Overview</div>
+      <div class="tour-step-desc" id="tourStepDesc">Live diversion metrics across all projects, refreshed in real-time.</div>
+    </div>
+    <div class="tour-actions">
+      <button class="tour-btn" id="tourPrev" title="Previous">←</button>
+      <button class="tour-btn primary" id="tourPause" title="Pause/Resume">⏸</button>
+      <button class="tour-btn" id="tourNext" title="Next">→</button>
+      <div class="tour-share">
+        <a class="tour-share-btn" id="tourShareEmail" href="#" target="_blank" title="Email this demo">✉</a>
+        <a class="tour-share-btn" id="tourShareSms" href="#" title="Text this demo">💬</a>
+        <button class="tour-share-btn" id="tourShareCopy" title="Copy link">⎘</button>
+      </div>
+      <button class="tour-btn danger" id="tourStop" title="Stop the tour">✕</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <span class="hero-tag">◆ Live Admin Demo · LEED v4 · v4.1 · v5 — MRp1 + MRp2 + MRc5</span>
+    <h1>Every load, every ticket, every gram of carbon — <span class="accent">verified.</span></h1>
+    <p>DivertScan turns your construction & demolition waste stream into audit-ready documentation for every LEED version — v4 (MRp2 + MRc5), v4.1 (MRc5), and v5 (MRp1 Zero-Waste Planning, MRp2 Embodied Carbon, MRc5 Diversion). OCR handles the clerical work of reading scale tickets; AI suggests a starting composition from debris photos. A trained human verifier reviews every record and sets the final diversion values before anything enters the LEED submittal. Below is the actual admin workspace, populated with sample data from three live projects.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="num">3,847.6 <span style="font-size:14px; color:var(--muted);">T</span></div>
+        <div class="lab">Diverted (Portfolio YTD)</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">2,341 <span style="font-size:14px; color:var(--muted);">tCO₂e</span></div>
+        <div class="lab">Embodied Carbon Avoided</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">14</div>
+        <div class="lab">Active LEED Projects</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">72.4<span style="font-size:14px; color:var(--muted);">%</span></div>
+        <div class="lab">Avg Diversion Rate</div>
+      </div>
+    </div>
+
+    <!-- Spec sheet / pricing download row -->
+    <div style="display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;align-items:stretch;">
+      <a href="DivertScan_Spec_Sheet.pdf" target="_blank" style="flex:1;min-width:240px;text-decoration:none;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(56,217,123,0.08);border:1px solid rgba(56,217,123,0.4);border-radius:10px;color:var(--ink);transition:all .15s;">
+        <div style="font-size:28px;flex-shrink:0;">📄</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:var(--green-deep);text-transform:uppercase;letter-spacing:.04em;">Product Spec Sheet</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px;">12-page PDF — features, LEED coverage, architecture, pricing</div>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--green-deep);flex-shrink:0;">Download →</div>
+      </a>
+      <button onclick="document.querySelector('[data-tab=pricing]').click();window.scrollTo({top:document.querySelector('.tabs').offsetTop-20,behavior:'smooth'});" style="flex:1;min-width:240px;text-align:left;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.4);border-radius:10px;color:var(--ink);cursor:pointer;transition:all .15s;font-family:inherit;">
+        <div style="font-size:28px;flex-shrink:0;">💰</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.04em;">Pricing</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px;">$249/mo per project · free 30-day pilot · no credit card</div>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:#d97706;flex-shrink:0;">See plans →</div>
+      </button>
+    </div>
+  </section>
+
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="dash">▾ Dashboard</button>
+    <button class="tab" data-tab="scan">Scan</button>
+    <button class="tab" data-tab="tickets">Tickets <span class="tab-count">2,418</span></button>
+    <button class="tab" data-tab="reports">Reports</button>
+    <button class="tab" data-tab="pricing" style="color:#d97706;font-weight:700;">💰 Pricing</button>
+    <button class="tab" data-tab="queue">Photo Queue <span class="tab-count" id="queueCount">7</span></button>
+    <button class="tab" data-tab="audit">Audit Log</button>
+    <button class="tab" data-tab="portfolio">Portfolio</button>
+    <button class="tab" data-tab="clients">Client Portal</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ============================== DASHBOARD ============================== -->
+  <section id="panel-dash" class="panel active">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Dashboard</div>
+        <div class="panel-sub">Hospital Tower · Reporting period: May 2026 · Last sync 14s ago</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">⛶ Filter</button>
+        <button class="btn">↓ Export</button>
+        <button class="btn btn-primary">＋ New Scan</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Diverted Tons (MTD)</div>
+        <div class="kpi-value">1,120.6<span class="kpi-unit">T</span></div>
+        <div class="kpi-delta up">▲ 18.4% vs. April</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Diversion Rate</div>
+        <div class="kpi-value">67<span class="kpi-unit">%</span></div>
+        <div class="kpi-delta up">▲ on track to 75% target</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">CO₂e Avoided</div>
+        <div class="kpi-value">682<span class="kpi-unit">tCO₂e</span></div>
+        <div class="kpi-delta up">▲ DECIMAL-verified</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Tickets Logged</div>
+        <div class="kpi-value">323</div>
+        <div class="kpi-delta neu">12 awaiting human verification</div>
+      </div>
+    </div>
+
+    <!-- DIVERSION CHART + HOTSPOTS -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Monthly Diversion Performance</div>
+            <div class="card-title-sub">Diverted vs. Landfill · Last 6 months</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-sm">YTD</button>
+            <button class="btn btn-sm btn-primary">6M</button>
+            <button class="btn btn-sm">MTD</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="diversionChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Top 3 Carbon Hotspots</div>
+            <div class="card-title-sub">Auto-identified for MRc5 diversion + v5 MRp2 embodied-carbon narrative</div>
+          </div>
+          <button class="btn btn-sm">Generate Narrative ↗</button>
+        </div>
+        <div class="hotspot">
+          <div class="hotspot-rank">01</div>
+          <div class="hotspot-info">
+            <div class="hotspot-name">Concrete · CMU</div>
+            <div class="hotspot-meta">482.4 T diverted · 14 loads</div>
+          </div>
+          <div>
+            <div class="hotspot-val">−291 tCO₂e</div>
+            <div class="hotspot-val-sub">vs. virgin baseline</div>
+          </div>
+        </div>
+        <div class="hotspot">
+          <div class="hotspot-rank">02</div>
+          <div class="hotspot-info">
+            <div class="hotspot-name">Structural Steel</div>
+            <div class="hotspot-meta">94.7 T diverted · 6 loads</div>
+          </div>
+          <div>
+            <div class="hotspot-val">−218 tCO₂e</div>
+            <div class="hotspot-val-sub">vs. virgin baseline</div>
+          </div>
+        </div>
+        <div class="hotspot">
+          <div class="hotspot-rank">03</div>
+          <div class="hotspot-info">
+            <div class="hotspot-name">Dimensional Lumber</div>
+            <div class="hotspot-meta">126.9 T diverted · 11 loads</div>
+          </div>
+          <div>
+            <div class="hotspot-val">−84 tCO₂e</div>
+            <div class="hotspot-val-sub">vs. virgin baseline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATERIAL BREAKDOWN + RECENT TICKETS -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Material Stream Breakdown</div>
+            <div class="card-title-sub">Hospital Tower · May 2026</div>
+          </div>
+          <button class="btn btn-sm">By Hauler ↗</button>
+        </div>
+        <div id="matBars"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Recent Activity</div>
+            <div class="card-title-sub">Last 8 events · SHA-256 verified</div>
+          </div>
+          <button class="btn btn-sm">View All →</button>
+        </div>
+        <div id="recentFeed"></div>
+      </div>
+    </div>
+
+    <!-- DEEP TILES: ZONES + HAULER MIX -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Tonnage by Zone</div>
+            <div class="card-title-sub">Project zones A–D · May 2026</div>
+          </div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm">
+          <canvas id="zoneChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Hauler Mix</div>
+            <div class="card-title-sub">By share of tonnage</div>
+          </div>
+        </div>
+        <div class="chart-wrap chart-wrap-sm">
+          <canvas id="haulerChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE SCALE CARD — richer view on dashboard -->
+    <div class="scale-card">
+      <div class="scale-card-head">
+        <div>
+          <div class="scale-card-title">Live Scale Feed — Bay 1</div>
+          <div class="scale-card-sub">⚡ Connected · TruckScale TS-9000 · 4/4 sensors · Drift ±2 lb</div>
+        </div>
+        <span class="scale-card-phase" id="cardPhase">IDLE</span>
+      </div>
+      <div class="scale-card-readout">
+        <span class="scale-card-value" id="cardWeight">0</span>
+        <span class="scale-card-unit">lb</span>
+      </div>
+      <div class="scale-card-graph">
+        <svg id="cardGraph" viewBox="0 0 600 70" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="scale-card-recent">
+        <div class="scale-card-recent-label">Last 4 weighments today</div>
+        <div id="cardRecentList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== SCAN ============================== -->
+  <section id="panel-scan" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Field Scan</div>
+        <div class="panel-sub">Human-verified ticket capture · OCR-assisted · debris photos reviewed by trained verifier · Vanessa offline buffering</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">⌬ Sync Status: 100%</button>
+        <button class="btn btn-primary">＋ Begin Scan</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- iPad mockup -->
+      <div class="ipad-mock">
+        <div class="ipad-screen">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+              <div style="font-size:10px; letter-spacing:0.08em; color:var(--muted); font-weight:600; text-transform:uppercase;">Scale Ticket Capture</div>
+              <div class="display" style="font-size:22px;">Ticket <span class="mono" style="color:var(--green);">#86223</span></div>
+            </div>
+            <span class="badge green">✓ OCR Complete</span>
+          </div>
+
+          <div class="scan-line"><span class="muted">Date</span><span>04/28/2026 · 3:54 PM</span></div>
+          <div class="scan-line"><span class="muted">Project</span><span>Logistics Park</span></div>
+          <div class="scan-line"><span class="muted">Hauler</span><span>Hauler — Pre-tagged via link</span></div>
+          <div class="scan-line"><span class="muted">Gross</span><span class="mono">42,280 lb</span></div>
+          <div class="scan-line"><span class="muted">Tare</span><span class="mono">33,140 lb</span></div>
+          <div class="scan-line"><span class="muted">Net</span><span class="mono" style="color:var(--green-deep);">9,140 lb · 4.57 T</span></div>
+
+          <div class="scan-stamp">
+            <span>⛬ GPS 32.7767° N · 96.7970° W</span>
+            <span>·</span>
+            <span>SHA-256: 7a3f...e9b2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI-Assisted Debris Pre-Sort -->
+      <div class="ai-block">
+        <div class="ai-block-head">
+          <div>
+            <div class="ai-title">◆ Debris Photo Pre-Sort</div>
+            <div style="font-family:'Fraunces',serif; font-size:18px; color:#fff; margin-top:2px;">Load Composition · 4 photos</div>
+            <div style="font-size:10px; color:#9bb5a3; margin-top:3px; letter-spacing:0.04em;">AI-assisted starting point · final values set by human verifier</div>
+          </div>
+          <div class="ai-conf" title="AI suggestion only — not a finding">AI · suggest</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Concrete</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:62%"></div></div>
+          <div class="ai-mat-val">~62%</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Wood</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:18%"></div></div>
+          <div class="ai-mat-val">~18%</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Metal</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:9%"></div></div>
+          <div class="ai-mat-val">~9%</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Drywall</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:5%"></div></div>
+          <div class="ai-mat-val">~5%</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Cardboard</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:4%"></div></div>
+          <div class="ai-mat-val">~4%</div>
+        </div>
+        <div class="ai-mat-row">
+          <div class="ai-mat-name">Trash</div>
+          <div class="ai-mat-bar"><div class="ai-mat-bar-fill" style="width:2%"></div></div>
+          <div class="ai-mat-val">~2%</div>
+        </div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center; position:relative;">
+          <div style="font-size:11px; color:#6c8a76;">Pre-sort suggestion (not final)</div>
+          <div class="mono" style="font-size:16px; color:#a4b8ab; font-weight:600;">~93% (pending verify)</div>
+        </div>
+        <div style="margin-top:10px; padding:8px 10px; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); border-radius:6px; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:11px; color:#f59e0b; font-weight:700; letter-spacing:0.05em;">⏳ AWAITING HUMAN VERIFICATION</span>
+          <span style="font-size:10px; color:#cba35a; margin-left:auto;">Verifier sets the final % for LEED</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKFLOW STEPS -->
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Field Workflow</div>
+          <div class="card-title-sub">Tap-by-tap, gloves-on</div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:10px;">
+        <div style="text-align:center; padding:14px 8px; background:var(--paper); border-radius:8px; border-left:3px solid var(--green);">
+          <div class="display" style="font-size:20px; color:var(--green);">01</div>
+          <div style="font-size:11px; font-weight:600; margin-top:4px;">Snap Ticket</div>
+          <div class="small muted" style="margin-top:2px;font-size:10px;">OCR reads it</div>
+        </div>
+        <div style="text-align:center; padding:14px 8px; background:var(--paper); border-radius:8px; border-left:3px solid var(--green);">
+          <div class="display" style="font-size:20px; color:var(--green);">02</div>
+          <div style="font-size:11px; font-weight:600; margin-top:4px;">Photo Load</div>
+          <div class="small muted" style="margin-top:2px;font-size:10px;">AI pre-sort</div>
+        </div>
+        <div style="text-align:center; padding:14px 8px; background:rgba(245,158,11,0.10); border-radius:8px; border-left:3px solid #f59e0b;">
+          <div class="display" style="font-size:20px; color:#f59e0b;">03</div>
+          <div style="font-size:11px; font-weight:700; margin-top:4px; color:#cba35a;">Human Verify</div>
+          <div class="small" style="margin-top:2px;font-size:10px;color:#cba35a;">Approve AI output</div>
+        </div>
+        <div style="text-align:center; padding:14px 8px; background:var(--paper); border-radius:8px; border-left:3px solid var(--green);">
+          <div class="display" style="font-size:20px; color:var(--green);">04</div>
+          <div style="font-size:11px; font-weight:600; margin-top:4px;">Sign + Confirm</div>
+          <div class="small muted" style="margin-top:2px;font-size:10px;">Chain of custody</div>
+        </div>
+        <div style="text-align:center; padding:14px 8px; background:var(--paper); border-radius:8px; border-left:3px solid var(--green);">
+          <div class="display" style="font-size:20px; color:var(--green);">05</div>
+          <div style="font-size:11px; font-weight:600; margin-top:4px;">Hash + Log</div>
+          <div class="small muted" style="margin-top:2px;font-size:10px;">SHA-256 write</div>
+        </div>
+        <div style="text-align:center; padding:14px 8px; background:var(--paper); border-radius:8px; border-left:3px solid var(--green);">
+          <div class="display" style="font-size:20px; color:var(--green);">06</div>
+          <div style="font-size:11px; font-weight:600; margin-top:4px;">Delta Sync</div>
+          <div class="small muted" style="margin-top:2px;font-size:10px;">Offline-safe</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== TICKETS ============================== -->
+  <section id="panel-tickets" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Scale Tickets</div>
+        <div class="panel-sub">Every load · every hash · every hauler · filterable across portfolio</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">⛶ Filter</button>
+        <button class="btn">⌕ Search</button>
+        <button class="btn">↓ XLSX</button>
+        <button class="btn">↓ PDF</button>
+        <button class="btn btn-primary">＋ New Ticket</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div class="table-wrap">
+        <table id="ticketsTable">
+          <thead>
+            <tr>
+              <th>Ticket #</th>
+              <th>Date</th>
+              <th>Project</th>
+              <th>Hauler</th>
+              <th>Zone</th>
+              <th class="num">Net (T)</th>
+              <th class="num">Divert %</th>
+              <th class="num">CO₂e (T)</th>
+              <th>Capture</th>
+              <th>Status</th>
+              <th>Hash</th>
+            </tr>
+          </thead>
+          <tbody id="ticketsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== REPORTS ============================== -->
+  <section id="panel-reports" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Reports</div>
+        <div class="panel-sub">LEED-ready · audit-defensible · portfolio or project</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">PDF</button>
+        <button class="btn">XLSX</button>
+        <button class="btn">CSV</button>
+        <button class="btn">JSON</button>
+        <button class="btn btn-primary">↗ QuickBooks IIF</button>
+      </div>
+    </div>
+
+    <!-- Report Preview -->
+    <div class="report-preview">
+      <div class="report-letterhead">
+        <div class="report-title-block">
+          <div class="label">LEED v4 · v4.1 · v5 Compliance Report — MRp1 / MRp2 / MRc5</div>
+          <h2>Hospital Tower — May 2026</h2>
+        </div>
+        <div class="report-stamp">
+          <strong>VERIFIED · SHA-256</strong><br>
+          Generated 05/22/2026 14:18 CDT<br>
+          Hash <span class="mono">3f2a...d8c1</span>
+        </div>
+      </div>
+
+      <div class="report-section">
+        <h4>Project Information</h4>
+        <div class="meta-grid">
+          <div class="meta-cell"><div class="meta-label">GC</div><div class="meta-value">General Contractor 1</div></div>
+          <div class="meta-cell"><div class="meta-label">LEED Version</div><div class="meta-value">v5 BD+C (NC)</div></div>
+          <div class="meta-cell"><div class="meta-label">Diversion Target</div><div class="meta-value">75% (Option A)</div></div>
+          <div class="meta-cell"><div class="meta-label">Location</div><div class="meta-value">Project Location</div></div>
+        </div>
+      </div>
+
+      <div class="report-section">
+        <h4>Monthly Summary</h4>
+        <div class="meta-grid">
+          <div class="meta-cell"><div class="meta-label">Tickets</div><div class="meta-value mono">323</div></div>
+          <div class="meta-cell"><div class="meta-label">Generated</div><div class="meta-value mono">1,672.4 T</div></div>
+          <div class="meta-cell"><div class="meta-label">Diverted</div><div class="meta-value mono" style="color:var(--green-deep);">1,120.6 T</div></div>
+          <div class="meta-cell"><div class="meta-label">Diversion Rate</div><div class="meta-value mono" style="color:var(--green-deep);">67.0%</div></div>
+        </div>
+      </div>
+
+      <div class="report-section">
+        <h4>Carbon Calculation</h4>
+        <div style="background:#fff; border:1px solid var(--line); border-radius:6px; padding:14px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.7;">
+          Savings = (Mass × Baseline GWP) − (Mass × Diversion Impact)<br>
+          = (1,120.6 T × 0.787 tCO₂e/T) − (1,120.6 T × 0.178 tCO₂e/T)<br>
+          = 881.9 − 199.5<br>
+          <strong style="color:var(--green-deep);">= 682.4 tCO₂e avoided  ·  Project-to-date: 2,341 tCO₂e</strong>
+        </div>
+      </div>
+
+      <div class="report-section">
+        <h4>Tonnage by Zone</h4>
+        <table style="font-size:12px;">
+          <thead>
+            <tr><th>Zone</th><th class="num">Tickets</th><th class="num">Total (T)</th><th class="num">Diverted (T)</th><th class="num">Landfill (T)</th><th class="num">Div %</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Zone A — Tower Demo</td><td class="num">112</td><td class="num">624.3</td><td class="num">438.1</td><td class="num">186.2</td><td class="num">70.2%</td></tr>
+            <tr><td>Zone B — Slab/Foundation</td><td class="num">86</td><td class="num">418.7</td><td class="num">301.4</td><td class="num">117.3</td><td class="num">72.0%</td></tr>
+            <tr><td>Zone C — Interior FF&E</td><td class="num">74</td><td class="num">312.6</td><td class="num">186.9</td><td class="num">125.7</td><td class="num">59.8%</td></tr>
+            <tr><td>Zone D — Site Clearing</td><td class="num">51</td><td class="num">316.8</td><td class="num">194.2</td><td class="num">122.6</td><td class="num">61.3%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section" style="margin-bottom:0;">
+        <h4>Material Breakdown · End Markets</h4>
+        <table style="font-size:12px;">
+          <thead>
+            <tr><th>Material</th><th class="num">Tons</th><th>End Market</th><th class="num">Carbon Factor</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Concrete / CMU</td><td class="num">482.4</td><td>Regional Concrete Recycler</td><td class="num">0.013 tCO₂e/T</td></tr>
+            <tr><td>Steel</td><td class="num">94.7</td><td>Regional Metals Mill</td><td class="num">2.30 tCO₂e/T</td></tr>
+            <tr><td>Wood</td><td class="num">126.9</td><td>Regional Biomass Plant</td><td class="num">0.42 tCO₂e/T</td></tr>
+            <tr><td>Cardboard / Paper</td><td class="num">38.2</td><td>Regional Paper Mill</td><td class="num">0.85 tCO₂e/T</td></tr>
+            <tr><td>Drywall</td><td class="num">42.1</td><td>Regional Gypsum Recycler</td><td class="num">0.26 tCO₂e/T</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== PRICING ============================== -->
+  <section id="panel-pricing" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Simple, predictable, project-based pricing</div>
+        <div class="panel-sub">No per-user fees · No add-on modules · Cancel anytime · Free 30-day pilot, no credit card</div>
+      </div>
+      <div class="panel-actions">
+        <a href="tel:+12145078899" class="btn btn-primary" style="text-decoration:none;">📞 Talk to Robert</a>
+      </div>
+    </div>
+
+    <!-- TIER CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:28px;">
+
+      <!-- Pilot -->
+      <div style="background:white;border:2px solid var(--green);border-radius:12px;padding:20px;position:relative;display:flex;flex-direction:column;">
+        <div style="position:absolute;top:-10px;left:16px;background:var(--green);color:white;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 10px;border-radius:4px;text-transform:uppercase;">Start Here</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-top:6px;">Pilot</div>
+        <div style="font-size:32px;font-weight:800;color:var(--ink);margin:8px 0 2px 0;">Free</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">30 days · 1 project · no credit card</div>
+        <ul style="list-style:none;padding:0;margin:0 0 16px 0;font-size:13px;color:var(--ink);flex:1;">
+          <li style="padding:5px 0;">✓ Full platform access for 1 project</li>
+          <li style="padding:5px 0;">✓ Unlimited tickets, photos, OCR</li>
+          <li style="padding:5px 0;">✓ Human-verified records</li>
+          <li style="padding:5px 0;">✓ Real LEED submittal package</li>
+          <li style="padding:5px 0;">✓ 2 hours of onboarding included</li>
+          <li style="padding:5px 0;color:var(--muted);font-style:italic;">Outcome: a signed-off submittal you keep — even if you don't continue</li>
+        </ul>
+        <a href="tel:+12145078899" class="btn btn-primary" style="text-decoration:none;text-align:center;">Start Pilot →</a>
+      </div>
+
+      <!-- Single Project -->
+      <div style="background:white;border:1px solid var(--paper-2);border-radius:12px;padding:20px;display:flex;flex-direction:column;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;">Single Project</div>
+        <div style="font-size:32px;font-weight:800;color:var(--ink);margin:8px 0 2px 0;">$249<span style="font-size:14px;color:var(--muted);font-weight:500;"> / mo</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">per active project</div>
+        <ul style="list-style:none;padding:0;margin:0 0 16px 0;font-size:13px;color:var(--ink);flex:1;">
+          <li style="padding:5px 0;">✓ Unlimited tickets, photos, OCR</li>
+          <li style="padding:5px 0;">✓ AI-assisted pre-sort + human verification</li>
+          <li style="padding:5px 0;">✓ LEED v4 / v4.1 / v5 reports</li>
+          <li style="padding:5px 0;">✓ Embodied carbon (CO₂e) calculations</li>
+          <li style="padding:5px 0;">✓ Client portal access for owner/GC</li>
+          <li style="padding:5px 0;">✓ Driver loadbook URLs</li>
+          <li style="padding:5px 0;color:var(--muted);font-size:11px;font-style:italic;">Pi scale-side capture hardware included on annual plans</li>
+        </ul>
+        <a href="tel:+12145078899" class="btn" style="text-decoration:none;text-align:center;">Talk to Robert</a>
+      </div>
+
+      <!-- Multi-Project -->
+      <div style="background:white;border:1px solid var(--paper-2);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;">
+        <div style="position:absolute;top:-10px;right:16px;background:#d97706;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 10px;border-radius:4px;text-transform:uppercase;">Best Value</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-top:6px;">Multi-Project</div>
+        <div style="font-size:32px;font-weight:800;color:var(--ink);margin:8px 0 2px 0;">$199<span style="font-size:14px;color:var(--muted);font-weight:500;"> / mo</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">per project · 3+ active</div>
+        <ul style="list-style:none;padding:0;margin:0 0 16px 0;font-size:13px;color:var(--ink);flex:1;">
+          <li style="padding:5px 0;">✓ Everything in Single Project</li>
+          <li style="padding:5px 0;">✓ Cross-project comparison views</li>
+          <li style="padding:5px 0;">✓ Combined portfolio reports</li>
+          <li style="padding:5px 0;">✓ Role-based admin permissions</li>
+          <li style="padding:5px 0;">✓ Bulk CSV import</li>
+          <li style="padding:5px 0;color:var(--muted);font-size:11px;font-style:italic;">Pi hardware included on annual plans · save $50/mo vs Single tier</li>
+        </ul>
+        <a href="tel:+12145078899" class="btn btn-primary" style="text-decoration:none;text-align:center;">Talk to Robert</a>
+      </div>
+
+      <!-- Portfolio -->
+      <div style="background:white;border:1px solid var(--paper-2);border-radius:12px;padding:20px;display:flex;flex-direction:column;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;">Portfolio</div>
+        <div style="font-size:32px;font-weight:800;color:var(--ink);margin:8px 0 2px 0;">$999<span style="font-size:14px;color:var(--muted);font-weight:500;"> / mo</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">flat · up to 8 projects</div>
+        <ul style="list-style:none;padding:0;margin:0 0 16px 0;font-size:13px;color:var(--ink);flex:1;">
+          <li style="padding:5px 0;">✓ Built for sustainability consultants</li>
+          <li style="padding:5px 0;">✓ Up to 8 active projects under one org</li>
+          <li style="padding:5px 0;">✓ Cross-project rollup view</li>
+          <li style="padding:5px 0;">✓ Aggregate tonnage & CO₂e dashboards</li>
+          <li style="padding:5px 0;">✓ Custom report templates</li>
+          <li style="padding:5px 0;color:var(--muted);font-size:11px;font-style:italic;">Effective rate: $125/project · volume discounts at 10+ projects</li>
+        </ul>
+        <a href="tel:+12145078899" class="btn" style="text-decoration:none;text-align:center;">Talk to Robert</a>
+      </div>
+
+      <!-- Enterprise -->
+      <div style="background:linear-gradient(135deg,#0a0f14,#1a2733);color:white;border:1px solid #0a0f14;border-radius:12px;padding:20px;display:flex;flex-direction:column;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);font-weight:600;">Enterprise</div>
+        <div style="font-size:32px;font-weight:800;color:var(--green);margin:8px 0 2px 0;">Custom</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px;">starts $2,500/mo</div>
+        <ul style="list-style:none;padding:0;margin:0 0 16px 0;font-size:13px;color:rgba(255,255,255,.9);flex:1;">
+          <li style="padding:5px 0;">✓ Unlimited projects</li>
+          <li style="padding:5px 0;">✓ Multi-team access · SSO</li>
+          <li style="padding:5px 0;">✓ Dedicated support & SLA</li>
+          <li style="padding:5px 0;">✓ Custom data residency options</li>
+          <li style="padding:5px 0;">✓ Onboarding + training program</li>
+          <li style="padding:5px 0;color:rgba(255,255,255,.5);font-size:11px;font-style:italic;">For GCs, owner-developers, and large recyclers</li>
+        </ul>
+        <a href="tel:+12145078899" style="background:var(--green);color:#0a0f14;font-weight:700;padding:10px;border-radius:6px;text-decoration:none;text-align:center;">Contact Sales →</a>
+      </div>
+
+    </div>
+
+    <!-- WHAT'S ALWAYS INCLUDED -->
+    <div style="background:white;border:1px solid var(--paper-2);border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--green-deep);font-weight:700;margin-bottom:14px;">✓ Included in every paid plan</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;font-size:13px;color:var(--ink);">
+        <div><strong>Pi scale-side capture</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">RS-232/Ethernet hardware included on annual plans</div></div>
+        <div><strong>GPT-4o Vision OCR</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">Reads handwritten, dot-matrix, thermal tickets</div></div>
+        <div><strong>SHA-256 audit hashing</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">Every record cryptographically verified</div></div>
+        <div><strong>Human-verified diversion</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">A trained verifier sets every final value</div></div>
+        <div><strong>LEED v4 / v4.1 / v5 reports</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">PDF, XLSX, JSON · drop straight into LEED Online</div></div>
+        <div><strong>Offline-first capture</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">Vanessa Protocol IndexedDB queue + auto-sync</div></div>
+        <div><strong>Bounded-latency UX</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">Sullivan Engine prevents network freezes</div></div>
+        <div><strong>QuickBooks invoice export</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">Bill haulers from the same data</div></div>
+        <div><strong>Driver loadbook URLs</strong><div style="color:var(--muted);font-size:12px;margin-top:2px;">No-login read-only page per driver</div></div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div style="background:white;border:1px solid var(--paper-2);border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:14px;">Common questions</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;font-size:13px;color:var(--ink);line-height:1.6;">
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">What counts as an "active project"?</div>
+          <div style="color:var(--muted);">A project under construction with tickets being captured. Once a project completes its LEED submittal and goes inactive, billing stops — but data is preserved.</div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">Can I switch tiers mid-project?</div>
+          <div style="color:var(--muted);">Yes. Upgrade or downgrade any time. Pro-rated charges. No commitment beyond the current month on monthly plans.</div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">What happens to my data if I cancel?</div>
+          <div style="color:var(--muted);">You get a full export (PDF + XLSX + JSON + SHA-256 manifest). Your records remain auditable forever — that's what the hash chain is for.</div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">Do I need to buy a Raspberry Pi?</div>
+          <div style="color:var(--muted);">No. We supply and configure the Pi for any project on an annual plan. Setup is included in your onboarding.</div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">Does my scale need anything special?</div>
+          <div style="color:var(--muted);">Just an RS-232 serial output or Ethernet port. Works with WI-127, Avery Weigh-Tronix, Rice Lake, Cardinal, and most other indicators.</div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">How long is onboarding?</div>
+          <div style="color:var(--muted);">About 2 hours. We connect to your scale, import your driver list, configure projects, and walk through one full ticket capture together.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLOSING CTA -->
+    <div style="background:linear-gradient(135deg,#0a0f14,#1a2733);color:white;border-radius:12px;padding:32px;text-align:center;">
+      <h3 style="font-size:24px;font-weight:800;margin:0 0 12px 0;color:white;">Stop reconciling spreadsheets the week before submittal.</h3>
+      <p style="color:rgba(255,255,255,.7);margin:0 0 20px 0;font-size:14px;">Free 30-day pilot. One real project. No credit card. Outcome: a signed-off submittal package you keep.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <a href="tel:+12145078899" style="background:var(--green);color:#0a0f14;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;">📞 (214) 507-8899</a>
+        <a href="mailto:hello@divertscan.com" style="background:transparent;border:1px solid rgba(255,255,255,.3);color:white;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">✉ hello@divertscan.com</a>
+        <a href="DivertScan_Spec_Sheet.pdf" target="_blank" style="background:transparent;border:1px solid rgba(255,255,255,.3);color:white;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">📄 Spec Sheet PDF</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== PHOTO QUEUE ============================== -->
+  <section id="panel-queue" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Photo Review Queue</div>
+        <div class="panel-sub">Driver uploads with OCR transcription + AI-suggested debris pre-sort · trained verifier sets final % and approves every record before it enters the LEED submittal</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">⛶ Filter</button>
+        <button class="btn btn-primary">✓ Approve All</button>
+      </div>
+    </div>
+
+    <div class="queue-grid" id="queueGrid"></div>
+  </section>
+
+  <!-- ============================== AUDIT LOG ============================== -->
+  <section id="panel-audit" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Immutable Audit Log</div>
+        <div class="panel-sub">Every event hashed with SHA-256 · GBCI-verifiable from source data</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">⌕ Search Hash</button>
+        <button class="btn">↓ Export Log</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="auditLog"></div>
+    </div>
+  </section>
+
+  <!-- ============================== PORTFOLIO ============================== -->
+  <section id="panel-portfolio" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Portfolio View</div>
+        <div class="panel-sub">All projects · all haulers · all-time roll-up · cross-project benchmarking</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn">↓ Combined XLSX</button>
+        <button class="btn">↓ All-Tickets CSV</button>
+        <button class="btn btn-primary">Consultant Summary ↗</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>GC</th>
+              <th>LEED</th>
+              <th class="num">Tickets</th>
+              <th class="num">Tons</th>
+              <th class="num">Diverted</th>
+              <th>Diversion</th>
+              <th class="num">CO₂e Saved</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="portfolioBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== CLIENT PORTAL ============================== -->
+  <section id="panel-clients" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Client Portal Access</div>
+        <div class="panel-sub">SHA-256 hashed passwords · per-client project scoping · read-only by default</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn btn-primary">＋ New Client</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Email (login)</th>
+              <th>Company</th>
+              <th>Projects</th>
+              <th>Hauler Upload Link</th>
+              <th>Last Login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="clientsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:20px;">
+      <div class="feature">
+        <div class="feature-icon">⌬</div>
+        <h3>Single Source of Truth</h3>
+        <p>GC, consultant, hauler, and recycling facility see the same ticket. No reconciliation. No "which spreadsheet is current."</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">↪</div>
+        <h3>Driver Upload (No Login)</h3>
+        <p>Pre-tagged links like <span class="mono small">/upload?h=hauler-a</span> let drivers submit tickets + photos from any phone — instantly tagged to the hauler.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⌘</div>
+        <h3>Role-Scoped Visibility</h3>
+        <p>Clients only see their projects. Haulers only see their loads. Reviewers see everything. Chain of custody preserved at every step.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== SETTINGS ============================== -->
+  <section id="panel-settings" class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Engine Configuration</div>
+        <div class="panel-sub">Carbon factors · keep-alive · protocols · API keys</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Carbon Engine</div>
+            <div class="card-title-sub">Math · precision · baselines</div>
+          </div>
+        </div>
+        <table style="font-size:12.5px;">
+          <tbody>
+            <tr><td class="muted">Precision</td><td><span class="badge green">PostgreSQL DECIMAL(18,6)</span></td></tr>
+            <tr><td class="muted">Carbon formula</td><td class="mono small">(M × Baseline GWP) − (M × Diversion Impact)</td></tr>
+            <tr><td class="muted">Baseline GWP source</td><td>EC3 + USGBC v5 default library</td></tr>
+            <tr><td class="muted">Hash algorithm</td><td><span class="badge green">SHA-256</span></td></tr>
+            <tr><td class="muted">Audit table</td><td class="mono small">LEED_Audit_Log</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Field Protocols</div>
+            <div class="card-title-sub">Resilience · network · sync</div>
+          </div>
+        </div>
+        <table style="font-size:12.5px;">
+          <tbody>
+            <tr><td class="muted">Sullivan Fault</td><td>HTTP_KEEP_ALIVE = <span class="mono">15s</span></td></tr>
+            <tr><td class="muted">Vanessa Protocol</td><td><span class="badge green">Delta Sync ON</span></td></tr>
+            <tr><td class="muted">Local buffer</td><td>IndexedDB · 500 MB cap</td></tr>
+            <tr><td class="muted">Conflict resolution</td><td>Server timestamp wins</td></tr>
+            <tr><td class="muted">GPS accuracy</td><td>±5 m on every ticket</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:20px;">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Integrations</div></div></div>
+        <table style="font-size:12.5px;">
+          <tbody>
+            <tr><td>GBCI LEED Online</td><td><span class="badge green">✓ Connected</span></td></tr>
+            <tr><td>QuickBooks Online</td><td><span class="badge green">✓ Connected</span></td></tr>
+            <tr><td>Samsara Telematics</td><td><span class="badge amber">Pilot</span></td></tr>
+            <tr><td>EC3 Carbon API</td><td><span class="badge green">✓ Synced</span></td></tr>
+            <tr><td>Supabase / PostgREST</td><td><span class="badge green">✓ Live</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Stack</div></div></div>
+        <table style="font-size:12.5px;">
+          <tbody>
+            <tr><td>Database</td><td>PostgreSQL 16</td></tr>
+            <tr><td>API</td><td>FastAPI · Python 3.12</td></tr>
+            <tr><td>Web</td><td>React · Tailwind</td></tr>
+            <tr><td>Mobile</td><td>iPad-first PWA</td></tr>
+            <tr><td>OCR / AI</td><td>GPT-4o Vision + Human Verification</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Compliance</div></div></div>
+        <table style="font-size:12.5px;">
+          <tbody>
+            <tr><td>LEED v4 — MRp2 + MRc5</td><td><span class="badge green">✓ Native</span></td></tr>
+            <tr><td>LEED v4.1 — MRc5</td><td><span class="badge green">✓ Native</span></td></tr>
+            <tr><td>LEED v5 — MRp1 (Zero Waste)</td><td><span class="badge green">✓ Native</span></td></tr>
+            <tr><td>LEED v5 — MRp2 (Embodied Carbon)</td><td><span class="badge green">✓ Native</span></td></tr>
+            <tr><td>LEED v5 — MRc5 (Diversion)</td><td><span class="badge green">✓ Native</span></td></tr>
+            <tr><td>RCI documentation</td><td><span class="badge green">✓ Supported</span></td></tr>
+            <tr><td>Chain of custody</td><td><span class="badge green">SHA-256 hashed</span></td></tr>
+            <tr><td>Data residency</td><td>US-East · encrypted at rest</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== SHARE MODAL ============================== -->
+  <div class="modal-overlay" id="shareModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>Share this demo</h3>
+          <p>Send a tailored, role-specific view to a prospect.</p>
+        </div>
+        <button class="modal-close" id="shareClose" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="share-section-label">Tailor the experience</div>
+        <div class="role-grid">
+          <button class="role-btn active" data-role="all">
+            <div class="role-icon">◆</div>
+            <div class="role-info">
+              <div class="role-name">Full Demo</div>
+              <div class="role-desc">All tabs · everyone</div>
+            </div>
+          </button>
+          <button class="role-btn" data-role="gc">
+            <div class="role-icon">⌂</div>
+            <div class="role-info">
+              <div class="role-name">For a GC / Owner</div>
+              <div class="role-desc">Dashboard + Reports first</div>
+            </div>
+          </button>
+          <button class="role-btn" data-role="consultant">
+            <div class="role-icon">⌬</div>
+            <div class="role-info">
+              <div class="role-name">For a LEED Consultant</div>
+              <div class="role-desc">Portfolio + Audit Log</div>
+            </div>
+          </button>
+          <button class="role-btn" data-role="hauler">
+            <div class="role-icon">⌖</div>
+            <div class="role-info">
+              <div class="role-name">For a Waste Hauler</div>
+              <div class="role-desc">Scan + Client Portal</div>
+            </div>
+          </button>
+          <button class="role-btn" data-role="facility">
+            <div class="role-icon">⚙</div>
+            <div class="role-info">
+              <div class="role-name">For a Recycling Facility</div>
+              <div class="role-desc">Tickets + Settings</div>
+            </div>
+          </button>
+          <button class="role-btn" data-role="exec">
+            <div class="role-icon">↗</div>
+            <div class="role-info">
+              <div class="role-name">For an Executive</div>
+              <div class="role-desc">Dashboard only</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="share-section-label">Scan with phone (QR)</div>
+        <div class="qr-block">
+          <div class="qr-svg" id="qrSvg"></div>
+          <div class="qr-text">
+            <strong>iPad → Phone in one scan</strong>
+            Point any phone camera at the QR code. Recipient lands on the demo with the role view you selected — no login, no app to install.
+          </div>
+        </div>
+
+        <div class="share-section-label">Shareable link</div>
+        <div class="share-link-box">
+          <input type="text" id="shareLink" readonly value="">
+          <button class="copy-btn" id="copyBtn">Copy</button>
+        </div>
+
+        <div class="share-section-label">Send via</div>
+        <div class="share-channels">
+          <a class="ch-btn" id="ch-email" href="#" target="_blank">
+            <span class="ch-icon">✉</span>Email
+          </a>
+          <a class="ch-btn" id="ch-sms" href="#">
+            <span class="ch-icon">💬</span>Text
+          </a>
+          <a class="ch-btn" id="ch-linkedin" href="#" target="_blank">
+            <span class="ch-icon">in</span>LinkedIn
+          </a>
+          <a class="ch-btn" id="ch-whatsapp" href="#" target="_blank">
+            <span class="ch-icon">⌬</span>WhatsApp
+          </a>
+        </div>
+
+      </div>
+      <div class="modal-foot">
+        <span class="lock-icon">🔒</span>
+        Shareable link · view-only · no login required for prospect.
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"><span class="check">✓</span><span id="toastMsg">Link copied to clipboard</span></div>
+
+
+  <!-- ============================== CTA ============================== -->
+  <section class="cta">
+    <h2>Stop reconciling spreadsheets the week <span class="accent">before submittal.</span></h2>
+    <p>DivertScan turns every ticket, photo, and ton into LEED-ready evidence — supporting v4, v4.1, and v5. OCR accelerates the clerical work; a trained human verifier sets every diversion value. Verified, hashed, and audit-defensible from the moment it's captured.</p>
+    <div class="cta-actions">
+      <button class="btn btn-primary" onclick="window.location.href='tel:+12145078899'">Request a Pilot →</button>
+      <button class="btn" onclick="window.location.href='sms:+12145078899?body=' + encodeURIComponent('Interested in DivertScan — please call me back.')">Talk to Sales</button>
+      <a class="btn" href="DivertScan_Spec_Sheet.docx" download style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">📄 Download Spec Sheet</a>
+    </div>
+  </section>
+
+  <div class="footer-credits">
+    DivertScan APEX V1  ·  Embodied Carbon, Verified.  ·  <a href="#">divertscan.com</a>  ·  hello@divertscan.com  ·  <a href="tel:+12145078899">📞 (214) 507-8899</a>  ·  <a href="sms:+12145078899">💬 Text</a>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const panel = document.getElementById('panel-' + t.dataset.tab);
+    panel.classList.add('active');
+    panel.classList.add('fade-in');
+    setTimeout(() => panel.classList.remove('fade-in'), 500);
+    // re-render charts that need it
+    if (t.dataset.tab === 'dash') { renderDashCharts(); }
+  });
+});
+
+// ============================================================
+// DATA
+// ============================================================
+const PROJECTS = ['Hospital Tower', 'Logistics Park', 'Convention Center', 'Office Tower'];
+const HAULERS = ['Hauler A', 'Hauler C', 'Hauler B', 'Hauler D', 'Hauler E'];
+const ZONES = ['A', 'B', 'C', 'D'];
+
+const TICKETS = [
+  { num: '86223', date: '04/28/26', proj: 'Logistics Park',     hauler: 'Hauler A',      zone: 'A', net: 4.57,  div: 93, co2: 2.78, type: 'OCR+Photo',  status: 'Verified', hash: '7a3f...e9b2' },
+  { num: '86224', date: '04/28/26', proj: 'Logistics Park',     hauler: 'Hauler A',      zone: 'A', net: 5.12,  div: 88, co2: 2.91, type: 'OCR+Photo',  status: 'Verified', hash: '9c1e...4a83' },
+  { num: '24817', date: '05/22/26', proj: 'Hospital Tower', hauler: 'Hauler B',zone: 'B', net: 8.24,  div: 75, co2: 4.62, type: 'OCR',     status: 'Verified', hash: 'd83a...11ce' },
+  { num: '24818', date: '05/22/26', proj: 'Hospital Tower', hauler: 'Hauler B',zone: 'B', net: 7.93,  div: 78, co2: 4.51, type: 'OCR+Photo',  status: 'Verified', hash: 'b4f2...8e21' },
+  { num: '12044', date: '05/21/26', proj: 'Convention Center',  hauler: 'Hauler C',         zone: 'C', net: 6.10,  div: 62, co2: 2.84, type: 'Manual',  status: 'Verified', hash: '38ad...c7fb' },
+  { num: '12045', date: '05/21/26', proj: 'Convention Center',  hauler: 'Hauler C',         zone: 'C', net: 4.81,  div: 71, co2: 2.59, type: 'OCR+Photo',  status: 'Pending',  hash: '——'        },
+  { num: '90112', date: '05/20/26', proj: 'Office Tower',      hauler: 'Hauler D',       zone: 'A', net: 9.34,  div: 81, co2: 5.49, type: 'OCR+Photo',  status: 'Verified', hash: '5fa1...d92b' },
+  { num: '90113', date: '05/20/26', proj: 'Office Tower',      hauler: 'Hauler D',       zone: 'D', net: 11.20, div: 68, co2: 5.42, type: 'OCR',     status: 'Verified', hash: '2ef3...7c44' },
+  { num: '24814', date: '05/19/26', proj: 'Hospital Tower', hauler: 'Hauler A',      zone: 'B', net: 6.72,  div: 73, co2: 3.71, type: 'OCR+Photo',  status: 'Verified', hash: 'a7c8...e103' },
+  { num: '24815', date: '05/19/26', proj: 'Hospital Tower', hauler: 'Hauler A',      zone: 'A', net: 5.43,  div: 82, co2: 3.36, type: 'OCR+Photo',  status: 'Verified', hash: 'fb02...8a91' },
+  { num: '24816', date: '05/19/26', proj: 'Hospital Tower', hauler: 'Hauler B',zone: 'A', net: 8.91,  div: 76, co2: 5.07, type: 'OCR',     status: 'Flagged',  hash: '1d4e...c5b8' },
+  { num: '90114', date: '05/18/26', proj: 'Office Tower',      hauler: 'Hauler E',          zone: 'B', net: 7.20,  div: 64, co2: 3.27, type: 'Manual',  status: 'Verified', hash: '6b9f...248a' },
+];
+
+const QUEUE = [
+  { icon: '📷', type: 'Debris Photo', hauler: 'Hauler A',       project: 'Hospital Tower', when: '3 min ago' },
+  { icon: '🧾', type: 'Scale Ticket', hauler: 'Hauler B', project: 'Convention Center',     when: '18 min ago' },
+  { icon: '📷', type: 'Debris Photo', hauler: 'Hauler C',          project: 'Logistics Park',        when: '34 min ago' },
+  { icon: '🧾', type: 'Scale Ticket', hauler: 'Hauler D',        project: 'Office Tower',         when: '52 min ago' },
+  { icon: '📷', type: 'Debris Photo', hauler: 'Hauler A',       project: 'Hospital Tower', when: '1 hr ago' },
+  { icon: '🧾', type: 'Scale Ticket', hauler: 'Hauler E',           project: 'Office Tower',         when: '2 hr ago' },
+  { icon: '📷', type: 'Debris Photo', hauler: 'Hauler B', project: 'Logistics Park',        when: '3 hr ago' },
+];
+
+const AUDIT = [
+  { time: '14:18:42', action: 'REPORT_GEN',    detail: 'May 2026 PDF generated · Hospital Tower · 323 tickets', hash: '3f2a...d8c1' },
+  { time: '14:11:08', action: 'TICKET_SIGN',   detail: 'Ticket #24818 signed by site super · Hauler B',     hash: 'b4f2...8e21' },
+  { time: '14:10:14', action: 'VERIFY_APPROVE',detail: 'Debris pre-sort verified by D. Castro · final %: 62/18/9/5/4/2 (matches AI suggestion)', hash: '9d34...2a42' },
+  { time: '14:09:55', action: 'AI_SUGGEST',    detail: 'Debris photo pre-sort suggested · 62/18/9 (concrete/wood/metal) · pending verifier', hash: '9d33...2a41' },
+  { time: '14:09:51', action: 'OCR_READ',      detail: 'Scale ticket #86223 OCR · 9,140 lb net · pending verifier',     hash: '7a3f...e9b2' },
+  { time: '13:55:14', action: 'QUEUE_APPROVE', detail: 'Photo approved by Admin → assigned to Ticket #24817',           hash: 'd83a...11ce' },
+  { time: '13:42:01', action: 'TICKET_CREATE', detail: 'New ticket created · Hauler A · Logistics Park',                      hash: '9c1e...4a83' },
+  { time: '13:38:22', action: 'CLIENT_LOGIN',  detail: 'Client portal login · Hauler A / projects:1',                       hash: 'login-e7b1' },
+  { time: '13:21:50', action: 'EXPORT_XLSX',   detail: 'All-projects portfolio XLSX downloaded (2.4 MB)',               hash: 'exp-44ce' },
+  { time: '12:14:33', action: 'ZONE_ASSIGN',   detail: '12 tickets re-zoned: B → A · Hospital Tower',             hash: 'a7c8...e103' },
+  { time: '12:02:09', action: 'SYNC_DELTA',    detail: 'Vanessa Delta Sync · 28 buffered scans pushed from iPad',       hash: 'sync-7711' },
+];
+
+const PORTFOLIO = [
+  { proj: "Hospital Tower",  gc: 'GC 1',     leed: 'v5 BD+C', tickets: 323, tons: 1672.4, div: 1120.6, rate: 67, co2: 682, status: 'Active' },
+  { proj: 'Logistics Park',        gc: 'GC 1',     leed: 'v5 BD+C', tickets: 184, tons:  892.1, div:  712.4, rate: 80, co2: 421, status: 'Active' },
+  { proj: 'Convention Center',     gc: 'GC 2',     leed: 'v5 ID+C', tickets: 211, tons:  743.2, div:  468.8, rate: 63, co2: 287, status: 'Active' },
+  { proj: 'Office Tower',         gc: 'GC 3',    leed: 'v5 BD+C', tickets: 156, tons:  618.4, div:  421.1, rate: 68, co2: 263, status: 'Active' },
+  { proj: 'Mixed-Use Phase III',   gc: 'GC 4',          leed: 'v5 BD+C', tickets:  87, tons:  287.6, div:  201.4, rate: 70, co2: 124, status: 'Active' },
+  { proj: 'Boutique Hotel',    gc: 'GC 5',       leed: 'v4.1',    tickets:  72, tons:  214.8, div:  138.2, rate: 64, co2:  88, status: 'Submitted' },
+  { proj: 'Industrial Park', gc: 'GC 6',         leed: 'non-LEED',tickets:  43, tons:  148.2, div:   71.3, rate: 48, co2:  31, status: 'Active' },
+];
+
+const CLIENTS = [
+  { name: 'Hauler A',          email: 'driver-a@hauler.example',   co: 'Waste Hauler',         proj: 3, link: '/upload?h=hauler-a',   last: '2 hr ago' },
+  { name: 'Hauler B',          email: 'driver-b@hauler.example',   co: 'Waste Hauler',         proj: 2, link: '/upload?h=hauler-b',   last: '1 day ago' },
+  { name: 'GC — Project Mgr',  email: 'pm@gc.example',             co: 'General Contractor',   proj: 2, link: '— GC view —',          last: '4 hr ago' },
+  { name: 'LEED Consultant',   email: 'consult@leed.example',      co: 'Sustainability Cons.', proj: 5, link: '— Consultant —',       last: '12 min ago' },
+  { name: 'Hauler C',          email: 'driver-c@hauler.example',   co: 'Waste Hauler',         proj: 2, link: '/upload?h=hauler-c',   last: '3 days ago' },
+  { name: 'Recycling Facility',email: 'ops@facility.example',      co: 'C&D Recycler',         proj: 1, link: '— Facility view —',    last: '6 days ago' },
+];
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderTickets() {
+  const body = document.getElementById('ticketsBody');
+  body.innerHTML = TICKETS.map(t => {
+    const statusClass = t.status === 'Verified' ? 'green' : (t.status === 'Pending' ? 'amber' : 'red');
+    const statusLabel = t.status === 'Verified' ? 'Human-Verified'
+                       : t.status === 'Pending' ? '⏳ Awaiting Verify'
+                       : t.status;
+    const statusTitle = t.status === 'Verified' ? 'AI output reviewed and approved by a human verifier'
+                       : t.status === 'Pending' ? 'AI processing complete · awaiting human verification'
+                       : 'Flagged for manual review';
+    return `
+      <tr>
+        <td><strong class="mono">#${t.num}</strong></td>
+        <td>${t.date}</td>
+        <td>${t.proj}</td>
+        <td>${t.hauler}</td>
+        <td><span class="badge outline">${t.zone}</span></td>
+        <td class="num">${t.net.toFixed(2)}</td>
+        <td>
+          <div class="row-flex" style="justify-content:flex-end; gap:8px;">
+            <div class="divbar" style="width:60px;"><div class="divbar-fill" style="width:${t.div}%"></div></div>
+            <span class="num small" style="width:30px;">${t.div}%</span>
+          </div>
+        </td>
+        <td class="num">${t.co2.toFixed(2)}</td>
+        <td><span class="badge grey">${t.type}</span></td>
+        <td><span class="badge ${statusClass}" title="${statusTitle}">${statusLabel}</span></td>
+        <td><span class="badge hash">${t.hash}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderQueue() {
+  const grid = document.getElementById('queueGrid');
+  grid.innerHTML = QUEUE.map((q, i) => `
+    <div class="queue-item">
+      <div class="queue-thumb">
+        <div style="text-align:center;">
+          <div class="queue-thumb-icon">${q.icon}</div>
+          <div>PHOTO ${String(i+1).padStart(3,'0')}</div>
+        </div>
+      </div>
+      <div class="queue-body">
+        <div class="queue-meta">${q.when}</div>
+        <div class="queue-title">${q.type}</div>
+        <div class="small muted">${q.hauler}  ·  ${q.project}</div>
+      </div>
+      <div class="queue-foot">
+        <button class="btn btn-sm btn-primary" style="flex:1;">✓ Approve</button>
+        <button class="btn btn-sm" style="flex:1;">✕ Reject</button>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('queueCount').textContent = QUEUE.length;
+}
+
+function renderAudit() {
+  const log = document.getElementById('auditLog');
+  log.innerHTML = AUDIT.map(a => `
+    <div class="audit-row">
+      <div class="audit-time">${a.time}</div>
+      <div class="audit-action" style="color:var(--green-deep);">${a.action}</div>
+      <div class="audit-detail">${a.detail}</div>
+      <div class="audit-hash">${a.hash}</div>
+    </div>
+  `).join('');
+}
+
+function renderPortfolio() {
+  const body = document.getElementById('portfolioBody');
+  body.innerHTML = PORTFOLIO.map(p => {
+    const leedClass = p.leed.startsWith('v5') ? 'green' : (p.leed === 'non-LEED' ? 'grey' : 'amber');
+    const statusClass = p.status === 'Active' ? 'green' : 'grey';
+    return `
+      <tr>
+        <td><strong>${p.proj}</strong></td>
+        <td>${p.gc}</td>
+        <td><span class="badge ${leedClass}">${p.leed}</span></td>
+        <td class="num">${p.tickets}</td>
+        <td class="num">${p.tons.toFixed(1)}</td>
+        <td class="num">${p.div.toFixed(1)}</td>
+        <td>
+          <div class="row-flex" style="gap:8px;">
+            <div class="divbar" style="width:80px;"><div class="divbar-fill" style="width:${p.rate}%"></div></div>
+            <span class="num small">${p.rate}%</span>
+          </div>
+        </td>
+        <td class="num">${p.co2}</td>
+        <td><span class="badge ${statusClass}">${p.status}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderClients() {
+  const body = document.getElementById('clientsBody');
+  body.innerHTML = CLIENTS.map(c => `
+    <tr>
+      <td><strong>${c.name}</strong></td>
+      <td class="small mono">${c.email}</td>
+      <td>${c.co}</td>
+      <td class="num">${c.proj}</td>
+      <td class="small mono">${c.link}</td>
+      <td class="small muted">${c.last}</td>
+      <td>
+        <button class="btn btn-sm">Edit</button>
+        <button class="btn btn-sm">Send link ↗</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderMatBars() {
+  const data = [
+    { name: 'Concrete', val: 482.4, pct: 43 },
+    { name: 'Wood',     val: 126.9, pct: 11 },
+    { name: 'Steel',    val:  94.7, pct:  8 },
+    { name: 'Drywall',  val:  42.1, pct:  4 },
+    { name: 'Cardboard',val:  38.2, pct:  3 },
+    { name: 'Landfill', val: 336.3, pct: 30 },
+  ];
+  document.getElementById('matBars').innerHTML = data.map(m => `
+    <div class="mat-row">
+      <div class="mat-name">${m.name}</div>
+      <div class="mat-bar"><div class="mat-bar-fill" style="width:${m.pct}%; background:${m.name==='Landfill'?'linear-gradient(90deg, #b83a2e, #8C2A1F)':''}"></div></div>
+      <div class="mat-val">${m.val} T</div>
+    </div>
+  `).join('');
+}
+
+function renderFeed() {
+  const feed = [
+    { what: 'Ticket #24818 verified by R. Sullivan', when: '7 min', hash: 'b4f2...8e21', kind: 'green' },
+    { what: 'Debris photo pre-sort (AI-suggested) · approved by D. Castro', when: '9 min', hash: '9d33...2a41', kind: 'green' },
+    { what: 'OCR · Ticket #86223 · approved by D. Castro', when: '9 min', hash: '7a3f...e9b2', kind: 'green' },
+    { what: 'Photo approved → #24817 (M. Reyes)', when: '23 min', hash: 'd83a...11ce', kind: 'amber' },
+    { what: 'Ticket #86224 created · awaiting verification', when: '28 min', hash: '9c1e...4a83', kind: 'amber' },
+    { what: 'Client portal login · Hauler A', when: '40 min', hash: 'login-e7b1', kind: 'grey' },
+    { what: 'XLSX export · portfolio', when: '57 min', hash: 'exp-44ce', kind: 'grey' },
+    { what: 'Delta Sync · 28 scans · 6 pending verification', when: '2 hr', hash: 'sync-7711', kind: 'green' },
+  ];
+  document.getElementById('recentFeed').innerHTML = feed.map(f => `
+    <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); font-size:12.5px; align-items:center;">
+      <div>
+        <span class="badge ${f.kind}" style="margin-right:8px;">●</span>
+        ${f.what}
+      </div>
+      <div style="text-align:right;">
+        <div class="small mono muted">${f.hash}</div>
+        <div class="small muted">${f.when} ago</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+let charts = {};
+function renderDashCharts() {
+  // Diversion chart
+  const ctx1 = document.getElementById('diversionChart');
+  if (charts.diversion) charts.diversion.destroy();
+  charts.diversion = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: ['Dec','Jan','Feb','Mar','Apr','May'],
+      datasets: [
+        { label: 'Diverted (T)', data: [684,712,801,892,946,1120], backgroundColor: '#1F7A3A', borderRadius: 4, stack: 's1' },
+        { label: 'Landfill (T)', data: [388,402,418,461,486,552],  backgroundColor: '#E2E3DE', borderRadius: 4, stack: 's1' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: 'Inter Tight', size: 11 }, boxWidth: 10, color: '#6B7A6F' } },
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#6B7A6F', font: { family: 'Inter Tight', size: 11 } } },
+        y: { stacked: true, grid: { color: '#E2E3DE' }, ticks: { color: '#6B7A6F', font: { family: 'IBM Plex Mono', size: 10 } } },
+      }
+    }
+  });
+
+  // Zone chart
+  const ctx2 = document.getElementById('zoneChart');
+  if (charts.zone) charts.zone.destroy();
+  charts.zone = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: ['Zone A', 'Zone B', 'Zone C', 'Zone D'],
+      datasets: [
+        { label: 'Diverted', data: [438,301,187,194], backgroundColor: '#1F7A3A', borderRadius: 3 },
+        { label: 'Landfill', data: [186,117,126,123], backgroundColor: '#E2E3DE', borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Inter Tight', size: 11 }, boxWidth: 10, color: '#6B7A6F' } } },
+      scales: {
+        x: { stacked: true, grid: { color: '#E2E3DE' }, ticks: { color: '#6B7A6F', font: { family: 'IBM Plex Mono', size: 10 } } },
+        y: { stacked: true, grid: { display: false }, ticks: { color: '#6B7A6F', font: { family: 'Inter Tight', size: 11 } } },
+      }
+    }
+  });
+
+  // Hauler chart
+  const ctx3 = document.getElementById('haulerChart');
+  if (charts.hauler) charts.hauler.destroy();
+  charts.hauler = new Chart(ctx3, {
+    type: 'doughnut',
+    data: {
+      labels: ['Hauler A', 'Hauler B', 'Hauler C', 'Hauler D', 'Hauler E'],
+      datasets: [{
+        data: [38, 24, 18, 12, 8],
+        backgroundColor: ['#1F7A3A','#2c8e4b','#5fa977','#9bc4a8','#cbe0d2'],
+        borderColor: '#fff',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: { legend: { position: 'right', labels: { font: { family: 'Inter Tight', size: 11 }, boxWidth: 10, color: '#6B7A6F' } } }
+    }
+  });
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderTickets();
+renderQueue();
+renderAudit();
+renderPortfolio();
+renderClients();
+renderMatBars();
+renderFeed();
+renderDashCharts();
+
+// ============================================================
+// SHARE MODAL
+// ============================================================
+(function setupShare() {
+  const modal     = document.getElementById('shareModal');
+  const openBtn   = document.getElementById('shareBtn');
+  const closeBtn  = document.getElementById('shareClose');
+  const roleBtns  = document.querySelectorAll('.role-btn');
+  const linkInput = document.getElementById('shareLink');
+  const copyBtn   = document.getElementById('copyBtn');
+  const toast     = document.getElementById('toast');
+  const toastMsg  = document.getElementById('toastMsg');
+
+  // Role -> query param + tab(s) the recipient lands on
+  const ROLE_CONFIG = {
+    all:        { tab: 'dash',      label: 'Full Demo' },
+    gc:         { tab: 'dash',      label: 'GC / Owner View' },
+    consultant: { tab: 'portfolio', label: 'LEED Consultant View' },
+    hauler:     { tab: 'scan',      label: 'Hauler View' },
+    facility:   { tab: 'tickets',   label: 'Recycling Facility View' },
+    exec:       { tab: 'dash',      label: 'Executive Summary' },
+  };
+
+  let activeRole = 'all';
+
+  function buildLink(role) {
+    // In production this would be divertscan.com — using current origin for the demo
+    const base = (window.location.protocol === 'file:')
+      ? 'https://divertscan.com/demo'
+      : window.location.origin + window.location.pathname;
+    const token = generateToken();
+    const params = new URLSearchParams();
+    params.set('view', role);
+    params.set('tab', ROLE_CONFIG[role].tab);
+    params.set('t', token);
+    return base + '?' + params.toString();
+  }
+
+  function generateToken() {
+    // Short readable token for the "shareable link" — deterministic-looking but random
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let out = '';
+    for (let i = 0; i < 10; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
+    return out;
+  }
+
+  function updateLink() {
+    const url = buildLink(activeRole);
+    linkInput.value = url;
+
+    const subject = encodeURIComponent('DivertScan — Live Demo (LEED v4/v4.1/v5 C&D Waste Compliance)');
+    const body    = encodeURIComponent(
+      "Hi,\n\nHere's a live demo of DivertScan — the embodied-carbon engine for LEED v4, v4.1, and v5 C&D waste compliance:\n\n" +
+      url + "\n\n" +
+      "It's a " + ROLE_CONFIG[activeRole].label.toLowerCase() + " of the admin workspace with sample data. " +
+      "Tap through the tabs to see scale-ticket OCR, AI-assisted debris pre-sort (human-verified), the SHA-256 audit log, and LEED-ready reports for MRp1, MRp2, and MRc5.\n\n" +
+      "Happy to walk you through it — call or text me at (214) 507-8899.\n\n— Robert"
+    );
+    const smsBody = encodeURIComponent("Live DivertScan demo (LEED v4/v4.1/v5 C&D compliance): " + url + " — Robert, (214) 507-8899");
+
+    document.getElementById('ch-email').href    = 'mailto:?subject=' + subject + '&body=' + body;
+    document.getElementById('ch-sms').href      = 'sms:?body=' + smsBody;
+    document.getElementById('ch-linkedin').href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(url);
+    document.getElementById('ch-whatsapp').href = 'https://wa.me/?text=' + smsBody;
+  }
+
+  function showToast(msg) {
+    toastMsg.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  openBtn.addEventListener('click', () => {
+    updateLink();
+    modal.classList.add('open');
+  });
+  closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', e => {
+    if (e.target === modal) modal.classList.remove('open');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') modal.classList.remove('open');
+  });
+
+  roleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      roleBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeRole = btn.dataset.role;
+      updateLink();
+    });
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(linkInput.value);
+      copyBtn.textContent = '✓ Copied';
+      copyBtn.classList.add('copied');
+      showToast('Link copied to clipboard');
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    } catch (err) {
+      // Fallback for older browsers / file:// origin
+      linkInput.select();
+      document.execCommand('copy');
+      copyBtn.textContent = '✓ Copied';
+      copyBtn.classList.add('copied');
+      showToast('Link copied');
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    }
+  });
+
+  // Honor inbound ?view=... &tab=... to land prospects on the right tab
+  const params = new URLSearchParams(window.location.search);
+  const inboundTab = params.get('tab');
+  const inboundView = params.get('view');
+  const inboundToken = params.get('t');
+  if (inboundTab) {
+    const t = document.querySelector('.tab[data-tab="' + inboundTab + '"]');
+    if (t) t.click();
+  }
+
+  // ============================================================
+  // CLICK TRACKING — honest, lightweight, no cookies, no fingerprinting
+  //
+  // Fires once when a shared link is opened. Sends only:
+  //   - token (which share link)
+  //   - role (which audience was targeted)
+  //   - device class (mobile / tablet / desktop)
+  //   - referrer hostname (e.g. "linkedin.com" or "mail.google.com")
+  //   - timezone (broad geo signal, no IP, no GPS)
+  // Identical to what any email-tracking pixel would capture, but transparent.
+  //
+  // To enable: deploy tracking_backend.py, then set the endpoint URL below.
+  // To disable entirely: set TRACKING_ENDPOINT = null.
+  // ============================================================
+  const TRACKING_ENDPOINT = null; // e.g. 'https://divertscan.com/api/track'
+  if (inboundToken && TRACKING_ENDPOINT) {
+    const ua = navigator.userAgent || '';
+    const device = /Mobi|Android|iPhone/.test(ua) ? 'mobile'
+                 : /iPad|Tablet/.test(ua) ? 'tablet'
+                 : 'desktop';
+    let refHost = '';
+    try { refHost = document.referrer ? new URL(document.referrer).hostname : ''; } catch(e) {}
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    // Use sendBeacon if available so the request survives page-unload navigations
+    const payload = JSON.stringify({
+      token: inboundToken,
+      role: inboundView || 'all',
+      device,
+      referrer: refHost,
+      timezone: tz,
+    });
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(TRACKING_ENDPOINT, new Blob([payload], {type:'application/json'}));
+      } else {
+        fetch(TRACKING_ENDPOINT, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch(e) {}
+  }
+
+  // Expose updateLink so QR/share can re-render together
+  window.__updateShareLink = updateLink;
+  window.__getActiveRole = () => activeRole;
+  window.__buildShareLink = buildLink;
+  window.__showToast = showToast;
+})();
+
+// ============================================================
+// QR CODE — tiny self-contained generator (no CDN)
+// Renders a 25x25 module QR-style code from a URL.
+// This is a visual stand-in for a real QR; in production, swap in
+// a proper QR library (qrcode.js / qr-code-styling) for actual scanning.
+// ============================================================
+function renderQR(text, targetEl) {
+  if (!targetEl) return;
+  // Hash the input deterministically into a 25x25 boolean grid that LOOKS
+  // like a QR code (finder squares in 3 corners + scattered modules).
+  const SIZE = 25;
+  const grid = Array.from({length: SIZE}, () => Array(SIZE).fill(false));
+
+  // Three finder patterns (top-left, top-right, bottom-left)
+  function placeFinder(r, c) {
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) {
+      const onBorder = i === 0 || i === 6 || j === 0 || j === 6;
+      const onCore   = i >= 2 && i <= 4 && j >= 2 && j <= 4;
+      grid[r+i][c+j] = onBorder || onCore;
+    }
+  }
+  placeFinder(0, 0);
+  placeFinder(0, SIZE - 7);
+  placeFinder(SIZE - 7, 0);
+
+  // Alignment marker (bottom-right small)
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+    const r = SIZE - 9 + i, c = SIZE - 9 + j;
+    const onBorder = i === 0 || i === 4 || j === 0 || j === 4;
+    const onCore   = i === 2 && j === 2;
+    grid[r][c] = onBorder || onCore;
+  }
+
+  // Timing patterns
+  for (let i = 8; i < SIZE - 8; i++) {
+    grid[6][i] = i % 2 === 0;
+    grid[i][6] = i % 2 === 0;
+  }
+
+  // Data-area modules — pseudo-random from string hash, skipping reserved zones
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+  function rand() { h = (h * 1103515245 + 12345) & 0x7fffffff; return h / 0x7fffffff; }
+
+  function isReserved(r, c) {
+    if (r < 8 && c < 8) return true;
+    if (r < 8 && c >= SIZE - 8) return true;
+    if (r >= SIZE - 8 && c < 8) return true;
+    if (r >= SIZE - 9 && c >= SIZE - 9) return true;
+    if (r === 6 || c === 6) return true;
+    return false;
+  }
+
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (isReserved(r, c)) continue;
+      grid[r][c] = rand() > 0.52;
+    }
+  }
+
+  // Render to SVG
+  const cell = 4;
+  const margin = 4;
+  const total = SIZE * cell + margin * 2;
+  let rects = '';
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c]) {
+        rects += `<rect x="${margin + c*cell}" y="${margin + r*cell}" width="${cell}" height="${cell}" fill="#0f1311"/>`;
+      }
+    }
+  }
+  targetEl.innerHTML = `<svg viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
+    <rect width="${total}" height="${total}" fill="#fff"/>
+    ${rects}
+  </svg>`;
+}
+
+// Re-render QR whenever the share link updates
+(function hookQR() {
+  const shareModal = document.getElementById('shareModal');
+  const linkInput  = document.getElementById('shareLink');
+  const qrEl       = document.getElementById('qrSvg');
+  // Observe link value changes
+  const observer = new MutationObserver(() => {
+    if (linkInput.value) renderQR(linkInput.value, qrEl);
+  });
+  // value changes won't fire mutations — easier to poll while modal open
+  let lastVal = '';
+  setInterval(() => {
+    if (shareModal.classList.contains('open') && linkInput.value !== lastVal) {
+      lastVal = linkInput.value;
+      renderQR(linkInput.value, qrEl);
+    }
+  }, 200);
+})();
+
+// ============================================================
+// LIVE SCALE — drives both the always-on strip and the dashboard card
+// (truck-on-scale simulation, no modal)
+// ============================================================
+(function setupLiveScale() {
+  // Strip elements (always present)
+  const stripWeight  = document.getElementById('stripWeight');
+  const stripPhase   = document.getElementById('stripPhase');
+  const stripGraph   = document.getElementById('stripGraph');
+  const stripTicket  = document.getElementById('stripLastTicket');
+  const stripCount   = document.getElementById('stripTodayCount');
+
+  // Card elements (only on dashboard tab — may be null on initial load)
+  function cardEls() {
+    return {
+      value: document.getElementById('cardWeight'),
+      phase: document.getElementById('cardPhase'),
+      graph: document.getElementById('cardGraph'),
+      list:  document.getElementById('cardRecentList'),
+    };
+  }
+
+  let currentWeight = 0;
+  let targetWeight  = 0;
+  let history       = [];
+  let phase         = 'idle';
+  let phaseTimer    = 0;
+  let ticketCounter = 86241;
+  let todayCount    = 18;
+
+  // Seeded recent weighments (could be replaced with real scrape from your DB)
+  let session = [
+    { time: '14:02', hauler: 'Hauler A', weight: 19420 },
+    { time: '13:51', hauler: 'Hauler C', weight: 14180 },
+    { time: '13:33', hauler: 'Hauler B', weight: 22640 },
+    { time: '13:18', hauler: 'Hauler D', weight: 17800 },
+  ];
+
+  function phaseLabel() {
+    if (phase === 'idle') return 'IDLE';
+    if (phase === 'rising') return 'RISING';
+    if (phase === 'settling') return 'SETTLING';
+    if (phase === 'locked') return 'LOCKED';
+    if (phase === 'driving-off') return 'OFF SCALE';
+    return phase.toUpperCase();
+  }
+
+  function startCycle() {
+    targetWeight = Math.floor(Math.random() * 24000) + 18000;
+    phase = 'rising';
+    phaseTimer = 0;
+  }
+
+  function commitTicket() {
+    const wt = Math.round(targetWeight);
+    const now = new Date();
+    const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    const hauler = 'Hauler ' + String.fromCharCode(65 + Math.floor(Math.random() * 5));
+    session.unshift({ time, hauler, weight: wt });
+    if (session.length > 6) session.length = 6;
+    ticketCounter += Math.floor(Math.random() * 3) + 1;
+    todayCount += 1;
+    renderRecent();
+    if (stripTicket) stripTicket.textContent = '#' + ticketCounter;
+    if (stripCount) stripCount.textContent = todayCount;
+  }
+
+  function tick() {
+    if (phase === 'idle') {
+      currentWeight += (Math.random() - 0.5) * 4;
+      currentWeight = Math.max(-5, Math.min(5, currentWeight));
+      phaseTimer++;
+      if (phaseTimer > 28) startCycle();
+    } else if (phase === 'rising') {
+      const remaining = targetWeight - currentWeight;
+      currentWeight += remaining * 0.18 + (Math.random() - 0.5) * 80;
+      if (Math.abs(remaining) < 200) { phase = 'settling'; phaseTimer = 0; }
+    } else if (phase === 'settling') {
+      currentWeight += (targetWeight - currentWeight) * 0.3 + (Math.random() - 0.5) * 18;
+      phaseTimer++;
+      if (phaseTimer > 8) { phase = 'locked'; currentWeight = targetWeight; phaseTimer = 0; }
+    } else if (phase === 'locked') {
+      currentWeight = targetWeight + (Math.random() - 0.5) * 3;
+      phaseTimer++;
+      if (phaseTimer === 20) commitTicket();  // auto-commit after lock
+      if (phaseTimer > 35) { phase = 'driving-off'; phaseTimer = 0; }
+    } else if (phase === 'driving-off') {
+      currentWeight *= 0.65;
+      currentWeight += (Math.random() - 0.5) * 60;
+      if (Math.abs(currentWeight) < 30) {
+        currentWeight = 0;
+        phase = 'idle';
+        phaseTimer = 0;
+      }
+    }
+
+    history.push(currentWeight);
+    if (history.length > 100) history.shift();
+
+    renderStrip();
+    renderCard();
+  }
+
+  function renderStrip() {
+    const display = Math.round(currentWeight);
+    if (stripWeight) {
+      stripWeight.textContent = display.toLocaleString();
+      stripWeight.classList.toggle('settling', phase === 'rising' || phase === 'settling');
+      if (stripPhase) {
+        stripPhase.textContent = phaseLabel();
+        stripPhase.className = 'strip-phase ' + phase;
+      }
+      drawGraph(stripGraph, 200, 40, 4);
+    }
+    // Also drive the top-bar live readout
+    const topW = document.getElementById('topLiveWeight');
+    const topP = document.getElementById('topLivePhase');
+    const ddP  = document.getElementById('ddPhase');
+    if (topW) {
+      topW.textContent = display.toLocaleString();
+      topW.classList.toggle('settling', phase === 'rising' || phase === 'settling');
+    }
+    if (topP) {
+      topP.textContent = phaseLabel();
+      topP.className = 'tls-phase ' + phase;
+    }
+    if (ddP) {
+      ddP.textContent = phaseLabel();
+      ddP.className = 'tls-phase ' + phase;
+    }
+  }
+
+  function renderCard() {
+    const c = cardEls();
+    if (!c.value) return;  // card not in DOM (not on dashboard tab)
+    const display = Math.round(currentWeight);
+    c.value.textContent = display.toLocaleString();
+    c.value.classList.toggle('settling', phase === 'rising' || phase === 'settling');
+    if (c.phase) {
+      c.phase.textContent = phaseLabel();
+      c.phase.className = 'scale-card-phase ' + phase;
+    }
+    drawGraph(c.graph, 600, 70, 6);
+    if (c.list && c.list.dataset.lastRender !== String(session.length) + session[0].time) {
+      renderRecent();
+    }
+  }
+
+  function drawGraph(target, width, height, pad) {
+    if (!target) return;
+    const max = Math.max(40000, ...history.map(Math.abs));
+    const baseline = height - pad;
+    if (history.length === 0) {
+      target.innerHTML = '';
+      return;
+    }
+    const points = history.map((v, i) => {
+      const x = (i / Math.max(1, history.length - 1)) * width;
+      const y = baseline - (Math.max(0, v) / max) * (baseline - pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const path = `M0,${baseline} L${points.join(' L')}`;
+    const gradId = 'grad_' + Math.random().toString(36).substr(2,6);
+    target.innerHTML = `
+      <line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" stroke-dasharray="2,3"/>
+      <path d="${path}" stroke="#38d97b" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+      <path d="${path} L${width},${baseline} L0,${baseline} Z" fill="url(#${gradId})" opacity="0.4"/>
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#38d97b" stop-opacity="0.6"/>
+          <stop offset="100%" stop-color="#38d97b" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+    `;
+  }
+
+  function renderRecent() {
+    const c = cardEls();
+    if (!c.list) return;
+    c.list.dataset.lastRender = String(session.length) + session[0].time;
+    c.list.innerHTML = session.slice(0, 4).map(s => `
+      <div class="scale-card-row">
+        <div class="scale-card-row-time">${s.time}</div>
+        <div class="scale-card-row-hauler">${s.hauler}</div>
+        <div class="scale-card-row-weight">${s.weight.toLocaleString()} lb</div>
+      </div>
+    `).join('');
+  }
+
+  // Seed initial strip values
+  if (stripTicket) stripTicket.textContent = '#' + ticketCounter;
+  if (stripCount) stripCount.textContent = todayCount;
+
+  // Expose session data globally so the Live Scale panel and other UI can read it
+  window.__liveScale = {
+    getSession:    () => session,
+    getTodayCount: () => todayCount,
+    getTicket:     () => '#' + ticketCounter,
+  };
+
+  // Run continuously — strip is always live
+  setInterval(tick, 200);
+})();
+
+// ============================================================
+// LIVE SCALE PANEL — expandable, shows last 10 weighments
+// ============================================================
+// ============================================================
+// LIVE SCALE TOP-BAR DROPDOWN — last 10 driver tickets
+// ============================================================
+(function setupTopLiveScale() {
+  const btn       = document.getElementById('liveScaleBtn');
+  const dropdown  = document.getElementById('tlsDropdown');
+  const listEl    = document.getElementById('tlsList');
+  const todayEl   = document.getElementById('ddTodayCount');
+  const tonsEl    = document.getElementById('ddTodayTons');
+  const avgEl     = document.getElementById('ddAvgWeight');
+  if (!btn || !dropdown) return;
+
+  const DRIVERS = [
+    { name: 'Driver 01', hauler: 'Hauler A' },
+    { name: 'Driver 02', hauler: 'Hauler B' },
+    { name: 'Driver 03', hauler: 'Hauler C' },
+    { name: 'Driver 04', hauler: 'Hauler A' },
+    { name: 'Driver 05', hauler: 'Hauler D' },
+    { name: 'Driver 06', hauler: 'Hauler B' },
+    { name: 'Driver 07', hauler: 'Hauler E' },
+    { name: 'Driver 08', hauler: 'Hauler C' },
+  ];
+  const PROJECTS = ['Hospital Tower', 'Logistics Park', 'Convention Center', 'Office Tower'];
+
+  function randomHash() {
+    const c = '0123456789abcdef';
+    let a = '', b = '';
+    for (let i = 0; i < 4; i++) a += c[Math.floor(Math.random() * 16)];
+    for (let i = 0; i < 4; i++) b += c[Math.floor(Math.random() * 16)];
+    return a + '...' + b;
+  }
+
+  function buildRows() {
+    const live = (window.__liveScale && window.__liveScale.getSession()) || [];
+    const all = [...live];
+    let baseTime = 13, baseMin = 10, ticketBase = 86230;
+    while (all.length < 10) {
+      baseMin -= Math.floor(Math.random() * 12) + 8;
+      if (baseMin < 0) { baseTime -= 1; baseMin += 60; }
+      all.push({
+        time:   String(baseTime).padStart(2,'0') + ':' + String(baseMin).padStart(2,'0'),
+        hauler: DRIVERS[Math.floor(Math.random() * DRIVERS.length)].hauler,
+        weight: Math.floor(Math.random() * 24000) + 14000,
+      });
+      ticketBase -= 1;
+    }
+    return all.slice(0, 10).map((entry, i) => {
+      const driver = DRIVERS.find(d => d.hauler === entry.hauler) || DRIVERS[0];
+      return {
+        rank:    i + 1,
+        time:    entry.time,
+        driver:  driver.name,
+        hauler:  entry.hauler,
+        project: PROJECTS[Math.floor(Math.random() * PROJECTS.length)],
+        ticket:  '#' + (86241 - i),
+        weight:  entry.weight,
+        hash:    randomHash(),
+        status:  i === 0 ? 'LIVE' : 'OK',
+      };
+    });
+  }
+
+  function render() {
+    const rows = buildRows();
+    listEl.innerHTML = rows.map(r => `
+      <div class="tls-row${r.status === 'LIVE' ? ' is-live' : ''}">
+        <div class="tls-rank">${String(r.rank).padStart(2,'0')}</div>
+        <div class="tls-row-time">${r.time}</div>
+        <div class="tls-row-driver">
+          ${r.driver}
+          <span class="driver-sub"> · ${r.hauler} · ${r.project}</span>
+        </div>
+        <div class="tls-row-ticket">${r.ticket}</div>
+        <div class="tls-row-weight">${r.weight.toLocaleString()} lb</div>
+        <div class="tls-row-status">${r.status}</div>
+      </div>
+    `).join('');
+
+    const totals = rows.reduce((s, r) => s + r.weight, 0);
+    const avg = Math.round(totals / rows.length);
+    if (todayEl) todayEl.textContent = (window.__liveScale ? window.__liveScale.getTodayCount() : rows.length);
+    if (tonsEl)  tonsEl.textContent = (totals / 2000).toFixed(1);  // convert lb -> tons
+    if (avgEl)   avgEl.textContent = avg.toLocaleString() + ' lb';
+  }
+
+  function open() {
+    render();
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+  }
+  function close() {
+    dropdown.classList.remove('open');
+    btn.classList.remove('open');
+  }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (dropdown.classList.contains('open')) close();
+    else open();
+  });
+  document.addEventListener('click', e => {
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && dropdown.classList.contains('open')) close();
+  });
+
+  // Refresh while dropdown is open
+  setInterval(() => {
+    if (dropdown.classList.contains('open')) render();
+  }, 4000);
+})();
+
+// ============================================================
+// DEMO SHARE POPUP — opens after the tour starts so user can grab the URL
+// ============================================================
+(function setupDemoShare() {
+  const btn      = document.getElementById('tourBtn');
+  const popup    = document.getElementById('demoSharePopup');
+  const linkEl   = document.getElementById('demoShareLink');
+  const copyBtn  = document.getElementById('demoShareCopy');
+  if (!btn || !popup) return;
+
+  function buildTourUrl() {
+    const base = (window.location.protocol === 'file:')
+      ? 'https://divertscan.com/demo'
+      : window.location.origin + window.location.pathname;
+    return base + '?tour=1';
+  }
+
+  function wireChannels(url) {
+    const subject = encodeURIComponent('DivertScan — Watch the auto-tour');
+    const body = encodeURIComponent(
+      "Quick look at DivertScan — this link auto-starts a 60-second guided tour of the LEED v4 / v4.1 / v5 C&D waste compliance engine:\n\n" + url + "\n\nHappy to walk you through it — call or text me at (214) 507-8899.\n\n— Robert"
+    );
+    const sms = encodeURIComponent("DivertScan auto-tour: " + url);
+    document.getElementById('demoShareEmail').href = 'mailto:?subject=' + subject + '&body=' + body;
+    document.getElementById('demoShareSms').href   = 'sms:?body=' + sms;
+    document.getElementById('demoShareLi').href    = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(url);
+    document.getElementById('demoShareWa').href    = 'https://wa.me/?text=' + sms;
+  }
+
+  function open() {
+    const url = buildTourUrl();
+    linkEl.value = url;
+    wireChannels(url);
+    popup.classList.add('open');
+  }
+  function close() { popup.classList.remove('open'); }
+
+  // When the tour starts, automatically show the share popup ~1s later
+  window.__onTourStart = () => {
+    setTimeout(open, 1200);
+  };
+
+  // Click outside / Escape closes
+  document.addEventListener('click', e => {
+    if (!popup.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') close();
+  });
+
+  // Copy button
+  copyBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(linkEl.value);
+    } catch(err) {
+      linkEl.select();
+      document.execCommand('copy');
+    }
+    copyBtn.textContent = '✓ Copied';
+    copyBtn.classList.add('copied');
+    if (window.__showToast) window.__showToast('Demo tour link copied');
+    setTimeout(() => {
+      copyBtn.textContent = 'Copy';
+      copyBtn.classList.remove('copied');
+    }, 2000);
+  });
+
+  // Prevent popup-internal clicks from bubbling and closing it
+  popup.addEventListener('click', e => e.stopPropagation());
+})();
+
+// ============================================================
+// AUTO-TOUR — sit back, watch the demo play itself
+// ============================================================
+(function setupTour() {
+  const btn        = document.getElementById('tourBtn');
+  const banner     = document.getElementById('tourBanner');
+  const ring       = document.getElementById('tourProgressRing');
+  const stepNum    = document.getElementById('tourStepNum');
+  const stepTot    = document.getElementById('tourStepTot');
+  const stepLabel  = document.getElementById('tourStepLabel');
+  const stepTitle  = document.getElementById('tourStepTitle');
+  const stepDesc   = document.getElementById('tourStepDesc');
+  const prevBtn    = document.getElementById('tourPrev');
+  const pauseBtn   = document.getElementById('tourPause');
+  const nextBtn    = document.getElementById('tourNext');
+  const stopBtn    = document.getElementById('tourStop');
+  const shareEmail = document.getElementById('tourShareEmail');
+  const shareSms   = document.getElementById('tourShareSms');
+  const shareCopy  = document.getElementById('tourShareCopy');
+  if (!btn || !banner) return;
+
+  const STEPS = [
+    {
+      tab: 'dash',
+      label: 'STEP 1 OF 8 — THE BIG PICTURE',
+      title: 'Dashboard · Carbon at a Glance',
+      desc:  '1,120 tons diverted this month. 682 tCO₂e avoided. Auto-identified hotspots for MRc5 diversion narrative + v5 MRp2 embodied-carbon storytelling. Everything a GC, consultant, or owner needs to see at 8am Monday.',
+      selector: '#panel-dash .kpi-grid',
+    },
+    {
+      tab: 'dash',
+      label: 'STEP 2 OF 8 — LIVE SCALE',
+      title: 'Real-Time Scale Feed',
+      desc:  'Direct from the floor scale. Pulsing dot means connected. Weight ticks every 200ms. Click ⚖ Live Scale up top to see the last 10 weighments.',
+      selector: '.scale-card',
+    },
+    {
+      tab: 'scan',
+      label: 'STEP 3 OF 8 — SCAN',
+      title: 'Human-Verified Capture (OCR-Assisted)',
+      desc:  'Driver snaps a scale ticket — OCR transcribes it in 2 seconds. Load photos get an AI pre-sort suggestion (concrete/wood/metal/etc.). A trained verifier reviews every record and sets the final diversion % before it enters the LEED submittal. iPad-first, gloves-on.',
+      selector: '#panel-scan .grid-2',
+    },
+    {
+      tab: 'tickets',
+      label: 'STEP 4 OF 8 — TICKETS',
+      title: 'Every Load. Every Hash.',
+      desc:  '2,418 tickets across the portfolio. Filter by project, hauler, zone, status. SHA-256 hash on every row — auditable, defensible, GBCI-ready.',
+      selector: '#panel-tickets .card',
+    },
+    {
+      tab: 'reports',
+      label: 'STEP 5 OF 8 — REPORTS',
+      title: 'LEED Submittal-Ready — All Versions',
+      desc:  'Auto-generated reports for LEED v4 (MRp2 + MRc5), v4.1 (MRc5), and v5 (MRp1 + MRp2 + MRc5). Carbon math written out in plain English. Tonnage by zone, material breakdown, end markets — exportable to PDF, XLSX, JSON.',
+      selector: '#panel-reports .report-preview',
+    },
+    {
+      tab: 'audit',
+      label: 'STEP 6 OF 8 — AUDIT LOG',
+      title: 'Immutable. Hashed. Tamper-Evident.',
+      desc:  'Every event SHA-256 hashed. GBCI reviewers can re-derive any hash from source data. This is what closes the trust gap on submittal day.',
+      selector: '#panel-audit .card',
+    },
+    {
+      tab: 'portfolio',
+      label: 'STEP 7 OF 8 — PORTFOLIO',
+      title: 'Multi-Project Roll-Up',
+      desc:  'For LEED consultants managing 5+ projects: one view. One combined export. Diversion targets tracked across the whole portfolio in DECIMAL precision.',
+      selector: '#panel-portfolio .card',
+    },
+    {
+      tab: 'clients',
+      label: 'STEP 8 OF 8 — STAKEHOLDERS',
+      title: 'GC, Hauler, Consultant — One Source of Truth',
+      desc:  'Pre-tagged hauler upload links. Read-only client portals. Chain of custody preserved at every step. No spreadsheet reconciliation. Ever.',
+      selector: '#panel-clients .card',
+    },
+  ];
+
+  const STEP_DURATION = 6000; // ms per step
+  const RING_CIRC = 169.6;
+  let idx = 0;
+  let timer = null;
+  let progressTimer = null;
+  let running = false;
+  let paused = false;
+  let progress = 0;
+  let lastSpotlight = null;
+
+  function buildShareUrl() {
+    const base = (window.location.protocol === 'file:')
+      ? 'https://divertscan.com/demo'
+      : window.location.origin + window.location.pathname;
+    return base + '?view=tour&tab=dash';
+  }
+
+  function updateShareLinks() {
+    const url = buildShareUrl();
+    const subject = encodeURIComponent('DivertScan — see this 60-second demo');
+    const body    = encodeURIComponent(
+      'Quick demo of DivertScan — the LEED v4 / v4.1 / v5 C&D waste compliance platform we just spun up.\n\n' +
+      'It auto-plays through the whole admin in about a minute. No login required:\n\n' +
+      url + '\n\nHappy to walk you through it — call or text me at (214) 507-8899.\n\n— Robert'
+    );
+    const smsBody = encodeURIComponent('Quick 60-sec DivertScan demo (LEED v4/v4.1/v5 C&D): ' + url + ' — Robert, (214) 507-8899');
+    if (shareEmail) shareEmail.href = 'mailto:?subject=' + subject + '&body=' + body;
+    if (shareSms)   shareSms.href   = 'sms:?body=' + smsBody;
+  }
+
+  function spotlight(selector) {
+    if (lastSpotlight) lastSpotlight.classList.remove('tour-spotlight');
+    const el = document.querySelector(selector);
+    if (el) {
+      el.classList.add('tour-spotlight');
+      lastSpotlight = el;
+      // Scroll into view smoothly
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function showStep(i) {
+    idx = (i + STEPS.length) % STEPS.length;
+    const step = STEPS[idx];
+    // Switch to the right tab
+    const tabBtn = document.querySelector('.tab[data-tab="' + step.tab + '"]');
+    if (tabBtn) tabBtn.click();
+
+    // Update banner content
+    stepNum.textContent = idx + 1;
+    stepTot.textContent = '/ ' + STEPS.length;
+    stepLabel.textContent = step.label;
+    stepTitle.textContent = step.title;
+    stepDesc.textContent = step.desc;
+
+    // Reset progress ring
+    progress = 0;
+    ring.style.strokeDashoffset = RING_CIRC;
+
+    // Wait briefly for tab content to render, then spotlight
+    setTimeout(() => spotlight(step.selector), 250);
+  }
+
+  function startTimers() {
+    if (timer) clearTimeout(timer);
+    if (progressTimer) clearInterval(progressTimer);
+    if (paused) return;
+
+    progress = 0;
+    const startTime = Date.now();
+    progressTimer = setInterval(() => {
+      progress = (Date.now() - startTime) / STEP_DURATION;
+      const offset = RING_CIRC * (1 - Math.min(progress, 1));
+      ring.style.strokeDashoffset = offset;
+    }, 80);
+
+    timer = setTimeout(() => {
+      if (idx === STEPS.length - 1) {
+        // Done — loop back
+        showStep(0);
+        startTimers();
+      } else {
+        showStep(idx + 1);
+        startTimers();
+      }
+    }, STEP_DURATION);
+  }
+
+  function start() {
+    running = true;
+    paused = false;
+    banner.classList.add('show');
+    btn.classList.add('running');
+    btn.innerHTML = '⏹ Stop';
+    pauseBtn.textContent = '⏸';
+    updateShareLinks();
+    showStep(0);
+    startTimers();
+    // Notify any listener (e.g. demo-share popup wants to show itself)
+    if (window.__onTourStart) try { window.__onTourStart(); } catch(e) {}
+  }
+
+  function stop() {
+    running = false;
+    paused = false;
+    banner.classList.remove('show');
+    btn.classList.remove('running');
+    btn.innerHTML = '▶ Demo';
+    if (timer) clearTimeout(timer);
+    if (progressTimer) clearInterval(progressTimer);
+    if (lastSpotlight) {
+      lastSpotlight.classList.remove('tour-spotlight');
+      lastSpotlight = null;
+    }
+  }
+
+  function togglePause() {
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶' : '⏸';
+    if (paused) {
+      if (timer) clearTimeout(timer);
+      if (progressTimer) clearInterval(progressTimer);
+    } else {
+      startTimers();
+    }
+  }
+
+  btn.addEventListener('click', () => {
+    if (running) stop();
+    else start();
+  });
+  stopBtn.addEventListener('click', stop);
+  pauseBtn.addEventListener('click', togglePause);
+  prevBtn.addEventListener('click', () => {
+    if (!running) return;
+    showStep(idx - 1);
+    startTimers();
+  });
+  nextBtn.addEventListener('click', () => {
+    if (!running) return;
+    showStep(idx + 1);
+    startTimers();
+  });
+
+  if (shareCopy) {
+    shareCopy.addEventListener('click', async () => {
+      const url = buildShareUrl();
+      try {
+        await navigator.clipboard.writeText(url);
+        if (window.__showToast) window.__showToast('Demo link copied to clipboard');
+      } catch(e) {
+        if (window.__showToast) window.__showToast('Could not copy — long-press to copy URL');
+      }
+    });
+  }
+
+  // Expose start so demo-share popup can trigger it
+  window.__startTour = start;
+
+  // Auto-start tour if URL has ?view=tour or ?tour=1
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') === 'tour' || params.get('tour') === '1') {
+    setTimeout(start, 800);  // Small delay to let the page settle
+  }
+})();
+
+// ============================================================
+// DEMO RESET — re-randomize hashes and timestamps for a fresh pitch
+// ============================================================
+(function setupReset() {
+  const btn = document.getElementById('resetBtn');
+  if (!btn) return;
+
+  function randHash() {
+    const chars = '0123456789abcdef';
+    let a = '', b = '';
+    for (let i = 0; i < 4; i++) a += chars[Math.floor(Math.random() * 16)];
+    for (let i = 0; i < 4; i++) b += chars[Math.floor(Math.random() * 16)];
+    return a + '...' + b;
+  }
+
+  function randMinAgo() {
+    const m = Math.floor(Math.random() * 60);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    return Math.floor(m/60) + ' hr ago';
+  }
+
+  btn.addEventListener('click', () => {
+    // Refresh ticket-table hashes
+    document.querySelectorAll('#ticketsBody .badge.hash').forEach(el => {
+      if (el.textContent !== '——') el.textContent = randHash();
+    });
+    // Refresh audit log hashes & times
+    document.querySelectorAll('.audit-row').forEach((row, i) => {
+      const timeEl = row.querySelector('.audit-time');
+      const hashEl = row.querySelector('.audit-hash');
+      if (timeEl) {
+        const h = 14 - Math.floor(i / 3);
+        const m = String(Math.floor(Math.random() * 60)).padStart(2, '0');
+        const s = String(Math.floor(Math.random() * 60)).padStart(2, '0');
+        timeEl.textContent = String(h).padStart(2,'0') + ':' + m + ':' + s;
+      }
+      if (hashEl && !hashEl.textContent.startsWith('login') && !hashEl.textContent.startsWith('exp') && !hashEl.textContent.startsWith('sync')) {
+        hashEl.textContent = randHash();
+      }
+    });
+    // Refresh recent feed hashes & timing
+    document.querySelectorAll('#recentFeed > div').forEach(div => {
+      const monos = div.querySelectorAll('.mono');
+      const muteds = div.querySelectorAll('.small.muted');
+      monos.forEach(m => {
+        if (!m.textContent.startsWith('login') && !m.textContent.startsWith('exp') && !m.textContent.startsWith('sync')) {
+          m.textContent = randHash();
+        }
+      });
+      if (muteds.length >= 2) {
+        muteds[1].textContent = randMinAgo();
+      }
+    });
+    // Refresh queue "when" labels
+    document.querySelectorAll('.queue-meta').forEach(q => {
+      q.textContent = randMinAgo();
+    });
+    // Refresh top-bar sync indicator
+    const subhead = document.querySelector('#panel-dash .panel-sub');
+    if (subhead) {
+      subhead.textContent = 'Hospital Tower · Reporting period: May 2026 · Last sync ' + Math.floor(Math.random() * 30 + 5) + 's ago';
+    }
+    // Toast
+    if (window.__showToast) window.__showToast('Demo data refreshed · all hashes regenerated');
+    // Tiny flash on the button
+    btn.style.background = '#E8F3EC';
+    setTimeout(() => btn.style.background = '', 400);
+  });
+})();
+</script>
+
+</body>
+</html>
