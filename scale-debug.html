@@ -485,17 +485,26 @@ function updateHeartbeat(latest) {
     value.textContent = weightTxt + ' · ' + ageText;
 
     if (ageMs < 5000) {
+        // Fresh data — truck on scale right now
         banner.style.borderColor = 'var(--green)';
         value.style.color = 'var(--green)';
-        sub.textContent = '✓ Pi is actively sending data';
+        sub.textContent = '✓ Pi is actively sending data — truck on scale';
     } else if (ageMs < 60000) {
+        // Recent data — truck just left or settling
+        banner.style.borderColor = 'var(--cyan)';
+        value.style.color = 'var(--cyan)';
+        sub.textContent = '◉ Recent activity · last reading ' + ageSec + 's ago';
+    } else if (ageMs < 4 * 60 * 60 * 1000) {
+        // 1 min to 4 hours — likely idle (scale empty, no activity). Soft blue, not alarming.
+        banner.style.borderColor = 'var(--blue)';
+        value.style.color = 'var(--blue)';
+        sub.textContent = '💤 Standby — scale is empty. Pi will catch the next truck automatically.';
+    } else {
+        // 4+ hours — actually suspicious, soft warning (could be overnight, weekend, or Pi crash)
         banner.style.borderColor = 'var(--amber)';
         value.style.color = 'var(--amber)';
-        sub.textContent = '⚠ Last reading was ' + ageSec + ' seconds ago — Pi may be polling slowly or stopped briefly';
-    } else {
-        banner.style.borderColor = 'var(--red)';
-        value.style.color = 'var(--red)';
-        sub.textContent = '✗ Pi has not sent a reading in ' + (ageMin >= 60 ? ageHr + ' hours' : ageMin + ' minutes') + '. Check that the Pi process is running.';
+        const stamp = ageHr >= 24 ? Math.floor(ageHr/24) + 'd ' + (ageHr % 24) + 'h' : ageHr + 'h ' + (ageMin % 60) + 'm';
+        sub.textContent = '⚠ No readings in ' + stamp + '. Normal if outside business hours. If you expect activity, check the Pi.';
     }
 }
 
