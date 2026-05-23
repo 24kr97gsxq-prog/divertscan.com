@@ -3992,9 +3992,18 @@ const DS = {
     // ============================================================
     sullivanStats: { timeouts: 0, errors: 0, ok: 0, recent: [] },
 
-    _sullivanRecord(outcome) {
+    _sullivanRecord(outcome, detail) {
         this.sullivanStats[outcome] = (this.sullivanStats[outcome] || 0) + 1;
-        this.sullivanStats.recent.push({ t: Date.now(), outcome });
+        const entry = { t: Date.now(), outcome };
+        if (detail) {
+            // detail = { endpoint, method, status, message, duration }
+            if (detail.endpoint) entry.endpoint = String(detail.endpoint).substring(0, 120);
+            if (detail.method) entry.method = detail.method;
+            if (typeof detail.status === 'number') entry.status = detail.status;
+            if (detail.message) entry.message = String(detail.message).substring(0, 200);
+            if (typeof detail.duration === 'number') entry.duration = detail.duration;
+        }
+        this.sullivanStats.recent.push(entry);
         if (this.sullivanStats.recent.length > 20) this.sullivanStats.recent.shift();
     },
 
@@ -4010,56 +4019,125 @@ const DS = {
         const total = (s.ok || 0) + (s.errors || 0) + (s.timeouts || 0);
         const okPct = total ? ((s.ok || 0) / total * 100).toFixed(1) : '—';
         const recent = (s.recent || []).slice(-10).reverse();
+
+        const shortEndpoint = (ep) => {
+            if (!ep) return '';
+            // Strip query string for cleaner display, keep first 60 chars
+            const noQ = ep.split('?')[0];
+            return noQ.length > 50 ? noQ.substring(0, 47) + '…' : noQ;
+        };
+
+        const statusBadge = (status) => {
+            if (!status) return '';
+            let bg = 'rgba(100,116,139,.2)', color = '#94a3b8';
+            if (status >= 200 && status < 300) { bg = 'rgba(34,197,94,.15)'; color = '#22c55e'; }
+            else if (status === 401 || status === 403) { bg = 'rgba(245,158,11,.15)'; color = '#f59e0b'; }
+            else if (status === 404) { bg = 'rgba(168,85,247,.15)'; color = '#a855f7'; }
+            else if (status >= 400 && status < 500) { bg = 'rgba(239,68,68,.15)'; color = '#ef4444'; }
+            else if (status >= 500) { bg = 'rgba(220,38,38,.2)'; color = '#dc2626'; }
+            return `<span style="background:${bg};color:${color};padding:1px 5px;border-radius:3px;font-size:.6rem;font-weight:700;margin-left:6px">${status}</span>`;
+        };
+
         const recentLines = recent.length
             ? recent.map(r => {
                 const ago = Math.round((Date.now() - r.t) / 1000);
                 const icon = r.outcome === 'ok' ? '✓' : r.outcome === 'timeouts' ? '⏱' : '✗';
                 const color = r.outcome === 'ok' ? '#22c55e' : r.outcome === 'timeouts' ? '#f59e0b' : '#ef4444';
-                return `<div style="font-family:'Space Mono',monospace;font-size:.72rem;color:${color};padding:2px 0">${icon} ${r.outcome.toUpperCase().padEnd(10)} ${ago}s ago</div>`;
+                const method = r.method ? `<span style="color:var(--text-muted);font-size:.65rem;margin-right:4px">${r.method}</span>` : '';
+                const ep = r.endpoint ? `<span style="color:#cbd5e1">${shortEndpoint(r.endpoint)}</span>` : '<span style="color:var(--text-muted)">—</span>';
+                const status = statusBadge(r.status);
+                const dur = (typeof r.duration === 'number') ? `<span style="color:var(--text-muted);font-size:.6rem;margin-left:6px">${r.duration}ms</span>` : '';
+                const msg = r.message ? `<div style="color:#fca5a5;font-size:.65rem;margin-left:18px;margin-top:2px;font-style:italic">${r.message}</div>` : '';
+                return `
+                    <div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;font-family:'Space Mono',monospace;font-size:.7rem">
+                            <span style="color:${color};font-weight:700;min-width:14px">${icon}</span>
+                            <span style="color:var(--text-muted);font-size:.6rem;min-width:42px">${ago}s ago</span>
+                            ${method}
+                            ${ep}
+                            ${status}
+                            ${dur}
+                        </div>
+                        ${msg}
+                    </div>`;
             }).join('')
-            : '<div style="color:var(--text-muted);font-size:.75rem">No calls yet this session.</div>';
+            : '<div style="color:var(--text-muted);font-size:.75rem;padding:8px">No calls yet this session.</div>';
+
+        // ERROR GROUPING — cluster recent errors by (endpoint + status) to show "this is the same bug repeating"
+        const errs = (s.recent || []).filter(r => r.outcome === 'errors');
+        const groups = {};
+        errs.forEach(e => {
+            const key = (e.method || '?') + ' ' + shortEndpoint(e.endpoint) + ' [' + (e.status || '?') + ']';
+            if (!groups[key]) groups[key] = { count: 0, status: e.status, sample: e.message || '' };
+            groups[key].count++;
+            if (!groups[key].sample && e.message) groups[key].sample = e.message;
+        });
+        const groupKeys = Object.keys(groups).sort((a, b) => groups[b].count - groups[a].count);
+        const errGroupsHtml = groupKeys.length
+            ? groupKeys.map(k => {
+                const g = groups[k];
+                return `
+                    <div style="padding:8px 10px;background:rgba(239,68,68,.06);border-left:3px solid #ef4444;border-radius:4px;margin-bottom:6px">
+                        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+                            <code style="font-family:'Space Mono',monospace;font-size:.7rem;color:#fca5a5;word-break:break-all">${k}</code>
+                            <span style="background:rgba(239,68,68,.2);color:#ef4444;padding:1px 6px;border-radius:3px;font-size:.65rem;font-weight:700;flex-shrink:0">×${g.count}</span>
+                        </div>
+                        ${g.sample ? `<div style="color:var(--text-muted);font-size:.65rem;margin-top:4px;font-style:italic">${g.sample.substring(0, 160)}</div>` : ''}
+                    </div>`;
+            }).join('')
+            : '<div style="color:var(--text-muted);font-size:.7rem;padding:8px;font-style:italic">No errors in the last 20 calls.</div>';
+
         const degraded = this.sullivanIsDegraded();
         const badge = degraded
             ? '<span style="background:rgba(239,68,68,.15);color:#ef4444;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:700">DEGRADED</span>'
             : '<span style="background:rgba(34,197,94,.15);color:#22c55e;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:700">HEALTHY</span>';
 
         const html = `
-            <div style="padding:20px;max-width:520px;margin:0 auto;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                    <h2 style="font-size:1.1rem;margin:0">⚡ Sullivan Engine — Network Report</h2>
+            <div style="padding:20px;max-width:560px;margin:0 auto;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+                    <h2 style="font-size:1.1rem;margin:0">⚡ Sullivan — Network Report</h2>
                     ${badge}
                 </div>
-                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:16px;">
-                    Stats since this page loaded. Tracks every Supabase call wrapped by the 5-second timeout.
+                <p style="font-size:.72rem;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+                    Every Supabase call wrapped by the 5-second timeout.
+                    <strong style="color:var(--text)">Healthy</strong> = no network problem.
+                    <strong style="color:var(--text)">Errors</strong> are app-level (bad request, missing table, permission denied) — see the grouping below to identify the cause.
                 </p>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px">
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#22c55e">${s.ok || 0}</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px">
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:#22c55e">${s.ok || 0}</div>
                         <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">OK</div>
                     </div>
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#f59e0b">${s.timeouts || 0}</div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:#f59e0b">${s.timeouts || 0}</div>
                         <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Timeout</div>
                     </div>
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#ef4444">${s.errors || 0}</div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:#ef4444">${s.errors || 0}</div>
                         <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Errors</div>
                     </div>
-                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:var(--primary)">${okPct}%</div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--primary)">${okPct}%</div>
                         <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Success</div>
                     </div>
                 </div>
-                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:6px">LAST 10 CALLS</div>
-                <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:200px;overflow-y:auto;margin-bottom:14px">
+
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:#ef4444;font-weight:700;margin-bottom:6px">⚠ ERRORS GROUPED BY ENDPOINT</div>
+                <div style="max-height:160px;overflow-y:auto;margin-bottom:14px">
+                    ${errGroupsHtml}
+                </div>
+
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:700;margin-bottom:6px">RECENT CALLS (newest first)</div>
+                <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:6px 10px;max-height:240px;overflow-y:auto;margin-bottom:14px">
                     ${recentLines}
                 </div>
-                <div style="font-size:.7rem;color:var(--text-muted);line-height:1.5">
-                    <strong>Degraded mode</strong> activates when 2+ of the last 5 calls timed out — Vanessa stops pushing the queue to avoid making things worse, and the user sees a "Network slow" toast.
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button onclick="DS.copySullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">📋 Copy raw JSON</button>
+                    <button onclick="DS.sullivanStats={timeouts:0,errors:0,ok:0,recent:[]};DS.showSullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🔄 Reset counters</button>
                 </div>
             </div>
         `;
-        // Simple modal: reuse showToast-style overlay if possible, otherwise inject inline
         let modal = document.getElementById('sullivanReportModal');
         if (!modal) {
             modal = document.createElement('div');
@@ -4068,10 +4146,31 @@ const DS = {
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             document.body.appendChild(modal);
         }
-        modal.innerHTML = `<div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;position:relative">
-            <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;padding:6px 10px">✕</button>
+        modal.innerHTML = `<div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;position:relative">
+            <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;padding:6px 10px;z-index:2">✕</button>
             ${html}
         </div>`;
+    },
+
+    copySullivanReport() {
+        const data = {
+            generated: new Date().toISOString(),
+            totals: {
+                ok: this.sullivanStats.ok || 0,
+                timeouts: this.sullivanStats.timeouts || 0,
+                errors: this.sullivanStats.errors || 0,
+            },
+            recent: this.sullivanStats.recent || [],
+        };
+        const text = JSON.stringify(data, null, 2);
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(
+                () => this.showToast('Sullivan report copied'),
+                () => this.showToast('Copy failed')
+            );
+        } else {
+            this.showToast('Clipboard not available');
+        }
     },
 
     async supabase(endpoint, method = 'GET', body = null) {
@@ -4092,27 +4191,36 @@ const DS = {
         // Sullivan Engine: 5s timeout via AbortController
         const ctrl = new AbortController();
         const timeoutId = setTimeout(() => ctrl.abort(), 5000);
+        const startTime = Date.now();
 
         try {
             const opts = { method, headers, signal: ctrl.signal };
             if (body) opts.body = JSON.stringify(body);
             const res = await fetch(url, opts);
             clearTimeout(timeoutId);
+            const duration = Date.now() - startTime;
             if (!res.ok) {
                 const err = await res.text();
                 console.error('Supabase error (' + method + ' ' + endpoint + '):', res.status, err);
-                this._sullivanRecord('errors');
+                this._sullivanRecord('errors', {
+                    endpoint, method, status: res.status, duration,
+                    message: err ? err.substring(0, 200) : ''
+                });
                 return null;
             }
-            this._sullivanRecord('ok');
+            this._sullivanRecord('ok', { endpoint, method, status: res.status, duration });
             if (res.status === 204 || method === 'DELETE') return [];
             const text = await res.text();
             return text ? JSON.parse(text) : [];
         } catch (e) {
             clearTimeout(timeoutId);
+            const duration = Date.now() - startTime;
             if (e.name === 'AbortError') {
                 console.warn('Sullivan: Supabase call timed out (' + method + ' ' + endpoint + ')');
-                this._sullivanRecord('timeouts');
+                this._sullivanRecord('timeouts', {
+                    endpoint, method, duration,
+                    message: 'Request aborted after 5s timeout'
+                });
                 if (this.sullivanIsDegraded()) {
                     this.showToast('Network slow — degraded mode');
                 } else {
@@ -4120,7 +4228,10 @@ const DS = {
                 }
             } else {
                 console.error('Supabase fetch error:', e);
-                this._sullivanRecord('errors');
+                this._sullivanRecord('errors', {
+                    endpoint, method, duration,
+                    message: (e.message || 'Unknown fetch error').substring(0, 200)
+                });
                 this.showToast('Database connection error');
             }
             return null;
