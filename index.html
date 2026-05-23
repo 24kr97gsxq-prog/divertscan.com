@@ -782,6 +782,10 @@
                 </div>
                 <div class="btn-row" style="margin-top:8px;">
                     <a href="smoke-test.html" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;flex:1;text-align:center;border-color:var(--amber);color:var(--amber);">🧪 Constraint Smoke Test</a>
+                    <a href="vanessa-smoke-test.html" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none;flex:1;text-align:center;border-color:var(--primary);color:var(--primary);">🔄 Vanessa Queue Test</a>
+                </div>
+                <div class="btn-row" style="margin-top:8px;">
+                    <button class="btn btn-sm btn-outline" onclick="DS.showSullivanReport()" style="flex:1;border-color:var(--blue,#3b82f6);color:var(--blue,#3b82f6);">⚡ Sullivan Network Report</button>
                 </div>
             </div>
 
@@ -3999,6 +4003,75 @@ const DS = {
         if (last5.length < 3) return false;
         const bad = last5.filter(r => r.outcome === 'timeouts').length;
         return bad >= 2;
+    },
+
+    showSullivanReport() {
+        const s = this.sullivanStats;
+        const total = (s.ok || 0) + (s.errors || 0) + (s.timeouts || 0);
+        const okPct = total ? ((s.ok || 0) / total * 100).toFixed(1) : '—';
+        const recent = (s.recent || []).slice(-10).reverse();
+        const recentLines = recent.length
+            ? recent.map(r => {
+                const ago = Math.round((Date.now() - r.t) / 1000);
+                const icon = r.outcome === 'ok' ? '✓' : r.outcome === 'timeouts' ? '⏱' : '✗';
+                const color = r.outcome === 'ok' ? '#22c55e' : r.outcome === 'timeouts' ? '#f59e0b' : '#ef4444';
+                return `<div style="font-family:'Space Mono',monospace;font-size:.72rem;color:${color};padding:2px 0">${icon} ${r.outcome.toUpperCase().padEnd(10)} ${ago}s ago</div>`;
+            }).join('')
+            : '<div style="color:var(--text-muted);font-size:.75rem">No calls yet this session.</div>';
+        const degraded = this.sullivanIsDegraded();
+        const badge = degraded
+            ? '<span style="background:rgba(239,68,68,.15);color:#ef4444;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:700">DEGRADED</span>'
+            : '<span style="background:rgba(34,197,94,.15);color:#22c55e;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:700">HEALTHY</span>';
+
+        const html = `
+            <div style="padding:20px;max-width:520px;margin:0 auto;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <h2 style="font-size:1.1rem;margin:0">⚡ Sullivan Engine — Network Report</h2>
+                    ${badge}
+                </div>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:16px;">
+                    Stats since this page loaded. Tracks every Supabase call wrapped by the 5-second timeout.
+                </p>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px">
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#22c55e">${s.ok || 0}</div>
+                        <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">OK</div>
+                    </div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#f59e0b">${s.timeouts || 0}</div>
+                        <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Timeout</div>
+                    </div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#ef4444">${s.errors || 0}</div>
+                        <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Errors</div>
+                    </div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+                        <div style="font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:var(--primary)">${okPct}%</div>
+                        <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px">Success</div>
+                    </div>
+                </div>
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:6px">LAST 10 CALLS</div>
+                <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:200px;overflow-y:auto;margin-bottom:14px">
+                    ${recentLines}
+                </div>
+                <div style="font-size:.7rem;color:var(--text-muted);line-height:1.5">
+                    <strong>Degraded mode</strong> activates when 2+ of the last 5 calls timed out — Vanessa stops pushing the queue to avoid making things worse, and the user sees a "Network slow" toast.
+                </div>
+            </div>
+        `;
+        // Simple modal: reuse showToast-style overlay if possible, otherwise inject inline
+        let modal = document.getElementById('sullivanReportModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'sullivanReportModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `<div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;position:relative">
+            <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;padding:6px 10px">✕</button>
+            ${html}
+        </div>`;
     },
 
     async supabase(endpoint, method = 'GET', body = null) {
