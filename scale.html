@@ -33,23 +33,119 @@
 
         .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:120px}
 
-        .weight-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
-        .weight-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);opacity:.5}
-        .weight-card.captured{border-color:var(--green)}
-        .weight-card.captured::before{background:linear-gradient(90deg,var(--green),transparent);opacity:.8}
+        /* ─────────────────────────────────────────────────────────
+           WEIGHT CARDS — now with live phase animation
+           Phases: idle (default) | rising (amber pulse) | settling (amber) | locked (green) | captured (green, persisted)
+           Phase classes are added to .weight-card; CSS reacts.
+           ───────────────────────────────────────────────────────── */
+        .weight-card{
+            background:var(--card);border:1px solid var(--border);border-radius:12px;
+            padding:16px;margin-bottom:10px;position:relative;overflow:hidden;
+            transition:border-color .25s ease, background .25s ease;
+        }
+        .weight-card::before{
+            content:'';position:absolute;top:0;left:0;right:0;height:2px;
+            background:linear-gradient(90deg,var(--cyan),transparent);opacity:.5;
+            transition:background .25s ease, opacity .25s ease;
+        }
+        .weight-card.captured,
+        .weight-card.locked{border-color:var(--green)}
+        .weight-card.captured::before,
+        .weight-card.locked::before{background:linear-gradient(90deg,var(--green),transparent);opacity:.85}
+
         .weight-card.waiting{border-color:var(--amber);border-style:dashed}
-        .wc-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-        .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+
+        .weight-card.rising,
+        .weight-card.settling{
+            border-color:var(--amber);
+            background:linear-gradient(180deg, var(--card), rgba(245,158,11,0.04));
+        }
+        .weight-card.rising::before{background:linear-gradient(90deg,var(--amber),transparent);opacity:1}
+        .weight-card.settling::before{background:linear-gradient(90deg,var(--amber),transparent);opacity:.8}
+
+        /* Subtle full-card pulse during RISING — tells the driver "we see you" */
+        @keyframes risePulse {
+            0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0); background-color:rgba(245,158,11,0.04);}
+            50%   {box-shadow:0 0 22px 2px rgba(245,158,11,0.18); background-color:rgba(245,158,11,0.07);}
+        }
+        .weight-card.rising{animation:risePulse 1.1s ease-in-out infinite}
+
+        /* LOCKED flash — a quick green confirmation right when it locks */
+        @keyframes lockFlash {
+            0%  {box-shadow:0 0 0 0 rgba(34,197,94,0);}
+            30% {box-shadow:0 0 0 4px rgba(34,197,94,0.35);}
+            100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}
+        }
+        .weight-card.lock-flash{animation:lockFlash .6s ease-out 1}
+
+        .wc-label{
+            font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);
+            font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+        }
+
+        /* Phase pill inside the label row — small, glanceable */
+        .phase-pill{
+            display:inline-flex;align-items:center;gap:4px;
+            padding:2px 7px;border-radius:6px;
+            font-family:var(--mono);font-size:.55rem;font-weight:800;
+            letter-spacing:.08em;line-height:1.4;
+            background:rgba(255,255,255,.05);color:var(--dim);
+            border:1px solid var(--border);
+            transition:background .2s ease, color .2s ease, border-color .2s ease;
+            margin-left:auto;
+        }
+        .phase-pill .phase-led{
+            width:6px;height:6px;border-radius:50%;background:currentColor;
+            box-shadow:0 0 6px currentColor;
+        }
+        .phase-pill.rising  {background:rgba(245,158,11,.14);color:var(--amber);border-color:rgba(245,158,11,.4)}
+        .phase-pill.settling{background:rgba(245,158,11,.10);color:var(--amber);border-color:rgba(245,158,11,.3)}
+        .phase-pill.locked  {background:rgba(34,197,94,.16);color:var(--green);border-color:rgba(34,197,94,.45)}
+        .phase-pill.idle    {background:rgba(255,255,255,.04);color:var(--dim);border-color:var(--border)}
+        @keyframes ledPulse {0%,100%{opacity:1}50%{opacity:.35}}
+        .phase-pill.rising .phase-led,
+        .phase-pill.settling .phase-led{animation:ledPulse .8s ease-in-out infinite}
+
+        .wc-value{font-family:var(--mono);font-size:2.2rem;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;}
         .wc-value.empty{color:var(--muted);font-size:1.2rem;font-weight:500}
+        .wc-value.live{color:var(--amber)}             /* live ticking value while rising/settling */
+        .wc-value.locked{color:var(--green)}            /* once locked, green */
         .wc-sub{font-size:.7rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+
+        /* Settling progress bar at the bottom of the card */
+        .phase-bar{
+            position:absolute;left:0;right:0;bottom:0;height:3px;
+            background:rgba(255,255,255,.05);overflow:hidden;
+            opacity:0;transition:opacity .25s ease;
+        }
+        .phase-bar-fill{
+            height:100%;width:0%;
+            background:linear-gradient(90deg, var(--amber), var(--green));
+            transition:width .25s linear, background .25s ease;
+        }
+        .weight-card.rising .phase-bar,
+        .weight-card.settling .phase-bar,
+        .weight-card.locked .phase-bar{opacity:1}
+        .weight-card.locked .phase-bar-fill{background:var(--green); width:100% !important;}
+
+        /* Small driver hint that appears under the card during RISING/SETTLING */
+        .phase-hint{
+            font-size:.65rem;color:var(--amber);margin-top:6px;
+            font-family:var(--mono);letter-spacing:.04em;
+            opacity:0;transition:opacity .25s ease;
+        }
+        .weight-card.rising .phase-hint,
+        .weight-card.settling .phase-hint{opacity:1}
+        .weight-card.locked .phase-hint{color:var(--green);opacity:1}
+
         /* Phase 2.7d: tap to change manual tare */
         .change-tare-btn{display:inline-block;margin-left:8px;padding:3px 9px;font-family:var(--sans);font-size:.65rem;font-weight:700;background:rgba(0,201,167,0.12);border:1px solid var(--cyan);border-radius:6px;color:var(--cyan);cursor:pointer;text-decoration:none;vertical-align:middle}
         .change-tare-btn:active{transform:scale(.97)}
 
         .net-card{background:linear-gradient(135deg,rgba(0,201,167,.08),rgba(34,197,94,.06));border:2px solid var(--cyan);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px}
         .net-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-weight:700;margin-bottom:6px}
-        .net-value{font-family:var(--mono);font-size:3rem;font-weight:800;color:var(--green);letter-spacing:-.03em}
-        .net-tons{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--cyan);margin-top:2px}
+        .net-value{font-family:var(--mono);font-size:3rem;font-weight:800;color:var(--green);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+        .net-tons{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--cyan);margin-top:2px;font-variant-numeric:tabular-nums}
         .net-ticket{font-family:var(--mono);font-size:.8rem;color:var(--amber);margin-top:6px;font-weight:700}
 
         .proj-select{width:100%;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:600;-webkit-appearance:none;margin-bottom:12px}
@@ -110,7 +206,7 @@
         .zone-btn:active{transform:scale(.95)}
         .zone-btn.selected{border-color:var(--cyan);background:var(--cyan-glow);color:var(--cyan);box-shadow:0 0 12px rgba(0,201,167,.15)}
 
-        /* Driver picker (NEW) */
+        /* Driver picker */
         .driver-section{display:none;margin-bottom:12px}
         .driver-section.show{display:block}
         .driver-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px}
@@ -123,6 +219,15 @@
         .driver-input.show{display:block}
         .driver-input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
         .driver-hint{font-size:.65rem;color:var(--dim);margin-bottom:4px;font-style:italic}
+
+        /* Respect reduced-motion preferences (driver may have iOS reduce-motion on) */
+        @media (prefers-reduced-motion: reduce) {
+            .weight-card.rising{animation:none}
+            .weight-card.lock-flash{animation:none}
+            .phase-pill.rising .phase-led,
+            .phase-pill.settling .phase-led{animation:none}
+            .dot{animation:none}
+        }
     </style>
 </head>
 <body>
@@ -138,22 +243,31 @@
 </header>
 
 <div class="main">
-    <!-- Gross Weight -->
+    <!-- Gross Weight — now with live phase pill, live-ticking number, phase progress bar, driver hint -->
     <div class="weight-card" id="grossCard">
-        <div class="wc-label">⚖️ Gross Weight (loaded truck)</div>
+        <div class="wc-label">
+            <span>⚖️ Gross Weight (loaded truck)</span>
+            <span class="phase-pill idle" id="grossPhasePill"><span class="phase-led"></span><span id="grossPhaseLabel">IDLE</span></span>
+        </div>
         <div class="wc-value empty" id="grossValue">Waiting for truck...</div>
         <div class="wc-sub" id="grossTime"></div>
+        <div class="phase-hint" id="grossPhaseHint"></div>
+        <div class="phase-bar"><div class="phase-bar-fill" id="grossPhaseBar"></div></div>
     </div>
 
-    <!-- Tare Weight -->
+    <!-- Tare Weight — same treatment -->
     <div class="weight-card" id="tareCard">
-        <div class="wc-label">🚛 Tare Weight (empty truck)</div>
+        <div class="wc-label">
+            <span>🚛 Tare Weight (empty truck)</span>
+            <span class="phase-pill idle" id="tarePhasePill"><span class="phase-led"></span><span id="tarePhaseLabel">IDLE</span></span>
+        </div>
         <div class="wc-value empty" id="tareValue">Drive to dump, then return</div>
         <div class="wc-sub" id="tareTime"></div>
+        <div class="phase-hint" id="tarePhaseHint"></div>
+        <div class="phase-bar"><div class="phase-bar-fill" id="tarePhaseBar"></div></div>
     </div>
 
-    <!-- Tare Estimate Options (NEW Phase 2.5) -->
-    <!-- Shows after gross is captured + driver is selected. Hidden once a real tare comes in. -->
+    <!-- Tare Estimate Options -->
     <div id="tareEstimateBox" style="display:none;margin:0 0 14px;padding:14px;background:rgba(15,40,55,0.5);border:1px dashed var(--amber);border-radius:12px;">
         <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;">⏱️ Not waiting for tare? Pick or type</div>
         <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px;line-height:1.4;">Best practice is to drive back over the scale empty. If you can't wait, pick the best estimate below.</div>
@@ -226,19 +340,14 @@
         <input type="text" class="walkin-input" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="checkReady()" style="display:none;">
     </div>
 
-    <!-- ====================================================
-         DRIVER PICKER (NEW Phase 2.2)
-         Shows recent drivers for selected hauler as tap buttons.
-         "+ New driver" reveals text input. Driver name persists
-         in localStorage and is written to clean driver_name column.
-         ==================================================== -->
+    <!-- DRIVER PICKER -->
     <div class="driver-section" id="driverSection">
         <div class="driver-label">👤 Driver</div>
         <div class="driver-hint" id="driverHint">Tap your name (or "New" if not listed)</div>
         <div class="driver-buttons" id="driverButtons"></div>
         <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()" onblur="commitDriverName()">
 
-        <!-- Phase 2.4: Optional phone field for backup access -->
+        <!-- Optional phone field for backup access -->
         <div id="driverPhoneRow" style="display:none;margin-top:10px;">
             <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px;">📱 Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-style:italic;">— optional, for backup access to your loadbook</span></div>
             <input type="tel" class="driver-input show" id="driverPhone" placeholder="(555) 123-4567" autocomplete="tel" oninput="onDriverPhoneInput()" onblur="commitDriverPhone()" style="border-color:var(--border);">
@@ -294,7 +403,6 @@
     <div id="successZone" style="font-family:var(--mono);font-size:.9rem;color:var(--amber);font-weight:700;margin-bottom:4px;"></div>
     <div class="success-msg">Ticket created in DivertScan</div>
 
-    <!-- Phase 2.3: Loadbook URL -->
     <div id="successLoadbook" style="display:none;margin-top:14px;padding:12px;background:rgba(0,201,167,0.1);border:1px solid var(--cyan);border-radius:10px;max-width:340px;text-align:center;">
         <div style="font-size:.65rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px;">📒 Your Loadbook</div>
         <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">Your loads opened in a new tab. Bookmark that page on your phone to save it.</div>
@@ -329,7 +437,17 @@ const SUPABASE_URL  = "https://cyvvlngtojagfoaitoog.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
 const DEVICE_ID     = "dalmex-scale-01";
 const TICKET_PREFIX = "DX";
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = 3000;       // Slow poll for captured/pending readings (unchanged)
+
+// ─────────────────────────────────────────────
+// LIVE SCALE PHASE CONSTANTS — drive the new card animation
+// ─────────────────────────────────────────────
+const LIVE_POLL_INTERVAL  = 600;   // Fast poll for live phase detection (ms)
+const LIVE_LOCK_VARIANCE  = 50;    // Max variance (lb) over LIVE_LOCK_DURATION to call it LOCKED
+const LIVE_LOCK_DURATION  = 2000;  // ms — how long weight must stay within variance
+const LIVE_RISING_RATE    = 200;   // lb/sec — above this between samples = RISING
+const LIVE_OFF_THRESHOLD  = 500;   // lb — below this we treat as empty / idle
+const LIVE_MIN_TRUCK      = 5000;  // lb — minimum a real loaded truck would read
 
 // ─────────────────────────────────────────────
 // STATE
@@ -339,19 +457,31 @@ let tareReading  = null;
 let projects     = [];
 let nextTicketNum = null;
 let pollTimer    = null;
+let livePollTimer = null;
 let selectedHauler = null;
 let selectedZone = null;
 let isWalkinMode = false;
 let driverTickets = [];
-let haulerDrivers = [];          // recent drivers for selected hauler (from v_hauler_drivers)
-let selectedDriverName = '';     // current driver name (from button tap or text input)
-let selectedDriverToken = '';    // driver_token from drivers table (Phase 2.3)
-let selectedDriverId = '';       // driver_id (UUID) from drivers table
+let haulerDrivers = [];
+let selectedDriverName = '';
+let selectedDriverToken = '';
+let selectedDriverId = '';
 
-// Phase 2.5: tare estimate state
-let manualTareValue = null;      // tare value selected from estimate options (lb)
-let manualTareSource = null;     // 'fleet_default' | 'driver_avg' | 'today_first' | 'manual_typed' (matches DB tare_source)
-let manualTareLabel = '';        // human-readable label shown in confirmation flow
+// Manual tare state
+let manualTareValue = null;
+let manualTareSource = null;
+let manualTareLabel = '';
+
+// Live phase state — separate buffers for gross & tare cards
+// Each sample: { w: lb, t: epoch_ms }
+const liveBuffers = {
+    gross: { samples: [], phase: 'idle', lockedAt: null, lastFlashAt: 0 },
+    tare:  { samples: [], phase: 'idle', lockedAt: null, lastFlashAt: 0 }
+};
+// Which card is currently "active" — i.e. listening to the live feed.
+// Before a gross is captured, the gross card listens. After gross is captured
+// and weight drops, the tare card takes over.
+let activeLiveCard = 'gross';
 
 // ─────────────────────────────────────────────
 // ZONE SELECTOR
@@ -400,6 +530,8 @@ function vibratePhone(pattern) { if (navigator.vibrate) navigator.vibrate(patter
 function notifyGross() { playBeep(800, 0.15, 2); vibratePhone([200, 100, 200]); }
 function notifyTare()  { playBeep(1200, 0.15, 3); vibratePhone([200, 100, 200, 100, 200]); }
 function notifyConfirm() { playBeep(600, 0.3, 1); vibratePhone([500]); }
+// New: a small confirmation cue when a reading locks (different pitch from final-ticket confirm)
+function notifyLock() { playBeep(1000, 0.08, 1); vibratePhone([60]); }
 
 // ─────────────────────────────────────────────
 // SUPABASE HELPER
@@ -416,10 +548,8 @@ async function sb(endpoint, method = 'GET', body = null) {
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
     if (!res.ok) {
-        // Phase 2.7d: capture and expose the actual error so callers can see what failed
         const errText = await res.text();
         console.error('SB error:', res.status, errText);
-        // Stash on a global so callers can read the last error
         window._lastSbError = { status: res.status, body: errText, endpoint, method };
         return null;
     }
@@ -429,8 +559,7 @@ async function sb(endpoint, method = 'GET', body = null) {
 }
 
 // ─────────────────────────────────────────────
-// DRIVER TOKEN — get or create driver row (Phase 2.3)
-// Returns { id, driver_token } for the (hauler, driver_name) pair
+// DRIVER TOKEN — get or create driver row
 // ─────────────────────────────────────────────
 async function getOrCreateDriver(hauler, driverName) {
     if (!hauler || !driverName || driverName === 'Unknown') return null;
@@ -438,13 +567,11 @@ async function getOrCreateDriver(hauler, driverName) {
     const haulerEnc = encodeURIComponent(hauler);
     const nameEnc = encodeURIComponent(driverName);
 
-    // Try to find existing
     const existing = await sb('drivers?hauler=eq.' + haulerEnc + '&driver_name=eq.' + nameEnc + '&limit=1');
     if (existing && existing.length > 0) {
         return existing[0];
     }
 
-    // Create new — token auto-generated by DB trigger
     const created = await sb('drivers', 'POST', {
         hauler: hauler,
         driver_name: driverName
@@ -475,19 +602,23 @@ async function init() {
 
     const savedHauler = localStorage.getItem('ds_driver_hauler');
     if (savedHauler && haulers.includes(savedHauler)) {
-        // Driver already chose their hauler last time — skip mode banner, go straight to LEED flow
         document.getElementById('modeBanner').style.display = 'none';
         await selectHauler(savedHauler);
     } else {
-        // First time or after logout — show mode banner (LEED vs Walk-in choice)
         document.getElementById('modeBanner').style.display = 'flex';
         document.getElementById('haulerSetup').style.display = 'none';
     }
 
     await refreshNextTicketNum();
     updateStatus('on', 'Listening...');
+
+    // Slow poll for captured/pending readings (existing behavior, drives the actual ticket capture)
     pollWeights();
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+
+    // Fast poll for live phase animation (NEW — drives what the driver sees in real time)
+    pollLiveScale();
+    livePollTimer = setInterval(pollLiveScale, LIVE_POLL_INTERVAL);
 }
 
 // ─────────────────────────────────────────────
@@ -498,7 +629,6 @@ async function selectHauler(haulerName) {
     selectedHauler = haulerName;
     localStorage.setItem('ds_driver_hauler', haulerName);
 
-    // Phase 2.7d: hide mode banner once a hauler is picked
     const mb = document.getElementById('modeBanner');
     if (mb) mb.style.display = 'none';
     document.getElementById('haulerSetup').style.display = 'none';
@@ -507,7 +637,6 @@ async function selectHauler(haulerName) {
     document.getElementById('walkinBadge').style.display = 'none';
     document.getElementById('walkinSection').classList.remove('show');
 
-    // Load driver picker for this hauler
     await loadDriverPicker(haulerName);
 
     document.getElementById('projectSelect').style.display = 'block';
@@ -536,7 +665,6 @@ function changeHauler() {
     selectedDriverToken = '';
     selectedDriverId = '';
     localStorage.removeItem('ds_driver_hauler');
-    // Phase 2.7d: Show mode banner instead of jumping straight to hauler buttons
     document.getElementById('modeBanner').style.display = 'flex';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('haulerBadge').style.display = 'none';
@@ -553,7 +681,7 @@ function changeHauler() {
 }
 
 // ─────────────────────────────────────────────
-// DRIVER PICKER (NEW Phase 2.2)
+// DRIVER PICKER
 // ─────────────────────────────────────────────
 async function loadDriverPicker(haulerName) {
     const section = document.getElementById('driverSection');
@@ -566,12 +694,10 @@ async function loadDriverPicker(haulerName) {
     input.value = '';
     selectedDriverName = '';
 
-    // Fetch recent drivers for this hauler from view
     const haulerEnc = encodeURIComponent(haulerName);
     const drivers = await sb(`v_hauler_drivers?hauler=eq.${haulerEnc}&order=ticket_count.desc&limit=12`) || [];
     haulerDrivers = drivers;
 
-    // Build buttons
     let html = '';
     if (drivers.length === 0) {
         hint.textContent = 'First time? Tap "New driver" and type your name';
@@ -581,14 +707,12 @@ async function loadDriverPicker(haulerName) {
         html = drivers.map(d => {
             const safeName = d.driver_name.replace(/'/g, "\\'");
             const tokenAttr = d.driver_token ? d.driver_token.replace(/'/g, "\\'") : '';
-            // Driver button + loadbook icon (Phase 2.7d - entry from selection screen)
             return `<div class="driver-btn-wrap" style="display:flex;align-items:stretch;gap:4px"><button class="driver-btn" onclick="selectDriver('${safeName}')" style="flex:1">${d.driver_name}</button>${tokenAttr ? `<button class="driver-btn-loadbook" onclick="openLoadbookFor('${tokenAttr}', event)" title="View Loadbook" style="padding:0 12px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--cyan);font-family:var(--sans);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .15s;min-height:42px;flex-shrink:0">📒</button>` : ''}</div>`;
         }).join('');
         html += '<button class="driver-btn driver-btn-new" onclick="showNewDriverInput()">+ New driver</button>';
     }
     buttons.innerHTML = html;
 
-    // Auto-restore previous driver if remembered for THIS hauler
     const savedKey = 'ds_driver_name_' + haulerName;
     const savedDriver = localStorage.getItem(savedKey);
     if (savedDriver) {
@@ -596,11 +720,9 @@ async function loadDriverPicker(haulerName) {
         if (match) {
             await selectDriver(savedDriver);
         } else {
-            // Driver was in localStorage but not in recent — show in input
             showNewDriverInput();
             input.value = savedDriver;
             selectedDriverName = savedDriver;
-            // Try to look up token
             const driver = await getOrCreateDriver(haulerName, savedDriver);
             if (driver) {
                 selectedDriverId = driver.id;
@@ -615,24 +737,20 @@ async function selectDriver(name) {
     document.getElementById('driverInput').classList.remove('show');
     document.getElementById('driverInput').value = '';
 
-    // Highlight selected button
     document.querySelectorAll('.driver-btn').forEach(btn => {
         btn.classList.toggle('selected', btn.textContent.trim() === name);
     });
 
-    // Remember per hauler
     if (selectedHauler) {
         localStorage.setItem('ds_driver_name_' + selectedHauler, name);
     }
 
-    // Phase 2.3: ensure driver row exists, get token
     if (selectedHauler && name) {
         const driver = await getOrCreateDriver(selectedHauler, name);
         if (driver) {
             selectedDriverId = driver.id;
             selectedDriverToken = driver.driver_token;
             localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + name, driver.driver_token);
-            // Phase 2.4: show phone field, prefill if we have one
             showPhoneRow(driver);
         }
     }
@@ -644,7 +762,6 @@ function showNewDriverInput() {
     const input = document.getElementById('driverInput');
     input.classList.add('show');
     input.focus();
-    // Clear button selection
     document.querySelectorAll('.driver-btn').forEach(btn => btn.classList.remove('selected'));
     selectedDriverName = input.value.trim();
     checkReady();
@@ -653,15 +770,11 @@ function showNewDriverInput() {
 function onDriverInput() {
     const input = document.getElementById('driverInput');
     selectedDriverName = input.value.trim();
-    // Save name to localStorage as user types so a refresh doesn't lose it
     if (selectedHauler && selectedDriverName) {
         localStorage.setItem('ds_driver_name_' + selectedHauler, selectedDriverName);
     }
-    // Clear token until commit
     selectedDriverToken = '';
     selectedDriverId = '';
-    // Defer driver row creation until user STOPS typing for 2.5s AND name is at least 3 chars
-    // (Real driver names like "Bob G" or "Tom S" are 4+ chars, "Robert" / "Curtis" / etc.)
     clearTimeout(window._driverInputTimer);
     if (selectedDriverName.length >= 3) {
         window._driverInputTimer = setTimeout(async () => {
@@ -671,29 +784,21 @@ function onDriverInput() {
     checkReady();
 }
 
-// Commit driver name as a real driver row. Called on debounce timeout OR when user blurs the input.
-// Phase 2.3 cleanup: if a shorter prefix was created in the last 30 seconds with zero tickets,
-// it was almost certainly a mid-typing artifact — supersede it with the new longer name.
 async function commitDriverName() {
     if (!selectedHauler || !selectedDriverName || selectedDriverName.length < 3) return;
-    if (selectedDriverToken) return;  // already minted
+    if (selectedDriverToken) return;
 
-    // Step 1: Look for recent prefix-matching rows from THIS hauler that might be typing artifacts
     const haulerEnc = encodeURIComponent(selectedHauler);
     const thirtySecAgo = new Date(Date.now() - 30 * 1000).toISOString();
     const recent = await sb('drivers?hauler=eq.' + haulerEnc + '&created_at=gte.' + encodeURIComponent(thirtySecAgo) + '&select=id,driver_name,driver_token');
 
     if (recent && recent.length > 0) {
-        // Find rows whose name is a prefix of the new name (case-insensitive) AND have zero tickets
         const lowerNew = selectedDriverName.toLowerCase();
         for (const candidate of recent) {
             const lowerOld = (candidate.driver_name || '').toLowerCase();
-            // Is candidate a prefix of new name, and shorter?
             if (lowerOld.length < lowerNew.length && lowerNew.startsWith(lowerOld)) {
-                // Check if this candidate has any tickets — if it does, leave it alone
                 const ticketCheck = await sb('tickets?driver_id=eq.' + candidate.id + '&select=id&limit=1');
                 if (!ticketCheck || ticketCheck.length === 0) {
-                    // Safe to delete — typing artifact with no tickets
                     await sb('drivers?id=eq.' + candidate.id, 'DELETE');
                     console.log('Cleaned up typing artifact:', candidate.driver_name);
                 }
@@ -701,19 +806,15 @@ async function commitDriverName() {
         }
     }
 
-    // Step 2: Get or create the row for the final committed name
     const driver = await getOrCreateDriver(selectedHauler, selectedDriverName);
     if (driver) {
         selectedDriverId = driver.id;
         selectedDriverToken = driver.driver_token;
         localStorage.setItem('ds_driver_token_' + selectedHauler + '_' + selectedDriverName, driver.driver_token);
-
-        // Show phone row, prefill if we have a saved number
         showPhoneRow(driver);
     }
 }
 
-// Phase 2.4: Phone capture
 function showPhoneRow(driver) {
     const row = document.getElementById('driverPhoneRow');
     const input = document.getElementById('driverPhone');
@@ -722,7 +823,6 @@ function showPhoneRow(driver) {
 
     row.style.display = 'block';
 
-    // Prefill from driver record first, then localStorage as fallback
     if (driver && driver.phone) {
         input.value = formatPhoneDisplay(driver.phone);
         status.textContent = '✓ Phone on file';
@@ -746,11 +846,10 @@ function hidePhoneRow() {
 }
 
 function normalizePhone(raw) {
-    // Strip everything except digits, then take last 10 (handles +1 prefix etc.)
     const digits = (raw || '').replace(/\D/g, '');
     if (digits.length === 11 && digits.startsWith('1')) return digits.substring(1);
     if (digits.length === 10) return digits;
-    return digits; // return whatever we got; commit validates
+    return digits;
 }
 
 function formatPhoneDisplay(raw) {
@@ -760,7 +859,6 @@ function formatPhoneDisplay(raw) {
 }
 
 function onDriverPhoneInput() {
-    // Live-format as user types
     const input = document.getElementById('driverPhone');
     const status = document.getElementById('driverPhoneStatus');
     const raw = input.value;
@@ -778,14 +876,13 @@ function onDriverPhoneInput() {
 }
 
 async function commitDriverPhone() {
-    if (!selectedDriverId) return;  // no driver to attach to
+    if (!selectedDriverId) return;
     const input = document.getElementById('driverPhone');
     const status = document.getElementById('driverPhoneStatus');
     const raw = input.value;
     const normalized = normalizePhone(raw);
 
     if (normalized.length === 0) {
-        // User cleared the field — null it out on the driver record
         await sb('drivers?id=eq.' + selectedDriverId, 'PATCH', { phone: null });
         localStorage.removeItem('ds_driver_phone_' + selectedDriverId);
         status.textContent = '';
@@ -798,7 +895,6 @@ async function commitDriverPhone() {
         return;
     }
 
-    // Save to DB and localStorage
     const result = await sb('drivers?id=eq.' + selectedDriverId, 'PATCH', { phone: normalized });
     if (result !== null) {
         localStorage.setItem('ds_driver_phone_' + selectedDriverId, normalized);
@@ -818,28 +914,21 @@ function hideDriverSection() {
 // ─────────────────────────────────────────────
 // WALK-IN MODE
 // ─────────────────────────────────────────────
-
-// Phase 2.7d: Mode selection — driver picks LEED Project vs Walk-in at start
 function selectMode(mode) {
-    // Hide the mode banner once a choice is made
     const banner = document.getElementById('modeBanner');
     if (banner) banner.style.display = 'none';
 
     if (mode === 'leed') {
-        // Normal flow — show hauler buttons (existing behavior)
         isWalkinMode = false;
         document.getElementById('haulerSetup').style.display = 'block';
     } else if (mode === 'walkin') {
-        // Walk-in flow — open walk-in section with hauler dropdown
         activateWalkin();
     }
 }
 
-// Phase 2.7d: Populate walk-in hauler dropdown from known haulers
 function populateWalkinHaulerDropdown() {
     const sel = document.getElementById('walkinHaulerSelect');
     if (!sel) return;
-    // Build set of known haulers from already-loaded projects
     const haulerSet = {};
     (projects || []).forEach(p => {
         if (p.waste_hauler && p.waste_hauler.trim()) haulerSet[p.waste_hauler.trim()] = true;
@@ -853,7 +942,6 @@ function populateWalkinHaulerDropdown() {
     sel.innerHTML = opts.join('');
 }
 
-// Phase 2.7d: Show/hide custom text input when driver picks "Other"
 function onWalkinHaulerChange() {
     const sel = document.getElementById('walkinHaulerSelect');
     const input = document.getElementById('walkinName');
@@ -864,7 +952,6 @@ function onWalkinHaulerChange() {
         input.focus();
     } else {
         input.style.display = 'none';
-        // For known haulers, copy the dropdown value into walkinName so existing code reads it
         input.value = sel.value || '';
     }
     checkReady();
@@ -877,7 +964,6 @@ function activateWalkin() {
     selectedDriverName = '';
     localStorage.removeItem('ds_driver_hauler');
 
-    // Phase 2.7d: hide mode banner once walk-in mode is entered
     const mb = document.getElementById('modeBanner');
     if (mb) mb.style.display = 'none';
     document.getElementById('haulerSetup').style.display = 'none';
@@ -885,10 +971,8 @@ function activateWalkin() {
     document.getElementById('walkinBadge').style.display = 'block';
     document.getElementById('walkinSection').classList.add('show');
 
-    // Phase 2.7d: Populate the hauler dropdown when walk-in mode is entered
     populateWalkinHaulerDropdown();
 
-    // For walk-ins, show driver picker with NO recent drivers (force input)
     const section = document.getElementById('driverSection');
     const buttons = document.getElementById('driverButtons');
     const hint = document.getElementById('driverHint');
@@ -911,10 +995,8 @@ function deactivateWalkin() {
     document.getElementById('walkinSection').classList.remove('show');
     document.getElementById('walkinName').value = '';
     document.getElementById('walkinName').style.display = 'none';
-    // Phase 2.7d: Reset hauler dropdown too
     const walkinSel = document.getElementById('walkinHaulerSelect');
     if (walkinSel) walkinSel.value = '';
-    // Phase 2.7d: Show the mode banner again so driver can re-pick
     document.getElementById('modeBanner').style.display = 'flex';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('driverSection').classList.remove('show');
@@ -944,8 +1026,242 @@ function getTicketNumber() {
     return num;
 }
 
+// ═════════════════════════════════════════════
+// LIVE SCALE PHASE ENGINE  (NEW)
+// ═════════════════════════════════════════════
+//
+// Architecture:
+//   1. pollLiveScale() runs every LIVE_POLL_INTERVAL (600ms).
+//      It fetches the single most recent scale_weights row for this device,
+//      regardless of status (pending OR confirmed). That gives us the latest
+//      raw reading from the Pi.
+//   2. Each new reading is pushed into liveBuffers[activeCard].samples.
+//      We keep the last ~10 samples (≈6 seconds of history).
+//   3. computePhase() looks at the buffer and decides which phase we're in.
+//   4. renderPhase() updates the appropriate weight card's visuals — pill,
+//      hint, progress bar, color, live value — without clobbering the captured
+//      values once they're locked in (those are still driven by pollWeights()).
+//   5. activeLiveCard flips from 'gross' to 'tare' once a gross is captured
+//      and we see weight drop below LIVE_OFF_THRESHOLD (driver dumped, coming back).
+//
+// Why two pollers (slow + fast)?
+//   - Slow poll (3s) is the source of truth for ticket capture. It only looks
+//     at status='pending' readings >5000 lb. Keeps the existing capture logic
+//     untouched and battle-tested.
+//   - Fast poll (600ms) is for the driver's eyeballs only. It updates the
+//     phase animation in near-real-time so the driver can see the scale settling.
+//     It never creates tickets and never modifies scale_weights.
+
+async function pollLiveScale() {
+    try {
+        // Grab the single most recent reading for this device.
+        // Order by captured_at desc, limit 1. Cheap query.
+        const rows = await sb(
+            `scale_weights?device_id=eq.${DEVICE_ID}` +
+            `&select=id,weight_lbs,captured_at,status` +
+            `&order=captured_at.desc&limit=1`
+        );
+        if (!rows || rows.length === 0) {
+            // No reading at all — keep showing IDLE
+            updateLivePhase(activeLiveCard, null);
+            return;
+        }
+
+        const latest = rows[0];
+        const sample = {
+            w: Number(latest.weight_lbs),
+            t: new Date(latest.captured_at).getTime(),
+            id: latest.id
+        };
+
+        // If this is the same reading we already saw, don't re-process —
+        // but DO let the phase advance toward LOCKED based on elapsed time.
+        const buf = liveBuffers[activeLiveCard];
+        const lastInBuf = buf.samples[buf.samples.length - 1];
+        if (!lastInBuf || lastInBuf.id !== sample.id) {
+            buf.samples.push(sample);
+            // Keep only the last ~10 samples (≈6 sec of history at 600ms poll)
+            if (buf.samples.length > 10) buf.samples.shift();
+        }
+
+        // Detect handoff from gross → tare:
+        // If we already have a captured gross AND the latest live weight is below
+        // LIVE_OFF_THRESHOLD, the truck has left the scale. Flip to tare card.
+        if (activeLiveCard === 'gross' && grossReading && sample.w < LIVE_OFF_THRESHOLD) {
+            // Reset tare buffer so we get a clean rising detection when the
+            // truck returns empty.
+            liveBuffers.tare.samples = [];
+            liveBuffers.tare.phase = 'idle';
+            liveBuffers.tare.lockedAt = null;
+            activeLiveCard = 'tare';
+        }
+
+        // After a tare is captured, stop driving the live tare animation —
+        // the captured value is now the source of truth for that card.
+        if (activeLiveCard === 'tare' && tareReading) {
+            // Phase frozen at captured; do nothing
+            updateLivePhase('tare', null, /* freeze */ true);
+            return;
+        }
+
+        updateLivePhase(activeLiveCard, sample);
+    } catch (err) {
+        // Live poll is best-effort. Don't disturb anything on transient errors.
+        console.warn('Live poll error:', err);
+    }
+}
+
+// Decide phase from the buffered samples for a given card.
+// Returns: 'idle' | 'rising' | 'settling' | 'locked'
+function computePhase(buf) {
+    const samples = buf.samples;
+    if (samples.length === 0) return 'idle';
+
+    const latest = samples[samples.length - 1];
+
+    // Below threshold → idle (scale empty)
+    if (latest.w < LIVE_OFF_THRESHOLD) return 'idle';
+
+    // Not heavy enough to be a truck yet → still rising
+    if (latest.w < LIVE_MIN_TRUCK) return 'rising';
+
+    // Look at the last ~LIVE_LOCK_DURATION worth of samples
+    const cutoff = latest.t - LIVE_LOCK_DURATION;
+    const recent = samples.filter(s => s.t >= cutoff);
+    if (recent.length < 2) {
+        // Not enough history yet — call it settling (heavy but unknown stability)
+        return 'settling';
+    }
+
+    // Variance over the window
+    const weights = recent.map(s => s.w);
+    const minW = Math.min(...weights);
+    const maxW = Math.max(...weights);
+    const variance = maxW - minW;
+
+    // Rate of change between the two most recent samples (lb/sec)
+    if (samples.length >= 2) {
+        const prev = samples[samples.length - 2];
+        const dt = (latest.t - prev.t) / 1000;
+        if (dt > 0) {
+            const rate = Math.abs(latest.w - prev.w) / dt;
+            if (rate > LIVE_RISING_RATE) return 'rising';
+        }
+    }
+
+    // Stable for long enough → LOCKED
+    const windowSpan = latest.t - recent[0].t;
+    if (variance <= LIVE_LOCK_VARIANCE && windowSpan >= LIVE_LOCK_DURATION) {
+        return 'locked';
+    }
+
+    return 'settling';
+}
+
+// Update the visual state of the given card based on the latest sample.
+// `frozen` means the card has been captured and we shouldn't touch its weight value.
+function updateLivePhase(cardKey, sample, frozen) {
+    const buf = liveBuffers[cardKey];
+
+    // Compute new phase (unless frozen — then we lock it)
+    const newPhase = frozen ? 'locked' : computePhase(buf);
+    const prevPhase = buf.phase;
+    buf.phase = newPhase;
+
+    const card     = document.getElementById(cardKey === 'gross' ? 'grossCard' : 'tareCard');
+    const pill     = document.getElementById(cardKey === 'gross' ? 'grossPhasePill' : 'tarePhasePill');
+    const pillLbl  = document.getElementById(cardKey === 'gross' ? 'grossPhaseLabel' : 'tarePhaseLabel');
+    const value    = document.getElementById(cardKey === 'gross' ? 'grossValue' : 'tareValue');
+    const hint     = document.getElementById(cardKey === 'gross' ? 'grossPhaseHint' : 'tarePhaseHint');
+    const bar      = document.getElementById(cardKey === 'gross' ? 'grossPhaseBar' : 'tarePhaseBar');
+
+    if (!card) return;
+
+    // Update phase class on the card (drives card border / background)
+    card.classList.remove('rising', 'settling', 'locked');
+    // Don't clobber 'captured' state — that flag is set by showGross/showTare
+    // and stays after a real capture. 'locked' is the live equivalent.
+    if (newPhase !== 'idle' && !card.classList.contains('captured')) {
+        card.classList.add(newPhase);
+    }
+
+    // Phase pill
+    pill.classList.remove('rising', 'settling', 'locked', 'idle');
+    pill.classList.add(newPhase);
+    pillLbl.textContent = newPhase.toUpperCase();
+
+    // Live-ticking weight number — only show while card hasn't been captured yet
+    if (sample && !card.classList.contains('captured')) {
+        const liveLbs = Math.round(sample.w);
+
+        if (newPhase === 'idle') {
+            // Reset to default empty state
+            value.textContent = (cardKey === 'gross') ? 'Waiting for truck...' : 'Drive to dump, then return';
+            value.classList.add('empty');
+            value.classList.remove('live', 'locked');
+        } else {
+            value.classList.remove('empty');
+            value.textContent = liveLbs.toLocaleString() + ' lbs';
+            value.classList.toggle('live', newPhase === 'rising' || newPhase === 'settling');
+            value.classList.toggle('locked', newPhase === 'locked');
+        }
+    }
+
+    // Driver hint
+    if (hint) {
+        if (newPhase === 'rising') {
+            hint.textContent = '↑ Climbing — hold on the scale';
+        } else if (newPhase === 'settling') {
+            hint.textContent = '~ Settling — almost there';
+        } else if (newPhase === 'locked') {
+            hint.textContent = '✓ Locked — capturing now';
+        } else {
+            hint.textContent = '';
+        }
+    }
+
+    // Progress bar — visualizes time-to-lock during settling
+    if (bar) {
+        if (newPhase === 'rising') {
+            bar.style.width = '15%';
+            bar.style.background = 'linear-gradient(90deg, var(--amber), var(--amber))';
+        } else if (newPhase === 'settling') {
+            // Fill proportional to how long we've been in the lock window
+            const samples = buf.samples;
+            if (samples.length >= 2) {
+                const latest = samples[samples.length - 1];
+                const cutoff = latest.t - LIVE_LOCK_DURATION;
+                const recent = samples.filter(s => s.t >= cutoff);
+                const span = recent.length > 0 ? (latest.t - recent[0].t) : 0;
+                const pct = Math.min(100, Math.round((span / LIVE_LOCK_DURATION) * 100));
+                bar.style.width = Math.max(20, pct) + '%';
+            } else {
+                bar.style.width = '30%';
+            }
+            bar.style.background = 'linear-gradient(90deg, var(--amber), var(--amber))';
+        } else if (newPhase === 'locked') {
+            bar.style.width = '100%';
+            bar.style.background = 'var(--green)';
+        } else {
+            bar.style.width = '0%';
+        }
+    }
+
+    // Lock transition cues: flash + sound + haptic — fire ONCE per lock
+    if (newPhase === 'locked' && prevPhase !== 'locked') {
+        const now = Date.now();
+        if (now - buf.lastFlashAt > 3000) {  // debounce — don't double-fire
+            buf.lastFlashAt = now;
+            buf.lockedAt = now;
+            card.classList.add('lock-flash');
+            setTimeout(() => card.classList.remove('lock-flash'), 700);
+            notifyLock();
+        }
+    }
+}
+
 // ─────────────────────────────────────────────
-// POLL FOR WEIGHTS
+// POLL FOR WEIGHTS (slow, captures actual gross/tare)
 // ─────────────────────────────────────────────
 async function pollWeights() {
     try {
@@ -984,28 +1300,45 @@ async function pollWeights() {
 }
 
 // ─────────────────────────────────────────────
-// DISPLAY
+// DISPLAY (captured readings — these "freeze" the cards)
 // ─────────────────────────────────────────────
 function showGross(reading) {
     const card = document.getElementById('grossCard');
     card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('grossValue').textContent = Number(reading.weight_lbs).toLocaleString() + ' lbs';
-    document.getElementById('grossValue').classList.remove('empty');
+    card.classList.remove('waiting', 'rising', 'settling', 'locked');
+
+    // Phase pill goes to LOCKED permanently for this card
+    const pill = document.getElementById('grossPhasePill');
+    const pillLbl = document.getElementById('grossPhaseLabel');
+    pill.classList.remove('rising', 'settling', 'idle');
+    pill.classList.add('locked');
+    pillLbl.textContent = 'CAPTURED';
+
+    const valEl = document.getElementById('grossValue');
+    valEl.textContent = Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    valEl.classList.remove('empty', 'live');
+    valEl.classList.add('locked');
+
     const grossAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
     const freshLabel = grossAge <= 5 ? '🟢 Just now' : grossAge <= 15 ? '🟡 ' + grossAge + ' min ago' : '🔴 ' + grossAge + ' min ago — verify this is your truck';
     document.getElementById('grossTime').innerHTML =
         new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (grossAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + freshLabel + '</span>';
 
+    // Hide hint, fill the bar
+    document.getElementById('grossPhaseHint').textContent = '✓ Gross captured';
+    document.getElementById('grossPhaseBar').style.width = '100%';
+    document.getElementById('grossPhaseBar').style.background = 'var(--green)';
+
+    // Set the tare card to waiting state — live engine will animate it once the truck returns
     const tareCard = document.getElementById('tareCard');
     tareCard.classList.add('waiting');
     document.getElementById('tareValue').textContent = 'Waiting...';
     document.getElementById('tareValue').classList.add('empty');
+
     checkReady();
 }
 
 function showTare(reading) {
-    // Phase 2.5: real tare overrides any manual estimate
     if (manualTareValue !== null) {
         manualTareValue = null;
         manualTareSource = null;
@@ -1013,13 +1346,28 @@ function showTare(reading) {
     }
     const card = document.getElementById('tareCard');
     card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('tareValue').textContent = Number(reading.weight_lbs).toLocaleString() + ' lbs';
-    document.getElementById('tareValue').classList.remove('empty');
+    card.classList.remove('waiting', 'rising', 'settling', 'locked');
+
+    const pill = document.getElementById('tarePhasePill');
+    const pillLbl = document.getElementById('tarePhaseLabel');
+    pill.classList.remove('rising', 'settling', 'idle');
+    pill.classList.add('locked');
+    pillLbl.textContent = 'CAPTURED';
+
+    const valEl = document.getElementById('tareValue');
+    valEl.textContent = Number(reading.weight_lbs).toLocaleString() + ' lbs';
+    valEl.classList.remove('empty', 'live');
+    valEl.classList.add('locked');
+
     const tareAge = Math.round((Date.now() - new Date(reading.captured_at).getTime()) / 60000);
     const tareFresh = tareAge <= 5 ? '🟢 Just now' : tareAge <= 15 ? '🟡 ' + tareAge + ' min ago' : '🔴 ' + tareAge + ' min ago';
     document.getElementById('tareTime').innerHTML =
         new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (tareAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + tareFresh + '</span>';
+
+    document.getElementById('tarePhaseHint').textContent = '✓ Tare captured';
+    document.getElementById('tarePhaseBar').style.width = '100%';
+    document.getElementById('tarePhaseBar').style.background = 'var(--green)';
+
     checkReady();
 }
 
@@ -1035,38 +1383,29 @@ function showNet() {
 }
 
 // ─────────────────────────────────────────────
-// PHASE 2.5: TARE ESTIMATE OPTIONS
+// TARE ESTIMATE OPTIONS
 // ─────────────────────────────────────────────
-let _tareEstimateOptions = null;  // cached: [{value, source, label}]
+let _tareEstimateOptions = null;
 let _tareEstimateLastHauler = null;
 let _tareEstimateLastDriverId = null;
 
 async function loadTareEstimateOptions() {
-    // Build the list of estimate options for the currently selected hauler + driver.
-    // Returns array of {value, source, label}.
-    // Sources: 'fleet_default' (hauler avg), 'driver_avg' (this driver's avg), 'today_first' (most recent tare today)
-    // Phase 2.7d: Works without a hauler too (walk-in mode) — just skips the fleet option.
-
     const options = [];
 
-    // Option 1: Fleet average from v_fleet_tares (requires a hauler — skipped in walk-in mode)
     if (selectedHauler) {
         const haulerEnc = encodeURIComponent(selectedHauler);
+        try {
+            const fleetRows = await sb('v_fleet_tares?hauler=eq.' + haulerEnc + '&limit=1');
+            if (fleetRows && fleetRows.length > 0 && fleetRows[0].avg_tare) {
+                options.push({
+                    value: Math.round(Number(fleetRows[0].avg_tare)),
+                    source: 'fleet_default',
+                    label: 'Fleet Average (' + selectedHauler + ')'
+                });
+            }
+        } catch (e) { console.warn('Fleet tare fetch failed:', e); }
+    }
 
-    // Option 1: Fleet average from v_fleet_tares (or computed live)
-    try {
-        const fleetRows = await sb('v_fleet_tares?hauler=eq.' + haulerEnc + '&limit=1');
-        if (fleetRows && fleetRows.length > 0 && fleetRows[0].avg_tare) {
-            options.push({
-                value: Math.round(Number(fleetRows[0].avg_tare)),
-                source: 'fleet_default',
-                label: 'Fleet Average (' + selectedHauler + ')'
-            });
-        }
-    } catch (e) { console.warn('Fleet tare fetch failed:', e); }
-    } // end of if (selectedHauler)
-
-    // Option 2: Driver's own historical tare average (if they have prior tickets)
     if (selectedDriverId) {
         try {
             const driverTickets = await sb('tickets?driver_id=eq.' + selectedDriverId + '&select=tare_lbs&tare_lbs=not.is.null&limit=50');
@@ -1082,7 +1421,6 @@ async function loadTareEstimateOptions() {
         } catch (e) { console.warn('Driver tare avg fetch failed:', e); }
     }
 
-    // Option 3: Most recent tare captured today from this same hauler
     try {
         const todayISO = new Date().toISOString().split('T')[0];
         const recentTares = await sb('scale_weights?weight_band=eq.tare_candidate&captured_at=gte.' + todayISO + '&order=captured_at.desc&limit=5');
@@ -1104,23 +1442,15 @@ async function updateTareEstimateBox() {
     const optsContainer = document.getElementById('tareEstimateOptions');
     if (!box || !optsContainer) return;
 
-    // Hide the box if:
-    //   - Already have a real tare reading from Pi
-    //   - User already picked a manual tare (don't show options again)
-    //   - Prereqs not met (no gross, no driver, no project context yet)
-    // Phase 2.7d: Walk-in mode is allowed — selectedHauler may be null, but the box still shows
-    //             so the driver can use ✏️ Type Custom Tare (driver_avg + today_first may also appear).
     if (tareReading) { box.style.display = 'none'; return; }
     if (manualTareValue !== null) { box.style.display = 'none'; return; }
     if (!grossReading || !selectedDriverName) { box.style.display = 'none'; return; }
-    // For non-walkin scans, require a hauler. For walkin scans, require a typed walkin name.
     if (!isWalkinMode && !selectedHauler) { box.style.display = 'none'; return; }
     if (isWalkinMode) {
         const walkinName = (document.getElementById('walkinName').value || '').trim();
         if (!walkinName) { box.style.display = 'none'; return; }
     }
 
-    // Cache: only reload options if hauler or driver changed
     if (selectedHauler !== _tareEstimateLastHauler || selectedDriverId !== _tareEstimateLastDriverId) {
         _tareEstimateOptions = await loadTareEstimateOptions();
         _tareEstimateLastHauler = selectedHauler;
@@ -1128,18 +1458,15 @@ async function updateTareEstimateBox() {
     }
 
     if (!_tareEstimateOptions || _tareEstimateOptions.length === 0) {
-        // No preset data available — still allow custom tare entry (Phase 2.7d)
         _tareEstimateOptions = [];
     }
 
-    // Render buttons
     optsContainer.innerHTML = _tareEstimateOptions.map((opt, idx) => (
         '<button type="button" onclick="selectManualTare(' + idx + ')" style="padding:12px 14px;background:rgba(245,158,11,0.1);border:1px solid var(--amber);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
             '<span style="flex:1;">' + opt.label + '</span>' +
             '<span style="font-family:var(--mono);font-weight:800;color:var(--amber);">' + Number(opt.value).toLocaleString() + ' lb</span>' +
         '</button>'
     )).join('') +
-    // Phase 2.7d: Free-form tare entry (4th option)
     '<button type="button" onclick="selectCustomTare()" style="padding:12px 14px;background:rgba(0,201,167,0.1);border:1px dashed var(--cyan);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:600;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
         '<span style="flex:1;">✏️ Type Custom Tare</span>' +
         '<span style="font-family:var(--mono);font-weight:600;color:var(--cyan);font-size:.7rem;">Enter lb</span>' +
@@ -1148,10 +1475,9 @@ async function updateTareEstimateBox() {
     box.style.display = 'block';
 }
 
-// Phase 2.7d: Allow driver to type a custom tare value (4th estimate option)
 function selectCustomTare() {
     const raw = prompt('Enter tare weight in pounds (empty truck):', '');
-    if (raw === null) return; // user cancelled
+    if (raw === null) return;
     const cleaned = String(raw).replace(/[^0-9.]/g, '');
     const val = parseFloat(cleaned);
     if (!isFinite(val) || val <= 0) {
@@ -1170,16 +1496,29 @@ function selectCustomTare() {
     manualTareSource = 'manual_typed';
     manualTareLabel = 'Custom entry (typed)';
 
-    // Update tare card visually
     const card = document.getElementById('tareCard');
     card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('tareValue').textContent = tareLbs.toLocaleString() + ' lbs';
-    document.getElementById('tareValue').classList.remove('empty');
+    card.classList.remove('waiting', 'rising', 'settling', 'locked');
+
+    // Update phase pill to show it was manually entered
+    const pill = document.getElementById('tarePhasePill');
+    const pillLbl = document.getElementById('tarePhaseLabel');
+    pill.classList.remove('rising', 'settling', 'idle');
+    pill.classList.add('locked');
+    pillLbl.textContent = 'MANUAL';
+
+    const valEl = document.getElementById('tareValue');
+    valEl.textContent = tareLbs.toLocaleString() + ' lbs';
+    valEl.classList.remove('empty', 'live');
+    valEl.classList.add('locked');
+
     document.getElementById('tareTime').innerHTML = '<span style="color:var(--cyan);">✏️ Custom entry · driver-typed</span>' +
         '<span class="change-tare-btn" onclick="changeManualTare()">✏️ Change</span>';
 
-    // Hide the estimate box
+    document.getElementById('tarePhaseHint').textContent = '✓ Manual tare set';
+    document.getElementById('tarePhaseBar').style.width = '100%';
+    document.getElementById('tarePhaseBar').style.background = 'var(--cyan)';
+
     document.getElementById('tareEstimateBox').style.display = 'none';
     checkReady();
 }
@@ -1191,16 +1530,28 @@ function selectManualTare(optIdx) {
     manualTareSource = opt.source;
     manualTareLabel = opt.label;
 
-    // Update the tare card visually to show the estimate is in use
     const card = document.getElementById('tareCard');
     card.classList.add('captured');
-    card.classList.remove('waiting');
-    document.getElementById('tareValue').textContent = Number(opt.value).toLocaleString() + ' lbs';
-    document.getElementById('tareValue').classList.remove('empty');
+    card.classList.remove('waiting', 'rising', 'settling', 'locked');
+
+    const pill = document.getElementById('tarePhasePill');
+    const pillLbl = document.getElementById('tarePhaseLabel');
+    pill.classList.remove('rising', 'settling', 'idle');
+    pill.classList.add('locked');
+    pillLbl.textContent = 'ESTIMATE';
+
+    const valEl = document.getElementById('tareValue');
+    valEl.textContent = Number(opt.value).toLocaleString() + ' lbs';
+    valEl.classList.remove('empty', 'live');
+    valEl.classList.add('locked');
+
     document.getElementById('tareTime').innerHTML = '<span style="color:var(--amber);">⚠️ Estimated · ' + opt.label + '</span>' +
         '<span class="change-tare-btn" onclick="changeManualTare()">✏️ Change</span>';
 
-    // Hide the estimate box
+    document.getElementById('tarePhaseHint').textContent = '~ Estimated tare in use';
+    document.getElementById('tarePhaseBar').style.width = '100%';
+    document.getElementById('tarePhaseBar').style.background = 'var(--amber)';
+
     document.getElementById('tareEstimateBox').style.display = 'none';
 
     checkReady();
@@ -1210,27 +1561,39 @@ function clearManualTare() {
     manualTareValue = null;
     manualTareSource = null;
     manualTareLabel = '';
-    // Reset tare card to waiting state
     const card = document.getElementById('tareCard');
-    card.classList.remove('captured');
+    card.classList.remove('captured', 'locked');
     card.classList.add('waiting');
-    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
-    document.getElementById('tareValue').classList.add('empty');
+
+    const pill = document.getElementById('tarePhasePill');
+    const pillLbl = document.getElementById('tarePhaseLabel');
+    pill.classList.remove('rising', 'settling', 'locked');
+    pill.classList.add('idle');
+    pillLbl.textContent = 'IDLE';
+
+    const valEl = document.getElementById('tareValue');
+    valEl.textContent = 'Drive to dump, then return';
+    valEl.classList.add('empty');
+    valEl.classList.remove('live', 'locked');
+
     document.getElementById('tareTime').textContent = '';
+    document.getElementById('tarePhaseHint').textContent = '';
+    document.getElementById('tarePhaseBar').style.width = '0%';
+
+    // Reset the tare live buffer so it can re-detect rising
+    liveBuffers.tare.samples = [];
+    liveBuffers.tare.phase = 'idle';
+    liveBuffers.tare.lockedAt = null;
+
     checkReady();
 }
 
-// Phase 2.7d: Driver-initiated tare change (re-opens the picker)
 function changeManualTare() {
-    // Only meaningful if we're using a manual tare (not a real Pi capture)
     if (tareReading) {
         if (!confirm('A real scale reading was captured. Override with a manual entry?')) return;
-        // User explicitly wants to override — discard real reading
         tareReading = null;
     }
     clearManualTare();
-    // Re-show the estimate box so they can pick or type again
-    // Force cache invalidation so options are refreshed
     _tareEstimateLastHauler = null;
     _tareEstimateLastDriverId = null;
     updateTareEstimateBox();
@@ -1241,7 +1604,6 @@ function checkReady() {
     const summary = document.getElementById('confirmSummary');
     let ready = false;
 
-    // Phase 2.5: either a real tare reading OR a manual tare estimate counts as "have a tare"
     const haveTare = tareReading || manualTareValue;
     const effectiveTareLbs = tareReading ? tareReading.weight_lbs : manualTareValue;
 
@@ -1253,7 +1615,6 @@ function checkReady() {
         ready = grossReading && haveTare && projectId && selectedHauler && selectedDriverName;
     }
 
-    // Phase 2.5: show or hide tare estimate options based on prereqs
     updateTareEstimateBox();
 
     if (ready) {
@@ -1317,13 +1678,11 @@ async function confirmTicket() {
     btn.disabled = true;
     btn.textContent = '⏳ Creating ticket...';
 
-    // Phase 2.7d: clear any previous error message
     try {
         const errEl = document.getElementById('submitErrorMsg');
         if (errEl) errEl.style.display = 'none';
     } catch(e) {}
 
-    // Phase 2.3 safety: if driver typed name but debounce hadn't fired yet, commit now
     if (selectedDriverName && !selectedDriverToken) {
         clearTimeout(window._driverInputTimer);
         await commitDriverName();
@@ -1331,7 +1690,6 @@ async function confirmTicket() {
 
     const driverName = selectedDriverName || 'Unknown';
     const grossLbs = grossReading.weight_lbs;
-    // Phase 2.5: use manual tare estimate if no real tare was captured
     const tareLbs = tareReading ? tareReading.weight_lbs : manualTareValue;
     const tareSource = tareReading ? 'pi_capture' : (manualTareSource || 'manual');
     const tareNote = tareReading ? '' : ' | Tare: ' + tareSource + ' (' + manualTareLabel + ')';
@@ -1356,8 +1714,6 @@ async function confirmTicket() {
         if (isWalkinMode) {
             const walkinName = document.getElementById('walkinName').value.trim();
             ticket = {
-                // Phase 2.7d: walk-in tickets attach to the "Walk-in / Non-LEED Tickets" placeholder project
-                // (tickets.project_id is NOT NULL — see Walk-in Inbox in admin for re-assignment)
                 project_id: '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590',
                 ticket_number: ticketNum,
                 ticket_date: today, service_date: today,
@@ -1416,11 +1772,9 @@ async function confirmTicket() {
 
         const result = await sb('tickets', 'POST', ticket);
         if (!result || result.length === 0) {
-            // Phase 2.7d: surface actual error to the driver so we know what's wrong
             const err = window._lastSbError;
             if (err) {
                 let detail = err.body || '';
-                // Trim long bodies and parse JSON if present
                 try {
                     const j = JSON.parse(detail);
                     detail = (j.message || j.hint || detail).toString();
@@ -1432,8 +1786,6 @@ async function confirmTicket() {
         }
         const createdTicket = result[0];
 
-        // Update scale_weights — confirmed_by carries driver name into raw scale records
-        // Phase 2.5 fix: only PATCH if we have a real Pi reading. Manual/fleet tares have no scale_weights row.
         if (grossReading && grossReading.id) {
             try {
                 await sb(`scale_weights?id=eq.${grossReading.id}`, 'PATCH', {
@@ -1455,6 +1807,7 @@ async function confirmTicket() {
         }
 
         clearInterval(pollTimer);
+        clearInterval(livePollTimer);
         notifyConfirm();
 
         document.getElementById('successTicket').textContent = ticketNum;
@@ -1468,12 +1821,9 @@ async function confirmTicket() {
             successZoneEl.style.display = 'none';
         }
 
-        // Phase 2.3: Show loadbook URL if we have a token
         const loadbookEl = document.getElementById('successLoadbook');
         if (selectedDriverToken) {
             loadbookEl.style.display = 'block';
-            // Auto-open the driver's loadbook in a new tab — driver sees their loads immediately
-            // Brief delay so the scale.html success animation has a moment first
             setTimeout(() => {
                 const url = loadbookUrl();
                 if (url) window.open(url, '_blank');
@@ -1483,7 +1833,6 @@ async function confirmTicket() {
         }
 
         document.getElementById('successOverlay').classList.add('show');
-        // No auto-reset — driver taps "Next Truck" button manually so they have time to copy info
 
     } catch (err) {
         console.error('Confirm error:', err);
@@ -1492,7 +1841,6 @@ async function confirmTicket() {
         btn.textContent = '❌ ERROR — TAP TO RETRY';
         updateStatus('off', 'Error: ' + err.message);
 
-        // Phase 2.7d: surface error to driver in a visible place (not just status bar)
         try {
             const errEl = document.getElementById('submitErrorMsg');
             if (errEl) {
@@ -1502,12 +1850,10 @@ async function confirmTicket() {
                     '<div style="font-family:var(--mono);font-size:.75rem;background:rgba(0,0,0,0.25);padding:8px 10px;border-radius:6px;margin-bottom:8px;">' + safeMsg + '</div>' +
                     '<div style="font-size:.7rem;opacity:.95;">Tap ✏️ Change above to adjust the tare, or tap RETRY to resubmit with the same values.</div>';
                 errEl.style.display = 'block';
-                // Scroll error into view so it can't be missed
                 try { errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
             }
         } catch(e) {}
 
-        // Surface a Change Tare affordance even if it was previously hidden
         try {
             if (manualTareValue !== null) {
                 const tareTimeEl = document.getElementById('tareTime');
@@ -1529,21 +1875,49 @@ function resetPage() {
     grossReading = null;
     tareReading = null;
     selectedZone = null;
-    // Phase 2.5: clear manual tare state
     manualTareValue = null;
     manualTareSource = null;
     manualTareLabel = '';
+
+    // Reset live buffers and active card
+    liveBuffers.gross = { samples: [], phase: 'idle', lockedAt: null, lastFlashAt: 0 };
+    liveBuffers.tare  = { samples: [], phase: 'idle', lockedAt: null, lastFlashAt: 0 };
+    activeLiveCard = 'gross';
+
     const tareBox = document.getElementById('tareEstimateBox');
     if (tareBox) tareBox.style.display = 'none';
     document.getElementById('successOverlay').classList.remove('show');
-    document.getElementById('grossCard').classList.remove('captured', 'waiting');
-    document.getElementById('grossValue').textContent = 'Waiting for truck...';
-    document.getElementById('grossValue').classList.add('empty');
+
+    // Gross card reset
+    const grossCard = document.getElementById('grossCard');
+    grossCard.classList.remove('captured', 'waiting', 'rising', 'settling', 'locked', 'lock-flash');
+    const grossVal = document.getElementById('grossValue');
+    grossVal.textContent = 'Waiting for truck...';
+    grossVal.classList.add('empty');
+    grossVal.classList.remove('live', 'locked');
     document.getElementById('grossTime').textContent = '';
-    document.getElementById('tareCard').classList.remove('captured', 'waiting');
-    document.getElementById('tareValue').textContent = 'Drive to dump, then return';
-    document.getElementById('tareValue').classList.add('empty');
+    const grossPill = document.getElementById('grossPhasePill');
+    grossPill.classList.remove('rising', 'settling', 'locked');
+    grossPill.classList.add('idle');
+    document.getElementById('grossPhaseLabel').textContent = 'IDLE';
+    document.getElementById('grossPhaseHint').textContent = '';
+    document.getElementById('grossPhaseBar').style.width = '0%';
+
+    // Tare card reset
+    const tareCard = document.getElementById('tareCard');
+    tareCard.classList.remove('captured', 'waiting', 'rising', 'settling', 'locked', 'lock-flash');
+    const tareVal = document.getElementById('tareValue');
+    tareVal.textContent = 'Drive to dump, then return';
+    tareVal.classList.add('empty');
+    tareVal.classList.remove('live', 'locked');
     document.getElementById('tareTime').textContent = '';
+    const tarePill = document.getElementById('tarePhasePill');
+    tarePill.classList.remove('rising', 'settling', 'locked');
+    tarePill.classList.add('idle');
+    document.getElementById('tarePhaseLabel').textContent = 'IDLE';
+    document.getElementById('tarePhaseHint').textContent = '';
+    document.getElementById('tarePhaseBar').style.width = '0%';
+
     document.getElementById('netCard').style.display = 'none';
     document.getElementById('confirmSummary').style.display = 'none';
     document.querySelectorAll('.zone-btn').forEach(btn => btn.classList.remove('selected'));
@@ -1554,10 +1928,13 @@ function resetPage() {
         document.getElementById('walkinName').value = '';
     }
 
-    // Keep driver name selected — same driver may do multiple loads in sequence
     refreshNextTicketNum();
     if (!isWalkinMode) loadRecentLoads();
+
+    // Restart both pollers
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+    livePollTimer = setInterval(pollLiveScale, LIVE_POLL_INTERVAL);
+
     checkReady();
 }
 
@@ -1588,7 +1965,6 @@ async function loadRecentLoads() {
             time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             if (!dateStr) dateStr = months[d.getMonth()] + ' ' + d.getDate();
         }
-        // Use clean driver_name column if available, fall back to notes regex
         let driverNameDisplay = t.driver_name || '';
         if (!driverNameDisplay) {
             const driver = (t.notes || '').match(/Driver:\s*(.+?)(\s*\||$)/);
@@ -1734,10 +2110,8 @@ function closeDM() {
     loadRecentLoads();
 }
 
-// Phase 2.3: Loadbook URL helpers
 function loadbookUrl() {
     if (!selectedDriverToken) return '';
-    // Build URL relative to current location so it works on staging/prod
     const base = window.location.origin + window.location.pathname.replace(/scale\.html$/, '').replace(/[^/]*$/, '');
     return base + 'driver.html?t=' + encodeURIComponent(selectedDriverToken);
 }
@@ -1747,7 +2121,6 @@ function openLoadbook() {
     if (url) window.open(url, '_blank');
 }
 
-// Phase 2.7d: Open loadbook for any driver from selection screen (no scan needed)
 function openLoadbookFor(token, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     if (!token) { alert('Loadbook link not available for this driver yet'); return; }
