@@ -167,6 +167,10 @@
                     <span id="liveScalePhase" style="font-size:.55rem;letter-spacing:.06em;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text-muted);font-family:'Space Mono',monospace;font-weight:700">IDLE</span>
                     <span style="font-size:.55rem;color:var(--text-dim)">▾</span>
                 </span>
+                <span class="status-pill" style="cursor:pointer;background:rgba(0,201,167,.12);border:1px solid rgba(0,201,167,.35);color:var(--primary);" onclick="window.open('scale.html', '_blank')" title="Open the driver-facing scale page in a new tab">
+                    <span style="font-size:.7rem">🚛</span>
+                    <span style="font-weight:700;letter-spacing:.04em">Driver Page</span>
+                </span>
                 <span class="status-pill" style="cursor:pointer;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--warning);" onclick="window.open('divertscan-demo.html', '_blank')" title="Open the DivertScan sales demo in a new tab">
                     <span style="font-size:.7rem">🎬</span>
                     <span style="font-weight:700;letter-spacing:.04em">Demo</span>
@@ -533,6 +537,19 @@
              ============================================================ -->
         <div id="scaleTab" class="tab-content">
             <!-- ============================================================
+                 DRIVER QUICK-LINK BANNER — Prominent shortcut to scale.html
+                 Top of the Scale tab so it's the first thing visible.
+                 ============================================================ -->
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding:12px 14px;background:linear-gradient(135deg,rgba(0,201,167,0.10),rgba(34,197,94,0.06));border:1px solid rgba(0,201,167,0.35);border-radius:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--primary);font-weight:700;margin-bottom:2px">🚛 Driver Scale Page</div>
+                    <div style="font-size:.78rem;color:var(--text-muted)">The page drivers see at the scale — rising / settling / locked indicator + ticket capture.</div>
+                </div>
+                <a href="scale.html" target="_blank" class="btn btn-sm btn-primary" style="text-decoration:none;white-space:nowrap;padding:8px 14px;font-weight:700">Open scale.html →</a>
+                <a href="scale-debug.html" target="_blank" class="btn btn-sm" style="text-decoration:none;white-space:nowrap;padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted);font-size:.72rem;font-weight:600">🔧 Debug</a>
+            </div>
+
+            <!-- ============================================================
                  OPERATIONAL PULSE — 7-day summary card (Phase 2.7d)
                  Shows counts for: photos pending, OCR queue, orphan captures,
                  recent tickets, recent logins, walk-in inbox.
@@ -592,7 +609,7 @@
                     <span id="piCapturesCount" style="margin-left:8px;background:var(--warning);color:#080f14;font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none;">0</span>
                     <button onclick="DS.loadPiCaptures()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.7rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
                 </div>
-                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Live captures from Dalmex scale (last 7 days). Tap any row to resolve to a ticket or mark as ignored.</p>
+                <p style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">Live captures from Dalmex scale (last 24 hours). Tap any row to resolve to a ticket or mark as ignored.</p>
                 <div id="piCapturesSummary" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;font-size:.65rem;"></div>
                 <div id="piCapturesList" style="font-size:.8rem;">
                     <div style="text-align:center;padding:16px;color:var(--text-dim);">Tap Refresh to load Pi captures</div>
@@ -1492,8 +1509,9 @@ const DS = {
         listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">Loading Pi captures...</div>';
 
         try {
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            const endpoint = 'v_admin_review?captured_at=gte.' + encodeURIComponent(sevenDaysAgo) + '&order=captured_at.desc';
+            // Last 24 hours only — reduces clutter; older readings still in DB but hidden
+            const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const endpoint = 'v_admin_review?captured_at=gte.' + encodeURIComponent(since) + '&order=captured_at.desc';
             const data = await this.supabase(endpoint);
 
             if (!data) {
@@ -1504,7 +1522,7 @@ const DS = {
             }
 
             if (data.length === 0) {
-                listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No Pi captures in last 7 days</div>';
+                listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No Pi captures in last 24 hours</div>';
                 if (countEl) countEl.style.display = 'none';
                 if (summaryEl) summaryEl.innerHTML = '';
                 return;
