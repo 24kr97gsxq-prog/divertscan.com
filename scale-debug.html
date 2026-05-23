@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0f14">
+<title>Scale Debug — DivertScan</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+    --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+    --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#00c9a7;
+    --orange:#fb923c;--blue:#3b82f6;
+    --mono:'JetBrains Mono',monospace;--sans:'DM Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);padding:14px;padding-top:max(14px,env(safe-area-inset-top));padding-bottom:max(14px,env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased;min-height:100vh}
+.wrap{max-width:600px;margin:0 auto}
+
+header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+h1{font-size:1.05rem;font-weight:700;letter-spacing:.02em}
+h1 span{color:var(--cyan)}
+.sub{font-size:.7rem;color:var(--muted);margin-top:2px}
+.back-link{font-size:.75rem;color:var(--muted);text-decoration:none;padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);transition:.15s}
+.back-link:hover,.back-link:active{background:var(--card);color:var(--text);border-color:var(--cyan)}
+
+.status-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;font-size:.75rem}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0;animation:pulse 2s ease infinite}
+.status-dot.ok{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,.5)}
+.status-dot.err{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.status-text{flex:1;color:var(--muted)}
+.toggle-btn{padding:5px 10px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-family:var(--sans);font-size:.7rem;font-weight:600;cursor:pointer}
+.toggle-btn.on{background:var(--cyan);color:#001a14;border-color:var(--cyan)}
+
+/* Current state card */
+.state-card{background:linear-gradient(135deg,var(--card),#0a1520);border:2px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;position:relative;overflow:hidden;transition:border-color .3s ease, box-shadow .3s ease}
+.state-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--phase-color,var(--dim));opacity:.8;transition:background .3s ease}
+.state-card.phase-off{--phase-color:#64748b}
+.state-card.phase-rising{--phase-color:#f59e0b;border-color:rgba(245,158,11,.5);box-shadow:0 0 12px rgba(245,158,11,.1)}
+.state-card.phase-settling{--phase-color:#fb923c;border-color:rgba(251,146,60,.5);box-shadow:0 0 12px rgba(251,146,60,.1)}
+.state-card.phase-locked{--phase-color:#22c55e;border-color:rgba(34,197,94,.5);box-shadow:0 0 16px rgba(34,197,94,.2);animation:locked-pulse 2s ease-in-out infinite}
+@keyframes locked-pulse{0%,100%{box-shadow:0 0 16px rgba(34,197,94,.2)}50%{box-shadow:0 0 22px rgba(34,197,94,.35)}}
+
+.state-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px}
+.state-cell{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px}
+.state-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:3px}
+.state-value{font-family:var(--mono);font-size:.85rem;font-weight:800;letter-spacing:-.01em;color:var(--text)}
+.state-value.big{font-size:1.4rem}
+.state-value.phase-rising-text{color:var(--amber)}
+.state-value.phase-settling-text{color:var(--orange)}
+.state-value.phase-locked-text{color:var(--green)}
+.state-value.phase-off-text{color:var(--dim)}
+
+/* Readings table */
+.section-title{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700;margin:14px 0 6px;display:flex;justify-content:space-between;align-items:baseline}
+.section-title .badge{font-family:var(--mono);font-size:.65rem;color:var(--cyan);text-transform:none;letter-spacing:0}
+.table{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.row{display:grid;grid-template-columns:60px 1fr 70px 90px;gap:6px;padding:8px 10px;font-size:.72rem;font-family:var(--mono);border-bottom:1px solid var(--border);align-items:center}
+.row:last-child{border-bottom:none}
+.row.head{background:rgba(0,201,167,.05);font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-family:var(--sans)}
+.row.fresh{background:rgba(34,197,94,.04)}
+.row.stale{opacity:.55}
+.cell-weight{font-weight:800;font-size:.82rem}
+.cell-band{padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.04em}
+.cell-band.gross_candidate{background:rgba(0,201,167,.1);color:var(--cyan);border:1px solid rgba(0,201,167,.3)}
+.cell-band.tare_candidate{background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.3)}
+.cell-band.noise{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.cell-band.empty,.cell-band.null{background:rgba(100,116,139,.15);color:var(--dim);border:1px solid rgba(100,116,139,.25)}
+.cell-status{padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;text-align:center}
+.cell-status.pending{background:rgba(245,158,11,.1);color:var(--amber)}
+.cell-status.confirmed{background:rgba(34,197,94,.1);color:var(--green)}
+.cell-status.rejected{background:rgba(239,68,68,.1);color:var(--red)}
+
+.empty-state{padding:30px 20px;text-align:center;color:var(--muted);font-size:.85rem;background:var(--card);border:1px dashed var(--border);border-radius:10px;margin-bottom:14px}
+
+/* Computed metrics */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.metric{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.metric-label{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px}
+.metric-value{font-family:var(--mono);font-size:.95rem;font-weight:800;color:var(--text)}
+.metric-value.warn{color:var(--amber)}
+.metric-value.bad{color:var(--red)}
+.metric-value.good{color:var(--green)}
+
+/* Diagnostic panel */
+.diag{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;font-size:.75rem;line-height:1.5}
+.diag-title{font-weight:700;color:var(--cyan);margin-bottom:6px;font-size:.75rem}
+.diag-item{color:var(--muted);margin-bottom:3px;padding-left:14px;position:relative}
+.diag-item::before{content:'•';position:absolute;left:4px;color:var(--dim)}
+.diag-item.warn{color:var(--amber)}
+.diag-item.bad{color:var(--red)}
+.diag-item.good{color:var(--green)}
+
+.refresh-bar{display:flex;gap:8px;flex-wrap:wrap}
+.refresh-bar button{flex:1;min-width:120px;padding:10px 14px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;font-family:var(--sans);font-size:.78rem;font-weight:600;cursor:pointer;transition:.15s}
+.refresh-bar button:active{transform:scale(.97)}
+.refresh-bar button:hover{border-color:var(--cyan)}
+.refresh-bar button.primary{background:var(--cyan);color:#001a14;border-color:var(--cyan)}
+
+/* Recent confirmed tickets table */
+.tiny{font-size:.65rem;color:var(--dim);font-style:italic;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+    <div>
+        <h1><span>Scale</span> Debug</h1>
+        <div class="sub">Live view of raw scale_weights data + computed phase</div>
+    </div>
+    <a href="scale.html" class="back-link">← Scale</a>
+</header>
+
+<div class="status-bar">
+    <span class="status-dot" id="connDot"></span>
+    <span class="status-text" id="connText">Connecting…</span>
+    <button class="toggle-btn on" id="autoBtn" onclick="toggleAuto()">▶ Live</button>
+</div>
+
+<!-- Current state -->
+<div class="state-card phase-off" id="stateCard">
+    <div class="state-label">Current Phase (computed from last 5s of readings)</div>
+    <div class="state-grid">
+        <div class="state-cell">
+            <div class="state-label">Phase</div>
+            <div class="state-value big phase-off-text" id="phaseText">OFF SCALE</div>
+        </div>
+        <div class="state-cell">
+            <div class="state-label">Latest Weight</div>
+            <div class="state-value big" id="latestWeight">— lb</div>
+        </div>
+        <div class="state-cell">
+            <div class="state-label">Reading Age</div>
+            <div class="state-value" id="readingAge">—</div>
+        </div>
+        <div class="state-cell">
+            <div class="state-label">Variance (2s window)</div>
+            <div class="state-value" id="variance">—</div>
+        </div>
+    </div>
+</div>
+
+<!-- Diagnostics -->
+<div class="diag" id="diagBox">
+    <div class="diag-title">🔍 Diagnostic checks</div>
+    <div id="diagList">Loading…</div>
+</div>
+
+<!-- Computed metrics -->
+<div class="metrics">
+    <div class="metric">
+        <div class="metric-label">Readings (10s)</div>
+        <div class="metric-value" id="mReadings">—</div>
+    </div>
+    <div class="metric">
+        <div class="metric-label">Min / Max</div>
+        <div class="metric-value" id="mMinMax">—</div>
+    </div>
+    <div class="metric">
+        <div class="metric-label">Rate (lb/sec)</div>
+        <div class="metric-value" id="mRate">—</div>
+    </div>
+</div>
+
+<!-- Raw readings table -->
+<div class="section-title">
+    <span>Last 10 readings from scale_weights</span>
+    <span class="badge" id="deviceLabel">dalmex-scale-01</span>
+</div>
+<div class="table">
+    <div class="row head">
+        <div>AGE</div>
+        <div>WEIGHT</div>
+        <div>BAND</div>
+        <div>STATUS</div>
+    </div>
+    <div id="readingsTable">
+        <div style="padding:14px;text-align:center;color:var(--muted);font-size:.8rem">Loading…</div>
+    </div>
+</div>
+
+<!-- Thresholds shown for reference -->
+<div class="diag">
+    <div class="diag-title">⚙️ Classifier thresholds (scale.html)</div>
+    <div class="diag-item">OFF_THRESHOLD: <span style="color:var(--text);font-family:var(--mono)">5,000 lb</span> — below this is treated as empty-scale drift</div>
+    <div class="diag-item">LOCK_VARIANCE: <span style="color:var(--text);font-family:var(--mono)">50 lb</span> — max−min over lock window for LOCKED</div>
+    <div class="diag-item">LOCK_DURATION: <span style="color:var(--text);font-family:var(--mono)">2,000 ms</span> — required stability time</div>
+    <div class="diag-item">RISING_RATE: <span style="color:var(--text);font-family:var(--mono)">200 lb/sec</span> — above this = RISING, below = SETTLING</div>
+    <div class="diag-item">STALE_AGE: <span style="color:var(--text);font-family:var(--mono)">8,000 ms</span> — no fresh reading after this → reset</div>
+</div>
+
+<!-- Action buttons -->
+<div class="section-title"><span>Actions</span></div>
+<div class="refresh-bar">
+    <button class="primary" onclick="loadOnce()">🔄 Refresh now</button>
+    <button onclick="copyToClipboard()">📋 Copy raw JSON</button>
+</div>
+
+<div class="tiny">Page polls scale_weights every 1.5 seconds. Toggle "Live" off to pause. The "Refresh now" button forces an immediate fetch. "Copy raw JSON" puts the last 10 readings on your clipboard so you can paste them into a support message.</div>
+
+</div>
+
+<script>
+const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
+const DEVICE_ID = "dalmex-scale-01";
+
+// Classifier constants — must match scale.html
+const LIVE_WINDOW_MS = 5000;
+const LIVE_LOCK_VARIANCE = 50;
+const LIVE_LOCK_DURATION = 2000;
+const LIVE_RISING_RATE = 200;
+const LIVE_OFF_THRESHOLD = 5000;
+const STALE_AGE = 8000;
+
+let pollTimer = null;
+let autoOn = true;
+let lastReadings = [];
+
+async function sb(endpoint) {
+    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    const opts = {
+        method: 'GET',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+        },
+    };
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error('HTTP ' + res.status + ': ' + txt.substring(0, 200));
+    }
+    return res.json();
+}
+
+function setConn(state, text) {
+    const dot = document.getElementById('connDot');
+    const txt = document.getElementById('connText');
+    dot.className = 'status-dot ' + state;
+    txt.textContent = text;
+}
+
+function fmtAge(ms) {
+    if (ms < 1000) return ms + 'ms';
+    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+    return Math.floor(ms / 60000) + 'm ' + Math.floor((ms % 60000) / 1000) + 's';
+}
+
+function classifyPhase(readings) {
+    if (!readings || readings.length === 0) return 'off';
+    const latest = readings[0];
+    const now = Date.now();
+    const latestAgeMs = now - latest.ts;
+    if (latestAgeMs > STALE_AGE) return 'off';
+    if (latest.weight_lbs < LIVE_OFF_THRESHOLD) return 'off';
+    if (readings.length < 2) return 'settling';
+    const lockCutoff = latest.ts - LIVE_LOCK_DURATION;
+    const inLockWindow = readings.filter(r => r.ts >= lockCutoff);
+    if (inLockWindow.length >= 2) {
+        const weights = inLockWindow.map(r => r.weight_lbs);
+        const v = Math.max(...weights) - Math.min(...weights);
+        if (v < LIVE_LOCK_VARIANCE) return 'locked';
+    }
+    const earlier = readings.find(r => latest.ts - r.ts >= 800) || readings[readings.length - 1];
+    const dt = (latest.ts - earlier.ts) / 1000;
+    if (dt <= 0) return 'settling';
+    const rate = Math.abs(latest.weight_lbs - earlier.weight_lbs) / dt;
+    if (rate > LIVE_RISING_RATE) return 'rising';
+    return 'settling';
+}
+
+function computeVariance(readings) {
+    if (!readings || readings.length < 2) return null;
+    const latest = readings[0];
+    const cutoff = latest.ts - LIVE_LOCK_DURATION;
+    const window = readings.filter(r => r.ts >= cutoff);
+    if (window.length < 2) return null;
+    const ws = window.map(r => r.weight_lbs);
+    return { variance: Math.max(...ws) - Math.min(...ws), n: window.length };
+}
+
+function computeRate(readings) {
+    if (!readings || readings.length < 2) return null;
+    const latest = readings[0];
+    const earlier = readings.find(r => latest.ts - r.ts >= 800) || readings[readings.length - 1];
+    const dt = (latest.ts - earlier.ts) / 1000;
+    if (dt <= 0) return null;
+    return Math.abs(latest.weight_lbs - earlier.weight_lbs) / dt;
+}
+
+function runDiagnostics(readings, phase) {
+    const list = [];
+    const now = Date.now();
+
+    if (!readings || readings.length === 0) {
+        list.push({ kind: 'warn', text: 'No readings in last 10 seconds — Pi may be offline or table empty' });
+        return list;
+    }
+
+    const latest = readings[0];
+    const ageMs = now - latest.ts;
+
+    if (ageMs > STALE_AGE) {
+        list.push({ kind: 'bad', text: 'Latest reading is ' + fmtAge(ageMs) + ' old — Pi may have stopped sending' });
+    } else if (ageMs > 3000) {
+        list.push({ kind: 'warn', text: 'Latest reading is ' + fmtAge(ageMs) + ' old — Pi polling may be slow' });
+    } else {
+        list.push({ kind: 'good', text: 'Latest reading is fresh (' + fmtAge(ageMs) + ' old)' });
+    }
+
+    if (latest.weight_lbs < LIVE_OFF_THRESHOLD) {
+        list.push({ kind: 'good', text: 'Weight under threshold (' + latest.weight_lbs.toLocaleString() + ' lb < ' + LIVE_OFF_THRESHOLD.toLocaleString() + ' lb) → treated as OFF SCALE' });
+    } else {
+        // Above threshold — could be a real truck or stuck drift
+        const variance = computeVariance(readings);
+        if (variance && variance.variance === 0 && readings.length >= 3) {
+            list.push({ kind: 'warn', text: 'Last ' + variance.n + ' readings are identical (' + latest.weight_lbs.toLocaleString() + ' lb) — possible stuck Pi or actually-static load' });
+        }
+        if (latest.weight_lbs >= LIVE_OFF_THRESHOLD && latest.weight_lbs < 12000) {
+            list.push({ kind: 'warn', text: 'Weight is ' + latest.weight_lbs.toLocaleString() + ' lb — above threshold but below typical empty hauler truck (≥12,000 lb). If nothing is on the scale, this is drift.' });
+        }
+    }
+
+    // Are all readings within last 10s actually fresh, or did we get stale data?
+    const within10s = readings.filter(r => now - r.ts < 10000);
+    if (within10s.length === 0 && readings.length > 0) {
+        list.push({ kind: 'bad', text: 'No readings in last 10 seconds despite ' + readings.length + ' rows fetched — query window or Pi clock skew?' });
+    } else if (within10s.length < 3 && latest && ageMs < 5000) {
+        list.push({ kind: 'warn', text: 'Only ' + within10s.length + ' reading(s) in last 10s — Pi may be polling slowly (<1Hz)' });
+    } else if (within10s.length >= 5) {
+        list.push({ kind: 'good', text: within10s.length + ' readings in last 10s (Pi polling ≥0.5Hz)' });
+    }
+
+    list.push({ kind: '', text: 'Computed phase: ' + phase.toUpperCase() });
+
+    return list;
+}
+
+function render(readings) {
+    lastReadings = readings;
+    const now = Date.now();
+
+    if (!readings || readings.length === 0) {
+        document.getElementById('phaseText').textContent = 'NO DATA';
+        document.getElementById('latestWeight').textContent = '— lb';
+        document.getElementById('readingAge').textContent = '—';
+        document.getElementById('variance').textContent = '—';
+        document.getElementById('mReadings').textContent = '0';
+        document.getElementById('mMinMax').textContent = '—';
+        document.getElementById('mRate').textContent = '—';
+        document.getElementById('readingsTable').innerHTML =
+            '<div style="padding:14px;text-align:center;color:var(--muted);font-size:.8rem">No readings in last 10 seconds. Check that the Pi is sending data.</div>';
+        document.getElementById('stateCard').className = 'state-card phase-off';
+        document.getElementById('phaseText').className = 'state-value big phase-off-text';
+        document.getElementById('diagList').innerHTML = renderDiag([{ kind: 'warn', text: 'No recent data from Pi' }]);
+        return;
+    }
+
+    const phase = classifyPhase(readings);
+    const latest = readings[0];
+    const ageMs = now - latest.ts;
+    const variance = computeVariance(readings);
+    const rate = computeRate(readings);
+    const weights = readings.map(r => r.weight_lbs);
+    const min = Math.min(...weights);
+    const max = Math.max(...weights);
+
+    document.getElementById('phaseText').textContent = phase.toUpperCase();
+    document.getElementById('phaseText').className = 'state-value big phase-' + phase + '-text';
+    document.getElementById('stateCard').className = 'state-card phase-' + phase;
+    document.getElementById('latestWeight').textContent = Math.round(latest.weight_lbs).toLocaleString() + ' lb';
+    document.getElementById('readingAge').textContent = fmtAge(ageMs);
+    document.getElementById('variance').textContent = variance ? variance.variance.toFixed(0) + ' lb (n=' + variance.n + ')' : 'n/a';
+
+    document.getElementById('mReadings').textContent = readings.length;
+    document.getElementById('mMinMax').textContent = Math.round(min).toLocaleString() + ' / ' + Math.round(max).toLocaleString();
+    const rateEl = document.getElementById('mRate');
+    if (rate !== null) {
+        rateEl.textContent = rate.toFixed(0);
+        rateEl.className = 'metric-value ' + (rate > LIVE_RISING_RATE ? 'warn' : 'good');
+    } else {
+        rateEl.textContent = '—';
+        rateEl.className = 'metric-value';
+    }
+
+    // Build the readings table
+    const rows = readings.map(r => {
+        const age = now - r.ts;
+        const ageClass = age > STALE_AGE ? 'stale' : (age < 2000 ? 'fresh' : '');
+        const band = r.weight_band || 'null';
+        const status = r.status || 'pending';
+        return `<div class="row ${ageClass}">
+            <div>${fmtAge(age)}</div>
+            <div class="cell-weight">${Math.round(r.weight_lbs).toLocaleString()} lb</div>
+            <div class="cell-band ${band}">${band === 'gross_candidate' ? 'GROSS' : band === 'tare_candidate' ? 'TARE' : band === 'noise' ? 'NOISE' : '—'}</div>
+            <div class="cell-status ${status}">${status}</div>
+        </div>`;
+    }).join('');
+    document.getElementById('readingsTable').innerHTML = rows;
+
+    // Diagnostics
+    const diag = runDiagnostics(readings, phase);
+    document.getElementById('diagList').innerHTML = renderDiag(diag);
+}
+
+function renderDiag(items) {
+    if (!items || items.length === 0) return '<div class="diag-item">No issues detected</div>';
+    return items.map(i => '<div class="diag-item ' + (i.kind || '') + '">' + i.text + '</div>').join('');
+}
+
+async function loadOnce() {
+    try {
+        const since = new Date(Date.now() - 30000).toISOString();
+        const rows = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
+        const enriched = (rows || []).map(r => ({
+            ...r,
+            weight_lbs: Number(r.weight_lbs),
+            ts: new Date(r.captured_at).getTime(),
+        }));
+        render(enriched);
+        setConn('ok', 'Connected · ' + enriched.length + ' rows fetched · ' + new Date().toLocaleTimeString());
+    } catch (err) {
+        setConn('err', 'Error: ' + err.message.substring(0, 80));
+        console.error(err);
+    }
+}
+
+function toggleAuto() {
+    const btn = document.getElementById('autoBtn');
+    if (autoOn) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        autoOn = false;
+        btn.classList.remove('on');
+        btn.textContent = '⏸ Paused';
+    } else {
+        autoOn = true;
+        btn.classList.add('on');
+        btn.textContent = '▶ Live';
+        loadOnce();
+        pollTimer = setInterval(loadOnce, 1500);
+    }
+}
+
+function copyToClipboard() {
+    if (!lastReadings || lastReadings.length === 0) {
+        alert('No readings to copy.');
+        return;
+    }
+    const data = {
+        device_id: DEVICE_ID,
+        fetched_at: new Date().toISOString(),
+        rows: lastReadings.map(r => ({
+            weight_lbs: r.weight_lbs,
+            weight_band: r.weight_band,
+            status: r.status,
+            captured_at: r.captured_at,
+            age_ms: Date.now() - r.ts,
+        })),
+    };
+    const text = JSON.stringify(data, null, 2);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => alert('Copied! Paste into a chat or message.')).catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); alert('Copied!'); } catch (e) { alert('Copy failed — long-press to copy manually.'); }
+    document.body.removeChild(ta);
+}
+
+// Start
+document.getElementById('deviceLabel').textContent = DEVICE_ID;
+loadOnce();
+pollTimer = setInterval(loadOnce, 1500);
+</script>
+</body>
+</html>
