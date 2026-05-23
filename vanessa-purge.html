@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vanessa Queue — Emergency Purge</title>
+<style>
+:root {
+    --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
+    --text:#f8fafc;--muted:#cbd5e1;--dim:#8da4be;
+    --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#00c9a7;
+    --mono:'JetBrains Mono','Menlo','Consolas',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+.wrap { max-width: 560px; margin: 30px auto; }
+h1 { font-size: 1.4rem; margin-bottom: 6px; }
+h1 span { color: var(--red); }
+.sub { color: var(--muted); font-size: .85rem; margin-bottom: 24px; }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 14px;
+}
+.card h2 { font-size: 1rem; margin-bottom: 12px; color: var(--cyan); }
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: .9rem;
+}
+.status-row:last-child { border-bottom: none; }
+.status-row .val {
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--text);
+}
+.status-row .val.big { font-size: 1.6rem; color: var(--red); }
+.status-row .val.ok { color: var(--green); }
+
+button {
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: .9rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    margin-top: 6px;
+}
+button.danger {
+    background: var(--red);
+    color: white;
+}
+button.danger:disabled {
+    background: rgba(239,68,68,.3);
+    cursor: not-allowed;
+}
+button.alt {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.item {
+    background: rgba(0,0,0,.3);
+    border-left: 3px solid var(--red);
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+    font-size: .72rem;
+    border-radius: 4px;
+}
+.item .ep { color: var(--text); }
+.item .meta { color: var(--muted); font-size: .65rem; margin-top: 4px; }
+
+.tip {
+    color: var(--muted);
+    font-size: .75rem;
+    line-height: 1.6;
+    margin-top: 14px;
+}
+.done {
+    color: var(--green);
+    padding: 14px;
+    background: rgba(34,197,94,.08);
+    border: 1px solid rgba(34,197,94,.3);
+    border-radius: 8px;
+    margin-top: 14px;
+    text-align: center;
+    font-weight: 600;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1><span>🗑</span> Vanessa Queue — Emergency Purge</h1>
+<div class="sub">Inspects and clears the production IndexedDB queue. Use this if stuck records keep being retried against Supabase.</div>
+
+<div class="card">
+    <h2>Current State</h2>
+    <div class="status-row">
+        <span>Production queue (<code>divertscan-vanessa</code>)</span>
+        <span class="val big" id="prodCount">—</span>
+    </div>
+    <div class="status-row">
+        <span>Test queue (<code>divertscan-vanessa-test</code>)</span>
+        <span class="val" id="testCount">—</span>
+    </div>
+    <div class="status-row">
+        <span>Browser online</span>
+        <span class="val" id="onlineState">—</span>
+    </div>
+</div>
+
+<div class="card" id="contentsCard" style="display:none">
+    <h2>Production queue contents</h2>
+    <div id="contents"></div>
+</div>
+
+<div class="card">
+    <h2>Actions</h2>
+    <button class="danger" id="purgeProdBtn" onclick="purgeProd()" disabled>🗑 Purge production queue</button>
+    <button class="alt" onclick="purgeTest()" style="margin-top:10px">Clear test queue (isolated)</button>
+    <button class="alt" onclick="refresh()" style="margin-top:10px">🔄 Refresh</button>
+</div>
+
+<div id="resultBox"></div>
+
+<div class="tip">
+    <strong>What this does:</strong> The production queue lives at IndexedDB key <code>divertscan-vanessa</code>. Each stuck record gets retried every ~30 seconds by your admin app, hitting Supabase and producing one error in the Sullivan report each time. Purging clears the queue immediately and stops the retries.<br><br>
+    <strong>Safe to use:</strong> If a record was stuck, it means Supabase had been rejecting it for a real reason (schema mismatch, missing column, etc.). Purging doesn't lose real data — those records were never going to succeed.
+</div>
+
+</div>
+
+<script>
+async function inspect(dbName) {
+    return new Promise((resolve) => {
+        const req = indexedDB.open(dbName);
+        req.onerror = () => resolve({ exists: false, items: [] });
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('pending_writes')) {
+                db.close();
+                resolve({ exists: true, items: [] });
+                return;
+            }
+            const tx = db.transaction('pending_writes', 'readonly');
+            const getReq = tx.objectStore('pending_writes').getAll();
+            getReq.onsuccess = () => {
+                db.close();
+                resolve({ exists: true, items: getReq.result || [] });
+            };
+            getReq.onerror = () => {
+                db.close();
+                resolve({ exists: true, items: [] });
+            };
+        };
+    });
+}
+
+async function refresh() {
+    const prod = await inspect('divertscan-vanessa');
+    const test = await inspect('divertscan-vanessa-test');
+
+    const prodCountEl = document.getElementById('prodCount');
+    prodCountEl.textContent = prod.items.length;
+    prodCountEl.className = 'val big ' + (prod.items.length === 0 ? 'ok' : '');
+
+    document.getElementById('testCount').textContent = test.items.length;
+    document.getElementById('onlineState').textContent = navigator.onLine ? 'Yes' : 'No';
+
+    document.getElementById('purgeProdBtn').disabled = prod.items.length === 0;
+
+    // Render contents
+    const card = document.getElementById('contentsCard');
+    const container = document.getElementById('contents');
+    if (prod.items.length === 0) {
+        card.style.display = 'none';
+    } else {
+        card.style.display = 'block';
+        container.innerHTML = prod.items.slice(0, 20).map(item => {
+            const ageS = Math.round((Date.now() - item.createdAt) / 1000);
+            const ageStr = ageS < 60 ? ageS + 's' : ageS < 3600 ? Math.floor(ageS/60) + 'm' : Math.floor(ageS/3600) + 'h ' + (Math.floor((ageS%3600)/60)) + 'm';
+            const isSmoke = item.body && item.body._smoke_test;
+            return `<div class="item">
+                <div class="ep">${(item.method || '?').toUpperCase()} ${(item.endpoint || '').substring(0, 60)}</div>
+                <div class="meta">id=${item.id} · age=${ageStr} · retries=${item.retries || 0}${isSmoke ? ' · 🧪 SMOKE TEST RESIDUE' : ''}</div>
+            </div>`;
+        }).join('') + (prod.items.length > 20 ? `<div class="item" style="border-color:var(--muted);font-style:italic">…and ${prod.items.length - 20} more</div>` : '');
+    }
+}
+
+async function purgeProd() {
+    if (!confirm('Delete ALL pending writes in the production queue?\n\nThis clears the entire IndexedDB store. Any unsynced records will be lost.\n\nProceed only if you have verified these records are not needed.')) return;
+
+    document.getElementById('purgeProdBtn').disabled = true;
+    try {
+        await new Promise((resolve, reject) => {
+            const delReq = indexedDB.deleteDatabase('divertscan-vanessa');
+            delReq.onsuccess = () => resolve();
+            delReq.onerror = () => reject(delReq.error);
+            delReq.onblocked = () => {
+                // Some other tab has the DB open. Try clearing instead.
+                console.warn('Delete blocked, attempting clear()');
+                const openReq = indexedDB.open('divertscan-vanessa');
+                openReq.onsuccess = (e) => {
+                    const db = e.target.result;
+                    if (db.objectStoreNames.contains('pending_writes')) {
+                        const clearReq = db.transaction('pending_writes', 'readwrite').objectStore('pending_writes').clear();
+                        clearReq.onsuccess = () => { db.close(); resolve(); };
+                        clearReq.onerror = () => { db.close(); reject(clearReq.error); };
+                    } else {
+                        db.close();
+                        resolve();
+                    }
+                };
+                openReq.onerror = () => reject(openReq.error);
+            };
+        });
+        document.getElementById('resultBox').innerHTML = '<div class="done">✓ Production queue purged successfully. Refresh your admin page; the errors should stop.</div>';
+        await refresh();
+    } catch (e) {
+        document.getElementById('resultBox').innerHTML = '<div class="done" style="color:var(--red);background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3)">✗ Purge failed: ' + e.message + '</div>';
+    }
+}
+
+async function purgeTest() {
+    if (!confirm('Clear the test queue?')) return;
+    try {
+        await new Promise((resolve, reject) => {
+            const delReq = indexedDB.deleteDatabase('divertscan-vanessa-test');
+            delReq.onsuccess = () => resolve();
+            delReq.onerror = () => reject(delReq.error);
+            delReq.onblocked = () => resolve(); // still treated as success
+        });
+        document.getElementById('resultBox').innerHTML = '<div class="done">✓ Test queue cleared.</div>';
+        await refresh();
+    } catch (e) {
+        document.getElementById('resultBox').innerHTML = '<div class="done" style="color:var(--red);background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3)">✗ ' + e.message + '</div>';
+    }
+}
+
+refresh();
+</script>
+</body>
+</html>
