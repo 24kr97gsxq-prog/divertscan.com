@@ -122,6 +122,13 @@ h1 span{color:var(--cyan)}
     <button class="toggle-btn on" id="autoBtn" onclick="toggleAuto()">▶ Live</button>
 </div>
 
+<!-- Pi heartbeat banner: when did the Pi last write to scale_weights? -->
+<div id="piHeartbeat" style="display:none;padding:14px 16px;background:var(--card);border:2px solid var(--border);border-radius:12px;margin-bottom:14px;text-align:center">
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700;margin-bottom:6px">📡 Pi Heartbeat — last reading written to database</div>
+    <div id="piHeartbeatValue" style="font-family:var(--mono);font-size:1.1rem;font-weight:800;color:var(--text)">—</div>
+    <div id="piHeartbeatSub" style="font-size:.75rem;color:var(--muted);margin-top:4px">—</div>
+</div>
+
 <!-- Current state -->
 <div class="state-card phase-off" id="stateCard">
     <div class="state-label">Current Phase (computed from last 5s of readings)</div>
@@ -417,18 +424,78 @@ function renderDiag(items) {
 
 async function loadOnce() {
     try {
-        const since = new Date(Date.now() - 30000).toISOString();
+        // Look back 30 minutes — wider window helps diagnose "Pi stopped sending" vs "Pi never sent"
+        const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
         const rows = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
         const enriched = (rows || []).map(r => ({
             ...r,
             weight_lbs: Number(r.weight_lbs),
             ts: new Date(r.captured_at).getTime(),
         }));
+
+        // Also fetch the very latest reading regardless of age, so we can show
+        // "last heartbeat was 14 minutes ago" if the Pi has gone silent
+        let everLatest = enriched[0] || null;
+        if (!everLatest) {
+            try {
+                const everRows = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&order=captured_at.desc&limit=1`);
+                if (everRows && everRows.length > 0) {
+                    everLatest = {
+                        ...everRows[0],
+                        weight_lbs: Number(everRows[0].weight_lbs),
+                        ts: new Date(everRows[0].captured_at).getTime(),
+                    };
+                }
+            } catch (e) { /* ignore */ }
+        }
+        updateHeartbeat(everLatest);
+
         render(enriched);
-        setConn('ok', 'Connected · ' + enriched.length + ' rows fetched · ' + new Date().toLocaleTimeString());
+        setConn('ok', 'Connected · ' + enriched.length + ' rows in last 30min · ' + new Date().toLocaleTimeString());
     } catch (err) {
         setConn('err', 'Error: ' + err.message.substring(0, 80));
         console.error(err);
+    }
+}
+
+function updateHeartbeat(latest) {
+    const banner = document.getElementById('piHeartbeat');
+    const value = document.getElementById('piHeartbeatValue');
+    const sub = document.getElementById('piHeartbeatSub');
+    banner.style.display = 'block';
+    if (!latest) {
+        banner.style.borderColor = 'var(--red)';
+        value.textContent = 'No data — ever';
+        value.style.color = 'var(--red)';
+        sub.textContent = 'The scale_weights table has no rows for this device_id. Check that the Pi has ever written here.';
+        return;
+    }
+    const ageMs = Date.now() - latest.ts;
+    const ageSec = Math.floor(ageMs / 1000);
+    const ageMin = Math.floor(ageMs / 60000);
+    const ageHr = Math.floor(ageMs / 3600000);
+
+    let ageText;
+    if (ageMs < 5000) ageText = ageSec + 's ago';
+    else if (ageMs < 60000) ageText = ageSec + ' seconds ago';
+    else if (ageMs < 3600000) ageText = ageMin + ' min ' + (ageSec % 60) + 's ago';
+    else ageText = ageHr + 'h ' + (ageMin % 60) + 'm ago';
+
+    const weightTxt = Math.round(latest.weight_lbs).toLocaleString() + ' lb';
+    value.textContent = weightTxt + ' · ' + ageText;
+
+    if (ageMs < 5000) {
+        banner.style.borderColor = 'var(--green)';
+        value.style.color = 'var(--green)';
+        sub.textContent = '✓ Pi is actively sending data';
+    } else if (ageMs < 60000) {
+        banner.style.borderColor = 'var(--amber)';
+        value.style.color = 'var(--amber)';
+        sub.textContent = '⚠ Last reading was ' + ageSec + ' seconds ago — Pi may be polling slowly or stopped briefly';
+    } else {
+        banner.style.borderColor = 'var(--red)';
+        value.style.color = 'var(--red)';
+        sub.textContent = '✗ Pi has not sent a reading in ' + (ageMin >= 60 ? ageHr + ' hours' : ageMin + ' minutes') + '. Check that the Pi process is running.';
     }
 }
 
