@@ -4138,24 +4138,32 @@ const DS = {
                     <div id="sullivanVanessaContents" style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.7rem;color:var(--text-muted);font-style:italic">Loading...</div>
                 </div>
 
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <button onclick="DS.copySullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">📋 Copy JSON</button>
-                    <button onclick="DS.sullivanStats={timeouts:0,errors:0,ok:0,recent:[]};DS.showSullivanReport()" style="flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🔄 Reset counters</button>
-                    <button onclick="DS.purgeVanessaQueue()" style="flex:1;padding:8px 12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#ef4444;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🗑 Purge queue</button>
-                </div>
+            </div>
+        `;
+        // Sticky action bar so buttons are always reachable on mobile (no scrolling required)
+        const actionsBarHtml = `
+            <div style="position:sticky;bottom:0;left:0;right:0;padding:12px 16px;background:linear-gradient(to top,var(--bg-card,#0d1a24) 70%,rgba(13,26,36,0));border-top:1px solid var(--border,#2a4058);display:flex;gap:6px;flex-wrap:wrap;z-index:3">
+                <button onclick="DS.copySullivanReport()" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">📋 Copy JSON</button>
+                <button onclick="DS.sullivanStats={timeouts:0,errors:0,ok:0,recent:[]};DS.showSullivanReport()" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🔄 Reset</button>
+                <button onclick="DS.purgeVanessaQueue()" style="flex:1;min-width:90px;padding:10px 8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#ef4444;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer">🗑 Purge</button>
             </div>
         `;
         let modal = document.getElementById('sullivanReportModal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'sullivanReportModal';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+            // Use 100dvh on iOS Safari for accurate viewport; padding scaled down on mobile
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;backdrop-filter:blur(4px);overflow:hidden';
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             document.body.appendChild(modal);
         }
-        modal.innerHTML = `<div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;position:relative">
-            <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;padding:6px 10px;z-index:2">✕</button>
-            ${html}
+        // Card flex column: header stays put, body scrolls, footer pinned via sticky
+        modal.innerHTML = `<div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:600px;width:100%;height:calc(100dvh - 24px);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;position:relative;overflow:hidden">
+            <button onclick="document.getElementById('sullivanReportModal').remove()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.4);border:none;color:var(--text-muted,#94a3b8);font-size:1.2rem;cursor:pointer;padding:6px 12px;border-radius:6px;z-index:5;line-height:1">✕</button>
+            <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
+                ${html}
+            </div>
+            ${actionsBarHtml}
         </div>`;
 
         // Populate Vanessa queue contents asynchronously
@@ -4219,14 +4227,73 @@ const DS = {
             recent: this.sullivanStats.recent || [],
         };
         const text = JSON.stringify(data, null, 2);
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(
-                () => this.showToast('Sullivan report copied'),
-                () => this.showToast('Copy failed')
-            );
-        } else {
-            this.showToast('Clipboard not available');
-        }
+
+        const flashSuccess = (msg) => {
+            // Visible inline confirmation that doesn't disappear in 3 seconds
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:fixed;top:20%;left:50%;transform:translateX(-50%);background:#22c55e;color:white;padding:14px 24px;border-radius:10px;font-weight:700;z-index:99999;box-shadow:0 10px 40px rgba(0,0,0,.4);font-size:.9rem';
+            flash.textContent = msg;
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 2500);
+        };
+
+        // Try modern clipboard API first
+        const tryModernClipboard = () => {
+            if (!navigator.clipboard) return Promise.reject('no clipboard API');
+            return navigator.clipboard.writeText(text);
+        };
+
+        // iOS-friendly fallback: select text in a textarea + execCommand
+        const tryFallback = () => {
+            return new Promise((resolve, reject) => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+                    ta.setAttribute('readonly', '');
+                    document.body.appendChild(ta);
+                    ta.select();
+                    ta.setSelectionRange(0, text.length);
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    ok ? resolve() : reject('execCommand returned false');
+                } catch (e) { reject(e); }
+            });
+        };
+
+        tryModernClipboard()
+            .then(() => flashSuccess('✓ Sullivan report copied to clipboard'))
+            .catch(() => {
+                tryFallback()
+                    .then(() => flashSuccess('✓ Sullivan report copied to clipboard'))
+                    .catch(() => {
+                        // Final fallback: show the JSON in a copyable modal
+                        this._showCopyFallbackModal(text);
+                    });
+            });
+    },
+
+    // Last-resort modal that just shows the JSON for manual copy/paste
+    _showCopyFallbackModal(text) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `
+            <div style="background:var(--bg-card,#0d1a24);border:1px solid var(--border,#2a4058);border-radius:12px;max-width:560px;width:100%;height:80vh;display:flex;flex-direction:column;padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <h3 style="margin:0;font-size:1rem">Sullivan Report JSON</h3>
+                    <button onclick="this.closest('div[style*=fixed]').remove()" style="background:transparent;border:none;color:var(--text);font-size:1.4rem;cursor:pointer;padding:4px 10px">✕</button>
+                </div>
+                <p style="font-size:.7rem;color:var(--text-muted);margin:0 0 8px 0">Long-press to select all → Copy. Paste this into your message to Claude.</p>
+                <textarea readonly style="flex:1;width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:'Space Mono',monospace;font-size:.7rem;resize:none;-webkit-user-select:text;user-select:text">${text}</textarea>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        // Auto-select for convenience
+        setTimeout(() => {
+            const ta = overlay.querySelector('textarea');
+            if (ta) { ta.focus(); ta.select(); }
+        }, 100);
     },
 
     async supabase(endpoint, method = 'GET', body = null) {
