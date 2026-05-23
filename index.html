@@ -3744,9 +3744,19 @@ const DS = {
         }
 
         // Online/offline detection
-        window.addEventListener('online', () => this.updateConnectionStatus(true));
+        window.addEventListener('online', () => {
+            this.updateConnectionStatus(true);
+            // Vanessa: opportunity to drain the queue
+            this.flushVanessa();
+        });
         window.addEventListener('offline', () => this.updateConnectionStatus(false));
         this.updateConnectionStatus(navigator.onLine);
+
+        // Vanessa: periodic flush + initial badge render
+        this._updateVanessaBadge();
+        setInterval(() => { if (navigator.onLine) this.flushVanessa(); }, 30000);
+        // First flush after a short delay so initial page load isn't blocked
+        setTimeout(() => { if (navigator.onLine) this.flushVanessa(); }, 3000);
 
         this.addAuditEntry('INIT', `DivertScan v${this.VERSION} ready`);
         console.log('DivertScan ready');
@@ -3961,6 +3971,36 @@ const DS = {
     // ============================================================
     // SUPABASE API
     // ============================================================
+    // ============================================================
+    // SULLIVAN ENGINE — bounded-latency Supabase calls
+    // ----------------------------------------------------------------
+    // Construction-site Wi-Fi is unreliable. Without a bounded timeout,
+    // every UI action that hits Supabase can freeze the page for 30s+
+    // while the browser waits on a TCP handshake that will never finish.
+    //
+    // Every Supabase call is wrapped in an AbortController with a
+    // 5-second cap. If the request can't complete in time we surface a
+    // clear "Network slow" toast (not a generic error), record the event
+    // for diagnostics, and return null so callers can fall back gracefully.
+    //
+    // The sullivanStats counter lets us show a "degraded mode" indicator
+    // in the UI when more than 2 of the last 5 calls have timed out.
+    // ============================================================
+    sullivanStats: { timeouts: 0, errors: 0, ok: 0, recent: [] },
+
+    _sullivanRecord(outcome) {
+        this.sullivanStats[outcome] = (this.sullivanStats[outcome] || 0) + 1;
+        this.sullivanStats.recent.push({ t: Date.now(), outcome });
+        if (this.sullivanStats.recent.length > 20) this.sullivanStats.recent.shift();
+    },
+
+    sullivanIsDegraded() {
+        const last5 = this.sullivanStats.recent.slice(-5);
+        if (last5.length < 3) return false;
+        const bad = last5.filter(r => r.outcome === 'timeouts').length;
+        return bad >= 2;
+    },
+
     async supabase(endpoint, method = 'GET', body = null) {
         if (!this.state.supabaseUrl || !this.state.supabaseKey) {
             this.showToast('Configure Supabase in Audit > Settings');
@@ -3976,23 +4016,222 @@ const DS = {
             headers['Prefer'] = 'return=representation';
         }
 
+        // Sullivan Engine: 5s timeout via AbortController
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), 5000);
+
         try {
-            const opts = { method, headers };
+            const opts = { method, headers, signal: ctrl.signal };
             if (body) opts.body = JSON.stringify(body);
             const res = await fetch(url, opts);
+            clearTimeout(timeoutId);
             if (!res.ok) {
                 const err = await res.text();
                 console.error('Supabase error (' + method + ' ' + endpoint + '):', res.status, err);
+                this._sullivanRecord('errors');
                 return null;
             }
+            this._sullivanRecord('ok');
             if (res.status === 204 || method === 'DELETE') return [];
             const text = await res.text();
             return text ? JSON.parse(text) : [];
         } catch (e) {
-            console.error('Supabase fetch error:', e);
-            this.showToast('Database connection error');
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                console.warn('Sullivan: Supabase call timed out (' + method + ' ' + endpoint + ')');
+                this._sullivanRecord('timeouts');
+                if (this.sullivanIsDegraded()) {
+                    this.showToast('Network slow — degraded mode');
+                } else {
+                    this.showToast('Network slow — retrying in background');
+                }
+            } else {
+                console.error('Supabase fetch error:', e);
+                this._sullivanRecord('errors');
+                this.showToast('Database connection error');
+            }
             return null;
         }
+    },
+
+    // ============================================================
+    // VANESSA PROTOCOL — local-first sync queue
+    // ----------------------------------------------------------------
+    // When Sullivan reports a timeout or the browser is offline, we
+    // can't lose the user's work. Vanessa wraps an IndexedDB-backed
+    // queue that holds pending writes (POST/PATCH/DELETE) and re-tries
+    // them when the network comes back.
+    //
+    // The queue is durable across page reloads. If a driver captures
+    // a ticket in the basement of a hospital project and closes the
+    // tab before signal returns, the next time the admin app loads,
+    // the queue flushes automatically.
+    //
+    // For now Vanessa wraps writes only. Reads still go straight
+    // through Sullivan — if a read fails, the UI can show stale data
+    // from the prior fetch.
+    // ============================================================
+    vanessa: {
+        DB_NAME: 'divertscan-vanessa',
+        DB_VERSION: 1,
+        STORE: 'pending_writes',
+        _db: null,
+        _flushing: false,
+        listeners: new Set(),
+
+        async _open() {
+            if (this._db) return this._db;
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(this.STORE)) {
+                        const store = db.createObjectStore(this.STORE, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('createdAt', 'createdAt', { unique: false });
+                    }
+                };
+                req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+                req.onerror = (e) => reject(e.target.error);
+            });
+        },
+
+        async enqueue(operation) {
+            // operation = { endpoint, method, body, label }
+            const db = await this._open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.STORE, 'readwrite');
+                const store = tx.objectStore(this.STORE);
+                const req = store.add({
+                    ...operation,
+                    createdAt: Date.now(),
+                    retries: 0,
+                });
+                req.onsuccess = () => { this._notify(); resolve(req.result); };
+                req.onerror = () => reject(req.error);
+            });
+        },
+
+        async list() {
+            const db = await this._open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.STORE, 'readonly');
+                const store = tx.objectStore(this.STORE);
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            });
+        },
+
+        async remove(id) {
+            const db = await this._open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.STORE, 'readwrite');
+                const store = tx.objectStore(this.STORE);
+                const req = store.delete(id);
+                req.onsuccess = () => { this._notify(); resolve(); };
+                req.onerror = () => reject(req.error);
+            });
+        },
+
+        async updateRetry(id, retries) {
+            const db = await this._open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.STORE, 'readwrite');
+                const store = tx.objectStore(this.STORE);
+                const getReq = store.get(id);
+                getReq.onsuccess = () => {
+                    const rec = getReq.result;
+                    if (!rec) return resolve();
+                    rec.retries = retries;
+                    rec.lastTry = Date.now();
+                    const putReq = store.put(rec);
+                    putReq.onsuccess = () => resolve();
+                    putReq.onerror = () => reject(putReq.error);
+                };
+                getReq.onerror = () => reject(getReq.error);
+            });
+        },
+
+        async count() {
+            try { return (await this.list()).length; } catch (e) { return 0; }
+        },
+
+        onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
+        _notify() { this.listeners.forEach(fn => { try { fn(); } catch (e) {} }); },
+    },
+
+    // Write-through helper: try Sullivan live first; if it returns null, queue to Vanessa.
+    // Use this in place of `this.supabase(...)` for POST/PATCH/DELETE that must not be lost.
+    async writeThrough(endpoint, method, body, label) {
+        if (navigator.onLine && !this.vanessa._flushing) {
+            const data = await this.supabase(endpoint, method, body);
+            if (data !== null) return { ok: true, data };
+        }
+        try {
+            await this.vanessa.enqueue({ endpoint, method, body, label: label || endpoint });
+            this._updateVanessaBadge();
+            this.showToast('Saved locally — will sync when online');
+            return { ok: false, queued: true };
+        } catch (e) {
+            console.error('Vanessa enqueue failed:', e);
+            this.showToast('Could not save locally — please retry');
+            return { ok: false, queued: false, error: e };
+        }
+    },
+
+    async flushVanessa() {
+        if (this.vanessa._flushing) return;
+        if (!navigator.onLine) return;
+        this.vanessa._flushing = true;
+        try {
+            const items = await this.vanessa.list();
+            if (items.length === 0) return;
+            console.log('Vanessa: flushing', items.length, 'pending writes');
+            for (const item of items) {
+                if (item.retries >= 5) {
+                    console.warn('Vanessa: max retries reached for', item.label);
+                    continue;
+                }
+                const data = await this.supabase(item.endpoint, item.method, item.body);
+                if (data !== null) {
+                    await this.vanessa.remove(item.id);
+                } else {
+                    await this.vanessa.updateRetry(item.id, (item.retries || 0) + 1);
+                    if (this.sullivanIsDegraded()) break; // back off if Supabase is struggling
+                }
+            }
+        } catch (e) {
+            console.error('Vanessa flush error:', e);
+        } finally {
+            this.vanessa._flushing = false;
+            this._updateVanessaBadge();
+        }
+    },
+
+    async _updateVanessaBadge() {
+        try {
+            const count = await this.vanessa.count();
+            let pill = document.getElementById('vanessaPill');
+            if (count === 0) {
+                if (pill) pill.style.display = 'none';
+                return;
+            }
+            if (!pill) {
+                const host = document.querySelector('header .status-bar') ||
+                             document.querySelector('header > div:last-child') ||
+                             document.querySelector('header');
+                if (!host) return;
+                pill = document.createElement('span');
+                pill.id = 'vanessaPill';
+                pill.className = 'status-pill';
+                pill.style.cssText = 'cursor:pointer;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:var(--warning);';
+                pill.title = 'Pending records waiting to sync. Click to retry now.';
+                pill.onclick = () => this.flushVanessa();
+                host.appendChild(pill);
+            }
+            pill.style.display = '';
+            pill.innerHTML = '<span style="font-size:.7rem">🔄</span><span style="font-weight:700;letter-spacing:.04em">' + count + ' pending</span>';
+        } catch (e) { /* IndexedDB unavailable - silent */ }
     },
 
     // ============================================================
@@ -5455,14 +5694,19 @@ const DS = {
             ticket.audit_id = await this.sha256(hashInput);
         } catch(e) { console.error('Hash error:', e); }
 
-        // Save to database
-        const result = await this.supabase('tickets', 'POST', ticket);
+        // Save to database — write-through (Vanessa-backed)
+        const wt = await this.writeThrough('tickets', 'POST', ticket, 'ticket:' + ticketNum);
         this.hideLoading();
 
-        if (result && result.length > 0) {
-            this.state.tickets.unshift(result[0]);
+        if (wt.ok && wt.data && wt.data.length > 0) {
+            this.state.tickets.unshift(wt.data[0]);
             this.showToast('✅ Ticket #' + ticketNum + ' saved — ' + netTons + ' T');
             this.addAuditEntry('TICKET_CREATE', ticketNum + ' | ' + netTons + 'T | ' + diversionPct + '% div');
+            this.resetScanForm();
+            this.renderReports();
+        } else if (wt.queued) {
+            // Stored locally; will sync when online
+            this.addAuditEntry('TICKET_QUEUED', ticketNum + ' | ' + netTons + 'T | Vanessa queue');
             this.resetScanForm();
             this.renderReports();
         } else {
@@ -5523,14 +5767,18 @@ const DS = {
             this.state.pendingTicket = null;
             return;
         }
-        const result = await this.supabase('tickets', 'POST', ticket);
+        const wt = await this.writeThrough('tickets', 'POST', ticket, 'ticket:' + ticket.ticket_number);
         this.hideLoading();
 
-        if (result && result.length > 0) {
-            this.state.tickets.unshift(result[0]);
+        if (wt.ok && wt.data && wt.data.length > 0) {
+            this.state.tickets.unshift(wt.data[0]);
             this.showToast(`Ticket ${ticket.ticket_number} saved ✓`);
             this.addAuditEntry('TICKET_CREATE',
                 `${ticket.ticket_number} | ${ticket.net_tons}T | ${ticket.diversion_pct}% div | Hash: ${ticket.audit_id.substring(0,16)}...`);
+            this.resetScanForm();
+            this.renderReports();
+        } else if (wt.queued) {
+            this.addAuditEntry('TICKET_QUEUED', `${ticket.ticket_number} | ${ticket.net_tons}T | Vanessa queue`);
             this.resetScanForm();
             this.renderReports();
         } else {
