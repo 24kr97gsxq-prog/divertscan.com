@@ -35,6 +35,25 @@ h1 span{color:var(--cyan)}
 .toggle-btn{padding:5px 10px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-family:var(--sans);font-size:.7rem;font-weight:600;cursor:pointer}
 .toggle-btn.on{background:var(--cyan);color:#001a14;border-color:var(--cyan)}
 
+/* Test-mode buttons */
+.tm-btn{padding:8px 14px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;font-family:var(--mono);font-size:.7rem;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:.15s;flex:1;min-width:140px}
+.tm-btn:hover{border-color:var(--cyan);color:var(--text)}
+.tm-btn.active{background:var(--cyan);color:#001a14;border-color:var(--cyan)}
+.tm-btn[data-mode="f150"].active,.tm-btn[data-mode="ultra"].active{background:var(--warning,#f59e0b);color:#1a1000;border-color:var(--warning,#f59e0b)}
+
+/* History KPI tiles */
+.hkpi{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center}
+.hkpi-lab{font-size:.55rem;color:var(--dim);letter-spacing:.08em;font-weight:700;margin-bottom:4px}
+.hkpi-val{font-family:var(--mono);font-size:1.05rem;color:var(--text);font-weight:700}
+@media (max-width:560px){#historyKpis{grid-template-columns:repeat(2,1fr) !important}}
+
+/* Daily timeline cells */
+.hday{aspect-ratio:1;background:#374151;border-radius:3px;cursor:default;position:relative;transition:transform .1s}
+.hday.alive{background:#0891b2}
+.hday.active{background:#22c55e}
+.hday:hover{transform:scale(1.2);z-index:2}
+.hday[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0a0f14;border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:.65rem;color:var(--text);white-space:nowrap;z-index:10;font-weight:600}
+
 /* Current state card */
 .state-card{background:linear-gradient(135deg,var(--card),#0a1520);border:2px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;position:relative;overflow:hidden;transition:border-color .3s ease, box-shadow .3s ease}
 .state-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--phase-color,var(--dim));opacity:.8;transition:background .3s ease}
@@ -129,6 +148,73 @@ h1 span{color:var(--cyan)}
     <div id="piHeartbeatSub" style="font-size:.75rem;color:var(--muted);margin-top:4px">—</div>
 </div>
 
+<!-- ===== TEST MODE CARD =====
+     Lets you temporarily lower the off-scale threshold so light vehicles (F-150 ~4-7k lb)
+     register on the scale. Saved to localStorage on THIS device only. Auto-expires in 24h
+     so you can't accidentally leave production-style 5,000 lb threshold disabled forever.
+-->
+<div id="testModeCard" style="padding:14px 16px;background:var(--card);border:2px solid var(--border);border-radius:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div>
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700">⚙️ Test mode (this device only)</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Lower threshold for testing with light vehicles (F-150, etc.)</div>
+        </div>
+        <div id="testModeStatus" style="font-family:var(--mono);font-size:.85rem;font-weight:700;text-align:right"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="tm-btn" data-mode="production" onclick="setTestMode('production')">PRODUCTION · 5,000 lb</button>
+        <button class="tm-btn" data-mode="f150" onclick="setTestMode('f150')">F-150 TEST · 3,500 lb</button>
+        <button class="tm-btn" data-mode="ultra" onclick="setTestMode('ultra')">ULTRA · 500 lb</button>
+    </div>
+    <div id="testModeExpiry" style="font-size:.7rem;color:var(--muted);margin-top:8px;display:none"></div>
+</div>
+
+<!-- Big amber banner shown when test mode is ACTIVE (i.e. anything other than production) -->
+<div id="testModeBanner" style="display:none;padding:12px 16px;background:rgba(245,158,11,0.15);border:2px solid rgba(245,158,11,0.5);border-radius:12px;margin-bottom:14px;text-align:center">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--warning,#f59e0b);font-weight:700">⚠ Test mode active</div>
+    <div id="testModeBannerText" style="font-size:.85rem;color:var(--text);margin-top:4px;font-weight:600">—</div>
+</div>
+
+<!-- ===== 30-DAY ACTIVITY HISTORY =====
+     Answers "what happened on the scale this week?" — shows Pi heartbeat presence,
+     reading counts, ticket counts per day across the last 30 days. Useful when
+     someone says "I didn't see any activity for two days."
+-->
+<div id="historyCard" style="padding:14px 16px;background:var(--card);border:2px solid var(--border);border-radius:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:700">📊 30-day activity history</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Pi heartbeat presence, weights captured, and tickets created — by day.</div>
+        </div>
+        <button class="toggle-btn on" onclick="loadHistory()">🔄 Refresh</button>
+    </div>
+
+    <!-- Quick KPIs -->
+    <div id="historyKpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+        <div class="hkpi"><div class="hkpi-lab">DAYS WITH DATA</div><div class="hkpi-val" id="hkpiActiveDays">—</div></div>
+        <div class="hkpi"><div class="hkpi-lab">TOTAL READINGS</div><div class="hkpi-val" id="hkpiReadings">—</div></div>
+        <div class="hkpi"><div class="hkpi-lab">TICKETS</div><div class="hkpi-val" id="hkpiTickets">—</div></div>
+        <div class="hkpi"><div class="hkpi-lab">LAST PI WRITE</div><div class="hkpi-val" id="hkpiLastPi">—</div></div>
+    </div>
+
+    <!-- Day-by-day strip: 30 cells, color-coded -->
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:700;margin-bottom:6px">DAILY TIMELINE · oldest → newest</div>
+    <div id="historyStrip" style="display:grid;grid-template-columns:repeat(30,1fr);gap:3px;margin-bottom:8px">
+        <!-- Filled by JS -->
+    </div>
+    <div style="display:flex;gap:14px;font-size:.65rem;color:var(--muted);margin-bottom:14px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Active (tickets created)</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#0891b2;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Pi alive (readings only)</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#374151;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Silent</span>
+    </div>
+
+    <!-- Recent activity log: last 20 events -->
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:700;margin-bottom:6px">RECENT ACTIVITY (last 20)</div>
+    <div id="historyLog" style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;font-family:var(--mono);font-size:.7rem;line-height:1.6">
+        <div style="color:var(--muted);font-style:italic">Loading…</div>
+    </div>
+</div>
+
 <!-- Current state -->
 <div class="state-card phase-off" id="stateCard">
     <div class="state-label">Current Phase (computed from last 5s of readings)</div>
@@ -194,7 +280,7 @@ h1 span{color:var(--cyan)}
 <!-- Thresholds shown for reference -->
 <div class="diag">
     <div class="diag-title">⚙️ Classifier thresholds (scale.html)</div>
-    <div class="diag-item">OFF_THRESHOLD: <span style="color:var(--text);font-family:var(--mono)">5,000 lb</span> — below this is treated as empty-scale drift</div>
+    <div class="diag-item">OFF_THRESHOLD: <span id="thresholdDisplay" style="color:var(--text);font-family:var(--mono)">5,000 lb</span> — below this is treated as empty-scale drift <span style="color:var(--muted);font-size:.7rem">(adjustable above for testing)</span></div>
     <div class="diag-item">LOCK_VARIANCE: <span style="color:var(--text);font-family:var(--mono)">50 lb</span> — max−min over lock window for LOCKED</div>
     <div class="diag-item">LOCK_DURATION: <span style="color:var(--text);font-family:var(--mono)">2,000 ms</span> — required stability time</div>
     <div class="diag-item">RISING_RATE: <span style="color:var(--text);font-family:var(--mono)">200 lb/sec</span> — above this = RISING, below = SETTLING</div>
@@ -222,8 +308,125 @@ const LIVE_WINDOW_MS = 5000;
 const LIVE_LOCK_VARIANCE = 50;
 const LIVE_LOCK_DURATION = 2000;
 const LIVE_RISING_RATE = 200;
-const LIVE_OFF_THRESHOLD = 5000;
+// LIVE_OFF_THRESHOLD is now dynamic — see getOffThreshold() below.
+// Production default = 5,000 lb. Test modes lower it for light-vehicle testing.
 const STALE_AGE = 8000;
+
+// ============================================================
+// TEST MODE — temporary threshold override for light vehicles
+// Stored in localStorage on THIS device only. Auto-expires in 24h.
+// Does NOT affect scale.html, index.html, or any other admin.
+// ============================================================
+const TEST_MODE_KEY = 'divertscan-scale-debug-testmode';
+const TEST_MODE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const TEST_MODES = {
+    production: { threshold: 5000, label: 'PRODUCTION', desc: 'Standard 5,000 lb floor — matches scale.html and all production code' },
+    f150:       { threshold: 3500, label: 'F-150 TEST', desc: 'Lowered to 3,500 lb to capture light vehicles like a Ford F-150 (4,000-7,500 lb)' },
+    ultra:      { threshold: 500,  label: 'ULTRA',      desc: 'Lowered to 500 lb — captures almost anything. Use for calibration testing only.' },
+};
+
+function getTestModeState() {
+    try {
+        const raw = localStorage.getItem(TEST_MODE_KEY);
+        if (!raw) return { mode: 'production', setAt: 0, expired: false };
+        const parsed = JSON.parse(raw);
+        if (!parsed.mode || !TEST_MODES[parsed.mode]) return { mode: 'production', setAt: 0, expired: false };
+        const age = Date.now() - (parsed.setAt || 0);
+        if (parsed.mode !== 'production' && age >= TEST_MODE_TTL_MS) {
+            // Expired — clean up and fall back to production
+            localStorage.removeItem(TEST_MODE_KEY);
+            return { mode: 'production', setAt: 0, expired: true };
+        }
+        return { mode: parsed.mode, setAt: parsed.setAt || 0, expired: false };
+    } catch (e) {
+        return { mode: 'production', setAt: 0, expired: false };
+    }
+}
+
+function getOffThreshold() {
+    const state = getTestModeState();
+    return TEST_MODES[state.mode].threshold;
+}
+
+function setTestMode(mode) {
+    if (!TEST_MODES[mode]) return;
+    if (mode === 'production') {
+        localStorage.removeItem(TEST_MODE_KEY);
+    } else {
+        localStorage.setItem(TEST_MODE_KEY, JSON.stringify({ mode, setAt: Date.now() }));
+    }
+    renderTestMode();
+    // Force a re-render of everything that uses the threshold
+    if (lastReadings && lastReadings.length) {
+        renderState(lastReadings);
+        renderTable(lastReadings);
+        renderMetrics(lastReadings);
+        renderDiagnostics(lastReadings);
+    }
+    // Update the displayed threshold text
+    const tEl = document.getElementById('thresholdDisplay');
+    if (tEl) tEl.textContent = getOffThreshold().toLocaleString() + ' lb';
+}
+
+function renderTestMode() {
+    const state = getTestModeState();
+    const cfg = TEST_MODES[state.mode];
+
+    // Highlight active button
+    document.querySelectorAll('.tm-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === state.mode);
+    });
+
+    // Update the displayed threshold text below in the "Classifier thresholds" card
+    const tEl = document.getElementById('thresholdDisplay');
+    if (tEl) tEl.textContent = cfg.threshold.toLocaleString() + ' lb';
+
+    // Status text in card header
+    const statusEl = document.getElementById('testModeStatus');
+    if (statusEl) {
+        const color = state.mode === 'production' ? 'var(--cyan)' : 'var(--warning,#f59e0b)';
+        statusEl.innerHTML = '<span style="color:' + color + '">' + cfg.label + '</span><br>'
+            + '<span style="font-size:.7rem;color:var(--muted);font-weight:400">' + cfg.threshold.toLocaleString() + ' lb floor</span>';
+    }
+
+    // Expiry countdown (only shown when not in production)
+    const expiryEl = document.getElementById('testModeExpiry');
+    if (expiryEl) {
+        if (state.mode === 'production') {
+            expiryEl.style.display = 'none';
+        } else {
+            const remain = TEST_MODE_TTL_MS - (Date.now() - state.setAt);
+            const hours = Math.floor(remain / 3600000);
+            const mins = Math.floor((remain % 3600000) / 60000);
+            expiryEl.style.display = '';
+            expiryEl.textContent = '⏱ Test mode auto-expires in ' + hours + 'h ' + mins + 'm. Returns to PRODUCTION automatically.';
+        }
+    }
+
+    // Big amber banner
+    const banner = document.getElementById('testModeBanner');
+    const bannerText = document.getElementById('testModeBannerText');
+    if (banner && bannerText) {
+        if (state.mode === 'production') {
+            banner.style.display = 'none';
+        } else {
+            banner.style.display = '';
+            bannerText.textContent = cfg.label + ' · threshold = ' + cfg.threshold.toLocaleString() + ' lb · ' + cfg.desc;
+        }
+    }
+}
+
+// On page load: check for expired test mode and notify
+window.addEventListener('DOMContentLoaded', () => {
+    const state = getTestModeState();
+    if (state.expired) {
+        console.log('Test mode auto-expired after 24h — back to PRODUCTION');
+    }
+    renderTestMode();
+});
+
+// Refresh the expiry countdown every 30 seconds
+setInterval(renderTestMode, 30000);
 
 let pollTimer = null;
 let autoOn = true;
@@ -266,7 +469,7 @@ function classifyPhase(readings) {
     const now = Date.now();
     const latestAgeMs = now - latest.ts;
     if (latestAgeMs > STALE_AGE) return 'off';
-    if (latest.weight_lbs < LIVE_OFF_THRESHOLD) return 'off';
+    if (latest.weight_lbs < getOffThreshold()) return 'off';
     if (readings.length < 2) return 'settling';
     const lockCutoff = latest.ts - LIVE_LOCK_DURATION;
     const inLockWindow = readings.filter(r => r.ts >= lockCutoff);
@@ -322,16 +525,22 @@ function runDiagnostics(readings, phase) {
         list.push({ kind: 'good', text: 'Latest reading is fresh (' + fmtAge(ageMs) + ' old)' });
     }
 
-    if (latest.weight_lbs < LIVE_OFF_THRESHOLD) {
-        list.push({ kind: 'good', text: 'Weight under threshold (' + latest.weight_lbs.toLocaleString() + ' lb < ' + LIVE_OFF_THRESHOLD.toLocaleString() + ' lb) → treated as OFF SCALE' });
+    const offThreshold = getOffThreshold();
+    if (latest.weight_lbs < offThreshold) {
+        list.push({ kind: 'good', text: 'Weight under threshold (' + latest.weight_lbs.toLocaleString() + ' lb < ' + offThreshold.toLocaleString() + ' lb) → treated as OFF SCALE' });
     } else {
         // Above threshold — could be a real truck or stuck drift
         const variance = computeVariance(readings);
         if (variance && variance.variance === 0 && readings.length >= 3) {
             list.push({ kind: 'warn', text: 'Last ' + variance.n + ' readings are identical (' + latest.weight_lbs.toLocaleString() + ' lb) — possible stuck Pi or actually-static load' });
         }
-        if (latest.weight_lbs >= LIVE_OFF_THRESHOLD && latest.weight_lbs < 12000) {
+        // The 12,000 lb "below typical empty truck" warning only makes sense in production mode.
+        // In F-150/ultra test modes, we're INTENTIONALLY accepting light vehicles, so suppress it.
+        const tmState = getTestModeState();
+        if (tmState.mode === 'production' && latest.weight_lbs >= offThreshold && latest.weight_lbs < 12000) {
             list.push({ kind: 'warn', text: 'Weight is ' + latest.weight_lbs.toLocaleString() + ' lb — above threshold but below typical empty hauler truck (≥12,000 lb). If nothing is on the scale, this is drift.' });
+        } else if (tmState.mode !== 'production' && latest.weight_lbs >= offThreshold && latest.weight_lbs < 12000) {
+            list.push({ kind: 'good', text: 'Weight is ' + latest.weight_lbs.toLocaleString() + ' lb — within F-150 / light-vehicle range (test mode: ' + TEST_MODES[tmState.mode].label + ')' });
         }
     }
 
@@ -421,6 +630,129 @@ function renderDiag(items) {
     if (!items || items.length === 0) return '<div class="diag-item">No issues detected</div>';
     return items.map(i => '<div class="diag-item ' + (i.kind || '') + '">' + i.text + '</div>').join('');
 }
+
+// ============================================================
+// 30-DAY HISTORY VIEW
+// Pulls a wide window of scale_weights + tickets to answer
+// "what actually happened on the scale this week / month?"
+// ============================================================
+async function loadHistory() {
+    const stripEl = document.getElementById('historyStrip');
+    const logEl = document.getElementById('historyLog');
+    if (!stripEl || !logEl) return;
+
+    // Show loading state
+    logEl.innerHTML = '<div style="color:var(--muted);font-style:italic">Loading 30 days of activity…</div>';
+
+    // Date math: start of "today" in user's local tz, 30 days back
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const since = new Date(today.getTime() - 29 * 86400000); // 30 days inclusive (today + 29 days back)
+    const sinceISO = since.toISOString();
+
+    try {
+        // Parallel fetches: weights (count by day), tickets (count by day), recent log
+        // We pull all 3 in parallel and stitch together. Use small selects to keep response cheap.
+        const [weights, tickets, recentWeights, recentTickets, lastWeight] = await Promise.all([
+            sb(`scale_weights?device_id=eq.${DEVICE_ID}&captured_at=gte.${sinceISO}&select=captured_at,weight_lbs&order=captured_at.asc&limit=10000`),
+            sb(`tickets?created_at=gte.${sinceISO}&select=created_at,ticket_number,net_tons,hauler&order=created_at.desc&limit=500`),
+            sb(`scale_weights?device_id=eq.${DEVICE_ID}&captured_at=gte.${sinceISO}&select=captured_at,weight_lbs&order=captured_at.desc&limit=10`),
+            sb(`tickets?created_at=gte.${sinceISO}&select=created_at,ticket_number,net_tons,hauler&order=created_at.desc&limit=10`),
+            sb(`scale_weights?device_id=eq.${DEVICE_ID}&order=captured_at.desc&limit=1&select=captured_at`),
+        ]);
+
+        // Build per-day buckets
+        const buckets = {};
+        for (let i = 0; i < 30; i++) {
+            const d = new Date(today.getTime() - (29 - i) * 86400000);
+            const key = d.toISOString().slice(0, 10);
+            buckets[key] = { date: d, weights: 0, tickets: 0 };
+        }
+
+        let totalReadings = 0;
+        (weights || []).forEach(w => {
+            const k = w.captured_at.slice(0, 10);
+            if (buckets[k]) { buckets[k].weights++; totalReadings++; }
+        });
+        (tickets || []).forEach(t => {
+            const k = (t.created_at || '').slice(0, 10);
+            if (buckets[k]) buckets[k].tickets++;
+        });
+
+        const totalTickets = (tickets || []).length;
+        const activeDays = Object.values(buckets).filter(b => b.weights > 0).length;
+
+        // KPI updates
+        document.getElementById('hkpiActiveDays').textContent = activeDays + ' / 30';
+        document.getElementById('hkpiReadings').textContent = totalReadings.toLocaleString();
+        document.getElementById('hkpiTickets').textContent = totalTickets.toLocaleString();
+
+        // Last Pi write — even if outside the 30-day window
+        let lastPiText = '—';
+        const lastInWindow = (weights && weights.length) ? weights[weights.length - 1] : null;
+        const lastEver = (lastWeight && lastWeight.length) ? lastWeight[0] : null;
+        const lastTs = lastEver ? new Date(lastEver.captured_at).getTime() : (lastInWindow ? new Date(lastInWindow.captured_at).getTime() : 0);
+        if (lastTs) {
+            const ageHrs = (Date.now() - lastTs) / 3600000;
+            if (ageHrs < 1) lastPiText = Math.round(ageHrs * 60) + 'm ago';
+            else if (ageHrs < 48) lastPiText = ageHrs.toFixed(1) + 'h ago';
+            else lastPiText = Math.floor(ageHrs / 24) + 'd ago';
+        }
+        document.getElementById('hkpiLastPi').textContent = lastPiText;
+
+        // Render the 30-day strip
+        stripEl.innerHTML = Object.entries(buckets).map(([key, b]) => {
+            let cls = 'hday';
+            if (b.tickets > 0) cls += ' active';
+            else if (b.weights > 0) cls += ' alive';
+            const dayLabel = b.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const tip = `${dayLabel} · ${b.weights} reading${b.weights === 1 ? '' : 's'} · ${b.tickets} ticket${b.tickets === 1 ? '' : 's'}`;
+            return `<div class="${cls}" data-tip="${tip}"></div>`;
+        }).join('');
+
+        // Recent activity log: merge weights + tickets, sort by time, take top 20
+        const events = [];
+        (recentWeights || []).forEach(w => {
+            events.push({
+                ts: new Date(w.captured_at).getTime(),
+                kind: 'weight',
+                text: 'Pi reading · ' + Math.round(Number(w.weight_lbs) || 0).toLocaleString() + ' lb',
+            });
+        });
+        (recentTickets || []).forEach(t => {
+            events.push({
+                ts: new Date(t.created_at).getTime(),
+                kind: 'ticket',
+                text: 'Ticket #' + (t.ticket_number || '?') + ' · ' + (t.hauler || 'unknown') + ' · ' + (t.net_tons ? Number(t.net_tons).toFixed(2) + ' T' : '—'),
+            });
+        });
+        events.sort((a, b) => b.ts - a.ts);
+
+        if (events.length === 0) {
+            logEl.innerHTML = '<div style="color:var(--muted);font-style:italic">No activity in the last 30 days. The Pi has not written any readings and no tickets have been created.</div>';
+        } else {
+            logEl.innerHTML = events.slice(0, 20).map(e => {
+                const ageMs = Date.now() - e.ts;
+                const ageHrs = ageMs / 3600000;
+                let ageStr;
+                if (ageHrs < 1) ageStr = Math.max(1, Math.round(ageMs / 60000)) + 'm';
+                else if (ageHrs < 24) ageStr = ageHrs.toFixed(1) + 'h';
+                else ageStr = Math.floor(ageHrs / 24) + 'd';
+                const color = e.kind === 'ticket' ? '#22c55e' : '#0891b2';
+                const icon = e.kind === 'ticket' ? '📋' : '⚖️';
+                return `<div style="padding:3px 0;display:grid;grid-template-columns:50px 18px 1fr;gap:8px;align-items:center">
+                    <span style="color:var(--muted);text-align:right">${ageStr} ago</span>
+                    <span>${icon}</span>
+                    <span style="color:${color}">${e.text}</span>
+                </div>`;
+            }).join('');
+        }
+    } catch (err) {
+        console.error('History load failed:', err);
+        logEl.innerHTML = '<div style="color:var(--bad,#ef4444)">Could not load history: ' + (err.message || 'unknown error') + '</div>';
+    }
+}
+
 
 async function loadOnce() {
     try {
@@ -562,6 +894,10 @@ function fallbackCopy(text) {
 document.getElementById('deviceLabel').textContent = DEVICE_ID;
 loadOnce();
 pollTimer = setInterval(loadOnce, 1500);
+
+// History view: load once at startup, refresh every 5 minutes
+loadHistory();
+setInterval(() => { if (autoOn) loadHistory(); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>
