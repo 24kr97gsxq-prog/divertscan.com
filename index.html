@@ -5006,11 +5006,47 @@ const DS = {
     // ============================================================
     // TICKET MANAGEMENT
     // ============================================================
+    // PERF NOTE — slim column list (added 2026-05-31):
+    //   Previously these queries used SELECT * which pulled `signature` (base64 PNG,
+    //   10-50 KB per row), `debris_images` (JSONB URL array), `ai_notes`, and
+    //   `raw_ocr_data` — none of which the list view renders. At 683 tickets that's
+    //   ~20-30 MB of payload + 683 DOM nodes built synchronously. Slim list cuts
+    //   network ~85% and parse time accordingly. Heavy fields are fetched on-demand
+    //   in showTicketDetail() when the user actually opens a ticket.
+    _ticketListColumns: [
+        'id', 'ticket_number', 'ticket_date', 'service_date', 'captured_at', 'created_at', 'updated_at',
+        'hauler', 'driver_name', 'driver_id', 'project_id',
+        'gross_lbs', 'tare_lbs', 'net_lbs', 'net_tons',
+        'diversion_pct', 'diverted_tons', 'landfill_tons', 'co2e_avoided',
+        'scan_type', 'zone', 'is_closed', 'audit_id', 'notes', 'container_size',
+        'wood_pct', 'occ_pct', 'metal_pct', 'plastic_pct',
+        'concrete_pct', 'block_pct', 'landfill_pct', 'gypsum_pct',
+        'wood_tons', 'occ_tons', 'metal_tons', 'plastic_tons',
+        'concrete_tons', 'block_tons', 'gypsum_tons',
+        'scale_ticket_image', 'source_weight_id', 'human_verified',
+        'signed_at', 'signed_by'
+    ].join(','),
+    // Render pagination — how many ticket rows to commit to the DOM at once.
+    // We still keep all fetched rows in state.tickets so filters/search/sort work
+    // against the full set; we just limit how many are drawn.
+    _ticketPageSize: 50,
+    _ticketsRendered: 50,
+
     async loadTickets(projectId) {
-        const data = await this.supabase(`tickets?project_id=eq.${projectId}&order=created_at.desc`);
+        const slimUrl = 'tickets?project_id=eq.' + projectId +
+                    '&select=' + encodeURIComponent(this._ticketListColumns) +
+                    '&order=created_at.desc';
+        let data = await this.supabase(slimUrl);
+        // Safety fallback — if slim column list errored (e.g. a column doesn't
+        // exist in this DB), retry with SELECT *. Slower but always works.
+        if (!data) {
+            console.warn('Slim ticket fetch failed; falling back to SELECT *');
+            data = await this.supabase('tickets?project_id=eq.' + projectId + '&order=created_at.desc');
+        }
         if (data) {
             this.state.tickets = data;
             this._showingAllProjects = false;
+            this._ticketsRendered = this._ticketPageSize;
             this.renderTickets();
             this.renderReports();
             this._applyDefaultMaterials();
@@ -5019,11 +5055,19 @@ const DS = {
 
     async loadAllProjectTickets() {
         this.showLoading('Loading all tickets...');
-        var allTickets = await this.supabase('tickets?order=created_at.desc&limit=1000');
+        const slimUrl = 'tickets?select=' + encodeURIComponent(this._ticketListColumns) +
+                    '&order=created_at.desc&limit=1000';
+        let allTickets = await this.supabase(slimUrl);
+        // Safety fallback as above
+        if (!allTickets) {
+            console.warn('Slim all-tickets fetch failed; falling back to SELECT *');
+            allTickets = await this.supabase('tickets?order=created_at.desc&limit=1000');
+        }
         this.hideLoading();
         if (allTickets) {
             this.state.tickets = allTickets;
             this._showingAllProjects = true;
+            this._ticketsRendered = this._ticketPageSize;
             this.renderTickets();
         }
     },
@@ -5071,7 +5115,14 @@ const DS = {
             return;
         }
 
-        el.innerHTML = tickets.map(t => {
+        // PERF (added 2026-05-31): render only the first _ticketsRendered rows.
+        // Footer shows "Showing X of Y" + Load More button. Filter/sort changes
+        // reset _ticketsRendered to _ticketPageSize.
+        const total = tickets.length;
+        const renderCount = Math.min(this._ticketsRendered || this._ticketPageSize, total);
+        const visibleTickets = tickets.slice(0, renderCount);
+
+        const rowHtml = visibleTickets.map(t => {
             var hasWeight = (parseFloat(t.net_tons) || 0) > 0;
             var hasMaterials = Object.keys(this.MATERIALS).some(k => (t[k + '_pct'] || 0) > 0);
             var hasPhoto = t.scale_ticket_image;
@@ -5093,10 +5144,44 @@ const DS = {
                 <div class="ticket-tons">${this.fmt(t.net_tons)} T</div>
             </div>`;
         }).join('');
+
+        // Pagination footer: count + Load More
+        var footerHtml = '';
+        if (total > renderCount) {
+            const remaining = total - renderCount;
+            const nextBatch = Math.min(this._ticketPageSize, remaining);
+            footerHtml =
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 12px;margin-top:8px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;flex-wrap:wrap;">' +
+                    '<div style="font-size:.75rem;color:var(--text-muted);font-weight:500;">' +
+                        'Showing <span style="color:var(--text);font-weight:700">' + renderCount + '</span> of <span style="color:var(--text);font-weight:700">' + total + '</span> tickets' +
+                    '</div>' +
+                    '<button class="btn btn-sm btn-primary" onclick="DS.loadMoreTickets()" style="white-space:nowrap;">↓ Load ' + nextBatch + ' more</button>' +
+                '</div>';
+        } else if (total > this._ticketPageSize) {
+            // All rows are visible but it's a multi-page result — show the "all loaded" badge
+            footerHtml =
+                '<div style="padding:12px;margin-top:8px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;text-align:center;font-size:.7rem;color:var(--text-muted);">' +
+                    '✓ Showing all <span style="color:var(--text);font-weight:700">' + total + '</span> tickets' +
+                '</div>';
+        }
+
+        el.innerHTML = rowHtml + footerHtml;
+    },
+
+    // PERF (added 2026-05-31): append next page of tickets to the DOM without re-fetching.
+    loadMoreTickets() {
+        this._ticketsRendered = (this._ticketsRendered || this._ticketPageSize) + this._ticketPageSize;
+        this.renderTickets(this._lastTicketFilter || 'all');
+        // Smooth-scroll the new section into view
+        try {
+            const el = document.getElementById('ticketList');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } catch (e) {}
     },
 
     searchTickets(query) {
         if (!query || query.trim() === '') {
+            this._ticketsRendered = this._ticketPageSize;
             this.renderTickets();
             return;
         }
@@ -5168,17 +5253,27 @@ const DS = {
     },
 
     filterTickets(filter) {
+        this._ticketsRendered = this._ticketPageSize;
         this.renderTickets(filter);
     },
 
     async showTicketDetail(id) {
         var t = this.state.tickets.find(x => x.id === id);
-        if (!t) {
-            var fetched = await this.supabase('tickets?id=eq.' + id);
-            if (fetched && fetched.length > 0) {
-                t = fetched[0];
+        // PERF (added 2026-05-31): list rows are SLIM (no debris_images, signature,
+        // ai_notes, raw_ocr_data). When opening the detail modal we always fetch
+        // the FULL row so photos/signature/AI notes render. Merge it back into
+        // state.tickets so re-opening the same ticket is instant.
+        const fetched = await this.supabase('tickets?id=eq.' + id);
+        if (fetched && fetched.length > 0) {
+            const full = fetched[0];
+            if (t) {
+                Object.assign(t, full);  // merge missing/updated fields into existing row
+            } else {
+                t = full;
                 this.state.tickets.push(t);
-            } else { this.showToast('Ticket not found'); return; }
+            }
+        } else if (!t) {
+            this.showToast('Ticket not found'); return;
         }
         this._currentDetailTicketId = t.id;
         document.getElementById('ticketDetailTitle').textContent = `Ticket ${t.ticket_number}`;
@@ -11290,6 +11385,8 @@ const DS = {
                 if (dd.value !== val) dd.value = val;
             });
         } catch(e) {}
+        // PERF: re-sort means a new "first page" — reset pagination cursor
+        this._ticketsRendered = this._ticketPageSize;
         // Re-render tickets list if function exists
         try { if (typeof this.renderTickets === 'function') this.renderTickets(this._lastTicketFilter || 'all'); } catch(e) {}
         // Re-render reports (monthly cards) if reports tab is visible
