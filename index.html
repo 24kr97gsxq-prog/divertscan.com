@@ -236,7 +236,7 @@
 
             <!-- AI Debris Analysis -->
             <div class="card">
-                <div class="card-title"><span class="icon">🤖</span> AI Debris Analysis</div>
+                <div class="card-title">AI Debris Analysis</div>
                 <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
                     Upload photos of debris for AI material stream estimation.
                 </p>
@@ -248,7 +248,7 @@
                 </div>
                 <div class="photo-grid" id="debrisPreview"></div>
                 <button class="btn btn-info mt-12 hidden" id="analyzeBtn" onclick="DS.analyzeDebris()">
-                    🤖 Analyze with AI
+                    Analyze with AI
                 </button>
                 <div id="aiResults" class="hidden"></div>
             </div>
@@ -2840,7 +2840,7 @@ const DS = {
             try { await navigator.clipboard.writeText(newUrl); } catch (e) { /* fallthrough */ }
         }
 
-        this.showToast('🔄 New URL copied — text it to ' + driver.driver_name + '. Old link is dead.');
+        this.showToast('New URL copied — text it to ' + driver.driver_name + '. Old link is dead.');
 
         if (typeof this.addAuditEntry === 'function') {
             this.addAuditEntry('DRIVER_TOKEN_REGEN', driver.driver_name + ' (' + driver.hauler + ')');
@@ -6618,7 +6618,7 @@ const DS = {
 
         el.innerHTML = `<div class="ai-result">
             <div class="ai-result-header">
-                <div class="card-title" style="margin:0;"><span class="icon">🤖</span> AI Analysis</div>
+                <div class="card-title" style="margin:0;">AI Analysis</div>
                 <span class="ai-badge">Confidence: ${analysis.confidence || 0}%</span>
             </div>
             ${bars}
@@ -6775,7 +6775,7 @@ const DS = {
                 Zone: ${ocr.zone || '—'} &nbsp; Container: ${ocr.container || '—'} cy
             </div>
             <div style="font-size:.65rem;color:var(--text-dim);margin-top:6px;padding:4px 8px;background:rgba(96,165,250,0.08);border-radius:6px;">
-                💡 Driver/Project/Zone saved to Notes — set Project dropdown before scanning if you want it on the ticket itself.
+                Tip — Driver/Project/Zone saved to Notes — set Project dropdown before scanning if you want it on the ticket itself.
             </div>
         </div>`;
 
@@ -7023,6 +7023,8 @@ const DS = {
         totRow.getCell(7).numFmt = '0%';
         totRow.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B5E20' } }; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; });
         ws1.columns = [{ width: 40 }, { width: 8 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }];
+        ws1.autoFilter = { from: { row: hdr.number, column: 1 }, to: { row: hdr.number + projects.length, column: 7 } };
+        ws1.views = [{ state: 'frozen', ySplit: hdr.number }];
 
         // Detail sheet
         var ws2 = wb.addWorksheet('All Tickets');
@@ -7032,6 +7034,13 @@ const DS = {
         var hdr2 = ws2.addRow(h2);
         hdr2.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         hdr2.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }; });
+        // Pre-sort all tickets ascending by ticket_date so the downloaded file
+        // opens in chronological order (matches LEED MR documentation log)
+        allTickets.sort(function(a, b) {
+            var ad = a.ticket_date || '', bd = b.ticket_date || '';
+            if (ad !== bd) return ad.localeCompare(bd);
+            return (a.captured_at || '').localeCompare(b.captured_at || '');
+        });
         allTickets.forEach(function(t, i) {
             var proj = projMap[t.project_id];
             var row = [proj ? proj.name : 'Unknown', t.ticket_date || '', t.ticket_number || '', t.zone || '', t.hauler || '', parseFloat(t.net_tons) || 0];
@@ -7043,6 +7052,8 @@ const DS = {
             if (i % 2 === 0) r.eachCell(function(c) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; });
         });
         ws2.columns = [{ width: 35 }, { width: 12 }, { width: 10 }, { width: 7 }, { width: 25 }, { width: 10 }].concat(matKeys.map(function() { return { width: 10 }; })).concat([{ width: 10 }, { width: 10 }, { width: 8 }, { width: 8 }]);
+        ws2.autoFilter = { from: { row: hdr2.number, column: 1 }, to: { row: hdr2.number + allTickets.length, column: h2.length } };
+        ws2.views = [{ state: 'frozen', ySplit: hdr2.number }];
 
         wb.xlsx.writeBuffer().then(function(buf) {
             var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -7050,7 +7061,7 @@ const DS = {
             a.href = URL.createObjectURL(blob);
             a.download = 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.xlsx';
             a.click();
-            DS.showToast('✅ All projects XLSX exported');
+            DS.showToast('All projects XLSX exported');
         });
     },
 
@@ -7580,7 +7591,7 @@ const DS = {
         let html = `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">${allFiles.length} photo${allFiles.length > 1 ? 's' : ''} selected</div>`;
 
         if (this._batchType === 'scale') {
-            html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" disabled onclick="DS.aiBatchOCR()">🤖 Loading photos...</button>`;
+            html += `<button class="btn btn-primary btn-sm mb-12" id="batchAiBtn" disabled onclick="DS.aiBatchOCR()">Loading photos...</button>`;
         }
 
         allFiles.forEach((file, idx) => {
@@ -7597,7 +7608,7 @@ const DS = {
                     const btn = document.getElementById('batchAiBtn');
                     if (btn) {
                         btn.disabled = false;
-                        btn.textContent = '🤖 AI Read All Ticket Numbers';
+                        btn.textContent = 'AI Read All Ticket Numbers';
                     }
                     // Auto-trigger for scale tickets (only once)
                     if (this._batchType === 'scale' && this.state.apiKey && !this._batchOCRRunning) {
@@ -7647,7 +7658,7 @@ const DS = {
         this._batchOCRRunning = true;
 
         const btn = document.getElementById('batchAiBtn');
-        if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Reading photos...'; }
 
         // Initialize processed tracker if not exists
         if (!this._batchProcessed) this._batchProcessed = {};
@@ -8472,6 +8483,8 @@ const DS = {
 
         // Freeze header row
         ws.views = [{state:'frozen', ySplit: hdrRow.number}];
+        // Auto-filter on the data table so users can sort by any column in Excel
+        ws.autoFilter = { from: { row: hdrRow.number, column: 1 }, to: { row: hdrRow.number + tickets.length, column: 27 } };
 
         // Zone summary section
         var zd={},hz=false;tickets.forEach(function(t){var z=t.zone||'Unassigned';if(t.zone)hz=true;
@@ -8600,6 +8613,9 @@ const DS = {
             d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
             var mWs = XLSX.utils.aoa_to_sheet(d);
             mWs['!cols']=[{wch:12},{wch:10},{wch:6},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
+            // Auto-filter + frozen top row (SheetJS syntax)
+            mWs['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: mTix.length, c: 24 } }) };
+            mWs['!freeze'] = { xSplit: 0, ySplit: 1 };
             // Format cells
             for(var r2=1;r2<=mTix.length+1;r2++){
                 [9,11,13,15,17,19,21,23].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0%';});
@@ -9294,7 +9310,7 @@ const DS = {
         // AI classify button
         if (this.state.apiKey) {
             html += '<button class="btn btn-info mb-12" style="width:100%" id="classifyBtn" onclick="DS._classifyAndProcess('+bIdx+')">'+
-                '🤖 AI Read & Process All ' + batch.items.length + ' Photos</button>';
+                'AI Read & Process All ' + batch.items.length + ' Photos</button>';
         }
 
         // Month/Year override for batch date assignment
@@ -9340,7 +9356,7 @@ const DS = {
         if (!batch) return;
 
         var btn = document.getElementById('classifyBtn');
-        if (btn) { btn.disabled = true; btn.textContent = '🤖 Reading photos...'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Reading photos...'; }
 
         this._ticketData = [];
         var scaleTickets = [];
@@ -9460,7 +9476,7 @@ const DS = {
                     });
                     if (bestMatch && bestScore >= 2) {
                         matchedProjId = bestMatch.id;
-                        matchedProjHint = '<span style="font-size:.55rem;color:var(--success)">🎯 Matched: "' + DS.esc(ocr.job_name) + '" → ' + DS.esc(bestMatch.name) + '</span>';
+                        matchedProjHint = '<span style="font-size:.55rem;color:var(--success)">Matched: "' + DS.esc(ocr.job_name) + '" → ' + DS.esc(bestMatch.name) + '</span>';
                     } else {
                         matchedProjHint = '<span style="font-size:.55rem;color:var(--warning)">📋 Job: "' + DS.esc(ocr.job_name) + '" — verify project</span>';
                     }
@@ -9526,7 +9542,7 @@ const DS = {
         if (confirmBtn) confirmBtn.classList.remove('hidden');
 
         } catch(buildErr) { console.error('Process error:', buildErr); alert('ERROR building ticket rows: ' + buildErr.message); var cb2 = document.getElementById('confirmAllBtn'); if(cb2) cb2.classList.remove('hidden'); }
-            if (btn) { btn.disabled = false; btn.textContent = '🤖 Re-run AI Classification'; }
+            if (btn) { btn.disabled = false; btn.textContent = 'Re-run AI Classification'; }
 
         this.showToast(scaleTickets.length + ' scale tickets + ' + debrisPhotos.length + ' debris detected');
     },
@@ -9685,7 +9701,7 @@ const DS = {
                 console.log('DEBRIS AI: Ticket #' + aiInfo.num + ' has ' + (aiDebris ? aiDebris.length : 0) + ' debris photos');
                 if (!aiDebris || !aiDebris.length) continue;
 
-                this.showLoading('🤖 Analyzing debris for ticket #' + aiInfo.num + ' (' + (ai+1) + '/' + createdTicketIds.length + ')...');
+                this.showLoading('Analyzing debris for ticket #' + aiInfo.num + ' (' + (ai+1) + '/' + createdTicketIds.length + ')...');
 
                 try {
                     var matPrompt = 'You are a C&D waste material analyst for LEED compliance. ' +
@@ -10671,7 +10687,7 @@ const DS = {
                 var debrisUrls = Array.isArray(t.debris_images) ? t.debris_images : [];
                 if (debrisUrls.length === 0) continue;
 
-                this.showLoading('🤖 AI classifying debris for ' + t.ticket_number + ' (' + (ai+1) + '/' + aiQueue.length + ')...');
+                this.showLoading('AI classifying debris for ' + t.ticket_number + ' (' + (ai+1) + '/' + aiQueue.length + ')...');
 
                 try {
                     var prompt = 'You are a C&D waste material analyst for LEED v5 MRp2 compliance. ' +
