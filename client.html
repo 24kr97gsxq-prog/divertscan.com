@@ -205,9 +205,29 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <div class="c">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
 <div class="ct" style="margin:0">All Tickets <span id="newTixBadge" class="hidden" style="background:var(--primary);color:#fff;font-size:.55rem;padding:1px 6px;border-radius:6px;font-weight:700;vertical-align:middle"></span></div>
-<div style="display:flex;gap:6px">
+<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
 <div class="b bsm bo" onclick="P.openGallery()">📸 Photos</div>
-<div class="b bsm bp" onclick="P.exportAllXLSX()">↓ XLSX</div>
+<div class="b bsm bp" onclick="P.exportAllXLSX()" title="Excel workbook, sortable columns">↓ XLSX</div>
+<div class="b bsm bo" onclick="P.exportAllCSV()" title="Plain CSV — opens in any spreadsheet app">↓ CSV</div>
+<div class="b bsm bo" onclick="P.exportSummaryPDF()" title="One-page summary PDF">📄 Summary</div>
+</div>
+</div>
+<!-- Export-scope filters (Phase 1) — narrow the dataset before XLSX/CSV/PDF -->
+<div id="expFilters" style="background:rgba(0,201,167,.04);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:.75rem">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+<div style="font-weight:700;color:var(--primary);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em">Export Scope</div>
+<div onclick="P.clearExportFilters()" style="font-size:.65rem;color:var(--text-d);cursor:pointer;text-decoration:underline">Clear</div>
+</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+<label style="font-size:.65rem;color:var(--text-m);font-weight:600">From</label>
+<input type="date" class="fi" id="expFrom" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
+<label style="font-size:.65rem;color:var(--text-m);font-weight:600">To</label>
+<input type="date" class="fi" id="expTo" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
+<select class="fi" id="expHauler" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto"><option value="">All haulers</option></select>
+<select class="fi" id="expZone" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
+<option value="">All zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
+</select>
+<span id="expCount" style="margin-left:auto;font-size:.65rem;color:var(--text-m);font-weight:700"></span>
 </div>
 </div>
 <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -451,7 +471,9 @@ try{P.renderTrend();}catch(e){console.error('Trend error:',e);}
 try{P.renderComparison();}catch(e){console.error('Comparison error:',e);}
 try{P.renderNewBadge();}catch(e){console.error('Badge error:',e);}
 P.renderMonths();
-try{P.renderTbl(P.tx);}catch(e){var dtel=document.getElementById('dTable');if(dtel)dtel.innerHTML='<div style="color:red;padding:10px;font-size:.75rem">Render error: '+e.message+'</div>';console.error('Table error:',e);}},
+try{P.renderTbl(P.tx);}catch(e){var dtel=document.getElementById('dTable');if(dtel)dtel.innerHTML='<div style="color:red;padding:10px;font-size:.75rem">Render error: '+e.message+'</div>';console.error('Table error:',e);}
+// Populate export-scope hauler dropdown and count
+try{P.updateExportScope();}catch(e){}},
 
 // Phase 2.7d: Load drivers who hauled for the current project
 // Phase 2.7d: Load drivers who hauled for ANY of this client's projects (privacy-scoped)
@@ -886,6 +908,7 @@ tr.getCell(5).numFmt='#,##0';tr.getCell(6).numFmt='#,##0';tr.getCell(7).numFmt='
 
 ws.columns=[{width:14},{width:11},{width:24},{width:7},{width:11},{width:11},{width:10},{width:8},{width:50}];
 ws.views=[{state:'frozen',ySplit:4}];
+ws.autoFilter={from:{row:hdr.number,column:1},to:{row:hdr.number+tix.length,column:9}};
 
 var buf=await wb.xlsx.writeBuffer();
 var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -1300,7 +1323,10 @@ ws.addRow([]);var ft=ws.addRow([DX.facility+' • TCEQ '+DX.tceq.rn+' • '+DX.p
 ft.getCell(1).font={size:9,italic:true,color:{argb:'FFA1A1AA'}};
 // Column widths + freeze (Driver column added at position 3, width 12)
 ws.columns=[{width:12},{width:10},{width:12},{width:7},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},{width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},{width:7},{width:7},{width:9},{width:7},{width:7},{width:7},{width:14}];
-ws.views=[{state:'frozen',ySplit:hdr.number}];},
+ws.views=[{state:'frozen',ySplit:hdr.number}];
+// Auto-filter on the data table — answers Ross's "can he sort by date" question.
+// Pre-sorted ascending; auto-filter lets him re-sort by ANY column in Excel.
+ws.autoFilter={from:{row:hdr.number,column:1},to:{row:hdr.number+tix.length,column:27}};},
 
 exportAllXLSX(){if(typeof ExcelJS==='undefined'){P.toast('Loading...');return;}if(!P.cp)return;
 var proj=P.cp,wb=new ExcelJS.Workbook();wb.creator='DivertScan';
@@ -1310,19 +1336,216 @@ ws0.mergeCells('A1:G1');var st=ws0.getCell('A1');st.value='LEED WASTE DIVERSION 
 st.font={bold:true,size:16,color:{argb:'FFFFFFFF'}};st.fill={type:'pattern',pattern:'solid',fgColor:dkG};st.alignment={horizontal:'center'};ws0.getRow(1).height=32;
 ws0.addRow([]);
 var ver=proj.leed_version||'v4';
+var filt=P._getExportFilterSummary();
 [['Project:',proj.name],['GC / Client:',proj.general_contractor||proj.client||''],['Location:',proj.location||''],['Waste Hauler:',proj.waste_hauler||''],
 ['LEED Version:',ver==='none'?'Non-LEED':ver],['Target:',(proj.leed_target!=null?proj.leed_target:50)+'%'],
 [],['Processing Facility:',DX.facility],['Address:',DX.addr],['Phone:',DX.phone],
-[],['Report by:','Dalmex Recycling LLC'],['Contact:','Robert Vandling'],['Email:','robert@dalmexrecycling.com'],['Generated:',new Date().toLocaleDateString()]
+[],['Report by:','Dalmex Recycling LLC'],['Contact:','Robert Vandling'],['Email:','robert@dalmexrecycling.com'],['Generated:',new Date().toLocaleDateString()],
+[],['Export Scope:',filt||'All time, all haulers, all zones']
 ].forEach(function(row){var r=ws0.addRow(row);r.getCell(1).font={bold:true,size:10,color:{argb:'FF52525B'}};});
 ws0.getColumn(1).width=20;ws0.getColumn(2).width=40;
-// Month sheets
-var keys=Object.keys(P._mg).sort();var mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-keys.forEach(function(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
+// Month sheets — use FILTERED monthly groups so date-range/hauler/zone scope is applied
+var filteredMg=P._getFilteredMg();
+var keys=Object.keys(filteredMg).sort();var mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+keys.forEach(function(key){var tix=(filteredMg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
 var pts=key.split('-');P._buildEJ(wb,tix,mf[+pts[1]],pts[0],proj);});
 wb.xlsx.writeBuffer().then(function(buf){var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 var a=document.createElement('a');a.href=URL.createObjectURL(blob);
-a.download=proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_Report.xlsx';a.click();P.toast('Downloaded!');});},
+a.download=proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_Report.xlsx';a.click();P.toast('Downloaded');});},
+
+// ============================================================
+// EXPORT SCOPE FILTERS (added 2026-05-31)
+// ============================================================
+// Returns the filtered ticket list based on the Export Scope panel inputs.
+// Empty inputs = no filter on that dimension. Returns P.tx (all tickets) if
+// no filters are set.
+_getExportTickets(){
+var tx=P.tx||[];if(!tx.length)return tx;
+var from=P._eVal('expFrom'),to=P._eVal('expTo'),h=P._eVal('expHauler'),z=P._eVal('expZone');
+if(!from&&!to&&!h&&!z)return tx;
+return tx.filter(function(t){
+  var d=t.ticket_date||'';
+  if(from&&d<from)return false;
+  if(to&&d>to)return false;
+  if(h&&(t.hauler||'')!==h)return false;
+  if(z){if(z==='none'){if(t.zone)return false;}else if(t.zone!==z)return false;}
+  return true;
+});},
+_eVal(id){try{var el=document.getElementById(id);return el?(el.value||'').trim():'';}catch(e){return '';}},
+// Re-group filtered tickets by month (same shape as P._mg)
+_getFilteredMg(){
+var tix=P._getExportTickets();
+var mg={};
+tix.forEach(function(t){
+  var d=(t.ticket_date||'').substring(0,7);
+  if(d.length!==7)return;
+  if(!mg[d])mg[d]=[];
+  mg[d].push(t);
+});
+return mg;},
+// Plain-English summary of active filters — shows up in PDF/XLSX footer
+_getExportFilterSummary(){
+var from=P._eVal('expFrom'),to=P._eVal('expTo'),h=P._eVal('expHauler'),z=P._eVal('expZone');
+var parts=[];
+if(from||to){parts.push((from||'…')+' to '+(to||'…'));}
+if(h)parts.push('Hauler: '+h);
+if(z)parts.push('Zone: '+(z==='none'?'(no zone)':z));
+return parts.join(' · ');},
+// Update the count badge and the hauler dropdown options
+updateExportScope(){
+try{
+  // Populate hauler dropdown on first call
+  var hSel=document.getElementById('expHauler');
+  if(hSel&&hSel.options.length<=1){
+    var haulers={};(P.tx||[]).forEach(function(t){if(t.hauler)haulers[t.hauler]=true;});
+    Object.keys(haulers).sort().forEach(function(h){var o=document.createElement('option');o.value=h;o.textContent=h;hSel.appendChild(o);});
+  }
+  var n=P._getExportTickets().length,total=(P.tx||[]).length;
+  var c=document.getElementById('expCount');
+  if(c){c.textContent=(n===total?n+' tickets':n+' of '+total+' tickets');c.style.color=n===total?'var(--text-m)':'var(--primary)';}
+}catch(e){}},
+clearExportFilters(){
+['expFrom','expTo','expHauler','expZone'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+P.updateExportScope();
+P.toast('Filters cleared');},
+
+// ============================================================
+// CSV EXPORT (added 2026-05-31)
+// ============================================================
+// Plain-CSV version of the XLSX data. Sorted ascending by ticket_date.
+// Respects the same Export Scope filters as XLSX.
+exportAllCSV(){
+if(!P.cp)return;
+var proj=P.cp;
+var tix=P._getExportTickets().slice().sort(function(a,b){
+  var ad=a.ticket_date||'',bd=b.ticket_date||'';
+  if(ad!==bd)return ad.localeCompare(bd);
+  return (a.captured_at||'').localeCompare(b.captured_at||'');
+});
+if(!tix.length){P.toast('No tickets in scope');return;}
+var hdr=['Date','Ticket #','Driver','Hauler','Zone','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons','Diversion %','Diverted Tons','Wood%','OCC%','Metal%','Plastic%','Concrete%','Block%','Gypsum%','Landfill%','Notes'];
+var esc=function(s){if(s==null)s='';s=String(s).replace(/"/g,'""');return /[",\n\r]/.test(s)?'"'+s+'"':s;};
+var rows=[hdr.join(',')];
+tix.forEach(function(t){
+  rows.push([
+    t.ticket_date||'',
+    t.ticket_number||'',
+    t.driver_name||'',
+    t.hauler||'',
+    t.zone||'',
+    t.gross_lbs||0,
+    t.tare_lbs||0,
+    t.net_lbs||0,
+    (+t.net_tons||0).toFixed(2),
+    (t.diversion_pct||0),
+    (+t.diverted_tons||0).toFixed(2),
+    t.wood_pct||0,t.occ_pct||0,t.metal_pct||0,t.plastic_pct||0,t.concrete_pct||0,t.block_pct||0,t.gypsum_pct||0,t.landfill_pct||0,
+    t.notes||''
+  ].map(esc).join(','));
+});
+// BOM so Excel opens UTF-8 cleanly
+var blob=new Blob(['\ufeff'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
+var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+a.download=proj.name.replace(/[^a-zA-Z0-9]/g,'_')+'_Diversion_'+new Date().toISOString().substring(0,10)+'.csv';
+a.click();
+P.toast('CSV downloaded ('+tix.length+' tickets)');},
+
+// ============================================================
+// PROJECT-WIDE PDF SUMMARY (added 2026-05-31)
+// ============================================================
+// One-page executive summary in a printable popup. Differs from the
+// existing per-month PDFs by giving a single project-wide snapshot.
+// Uses window.print() against a clean stylesheet — no PDF library needed.
+exportSummaryPDF(){
+if(!P.cp)return;
+var proj=P.cp;
+var tix=P._getExportTickets();
+if(!tix.length){P.toast('No tickets in scope');return;}
+var totalTons=0,totalDiv=0,totalCO2=0,totalGross=0,totalTare=0;
+var matTons={wood:0,occ:0,metal:0,plastic:0,concrete:0,block:0,gypsum:0,landfill:0};
+var byHauler={},byDriver={},byZone={};
+tix.forEach(function(t){
+  var tn=+t.net_tons||0;
+  totalTons+=tn;
+  totalDiv+=+t.diverted_tons||0;
+  totalCO2+=+t.co2e_avoided||0;
+  totalGross+=+t.gross_lbs||0;
+  totalTare+=+t.tare_lbs||0;
+  Object.keys(matTons).forEach(function(k){matTons[k]+=tn*((t[k+'_pct']||0)/100);});
+  var h=t.hauler||'(unknown)';byHauler[h]=(byHauler[h]||0)+tn;
+  var d=t.driver_name||'(unknown)';byDriver[d]=(byDriver[d]||0)+tn;
+  var z=t.zone||'Unassigned';byZone[z]=(byZone[z]||0)+tn;
+});
+var divPct=totalTons>0?(totalDiv/totalTons*100):0;
+var dates=tix.map(function(t){return t.ticket_date;}).filter(Boolean).sort();
+var period=dates.length?dates[0]+' to '+dates[dates.length-1]:'—';
+var tgt=proj.leed_target!=null?proj.leed_target:50;
+var ver=proj.leed_version||'v4';
+var isNL=ver==='none';
+var onTarget=divPct>=tgt;
+
+// Top-5 helpers
+var top=function(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a];}).slice(0,5).map(function(k){return {name:k,tons:o[k]};});};
+var topH=top(byHauler),topD=top(byDriver);
+var zones=Object.keys(byZone).sort();
+
+var w=window.open('','_blank');
+if(!w){P.toast('Allow popups to export PDF');return;}
+var matRows=Object.keys(matTons).filter(function(k){return matTons[k]>0;})
+  .sort(function(a,b){return matTons[b]-matTons[a];})
+  .map(function(k){var pct=totalTons>0?(matTons[k]/totalTons*100):0;
+    var color=k==='landfill'?'#dc2626':'#059669';
+    return '<tr><td>'+(k.charAt(0).toUpperCase()+k.slice(1))+'</td>'+
+      '<td class="r">'+matTons[k].toFixed(2)+' T</td>'+
+      '<td class="r" style="color:'+color+';font-weight:700">'+pct.toFixed(1)+'%</td></tr>';}).join('');
+var hRows=topH.map(function(h){return '<tr><td>'+P.esc(h.name)+'</td><td class="r">'+h.tons.toFixed(2)+' T</td></tr>';}).join('');
+var dRows=topD.map(function(d){return '<tr><td>'+P.esc(d.name)+'</td><td class="r">'+d.tons.toFixed(2)+' T</td></tr>';}).join('');
+var zRows=zones.map(function(z){return '<tr><td>'+(z==='Unassigned'?'<em>Unassigned</em>':P.esc(z))+'</td><td class="r">'+byZone[z].toFixed(2)+' T</td></tr>';}).join('');
+var scopeNote=P._getExportFilterSummary();
+var html='<!DOCTYPE html><html><head><meta charset=utf-8><title>'+P.esc(proj.name)+' — Summary</title>'+
+'<style>'+
+'@page{size:letter;margin:0.5in}'+
+'body{font-family:-apple-system,Arial,sans-serif;color:#111;margin:0;padding:24px;font-size:11pt;line-height:1.4}'+
+'h1{font-size:18pt;margin:0 0 4px 0;color:#1B5E20}'+
+'h2{font-size:11pt;margin:14px 0 4px 0;color:#1B5E20;border-bottom:1px solid #ccc;padding-bottom:3px}'+
+'.meta{color:#666;font-size:9pt;margin-bottom:6px}'+
+'.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}'+
+'.kpi{padding:10px;border:1px solid #ddd;border-radius:6px;text-align:center}'+
+'.kpi .v{font-size:18pt;font-weight:800;color:#1B5E20}'+
+'.kpi .l{font-size:8pt;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}'+
+'.target{padding:10px;border-radius:6px;text-align:center;margin:10px 0;font-weight:700;font-size:11pt}'+
+'.target.on{background:#dcfce7;color:#166534;border:1px solid #86efac}'+
+'.target.off{background:#fef3c7;color:#92400e;border:1px solid #fbbf24}'+
+'table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9.5pt}'+
+'th{text-align:left;padding:5px 8px;background:#f4f4f5;font-weight:600;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}'+
+'td{padding:5px 8px;border-bottom:1px solid #eee}'+
+'.r{text-align:right;font-variant-numeric:tabular-nums}'+
+'.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}'+
+'.foot{margin-top:16px;font-size:8pt;color:#888;text-align:center;border-top:1px solid #eee;padding-top:8px}'+
+'.no-print{margin:14px 0}'+
+'@media print{.no-print{display:none}}'+
+'</style></head><body>'+
+'<div class="no-print" style="background:#1B5E20;color:#fff;padding:12px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'+
+'<span style="font-weight:700">Project Summary</span>'+
+'<button onclick="window.print()" style="background:#fff;color:#1B5E20;border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">Save as PDF</button></div>'+
+'<h1>'+P.esc(proj.name)+'</h1>'+
+'<div class="meta">'+P.esc(proj.general_contractor||proj.client||'')+(proj.location?' · '+P.esc(proj.location):'')+' · '+(isNL?'Non-LEED tracking':ver.toUpperCase()+' · Target '+tgt+'%')+'</div>'+
+'<div class="meta">Period: '+period+' · '+tix.length+' ticket'+(tix.length===1?'':'s')+(scopeNote?' · Scope: '+scopeNote:'')+'</div>'+
+'<div class="kpi-grid">'+
+'<div class="kpi"><div class="v">'+tix.length+'</div><div class="l">Tickets</div></div>'+
+'<div class="kpi"><div class="v">'+totalTons.toFixed(2)+'</div><div class="l">Tons</div></div>'+
+(isNL?'':'<div class="kpi"><div class="v">'+totalDiv.toFixed(2)+'</div><div class="l">Diverted (T)</div></div>')+
+(isNL?'':'<div class="kpi"><div class="v">'+totalCO2.toFixed(2)+'</div><div class="l">CO₂e Avoided</div></div>')+
+'</div>'+
+(isNL?'':'<div class="target '+(onTarget?'on':'off')+'">Diversion '+divPct.toFixed(1)+'% — '+(onTarget?'On Target':((tgt-divPct).toFixed(1)+'% below target'))+'</div>')+
+'<div class="two-col"><div><h2>Materials</h2><table><tr><th>Material</th><th class="r">Tons</th><th class="r">%</th></tr>'+matRows+'</table></div>'+
+'<div><h2>Top Haulers</h2><table><tr><th>Hauler</th><th class="r">Tons</th></tr>'+hRows+'</table>'+
+'<h2 style="margin-top:12px">Top Drivers</h2><table><tr><th>Driver</th><th class="r">Tons</th></tr>'+dRows+'</table></div></div>'+
+(zRows?'<h2>Zone Breakdown</h2><table><tr><th>Zone</th><th class="r">Tons</th></tr>'+zRows+'</table>':'')+
+'<div class="foot">'+DX.facility+' · TCEQ '+DX.tceq.rn+' · '+DX.phone+' · robert@dalmexrecycling.com · Powered by DivertScan · Generated '+new Date().toLocaleString()+'</div>'+
+'</body></html>';
+w.document.open();w.document.write(html);w.document.close();},
+
 
 // Phase 2.7d: Drivers tab — PDF report (summary + per-driver detail)
 // Scoped to client's projects only. Uses cached _vDriversCache for summary,
@@ -1594,6 +1817,9 @@ sum.getColumn(3).width=10;
 sum.getColumn(4).width=12;
 sum.getColumn(5).width=14;
 sum.getColumn(6).width=12;
+// Auto-filter so Ross can sort by any column in Excel
+sum.autoFilter={from:{row:allHdr.number,column:1},to:{row:allHdr.number+drivers.length,column:6}};
+sum.views=[{state:'frozen',ySplit:allHdr.number}];
 
 // ===== PER-DRIVER SHEETS =====
 // Note: Excel sheet name limited to 31 chars, no special chars
@@ -1668,6 +1894,7 @@ drivers.forEach(function(d,idx){
 
   ws.columns=[{width:12},{width:11},{width:24},{width:7},{width:11},{width:11},{width:10},{width:50}];
   ws.views=[{state:'frozen',ySplit:4}];
+  ws.autoFilter={from:{row:hdr.number,column:1},to:{row:hdr.number+dTix.length,column:8}};
 });
 
 // Download
