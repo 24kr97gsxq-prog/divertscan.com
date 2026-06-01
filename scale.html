@@ -276,6 +276,26 @@
         <div class="driver-buttons" id="driverButtons"></div>
         <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()" onblur="commitDriverName()">
 
+        <!-- "My Loadbook" persistent banner — appears once a driver is selected.
+             Solves the discoverability problem: drivers couldn't find their loadbook
+             because the only buttons were a tiny icon in the picker + a one-shot
+             popup after ticket success. This banner stays visible through the entire
+             scanning flow so they can open the loadbook ANY time. -->
+        <div id="driverLoadbookBanner" style="display:none;margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,rgba(0,201,167,.18),rgba(0,201,167,.06));border:1.5px solid var(--cyan);border-radius:12px;box-shadow:0 0 14px rgba(0,201,167,.12);">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="font-size:1.8rem;line-height:1;flex-shrink:0;">📒</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);font-weight:700;margin-bottom:1px;">Your Loadbook</div>
+                    <div style="font-size:.78rem;color:var(--muted);font-weight:500;line-height:1.3;">See every load you've delivered, with photos and tonnage.</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:10px;">
+                <button onclick="openLoadbook()" style="flex:1;padding:11px 0;background:var(--cyan);color:#080f14;border:none;border-radius:9px;font-family:var(--sans);font-weight:800;font-size:.85rem;cursor:pointer;letter-spacing:.02em;">▶ Open My Loadbook</button>
+                <button onclick="copyLoadbookUrl()" title="Copy link to share or save" style="padding:11px 14px;background:transparent;border:1.5px solid var(--cyan);color:var(--cyan);border-radius:9px;font-family:var(--sans);font-weight:700;font-size:.75rem;cursor:pointer;white-space:nowrap;">📋 Copy</button>
+            </div>
+            <div style="font-size:.6rem;color:var(--dim);margin-top:8px;font-style:italic;text-align:center;">Tip: bookmark the loadbook page on your phone to save it for next time.</div>
+        </div>
+
         <div id="driverPhoneRow" style="display:none;margin-top:10px;">
             <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px;">📱 Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-style:italic;">— optional, for backup access to your loadbook</span></div>
             <input type="tel" class="driver-input show" id="driverPhone" placeholder="(555) 123-4567" autocomplete="tel" oninput="onDriverPhoneInput()" onblur="commitDriverPhone()" style="border-color:var(--border);">
@@ -332,12 +352,13 @@
     <div class="success-msg">Ticket created in DivertScan</div>
 
     <!-- Phase 2.3: Loadbook URL -->
-    <div id="successLoadbook" style="display:none;margin-top:14px;padding:12px;background:rgba(0,201,167,0.1);border:1px solid var(--cyan);border-radius:10px;max-width:340px;text-align:center;">
-        <div style="font-size:.65rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px;">📒 Your Loadbook</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;">Your loads opened in a new tab. Bookmark that page on your phone to save it.</div>
+    <div id="successLoadbook" style="display:none;margin-top:18px;padding:16px;background:linear-gradient(135deg,rgba(0,201,167,0.18),rgba(0,201,167,0.06));border:2px solid var(--cyan);border-radius:12px;max-width:360px;text-align:center;box-shadow:0 0 20px rgba(0,201,167,.18);">
+        <div style="font-size:1.5rem;margin-bottom:4px;">📒</div>
+        <div style="font-size:.85rem;color:var(--cyan);font-weight:800;letter-spacing:.04em;margin-bottom:4px;">YOUR LOADBOOK</div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:12px;line-height:1.4;">Opened in a new tab. Bookmark that page on your phone so you don't lose it.</div>
         <div style="display:flex;gap:6px;justify-content:center;">
-            <button onclick="openLoadbook()" style="padding:8px 14px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer;">Open Again</button>
-            <button onclick="copyLoadbookUrl()" style="padding:8px 14px;background:transparent;border:1px solid var(--cyan);color:var(--cyan);border-radius:8px;font-weight:700;font-size:.75rem;cursor:pointer;">📋 Copy Link</button>
+            <button onclick="openLoadbook()" style="padding:10px 16px;background:var(--cyan);color:#080f14;border:none;border-radius:8px;font-weight:800;font-size:.8rem;cursor:pointer;letter-spacing:.02em;">▶ Open Again</button>
+            <button onclick="copyLoadbookUrl()" style="padding:10px 16px;background:transparent;border:1.5px solid var(--cyan);color:var(--cyan);border-radius:8px;font-weight:700;font-size:.8rem;cursor:pointer;">📋 Copy Link</button>
         </div>
     </div>
 
@@ -574,6 +595,7 @@ function changeHauler() {
     document.getElementById('walkinSection').classList.remove('show');
     document.getElementById('driverSection').classList.remove('show');
     hidePhoneRow();
+    hideLoadbookBanner();
     document.getElementById('projectSelect').style.display = 'none';
     document.getElementById('projectSelect').value = '';
     hideZoneSelector();
@@ -629,6 +651,9 @@ async function loadDriverPicker(haulerName) {
             if (driver) {
                 selectedDriverId = driver.id;
                 selectedDriverToken = driver.driver_token;
+                // showPhoneRow also triggers the loadbook banner — driver gets
+                // immediate access on page reload after they previously picked a name
+                showPhoneRow(driver);
             }
         }
     }
@@ -673,6 +698,7 @@ function onDriverInput() {
     }
     selectedDriverToken = '';
     selectedDriverId = '';
+    hideLoadbookBanner();
     clearTimeout(window._driverInputTimer);
     if (selectedDriverName.length >= 3) {
         window._driverInputTimer = setTimeout(async () => {
@@ -734,6 +760,31 @@ function showPhoneRow(driver) {
             status.textContent = '';
         }
     }
+    // Whenever a driver is locked in with a token, the loadbook banner appears too.
+    // This is the persistent "find my loadbook" affordance that solves the
+    // discoverability problem — driver sees it as soon as they're picked, and it
+    // stays visible the whole time they're on the page.
+    showLoadbookBanner();
+}
+
+// Show the persistent loadbook banner. Called from any path where we've just
+// confirmed selectedDriverToken — selectDriver(), commitDriverName(),
+// loadDriverPicker() restore-from-localStorage path, etc.
+function showLoadbookBanner() {
+    const banner = document.getElementById('driverLoadbookBanner');
+    if (!banner) return;
+    if (selectedDriverToken) {
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+// Explicit hide — used by resetPage(), changeHauler(), and walkin paths
+// where the driver context is being cleared.
+function hideLoadbookBanner() {
+    const banner = document.getElementById('driverLoadbookBanner');
+    if (banner) banner.style.display = 'none';
 }
 
 function hidePhoneRow() {
@@ -875,6 +926,8 @@ function activateWalkin() {
     buttons.innerHTML = '';
     input.classList.add('show');
     input.value = '';
+    // Walk-in mode = no persistent driver record, no loadbook URL
+    hideLoadbookBanner();
 
     document.getElementById('projectSelect').style.display = 'none';
     hideZoneSelector();
@@ -893,6 +946,7 @@ function deactivateWalkin() {
     document.getElementById('modeBanner').style.display = 'flex';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('driverSection').classList.remove('show');
+    hideLoadbookBanner();
     hideZoneSelector();
     document.getElementById('confirmBtn').className = 'confirm-btn disabled';
     document.getElementById('confirmBtn').disabled = true;
@@ -1596,6 +1650,10 @@ function resetPage() {
     refreshNextTicketNum();
     if (!isWalkinMode) loadRecentLoads();
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+    // Driver context persists across resets — ensure the loadbook banner is shown
+    // again if we still have a valid token. (It may have been visually obscured
+    // during the success overlay; this brings it back for the next truck cycle.)
+    showLoadbookBanner();
     checkReady();
 }
 
