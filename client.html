@@ -611,18 +611,42 @@ list.innerHTML=filtered.map(function(d){
   var lastStr=d.lastLoad?P.fd(d.lastLoad.substring(0,10)):'—';
   var tons=d.tons.toFixed(1);
   var projInfo=d.projectCount>1?' • '+d.projectCount+' projects':'';
-  return '<div class="c" onclick="P.openDriverDtl(\''+d.driver_id+'\')" style="cursor:pointer">'+
+  // 2026-06-01: Driver name (whole row) is now the loadbook target — one tap → loadbook.
+  // The detail modal (XLSX/PDF exports, full ticket table, etc.) moves to the small "i"
+  // icon on the right side of the row. Drivers without a token can't open a loadbook,
+  // so for them the whole row falls back to opening the detail modal.
+  var hasToken=!!d.token;
+  var safeTok=hasToken?d.token.replace(/'/g,"\\'"):'';
+  var rowAction=hasToken
+    ? 'P.openDriverLoadbook(\''+safeTok+'\')'
+    : 'P.openDriverDtl(\''+d.driver_id+'\')';
+  var infoBtn=
+    '<button onclick="event.stopPropagation();P.openDriverDtl(\''+d.driver_id+'\')" '+
+    'title="Driver details, exports, full ticket list" aria-label="Driver details" '+
+    'style="background:rgba(0,0,0,.04);border:1px solid var(--border);color:var(--text-m);'+
+    'border-radius:50%;width:30px;height:30px;cursor:pointer;flex-shrink:0;'+
+    'font-family:var(--font);font-weight:700;font-size:.85rem;line-height:1;'+
+    'display:inline-flex;align-items:center;justify-content:center;padding:0">i</button>';
+  return '<div class="c" onclick="'+rowAction+'" style="cursor:pointer">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'+
       '<div style="flex:1;min-width:140px">'+
-        '<div style="font-weight:700;color:var(--text);font-size:.95rem;letter-spacing:-.01em">'+P.esc(d.driver_name)+'</div>'+
-        '<div style="font-size:.65rem;color:var(--text-d);margin-top:2px">🚛 '+P.esc(d.hauler)+projInfo+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
+          (hasToken?'<span style="font-size:.95rem;line-height:1;flex-shrink:0">📒</span>':'')+
+          '<div style="font-weight:700;color:var(--text);font-size:.95rem;letter-spacing:-.01em">'+P.esc(d.driver_name)+'</div>'+
+        '</div>'+
+        '<div style="font-size:.65rem;color:var(--text-d);margin-top:4px">🚛 '+P.esc(d.hauler)+projInfo+'</div>'+
       '</div>'+
-      '<div style="text-align:right;min-width:80px">'+
-        '<div style="font-family:var(--mono);font-weight:700;color:var(--primary);font-size:.9rem">'+d.loads+' load'+(d.loads===1?'':'s')+'</div>'+
-        '<div style="font-size:.6rem;color:var(--text-d)">'+tons+' T · last '+lastStr+'</div>'+
+      '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'+
+        '<div style="text-align:right;min-width:80px">'+
+          '<div style="font-family:var(--mono);font-weight:700;color:var(--primary);font-size:.9rem">'+d.loads+' load'+(d.loads===1?'':'s')+'</div>'+
+          '<div style="font-size:.6rem;color:var(--text-d)">'+tons+' T · last '+lastStr+'</div>'+
+        '</div>'+
+        infoBtn+
       '</div>'+
     '</div>'+
-    '<div style="margin-top:8px;font-size:.6rem;color:var(--text-d);text-align:center">Tap to view tickets, reports, and loadbook →</div>'+
+    '<div style="margin-top:8px;font-size:.6rem;color:var(--text-d);text-align:center">'+
+      (hasToken?'Tap row to open loadbook · tap "i" for exports &amp; details':'Tap row for driver details (no loadbook yet)')+
+    '</div>'+
   '</div>';
 }).join('');
 },
