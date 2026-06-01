@@ -542,6 +542,10 @@ async function init() {
 
     // Start the live phase indicator (added 2026-05)
     startLivePhasePoll();
+
+    // Start the iOS Safari resume watchdog — auto-recovers when the tab is
+    // backgrounded and iOS freezes the timers. See block in pollers section.
+    startResumeWatchdog();
 }
 
 // ─────────────────────────────────────────────
@@ -980,6 +984,9 @@ async function pollWeights() {
     try {
         const since = new Date(Date.now() - 30 * 60000).toISOString();
         const weights = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
+        // Mark the wall-clock time of a successful network round-trip, success or empty.
+        // The watchdog reads this to decide if iOS Safari has silently frozen the timer.
+        lastSuccessfulPollAt = Date.now();
         if (!weights || weights.length === 0) return;
 
         const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
@@ -1126,6 +1133,88 @@ function startLivePhasePoll() {
     pollLivePhase();
     livePollTimer = setInterval(pollLivePhase, LIVE_POLL_MS);
 }
+
+// ─────────────────────────────────────────────
+// iOS SAFARI RESUME HANDLING (added 2026-05-31)
+// ─────────────────────────────────────────────
+// Why this exists:
+//   iOS Safari aggressively suspends background tabs to save battery. When you
+//   tap back into a tab that's been hidden for more than a few minutes, iOS
+//   often restores it from a frozen snapshot. JS timers (setInterval) silently
+//   die — the page LOOKS fine but isn't actually polling Supabase. The driver
+//   has to manually pull-to-refresh to fix it.
+//
+//   There are three different signals iOS gives us when the page wakes back up,
+//   and we hook all three because none of them fire reliably in every case:
+//
+//   1. visibilitychange (document.hidden -> false)
+//      Fires when the user switches back to this tab. The most common case.
+//
+//   2. pageshow with event.persisted === true
+//      Fires when Safari restores the page from its back/forward cache (bfcache).
+//      Different code path from visibilitychange — bfcache restore CAN happen
+//      without a visibility change firing.
+//
+//   3. Heartbeat watchdog (every 10s)
+//      Catches the rare case where iOS lets timers run but kills the network,
+//      OR where the page is "visible" by iOS's measure but has been stale for
+//      a while. If lastSuccessfulPollAt is more than STALE_THRESHOLD ms old, we
+//      assume the pollers are dead and restart everything.
+//
+// On every resume we: clear & restart both pollers, force an immediate poll,
+// and flash a brief "Reconnecting..." status so the driver knows it's working.
+
+let lastSuccessfulPollAt = Date.now();
+let watchdogTimer = null;
+const STALE_THRESHOLD = 30000;  // ms — if pollWeights hasn't succeeded in this long, force a restart
+const WATCHDOG_INTERVAL = 10000; // ms — how often the watchdog checks
+
+function restartPollers(reason) {
+    console.log('[scale] restartPollers triggered:', reason);
+    updateStatus('off', 'Reconnecting...');
+    // Clear existing timers
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+    // Mark a fresh starting point so the watchdog doesn't immediately re-fire
+    lastSuccessfulPollAt = Date.now();
+    // Force-fire one poll immediately so the driver sees data right away,
+    // then restart the regular cadence.
+    pollWeights().catch(e => console.warn('Resume poll failed:', e));
+    pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+    startLivePhasePoll();
+}
+
+function startResumeWatchdog() {
+    if (watchdogTimer) return;
+    watchdogTimer = setInterval(() => {
+        const age = Date.now() - lastSuccessfulPollAt;
+        if (age > STALE_THRESHOLD) {
+            // Pollers look dead. Even if they didn't error out, they're stale.
+            // Restart and reset the clock.
+            restartPollers('stale (' + Math.round(age/1000) + 's since last success)');
+        }
+    }, WATCHDOG_INTERVAL);
+}
+
+// Listener 1: visibilitychange — fires when user switches back to this tab
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        // Just came back to the foreground
+        const age = Date.now() - lastSuccessfulPollAt;
+        // Only restart if we've been gone long enough to actually need it.
+        // Below 5 seconds is just a brief blur (e.g. tapping a button) — no point churning.
+        if (age > 5000) {
+            restartPollers('visibilitychange (was hidden ' + Math.round(age/1000) + 's)');
+        }
+    }
+});
+
+// Listener 2: pageshow with persisted=true — bfcache restore
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        restartPollers('pageshow.persisted (bfcache restore)');
+    }
+});
 
 // ─────────────────────────────────────────────
 // DISPLAY
@@ -1649,7 +1738,9 @@ function resetPage() {
 
     refreshNextTicketNum();
     if (!isWalkinMode) loadRecentLoads();
-    pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+    // Use the unified restart path so both pollers come back cleanly, lastSuccessfulPollAt
+    // is fresh, and the watchdog doesn't false-fire mid-cycle.
+    restartPollers('next truck reset');
     // Driver context persists across resets — ensure the loadbook banner is shown
     // again if we still have a valid token. (It may have been visually obscured
     // during the success overlay; this brings it back for the next truck cycle.)
