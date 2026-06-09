@@ -3715,6 +3715,10 @@ const DS = {
         if (this.state.supabaseUrl) localStorage.setItem('ds_supabase_url', this.state.supabaseUrl);
         if (this.state.supabaseKey) localStorage.setItem('ds_supabase_key', this.state.supabaseKey);
 
+        // After Edge Function migration: API key lives server-side (Supabase secret OPENAI_API_KEY).
+        // Set sentinel value so existing gatekeeper checks (if (!this.state.apiKey)) continue to pass.
+        if (!this.state.apiKey) this.state.apiKey = 'server-managed';
+
         // Populate settings fields — show actual URL, mask secrets
         if (this.state.apiKey) document.getElementById('apiKeyInput').value = '••••••••';
         if (this.state.supabaseUrl) document.getElementById('supabaseUrl').value = this.state.supabaseUrl;
@@ -4658,70 +4662,63 @@ const DS = {
     },
 
     // ============================================================
-    // OPENAI API HELPER — routes through Supabase DB function (no CORS issues)
+    // OPENAI API HELPER — routes through Supabase Edge Function "smart-action"
+    // OpenAI key is stored as server-side secret (OPENAI_API_KEY); no longer in client localStorage.
     // ============================================================
     async callOpenAI(body) {
-        if (!this.state.apiKey) throw new Error('No API key set — go to Audit > Settings');
-
-        // Route through Supabase RPC function to avoid CORS
-        if (this.state.supabaseUrl && this.state.supabaseKey) {
-            try {
-                const rpcUrl = this.state.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/openai_proxy';
-                const res = await fetch(rpcUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': this.state.supabaseKey,
-                        'Authorization': 'Bearer ' + this.state.supabaseKey
-                    },
-                    body: JSON.stringify({
-                        openai_key: this.state.apiKey,
-                        request_body: body
-                    })
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.choices) return data;
-                    if (data.error) {
-                        const msg = data.error.message || 'Unknown error';
-                        if (msg.includes('Incorrect API key') || msg.includes('invalid')) throw new Error('Invalid OpenAI API key');
-                        if (msg.includes('quota') || msg.includes('rate')) throw new Error('OpenAI quota exceeded — check billing');
-                        throw new Error(msg);
-                    }
-                    return data;
-                } else {
-                    const errText = await res.text();
-                    console.error('RPC error:', res.status, errText);
-                    if (res.status === 404) {
-                        throw new Error('Run openai_proxy_function.sql in Supabase SQL Editor first');
-                    }
-                    throw new Error('Supabase RPC error: ' + res.status);
-                }
-            } catch (e) {
-                if (e.message.includes('API key') || e.message.includes('quota') || e.message.includes('SQL Editor')) throw e;
-                console.error('RPC call failed:', e.message);
-            }
+        if (!this.state.supabaseUrl || !this.state.supabaseKey) {
+            throw new Error('Supabase not configured — go to Audit > Settings');
         }
 
-        // Fallback: direct call (usually blocked by CORS in browser)
+        const url = this.state.supabaseUrl.replace(/\/$/, '') + '/functions/v1/smart-action';
+
         try {
-            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + this.state.apiKey
+                    'Authorization': 'Bearer ' + this.state.supabaseKey
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify({ request_body: body })
             });
-            if (res.ok) return await res.json();
-            const errBody = await res.text();
-            let errMsg = 'API error ' + res.status;
-            try { errMsg = JSON.parse(errBody).error.message; } catch(e) {}
-            throw new Error(errMsg);
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.choices) return data;
+                if (data.error) {
+                    const msg = data.error.message || 'Unknown error';
+                    if (msg.includes('Incorrect API key') || msg.includes('invalid')) {
+                        throw new Error('OpenAI key invalid on server — update OPENAI_API_KEY secret in Supabase Edge Functions');
+                    }
+                    if (msg.includes('quota') || msg.includes('rate')) {
+                        throw new Error('OpenAI quota exceeded — check OpenAI billing');
+                    }
+                    if (msg.includes('OPENAI_API_KEY')) {
+                        throw new Error('Server missing OpenAI key — add OPENAI_API_KEY in Supabase Edge Functions secrets');
+                    }
+                    throw new Error(msg);
+                }
+                return data;
+            } else {
+                const errText = await res.text();
+                console.error('Edge Function error:', res.status, errText);
+                if (res.status === 404) {
+                    throw new Error('Edge Function smart-action not deployed — check Supabase Dashboard → Edge Functions');
+                }
+                if (res.status === 401) {
+                    throw new Error('Edge Function auth failed — Supabase anon key may be incorrect');
+                }
+                throw new Error('Edge Function returned ' + res.status + ': ' + errText.slice(0, 100));
+            }
         } catch (e) {
-            if (e.message.includes('API key')) throw e;
-            throw new Error('Run openai_proxy_function.sql in Supabase SQL Editor to enable AI features');
+            if (e.message.includes('API key') ||
+                e.message.includes('quota') ||
+                e.message.includes('Edge Function') ||
+                e.message.includes('OpenAI')) {
+                throw e;
+            }
+            console.error('OCR call failed:', e.message);
+            throw new Error('OCR call failed: ' + e.message);
         }
     },
 
