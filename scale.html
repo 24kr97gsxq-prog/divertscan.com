@@ -180,6 +180,7 @@
         <div class="wc-value empty" id="grossValue">Waiting for truck...</div>
         <div class="wc-sub" id="grossTime"></div>
         <div class="wc-live-hint" id="grossHint">⬆ Reading… weight climbing</div>
+        <button id="grossDismissBtn" onclick="dismissGross()" style="display:none;margin-top:10px;padding:6px 12px;font-family:var(--sans);font-size:.7rem;font-weight:700;background:rgba(220,38,38,0.12);border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer">✕ Clear Gross (wrong truck/stale)</button>
     </div>
 
     <!-- Tare Weight -->
@@ -191,6 +192,7 @@
         <div class="wc-value empty" id="tareValue">Drive to dump, then return</div>
         <div class="wc-sub" id="tareTime"></div>
         <div class="wc-live-hint" id="tareHint">⬆ Reading… weight climbing</div>
+        <button id="tareDismissBtn" onclick="dismissTare()" style="display:none;margin-top:10px;padding:6px 12px;font-family:var(--sans);font-size:.7rem;font-weight:700;background:rgba(220,38,38,0.12);border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer">✕ Clear Tare (wrong reading)</button>
     </div>
 
     <!-- Tare Estimate Options (NEW Phase 2.5) -->
@@ -409,6 +411,10 @@ let selectedDriverId = '';
 let manualTareValue = null;
 let manualTareSource = null;
 let manualTareLabel = '';
+
+// Phase 2.9: Track dismissed scale readings so they don't re-appear after manual clear.
+// IDs added here are filtered out of the polling loop until page reload.
+let dismissedWeightIds = new Set();
 
 // Live phase indicator state (added 2026-05)
 let livePollTimer = null;
@@ -983,11 +989,17 @@ function getTicketNumber() {
 async function pollWeights() {
     try {
         const since = new Date(Date.now() - 30 * 60000).toISOString();
-        const weights = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
+        let weights = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&status=eq.pending&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
         // Mark the wall-clock time of a successful network round-trip, success or empty.
         // The watchdog reads this to decide if iOS Safari has silently frozen the timer.
         lastSuccessfulPollAt = Date.now();
         if (!weights || weights.length === 0) return;
+
+        // Phase 2.9: Filter out any readings the user explicitly dismissed this session
+        if (dismissedWeightIds.size > 0) {
+            weights = weights.filter(w => !dismissedWeightIds.has(w.id));
+            if (weights.length === 0) return;
+        }
 
         const sorted = weights.sort((a, b) => b.weight_lbs - a.weight_lbs);
 
@@ -1001,7 +1013,17 @@ async function pollWeights() {
 
         if (sorted.length >= 2 && grossReading) {
             const candidate = sorted[sorted.length - 1];
-            if (candidate.weight_lbs < grossReading.weight_lbs - 2000 && candidate.id !== grossReading.id) {
+            // Phase 2.9: Tare must be captured AFTER gross. A real cycle is:
+            //   1. Truck pulls in loaded → gross captured
+            //   2. Truck dumps
+            //   3. Truck returns empty → tare captured
+            // If candidate timestamp is BEFORE or EQUAL TO gross, it belongs to a
+            // different (earlier) event and must not be auto-paired.
+            const grossTime = new Date(grossReading.captured_at).getTime();
+            const candTime  = new Date(candidate.captured_at).getTime();
+            const tareAfterGross = candTime > grossTime;
+
+            if (tareAfterGross && candidate.weight_lbs < grossReading.weight_lbs - 2000 && candidate.id !== grossReading.id) {
                 if (!tareReading || candidate.id !== tareReading.id) {
                     tareReading = candidate;
                     showTare(tareReading);
@@ -1232,6 +1254,10 @@ function showGross(reading) {
     document.getElementById('grossTime').innerHTML =
         new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (grossAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + freshLabel + '</span>';
 
+    // Phase 2.9: show dismiss button so user can clear stale gross
+    const gDismiss = document.getElementById('grossDismissBtn');
+    if (gDismiss) gDismiss.style.display = 'inline-block';
+
     const tareCard = document.getElementById('tareCard');
     tareCard.classList.add('waiting');
     document.getElementById('tareValue').textContent = 'Waiting...';
@@ -1256,6 +1282,11 @@ function showTare(reading) {
     const tareFresh = tareAge <= 5 ? '🟢 Just now' : tareAge <= 15 ? '🟡 ' + tareAge + ' min ago' : '🔴 ' + tareAge + ' min ago';
     document.getElementById('tareTime').innerHTML =
         new Date(reading.captured_at).toLocaleTimeString() + ' <span style="color:' + (tareAge <= 15 ? 'var(--green)' : 'var(--amber)') + '">' + tareFresh + '</span>';
+
+    // Phase 2.9: show dismiss button so user can clear stale tare
+    const tDismiss = document.getElementById('tareDismissBtn');
+    if (tDismiss) tDismiss.style.display = 'inline-block';
+
     checkReady();
 }
 
@@ -1268,6 +1299,73 @@ function showNet() {
     document.getElementById('netTons').textContent = netTons + ' tons';
     document.getElementById('netTicket').textContent = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
     checkReady();
+}
+
+// ─────────────────────────────────────────────
+// Phase 2.9: DISMISS STALE READINGS
+// User-facing "Clear" buttons on Gross/Tare cards. Dismissed readings:
+//   - get marked dismissed locally so they don't re-pair
+//   - get PATCHed in DB to status='dismissed' so they don't re-poll
+//   - card UI resets to "waiting" state
+// ─────────────────────────────────────────────
+async function dismissGross() {
+    if (!grossReading) return;
+    if (!confirm('Clear the current Gross reading? This will reset the screen so a fresh weight can be captured.')) return;
+    const id = grossReading.id;
+    dismissedWeightIds.add(id);
+    grossReading = null;
+    tareReading = null;  // tare can't exist without a gross to pair with
+    resetGrossCard();
+    resetTareCard();
+    document.getElementById('netCard').style.display = 'none';
+    // Best-effort DB update (non-fatal if it fails — local dismiss still works for this session)
+    try {
+        await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
+            status: 'dismissed',
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: (typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName + ' (manual clear)' : 'manual clear'
+        });
+    } catch (e) { console.warn('Dismiss gross PATCH failed (local-only):', e); }
+    checkReady();
+}
+
+async function dismissTare() {
+    if (!tareReading) return;
+    if (!confirm('Clear the current Tare reading? The Gross stays; a fresh tare can be captured.')) return;
+    const id = tareReading.id;
+    dismissedWeightIds.add(id);
+    tareReading = null;
+    resetTareCard();
+    document.getElementById('netCard').style.display = 'none';
+    try {
+        await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
+            status: 'dismissed',
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: (typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName + ' (manual clear)' : 'manual clear'
+        });
+    } catch (e) { console.warn('Dismiss tare PATCH failed (local-only):', e); }
+    checkReady();
+}
+
+function resetGrossCard() {
+    const card = document.getElementById('grossCard');
+    card.classList.remove('phase-rising','phase-settling','phase-locked','captured');
+    document.getElementById('grossValue').textContent = 'Waiting for truck...';
+    document.getElementById('grossValue').classList.add('empty');
+    document.getElementById('grossTime').innerHTML = '';
+    const btn = document.getElementById('grossDismissBtn');
+    if (btn) btn.style.display = 'none';
+}
+
+function resetTareCard() {
+    const card = document.getElementById('tareCard');
+    card.classList.remove('phase-rising','phase-settling','phase-locked','captured');
+    card.classList.add('waiting');
+    document.getElementById('tareValue').textContent = grossReading ? 'Waiting...' : 'Drive to dump, then return';
+    document.getElementById('tareValue').classList.add('empty');
+    document.getElementById('tareTime').innerHTML = '';
+    const btn = document.getElementById('tareDismissBtn');
+    if (btn) btn.style.display = 'none';
 }
 
 // ─────────────────────────────────────────────
