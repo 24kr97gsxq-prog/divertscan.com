@@ -7556,6 +7556,7 @@ const DS = {
         this._batchLoaded = 0;
         this._batchProcessed = {};
         this._batchOCRRunning = false;
+        this._batchPendingReview = [];  // Phase 2.8: tickets flagged for human review before save
 
         const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
         document.getElementById('batchUploadTitle').textContent = title;
@@ -7920,6 +7921,79 @@ const DS = {
                                 if (scaleUrl) newTicket.scale_ticket_image = scaleUrl;
                                 Object.assign(newTicket, matData2);
 
+                                // ============================================================
+                                // Phase 2.8: SUSPICION CHECK — flag for human review instead of auto-create
+                                // ============================================================
+                                var suspicions = [];
+                                var todayStr_ = new Date().toISOString().split('T')[0];
+
+                                // Check 1: Date validity
+                                if (!rawDate2 || !parsed.date) {
+                                    suspicions.push('Date missing from OCR');
+                                } else {
+                                    var dObj_ = new Date(tktDate2 + 'T12:00:00');
+                                    var todObj_ = new Date(todayStr_ + 'T12:00:00');
+                                    var dDiff_ = Math.round((dObj_ - todObj_) / 86400000);
+                                    if (dDiff_ > 7) {
+                                        suspicions.push('Date is ' + dDiff_ + ' days in the future');
+                                    } else if (dDiff_ < -90) {
+                                        suspicions.push('Date is ' + Math.abs(dDiff_) + ' days old');
+                                    }
+                                }
+
+                                // Check 2: Driver name
+                                if (!parsed.driver || !String(parsed.driver).trim()) {
+                                    suspicions.push('Driver name missing');
+                                }
+
+                                // Check 3: Weights sanity
+                                if (photoGross2 === 0) {
+                                    suspicions.push('Gross weight is 0');
+                                } else if (photoTare2 === 0) {
+                                    suspicions.push('Tare weight is 0');
+                                } else if (photoGross2 <= photoTare2) {
+                                    suspicions.push('Gross weight is less than or equal to Tare');
+                                }
+
+                                // Check 4: Project mismatch (OCR project text vs user-selected project)
+                                if (parsed.project) {
+                                    var ocrProjLower_ = String(parsed.project).toLowerCase().trim();
+                                    var selProjLower_ = (this.state.currentProject.name || '').toLowerCase();
+                                    var ocrWords_ = ocrProjLower_.split(/[\s\/\-,]+/).filter(function(w){return w.length>=4;});
+                                    var selWords_ = selProjLower_.split(/[\s\/\-,]+/).filter(function(w){return w.length>=4;});
+                                    var overlap_ = false;
+                                    ocrWords_.forEach(function(w){ if (selProjLower_.indexOf(w) >= 0) overlap_ = true; });
+                                    selWords_.forEach(function(w){ if (ocrProjLower_.indexOf(w) >= 0) overlap_ = true; });
+                                    if (!overlap_ && ocrProjLower_.length > 0) {
+                                        suspicions.push('OCR project "' + parsed.project + '" doesn\'t match selected "' + this.state.currentProject.name + '"');
+                                    }
+                                }
+
+                                if (suspicions.length > 0) {
+                                    // FLAGGED — queue for human review, don't POST yet
+                                    this._batchPendingReview.push({
+                                        idx: idx,
+                                        ticketNumber: ticketNum,
+                                        ticketData: newTicket,
+                                        photoBase64: this._batchBase64[idx],
+                                        photoUrl: scaleUrl,
+                                        ocr: parsed,
+                                        suspicions: suspicions,
+                                        skipped: false
+                                    });
+                                    this._batchProcessed[idx] = true;
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '⚠️ <strong>#' + ticketNum + '</strong> — needs review: ' + suspicions[0] + (suspicions.length > 1 ? ' <span style="opacity:.7">(+' + (suspicions.length-1) + ' more)</span>' : '');
+                                        statusEl.style.color = 'var(--warning)';
+                                    }
+                                    if (rowEl) { rowEl.style.background = 'rgba(245,158,11,0.1)'; rowEl.style.borderLeft = '3px solid var(--warning)'; }
+                                    continue;  // skip to next photo
+                                }
+
+                                // ============================================================
+                                // CLEAN — proceed with auto-create (existing logic below)
+                                // ============================================================
+
                                 // Direct POST with error capture
                                 var postRes = await fetch(this.state.supabaseUrl + '/rest/v1/tickets', {
                                     method: 'POST',
@@ -7988,11 +8062,316 @@ const DS = {
 
         if (btn) {
             btn.disabled = true;
-            const summary = flagged > 0 ? matched + ' matched, ' + flagged + ' flagged ⚠️' : matched + '/' + this._batchFiles.length + ' verified ✓';
+            const reviewCnt = (this._batchPendingReview || []).length;
+            let summary;
+            if (reviewCnt > 0) {
+                summary = matched + ' created, ' + reviewCnt + ' need review ⚠️';
+            } else if (flagged > 0) {
+                summary = matched + ' matched, ' + flagged + ' flagged ⚠️';
+            } else {
+                summary = matched + '/' + this._batchFiles.length + ' verified ✓';
+            }
             btn.textContent = '✅ ' + summary;
         }
         this._batchOCRRunning = false;
-        this.addAuditEntry('AI_BATCH_OCR', 'Read ' + this._batchFiles.length + ' photos, ' + matched + ' matched, ' + flagged + ' flagged');
+        this.addAuditEntry('AI_BATCH_OCR', 'Read ' + this._batchFiles.length + ' photos, ' + matched + ' matched, ' + flagged + ' flagged, ' + ((this._batchPendingReview||[]).length) + ' pending review');
+
+        // Phase 2.8: If any tickets were flagged, show the review section
+        if (this._batchPendingReview && this._batchPendingReview.length > 0) {
+            this._renderBatchReviewSection();
+        }
+    },
+
+    // ============================================================
+    // Phase 2.8: BATCH REVIEW SECTION — flagged-ticket verification UI
+    // ============================================================
+    _renderBatchReviewSection() {
+        var pending = this._batchPendingReview || [];
+        if (pending.length === 0) return;
+
+        var batchList = document.getElementById('batchPhotoList');
+        if (!batchList) return;
+
+        // Remove any existing review section (in case of re-render)
+        var oldReview = document.getElementById('batchReviewSection');
+        if (oldReview) oldReview.remove();
+
+        var DS = this;
+        var todayStr_ = new Date().toISOString().split('T')[0];
+
+        var html = '<div id="batchReviewSection" style="margin-top:16px;padding:14px;border:2px solid var(--warning);border-radius:10px;background:rgba(245,158,11,0.06)">' +
+            '<div style="font-size:.9rem;font-weight:800;color:var(--warning);margin-bottom:4px">🔍 Review Needed (' + pending.length + ' ticket' + (pending.length>1?'s':'') + ')</div>' +
+            '<div style="font-size:.7rem;color:var(--text-muted);margin-bottom:14px">AI flagged these for verification. Check the photo, fix any errors, then approve. Clean tickets above have already been created.</div>';
+
+        pending.forEach(function(item, ri) {
+            var t = item.ticketData;
+            var tDate = t.ticket_date || todayStr_;
+            var dateBorder = 'var(--primary)';
+            var dateBg = 'var(--bg-input)';
+            if (tDate && tDate !== todayStr_) {
+                var dObj = new Date(tDate + 'T12:00:00');
+                var todObj = new Date(todayStr_ + 'T12:00:00');
+                var dd = Math.round((dObj - todObj) / 86400000);
+                if (dd > 7) { dateBorder = 'var(--danger)'; dateBg = 'rgba(220,38,38,0.12)'; }
+                else if (dd < -90) { dateBorder = 'var(--warning)'; dateBg = 'rgba(234,179,8,0.12)'; }
+            }
+
+            var suspList = item.suspicions.map(function(s){ return '<li>' + DS.esc(s) + '</li>'; }).join('');
+
+            var projOpts = DS.state.projects.map(function(p) {
+                return '<option value="' + p.id + '"' + (p.id === t.project_id ? ' selected' : '') + '>' + DS.esc(p.name) + '</option>';
+            }).join('');
+
+            html += '<div id="reviewRow_' + ri + '" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--bg-input)">' +
+                // Header
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+                    '<div style="font-size:.7rem;font-weight:700;color:var(--warning)">⚠️ Review ' + (ri+1) + ' of ' + pending.length + ' — #' + DS.esc(item.ticketNumber) + '</div>' +
+                    '<button onclick="DS._skipBatchReviewRow(' + ri + ')" style="font-size:.6rem;padding:3px 10px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
+                '</div>' +
+                // Why flagged
+                '<div style="background:rgba(245,158,11,0.12);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:.65rem">' +
+                    '<div style="font-weight:700;margin-bottom:2px;color:var(--warning)">Why flagged:</div>' +
+                    '<ul style="margin:0;padding-left:16px">' + suspList + '</ul>' +
+                '</div>' +
+                // Photo + editable fields
+                '<div style="display:flex;gap:10px">' +
+                    '<img id="reviewImg_' + ri + '" src="' + (item.photoBase64 || item.photoUrl || '') + '" onclick="DS._enlargeReviewPhoto(' + ri + ')" style="width:130px;height:130px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer;border:1px solid var(--border)" title="Tap to enlarge">' +
+                    '<div style="flex:1;min-width:0">' +
+                        // Date (top, prominent)
+                        '<div style="font-size:.6rem;color:var(--text-muted);font-weight:700;margin-bottom:2px">📅 DATE</div>' +
+                        '<input type="date" id="rv_date_' + ri + '" class="form-input" value="' + tDate + '" style="margin-bottom:8px;font-size:.9rem;font-weight:700;padding:8px;border:2px solid ' + dateBorder + ';background:' + dateBg + '">' +
+                        // Ticket #
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">🎫 Ticket #</div>' +
+                        '<input type="text" id="rv_num_' + ri + '" class="form-input" value="' + DS.esc(t.ticket_number || '') + '" inputmode="numeric" style="margin-bottom:6px;font-size:.8rem">' +
+                        // Project
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">🏗 Project</div>' +
+                        '<select id="rv_proj_' + ri + '" class="form-input" style="margin-bottom:6px;font-size:.75rem;font-weight:600">' + projOpts + '</select>' +
+                        // Driver
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">🚛 Driver</div>' +
+                        '<input type="text" id="rv_driver_' + ri + '" class="form-input" value="' + DS.esc(t.driver_name || '') + '" placeholder="Driver name" style="margin-bottom:6px;font-size:.8rem">' +
+                        // Weights side-by-side
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">⚖️ Gross / Tare</div>' +
+                        '<div style="display:flex;gap:4px">' +
+                            '<input type="number" id="rv_gross_' + ri + '" class="form-input" value="' + (t.gross_lbs || '') + '" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
+                            '<input type="number" id="rv_tare_' + ri + '" class="form-input" value="' + (t.tare_lbs || '') + '" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        html += '<button id="batchReviewApproveBtn" class="btn btn-success" onclick="DS._approveBatchReview()" style="width:100%;font-size:.9rem;font-weight:700;padding:14px;margin-top:6px">✅ Create All Reviewed Tickets</button>' +
+            '</div>';
+
+        batchList.insertAdjacentHTML('afterend', html);
+
+        // Scroll the review section into view
+        setTimeout(function() {
+            var sec = document.getElementById('batchReviewSection');
+            if (sec) sec.scrollIntoView({behavior:'smooth', block:'start'});
+        }, 200);
+    },
+
+    _skipBatchReviewRow(ri) {
+        if (!this._batchPendingReview || !this._batchPendingReview[ri]) return;
+        this._batchPendingReview[ri].skipped = true;
+        var row = document.getElementById('reviewRow_' + ri);
+        if (row) {
+            row.style.opacity = '0.45';
+            row.style.background = 'rgba(120,120,120,0.1)';
+            // Disable all inputs in this row
+            row.querySelectorAll('input, select, button').forEach(function(el) {
+                if (el.id !== ('skip-undo-' + ri)) el.disabled = true;
+            });
+            // Add an undo button
+            var header = row.querySelector('div');
+            if (header && !document.getElementById('skip-undo-' + ri)) {
+                var undoBtn = document.createElement('button');
+                undoBtn.id = 'skip-undo-' + ri;
+                undoBtn.textContent = '↶ Undo skip';
+                undoBtn.style.cssText = 'font-size:.6rem;padding:3px 10px;margin-left:6px;border:1px solid var(--primary);color:var(--primary);background:transparent;border-radius:4px;cursor:pointer';
+                undoBtn.onclick = function() { DS._unskipBatchReviewRow(ri); };
+                header.appendChild(undoBtn);
+            }
+        }
+    },
+
+    _unskipBatchReviewRow(ri) {
+        if (!this._batchPendingReview || !this._batchPendingReview[ri]) return;
+        this._batchPendingReview[ri].skipped = false;
+        var row = document.getElementById('reviewRow_' + ri);
+        if (row) {
+            row.style.opacity = '1';
+            row.style.background = 'var(--bg-input)';
+            row.querySelectorAll('input, select, button').forEach(function(el) { el.disabled = false; });
+            var undoBtn = document.getElementById('skip-undo-' + ri);
+            if (undoBtn) undoBtn.remove();
+        }
+    },
+
+    _enlargeReviewPhoto(ri) {
+        var item = this._batchPendingReview && this._batchPendingReview[ri];
+        if (!item) return;
+        var src = item.photoBase64 || item.photoUrl;
+        if (!src) return;
+        var titleEl = document.getElementById('photoViewerTitle');
+        var contentEl = document.getElementById('photoViewerContent');
+        if (titleEl) titleEl.textContent = 'Review #' + item.ticketNumber + ' (' + (ri+1) + ' of ' + this._batchPendingReview.length + ')';
+        if (contentEl) contentEl.innerHTML = '<img src="' + src + '" style="width:100%;border-radius:12px;border:1px solid var(--border);">';
+        this.openModal('photoViewerModal');
+    },
+
+    async _approveBatchReview() {
+        var pending = this._batchPendingReview || [];
+        if (pending.length === 0) return;
+
+        var btn = document.getElementById('batchReviewApproveBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Creating tickets...'; }
+
+        var created = 0, failed = 0, skipped = 0;
+        var DS = this;
+
+        for (var ri = 0; ri < pending.length; ri++) {
+            var item = pending[ri];
+            if (item.skipped) { skipped++; continue; }
+
+            var rowEl = document.getElementById('reviewRow_' + ri);
+            if (!rowEl) continue;
+
+            // Read edited values from inputs
+            var editedDate = document.getElementById('rv_date_' + ri).value;
+            var editedNum = document.getElementById('rv_num_' + ri).value.trim();
+            var editedProj = document.getElementById('rv_proj_' + ri).value;
+            var editedDriver = document.getElementById('rv_driver_' + ri).value.trim();
+            var editedGross = parseInt(document.getElementById('rv_gross_' + ri).value) || 0;
+            var editedTare = parseInt(document.getElementById('rv_tare_' + ri).value) || 0;
+            var editedNet = editedGross - editedTare;
+            var editedTons = +(editedNet / 2000).toFixed(4);
+
+            if (editedNet <= 0 || !editedDate || !editedNum) {
+                if (rowEl) {
+                    rowEl.style.background = 'rgba(220,38,38,0.15)';
+                    rowEl.style.borderColor = 'var(--danger)';
+                }
+                failed++;
+                continue;
+            }
+
+            // Recompute material breakdown based on current project
+            var projObj = this.state.projects.find(function(p) { return p.id === editedProj; }) || {};
+            var projName = projObj.name || '';
+            var defaults = DS._getDefaultMaterials(this.state.tickets, projName);
+            var matData = {};
+            var matKeys = Object.keys(DS.MATERIALS);
+            matKeys.forEach(function(k) {
+                matData[k + '_pct'] = defaults[k] || 0;
+                matData[k + '_tons'] = +(editedTons * (defaults[k] || 0) / 100).toFixed(4);
+            });
+            var nonDiverted = new Set(defaults._non_diverted || []);
+            var divPct = 0;
+            matKeys.forEach(function(k) {
+                if (k !== 'landfill' && !nonDiverted.has(k)) divPct += (defaults[k] || 0);
+            });
+            var lfPct = 100 - divPct;
+            var divTons = +(editedTons * divPct / 100).toFixed(4);
+            var co2e = 0;
+            matKeys.forEach(function(k) {
+                if (k !== 'landfill' && !nonDiverted.has(k)) {
+                    co2e += (matData[k + '_tons'] || 0) * (DS.MATERIALS[k].gwp || 0);
+                }
+            });
+
+            // Build final ticket — start from queued data, overlay edits
+            var newTicket = Object.assign({}, item.ticketData, {
+                ticket_number: editedNum,
+                ticket_date: editedDate,
+                project_id: editedProj,
+                gross_lbs: editedGross,
+                tare_lbs: editedTare,
+                net_lbs: editedNet,
+                net_tons: editedTons,
+                diversion_pct: divPct,
+                diverted_tons: divTons,
+                landfill_tons: +(editedTons * lfPct / 100).toFixed(4),
+                co2e_avoided: +co2e.toFixed(4),
+                driver_name: editedDriver || null,
+                human_verified: true,
+                signed_by: 'Batch review approved'
+            }, matData);
+
+            // Re-resolve driver_id from edited name
+            if (editedDriver) {
+                try {
+                    var dId = await this._resolveDriverId(editedDriver, newTicket.hauler || 'Jaguar Waste Management');
+                    if (dId) newTicket.driver_id = dId;
+                    else delete newTicket.driver_id;  // clear stale id if name changed
+                } catch(dErr) { /* non-fatal */ }
+            } else {
+                delete newTicket.driver_id;
+            }
+
+            // POST
+            try {
+                var postRes = await fetch(this.state.supabaseUrl + '/rest/v1/tickets', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': this.state.supabaseKey,
+                        'Authorization': 'Bearer ' + this.state.supabaseKey,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation'
+                    },
+                    body: JSON.stringify(newTicket)
+                });
+                if (postRes.ok) {
+                    var createdData = await postRes.json();
+                    if (createdData && createdData.length > 0) {
+                        this.state.tickets.unshift(createdData[0]);
+                        created++;
+                        if (rowEl) {
+                            rowEl.style.background = 'rgba(34,197,94,0.15)';
+                            rowEl.style.borderColor = 'var(--success)';
+                            rowEl.style.borderWidth = '2px';
+                        }
+                        this.addAuditEntry('TICKET_CREATE', '#' + editedNum + ' from batch review | ' + editedTons + 'T' + (editedDriver ? ' | driver: ' + editedDriver : ''));
+                    }
+                } else {
+                    failed++;
+                    var errText = await postRes.text();
+                    console.error('Review create error:', postRes.status, errText);
+                    if (rowEl) {
+                        rowEl.style.background = 'rgba(220,38,38,0.15)';
+                        rowEl.style.borderColor = 'var(--danger)';
+                    }
+                }
+            } catch(e) {
+                failed++;
+                console.error('Review POST exception:', e);
+                if (rowEl) {
+                    rowEl.style.background = 'rgba(220,38,38,0.15)';
+                    rowEl.style.borderColor = 'var(--danger)';
+                }
+            }
+        }
+
+        // Clear the queue once processed
+        this._batchPendingReview = [];
+
+        if (btn) {
+            var parts = [];
+            if (created > 0) parts.push(created + ' created');
+            if (skipped > 0) parts.push(skipped + ' skipped');
+            if (failed > 0) parts.push(failed + ' failed');
+            btn.textContent = '✅ ' + parts.join(', ');
+            btn.disabled = true;
+        }
+
+        this.renderTickets();
+        this.renderReports();
+        if (failed === 0) {
+            this.showToast('✅ ' + created + ' reviewed ticket' + (created !== 1 ? 's' : '') + ' created');
+        } else {
+            this.showToast('⚠️ ' + created + ' created, ' + failed + ' failed — check rows in red');
+        }
     },
 
     // Compress image to max dimension to reduce API payload
@@ -9487,55 +9866,24 @@ const DS = {
                 // Store matched project for confirmAllTickets
                 item.matchedProjectId = matchedProjId;
 
-                // Date sanity check — flag dates that look wrong so user can spot them quickly
-                var todayStr = new Date().toISOString().split('T')[0];
-                var dateBorderColor = 'var(--primary)';
-                var dateBgColor = 'var(--bg-input)';
-                var dateBadge = '';
-                if (useDate && useDate !== todayStr) {
-                    var dateObj = new Date(useDate + 'T12:00:00');
-                    var todayObj = new Date(todayStr + 'T12:00:00');
-                    var diffDays = Math.round((dateObj - todayObj) / 86400000);
-                    if (diffDays > 7) {
-                        dateBorderColor = 'var(--danger)';
-                        dateBgColor = 'rgba(220,38,38,.12)';
-                        dateBadge = '<span style="display:inline-block;background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;margin-left:6px">⚠️ FUTURE DATE — VERIFY</span>';
-                    } else if (diffDays < -90) {
-                        dateBorderColor = 'var(--warning)';
-                        dateBgColor = 'rgba(234,179,8,.12)';
-                        dateBadge = '<span style="display:inline-block;background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;margin-left:6px">⚠️ '+Math.abs(diffDays)+' DAYS OLD</span>';
-                    }
-                }
-
-                html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--bg-input)">' +
-                    // Header row with ticket count and skip button
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-                        '<div style="font-size:.7rem;color:var(--success);font-weight:700">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
-                        '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.6rem;padding:3px 10px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
+                html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
+                    '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+                    '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
+                    '<div style="flex:1">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+                    '<div style="font-size:.65rem;color:var(--success);font-weight:700">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
+                    '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.55rem;padding:2px 8px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
                     '</div>' +
-                    // Main content: large photo on left, editable fields on right
-                    '<div style="display:flex;gap:10px">' +
-                        // PHOTO — 120px wide, tap to enlarge
-                        '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:120px;height:120px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer;border:1px solid var(--border)" title="Tap to enlarge">' +
-                        // FIELDS column
-                        '<div style="flex:1;min-width:0">' +
-                            // DATE — first, prominent, with warning if suspicious
-                            '<div style="font-size:.6rem;color:var(--text-muted);font-weight:700;margin-bottom:2px">📅 DATE'+dateBadge+'</div>' +
-                            '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.9rem;font-weight:700;padding:8px;border:2px solid '+dateBorderColor+';background:'+dateBgColor+'">' +
-                            (dayHint ? '<div style="margin-bottom:6px">'+dayHint+'</div>' : '<div style="margin-bottom:6px"></div>') +
-                            // TICKET NUMBER
-                            '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
-                            // PROJECT
-                            '<select id="mt_proj_'+i+'" class="form-input" style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:var(--primary)">' + projOpts + '</select>' +
-                            (matchedProjHint ? '<div style="margin-bottom:4px">'+matchedProjHint+'</div>' : '') +
-                            // WEIGHTS side-by-side
-                            '<div style="display:flex;gap:4px">' +
-                                '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
-                                '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
-                            '</div>' +
-                        '</div>' +
+                    '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
+                    '<select id="mt_proj_'+i+'" class="form-input" style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:var(--primary)">' + projOpts + '</select>' +
+                    matchedProjHint +
+                    '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
+                    dayHint +
+                    '<div style="display:flex;gap:4px">' +
+                    '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
+                    '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
                     '</div>' +
-                '</div>';
+                    '</div></div></div>';
             });
 
             rowsEl.innerHTML = html;
