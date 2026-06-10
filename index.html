@@ -9487,24 +9487,55 @@ const DS = {
                 // Store matched project for confirmAllTickets
                 item.matchedProjectId = matchedProjId;
 
-                html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
-                    '<div style="display:flex;gap:8px;margin-bottom:8px">' +
-                    '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
-                    '<div style="flex:1">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-                    '<div style="font-size:.65rem;color:var(--success);font-weight:700">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
-                    '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.55rem;padding:2px 8px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
+                // Date sanity check — flag dates that look wrong so user can spot them quickly
+                var todayStr = new Date().toISOString().split('T')[0];
+                var dateBorderColor = 'var(--primary)';
+                var dateBgColor = 'var(--bg-input)';
+                var dateBadge = '';
+                if (useDate && useDate !== todayStr) {
+                    var dateObj = new Date(useDate + 'T12:00:00');
+                    var todayObj = new Date(todayStr + 'T12:00:00');
+                    var diffDays = Math.round((dateObj - todayObj) / 86400000);
+                    if (diffDays > 7) {
+                        dateBorderColor = 'var(--danger)';
+                        dateBgColor = 'rgba(220,38,38,.12)';
+                        dateBadge = '<span style="display:inline-block;background:var(--danger);color:#fff;padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;margin-left:6px">⚠️ FUTURE DATE — VERIFY</span>';
+                    } else if (diffDays < -90) {
+                        dateBorderColor = 'var(--warning)';
+                        dateBgColor = 'rgba(234,179,8,.12)';
+                        dateBadge = '<span style="display:inline-block;background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;font-size:.6rem;font-weight:700;margin-left:6px">⚠️ '+Math.abs(diffDays)+' DAYS OLD</span>';
+                    }
+                }
+
+                html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--bg-input)">' +
+                    // Header row with ticket count and skip button
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+                        '<div style="font-size:.7rem;color:var(--success);font-weight:700">📄 Ticket '+(i+1)+' of '+scaleTickets.length+'</div>' +
+                        '<button onclick="DS._skipTicketRow('+i+')" style="font-size:.6rem;padding:3px 10px;border:1px solid var(--danger);color:var(--danger);background:transparent;border-radius:4px;cursor:pointer">✕ Skip</button>' +
                     '</div>' +
-                    '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
-                    '<select id="mt_proj_'+i+'" class="form-input" style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:var(--primary)">' + projOpts + '</select>' +
-                    matchedProjHint +
-                    '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
-                    dayHint +
-                    '<div style="display:flex;gap:4px">' +
-                    '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
-                    '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
+                    // Main content: large photo on left, editable fields on right
+                    '<div style="display:flex;gap:10px">' +
+                        // PHOTO — 120px wide, tap to enlarge
+                        '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:120px;height:120px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer;border:1px solid var(--border)" title="Tap to enlarge">' +
+                        // FIELDS column
+                        '<div style="flex:1;min-width:0">' +
+                            // DATE — first, prominent, with warning if suspicious
+                            '<div style="font-size:.6rem;color:var(--text-muted);font-weight:700;margin-bottom:2px">📅 DATE'+dateBadge+'</div>' +
+                            '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.9rem;font-weight:700;padding:8px;border:2px solid '+dateBorderColor+';background:'+dateBgColor+'">' +
+                            (dayHint ? '<div style="margin-bottom:6px">'+dayHint+'</div>' : '<div style="margin-bottom:6px"></div>') +
+                            // TICKET NUMBER
+                            '<input type="text" id="mt_num_'+i+'" class="form-input" value="'+(ocr.ticket_number||'')+'" placeholder="Ticket #" inputmode="numeric" style="margin-bottom:4px;font-size:.8rem">' +
+                            // PROJECT
+                            '<select id="mt_proj_'+i+'" class="form-input" style="margin-bottom:4px;font-size:.75rem;font-weight:600;color:var(--primary)">' + projOpts + '</select>' +
+                            (matchedProjHint ? '<div style="margin-bottom:4px">'+matchedProjHint+'</div>' : '') +
+                            // WEIGHTS side-by-side
+                            '<div style="display:flex;gap:4px">' +
+                                '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
+                                '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
+                            '</div>' +
+                        '</div>' +
                     '</div>' +
-                    '</div></div></div>';
+                '</div>';
             });
 
             rowsEl.innerHTML = html;
