@@ -58,6 +58,15 @@
         .weight-card.phase-locked::before{background:linear-gradient(90deg,var(--green),transparent);opacity:1}
         .weight-card.phase-locked .wc-value{color:var(--green)}
         @keyframes wc-locked-pulse{0%,100%{box-shadow:0 0 18px rgba(34,197,94,.20)}50%{box-shadow:0 0 26px rgba(34,197,94,.35)}}
+        /* Phase 2.9: stale-reading warning. Red pulsing border, drawn around weight cards 15+ min old. */
+        .weight-card.stale-warning{border-color:rgba(220,38,38,.75) !important;box-shadow:0 0 18px rgba(220,38,38,.25);animation:wc-stale-pulse 1.4s ease-in-out infinite}
+        @keyframes wc-stale-pulse{0%,100%{box-shadow:0 0 18px rgba(220,38,38,.22),inset 0 0 0 1px rgba(220,38,38,.3)}50%{box-shadow:0 0 30px rgba(220,38,38,.50),inset 0 0 0 1px rgba(220,38,38,.55)}}
+        .stale-warning-text{color:var(--red);font-family:var(--sans);font-size:.7rem;font-weight:800;letter-spacing:.04em;margin-top:6px;animation:wc-dot-pulse 1.5s ease-in-out infinite}
+        /* Phase 2.9: top-of-screen toast for auto-clear notifications */
+        .ds-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-120%);max-width:90%;padding:12px 18px;background:rgba(15,30,45,.95);border:1px solid var(--cyan);border-radius:10px;color:#fff;font-family:var(--sans);font-size:.85rem;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:9999;transition:transform .3s ease;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+        .ds-toast.show{transform:translateX(-50%) translateY(0)}
+        .ds-toast.warn{border-color:var(--amber);color:var(--amber)}
+        .ds-toast.danger{border-color:var(--red);color:#fecaca}
         .weight-card.phase-rising .wc-value.empty,
         .weight-card.phase-settling .wc-value.empty,
         .weight-card.phase-locked .wc-value.empty{font-size:2.2rem;font-weight:800}
@@ -391,6 +400,10 @@ const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const DEVICE_ID     = "dalmex-scale-01";
 const TICKET_PREFIX = "DX";
 const POLL_INTERVAL = 3000;
+// Phase 2.9: staleness thresholds for weight readings
+const STALE_WARN_MS  = 15 * 60 * 1000;   // 15 min — show warning, still keep reading
+const STALE_CLEAR_MS = 30 * 60 * 1000;   // 30 min — auto-clear, force fresh capture
+const AGE_CHECK_MS   = 30 * 1000;        // re-evaluate ages every 30 sec
 
 // ─────────────────────────────────────────────
 // STATE
@@ -415,6 +428,8 @@ let manualTareLabel = '';
 // Phase 2.9: Track dismissed scale readings so they don't re-appear after manual clear.
 // IDs added here are filtered out of the polling loop until page reload.
 let dismissedWeightIds = new Set();
+// Phase 2.9: Age check timer — separate from pollWeights, only watches for staleness
+let ageCheckTimer = null;
 
 // Live phase indicator state (added 2026-05)
 let livePollTimer = null;
@@ -545,6 +560,10 @@ async function init() {
     updateStatus('on', 'Listening...');
     pollWeights();
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+
+    // Phase 2.9: start the age-check timer (independent of pollWeights, runs every 30s)
+    if (ageCheckTimer) clearInterval(ageCheckTimer);
+    ageCheckTimer = setInterval(checkReadingAges, AGE_CHECK_MS);
 
     // Start the live phase indicator (added 2026-05)
     startLivePhasePoll();
@@ -1197,6 +1216,7 @@ function restartPollers(reason) {
     // Clear existing timers
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+    if (ageCheckTimer) { clearInterval(ageCheckTimer); ageCheckTimer = null; }
     // Mark a fresh starting point so the watchdog doesn't immediately re-fire
     lastSuccessfulPollAt = Date.now();
     // Force-fire one poll immediately so the driver sees data right away,
@@ -1204,6 +1224,9 @@ function restartPollers(reason) {
     pollWeights().catch(e => console.warn('Resume poll failed:', e));
     pollTimer = setInterval(pollWeights, POLL_INTERVAL);
     startLivePhasePoll();
+    // Phase 2.9: re-arm age check + immediate run (catches stale readings on wake)
+    checkReadingAges();
+    ageCheckTimer = setInterval(checkReadingAges, AGE_CHECK_MS);
 }
 
 function startResumeWatchdog() {
@@ -1310,9 +1333,11 @@ function showNet() {
 // ─────────────────────────────────────────────
 async function dismissGross() {
     if (!grossReading) return;
-    if (!confirm('Clear the current Gross reading? This will reset the screen so a fresh weight can be captured.')) return;
+    if (!confirm('Discard this gross reading? A fresh capture will be needed when the next truck pulls on.')) return;
     const id = grossReading.id;
+    const ageMinutes = Math.round((Date.now() - new Date(grossReading.captured_at).getTime()) / 60000);
     dismissedWeightIds.add(id);
+    if (tareReading) dismissedWeightIds.add(tareReading.id);
     grossReading = null;
     tareReading = null;  // tare can't exist without a gross to pair with
     resetGrossCard();
@@ -1323,16 +1348,18 @@ async function dismissGross() {
         await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
             status: 'dismissed',
             confirmed_at: new Date().toISOString(),
-            confirmed_by: (typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName + ' (manual clear)' : 'manual clear'
+            confirmed_by: ((typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName : 'operator') + ' (manual clear, ' + ageMinutes + ' min old)'
         });
     } catch (e) { console.warn('Dismiss gross PATCH failed (local-only):', e); }
+    showToast('Gross cleared. Waiting for next truck.', 'warn');
     checkReady();
 }
 
 async function dismissTare() {
     if (!tareReading) return;
-    if (!confirm('Clear the current Tare reading? The Gross stays; a fresh tare can be captured.')) return;
+    if (!confirm('Discard this tare reading? The Gross stays; a fresh empty-weight capture will be needed.')) return;
     const id = tareReading.id;
+    const ageMinutes = Math.round((Date.now() - new Date(tareReading.captured_at).getTime()) / 60000);
     dismissedWeightIds.add(id);
     tareReading = null;
     resetTareCard();
@@ -1341,31 +1368,153 @@ async function dismissTare() {
         await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
             status: 'dismissed',
             confirmed_at: new Date().toISOString(),
-            confirmed_by: (typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName + ' (manual clear)' : 'manual clear'
+            confirmed_by: ((typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName : 'operator') + ' (manual clear, ' + ageMinutes + ' min old)'
         });
     } catch (e) { console.warn('Dismiss tare PATCH failed (local-only):', e); }
+    showToast('Tare cleared. Waiting for fresh empty-weight reading.', 'warn');
     checkReady();
 }
 
 function resetGrossCard() {
     const card = document.getElementById('grossCard');
-    card.classList.remove('phase-rising','phase-settling','phase-locked','captured');
+    card.classList.remove('phase-rising','phase-settling','phase-locked','captured','stale-warning');
     document.getElementById('grossValue').textContent = 'Waiting for truck...';
     document.getElementById('grossValue').classList.add('empty');
     document.getElementById('grossTime').innerHTML = '';
     const btn = document.getElementById('grossDismissBtn');
     if (btn) btn.style.display = 'none';
+    // Remove stale warning text if present
+    const w = document.getElementById('grossStaleWarning');
+    if (w) w.remove();
 }
 
 function resetTareCard() {
     const card = document.getElementById('tareCard');
-    card.classList.remove('phase-rising','phase-settling','phase-locked','captured');
+    card.classList.remove('phase-rising','phase-settling','phase-locked','captured','stale-warning');
     card.classList.add('waiting');
     document.getElementById('tareValue').textContent = grossReading ? 'Waiting...' : 'Drive to dump, then return';
     document.getElementById('tareValue').classList.add('empty');
     document.getElementById('tareTime').innerHTML = '';
     const btn = document.getElementById('tareDismissBtn');
     if (btn) btn.style.display = 'none';
+    // Remove any stale warning text appended below the timestamp
+    const w = document.getElementById('tareStaleWarning');
+    if (w) w.remove();
+}
+
+// ─────────────────────────────────────────────
+// Phase 2.9: TOAST NOTIFICATION
+// Top-of-screen banner that auto-dismisses after a few seconds.
+// Used for auto-clear notifications and other non-blocking alerts.
+// ─────────────────────────────────────────────
+function showToast(message, variant) {
+    // variant: 'warn' | 'danger' | undefined (default cyan)
+    const existing = document.getElementById('dsToast');
+    if (existing) existing.remove();
+    const t = document.createElement('div');
+    t.id = 'dsToast';
+    t.className = 'ds-toast' + (variant ? ' ' + variant : '');
+    t.textContent = message;
+    document.body.appendChild(t);
+    // Trigger transition (next tick)
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 350);
+    }, 5000);
+}
+
+// ─────────────────────────────────────────────
+// Phase 2.9: AGE CHECK — runs every 30 seconds
+// Watches the gross and tare readings for staleness:
+//   - 15+ min old → pulsing red border + warning text (still usable, but verify)
+//   - 30+ min old (gross) → auto-clear with toast notification
+// Tare doesn't auto-clear independently because the temporal-ordering rule
+// guarantees tare can't exist without a gross to pair with.
+// ─────────────────────────────────────────────
+function checkReadingAges() {
+    const now = Date.now();
+
+    // GROSS
+    if (grossReading) {
+        const grossAge = now - new Date(grossReading.captured_at).getTime();
+        const grossCard = document.getElementById('grossCard');
+
+        if (grossAge >= STALE_CLEAR_MS) {
+            // 30+ min — auto-clear
+            _autoDismissGross();
+            return; // tare gets cleared too inside _autoDismissGross
+        } else if (grossAge >= STALE_WARN_MS) {
+            // 15-30 min — warn
+            if (grossCard && !grossCard.classList.contains('stale-warning')) {
+                grossCard.classList.add('stale-warning');
+                let w = document.getElementById('grossStaleWarning');
+                if (!w) {
+                    w = document.createElement('div');
+                    w.id = 'grossStaleWarning';
+                    w.className = 'stale-warning-text';
+                    w.textContent = '⚠️ STALE — verify this is your truck or clear';
+                    const subEl = document.getElementById('grossTime');
+                    if (subEl && subEl.parentNode) subEl.parentNode.insertBefore(w, subEl.nextSibling);
+                }
+            }
+        } else {
+            // Fresh — remove any warning that might have been there
+            if (grossCard) grossCard.classList.remove('stale-warning');
+            const w = document.getElementById('grossStaleWarning');
+            if (w) w.remove();
+        }
+    }
+
+    // TARE — only adds visual warning, never auto-clears (gross drives the lifecycle)
+    if (tareReading) {
+        const tareAge = now - new Date(tareReading.captured_at).getTime();
+        const tareCard = document.getElementById('tareCard');
+
+        if (tareAge >= STALE_WARN_MS) {
+            if (tareCard && !tareCard.classList.contains('stale-warning')) {
+                tareCard.classList.add('stale-warning');
+                let w = document.getElementById('tareStaleWarning');
+                if (!w) {
+                    w = document.createElement('div');
+                    w.id = 'tareStaleWarning';
+                    w.className = 'stale-warning-text';
+                    w.textContent = '⚠️ STALE — verify or clear';
+                    const subEl = document.getElementById('tareTime');
+                    if (subEl && subEl.parentNode) subEl.parentNode.insertBefore(w, subEl.nextSibling);
+                }
+            }
+        } else {
+            if (tareCard) tareCard.classList.remove('stale-warning');
+            const w = document.getElementById('tareStaleWarning');
+            if (w) w.remove();
+        }
+    }
+}
+
+async function _autoDismissGross() {
+    // Internal version of dismissGross — no confirm dialog, fires automatically.
+    if (!grossReading) return;
+    const id = grossReading.id;
+    const ageMinutes = Math.round((Date.now() - new Date(grossReading.captured_at).getTime()) / 60000);
+    dismissedWeightIds.add(id);
+    if (tareReading) dismissedWeightIds.add(tareReading.id);
+    grossReading = null;
+    tareReading = null;
+    resetGrossCard();
+    resetTareCard();
+    const netCard = document.getElementById('netCard');
+    if (netCard) netCard.style.display = 'none';
+    // Best-effort DB update
+    try {
+        await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
+            status: 'auto_dismissed',
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: 'auto-cleared (stale ' + ageMinutes + ' min)'
+        });
+    } catch (e) { console.warn('Auto-dismiss PATCH failed (local-only):', e); }
+    showToast('Auto-cleared stale gross reading (' + ageMinutes + ' min old)', 'warn');
+    if (typeof checkReady === 'function') checkReady();
 }
 
 // ─────────────────────────────────────────────
