@@ -110,8 +110,11 @@
 
         .confirm-btn{width:100%;padding:18px;border:none;border-radius:12px;font-family:var(--sans);font-size:1.1rem;font-weight:800;cursor:pointer;letter-spacing:.02em;transition:all .15s}
         .confirm-btn:active{transform:scale(.97)}
-        .confirm-btn.ready{background:var(--green);color:#080f14}
-        .confirm-btn.disabled{background:var(--border);color:var(--dim);cursor:not-allowed}
+        .confirm-btn.ready{background:var(--green);color:#080f14;animation:confirm-pulse 1.8s ease-in-out infinite}
+        @keyframes confirm-pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 0 0 12px rgba(34,197,94,0)}}
+        /* Phase 2.7d: amber "in progress" state so the button is visible (not grey-on-grey) while we're collecting data */
+        .confirm-btn.disabled{background:rgba(245,158,11,.15);color:var(--amber,#f59e0b);cursor:not-allowed;border:2px solid rgba(245,158,11,.4);padding:16px}
+        .confirm-btn.disabled.no-progress{background:var(--border);color:var(--dim);border:none;padding:18px}
 
         .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
         .success-overlay.show{display:flex}
@@ -367,6 +370,12 @@
         <div style="font-size:.75rem;color:var(--muted);" id="summaryProject"></div>
         <div style="font-size:.7rem;color:var(--cyan);font-weight:700;margin-top:4px;" id="summaryDriver"></div>
         <div style="font-size:.7rem;color:var(--amber);font-weight:700;margin-top:4px;" id="summaryZone"></div>
+    </div>
+
+    <!-- Phase 2.7d: Step-by-step progress so drivers see what's left to do -->
+    <div id="stepProgress" style="margin:8px 0 10px;padding:10px 12px;background:rgba(0,201,167,0.08);border:1px solid rgba(0,201,167,0.25);border-radius:8px;display:none">
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--cyan);font-weight:700;margin-bottom:6px">Ticket Progress</div>
+        <div id="stepList" style="display:flex;flex-direction:column;gap:4px;font-size:.75rem"></div>
     </div>
 
     <!-- Confirm Button -->
@@ -1812,6 +1821,47 @@ function changeManualTare() {
     updateTareEstimateBox();
 }
 
+// Phase 2.7d: Visual step-by-step progress shown to drivers/operators.
+// Solves the "blank screen, what do I do?" anxiety that drives refresh-button hits.
+// Each step is checkmarked as it's done, with a clear hint on what's pending next.
+function updateStepProgress(ready, haveTare) {
+    const wrap = document.getElementById('stepProgress');
+    const list = document.getElementById('stepList');
+    if (!wrap || !list) return;
+
+    // Don't show step progress until the page has at least started (avoid showing on initial mode-select screen)
+    const modeBanner = document.getElementById('modeBanner');
+    const banner = modeBanner ? window.getComputedStyle(modeBanner).display : 'none';
+    if (banner !== 'none') { wrap.style.display = 'none'; return; }
+
+    const steps = [];
+    if (isWalkinMode) {
+        const walkinName = (document.getElementById('walkinName')?.value || '').trim();
+        steps.push({ done: !!selectedHauler, label: 'Pick hauler', pending: 'Tap hauler above' });
+        steps.push({ done: !!selectedDriverName, label: 'Driver name', pending: 'Tap driver name field' });
+        steps.push({ done: !!walkinName, label: 'Company name', pending: 'Type walk-in company name' });
+        steps.push({ done: !!grossReading, label: 'Gross weight', pending: 'Drive onto scale loaded' });
+        steps.push({ done: !!haveTare, label: 'Tare weight', pending: 'Drive off, dump, drive back empty' });
+    } else {
+        steps.push({ done: !!selectedHauler, label: 'Pick hauler', pending: 'Tap hauler above' });
+        steps.push({ done: !!selectedDriverName, label: 'Driver name', pending: 'Tap driver name to pick or add' });
+        steps.push({ done: !!(document.getElementById('projectSelect')?.value), label: 'Project', pending: 'Select project from list' });
+        steps.push({ done: !!grossReading, label: 'Gross weight (loaded)', pending: 'Drive onto scale loaded' });
+        steps.push({ done: !!haveTare, label: 'Tare weight (empty)', pending: 'Drive off, dump, drive back empty' });
+    }
+
+    wrap.style.display = 'block';
+    list.innerHTML = steps.map(s => {
+        if (s.done) {
+            return '<div style="display:flex;gap:8px;align-items:center;color:var(--green);font-weight:600"><span style="font-size:1rem">✅</span> <span style="opacity:.7;text-decoration:line-through">' + s.label + '</span></div>';
+        }
+        return '<div style="display:flex;gap:8px;align-items:center;color:var(--amber,#f59e0b);font-weight:700"><span style="font-size:1rem">⏳</span> <span>' + s.label + ' — <span style="font-weight:500;opacity:.85;font-style:italic">' + s.pending + '</span></span></div>';
+    }).join('');
+
+    // If everything is done, hide the box (the green confirm button is the next signal)
+    if (ready) wrap.style.display = 'none';
+}
+
 function checkReady() {
     const btn = document.getElementById('confirmBtn');
     const summary = document.getElementById('confirmSummary');
@@ -1828,6 +1878,8 @@ function checkReady() {
     }
 
     updateTareEstimateBox();
+    // Phase 2.7d: refresh the visual step progress so drivers see exactly what's left
+    try { updateStepProgress(ready, haveTare); } catch (e) {}
 
     if (ready) {
         btn.classList.remove('disabled');
