@@ -26,10 +26,21 @@
         .hdr{background:linear-gradient(135deg,#0f2b3c,#0a1f2e);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
         .hdr h1{font-size:1rem;font-weight:700;letter-spacing:.02em}
         .hdr h1 span{color:var(--cyan)}
-        .hdr-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--muted)}
-        .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s ease infinite}
-        .dot.on{background:var(--green)}.dot.off{background:var(--red)}
+        .hdr-status{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--muted)}
+        .dot{width:9px;height:9px;border-radius:50%}
+        .dot.on{background:var(--green);box-shadow:0 0 0 0 var(--green);animation:dot-pulse 1.2s ease-out infinite}
+        .dot.off{background:var(--red);animation:dot-blink 0.6s ease infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes dot-pulse{
+            0%{box-shadow:0 0 0 0 rgba(34,197,94,.7);transform:scale(1)}
+            70%{box-shadow:0 0 0 8px rgba(34,197,94,0);transform:scale(1.15)}
+            100%{box-shadow:0 0 0 0 rgba(34,197,94,0);transform:scale(1)}
+        }
+        @keyframes dot-blink{0%,100%{opacity:1}50%{opacity:.25}}
+        /* Phase 2.7d: heartbeat counter — proves the page is alive even when no truck is on the scale */
+        .hb-counter{font-family:var(--mono,monospace);font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums;min-width:46px;text-align:right}
+        .hb-counter.stale{color:var(--amber,#f59e0b);font-weight:700}
+        .hb-counter.dead{color:var(--red);font-weight:700}
 
         .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:120px}
 
@@ -176,6 +187,7 @@
     <div class="hdr-status">
         <span class="dot off" id="statusDot"></span>
         <span id="statusText">Connecting...</span>
+        <span class="hb-counter" id="hbCounter" title="Time since last successful Supabase poll. Updates in real-time so you can see the page is alive.">—</span>
     </div>
 </header>
 
@@ -219,6 +231,23 @@
         <div style="font-size:.7rem;color:var(--muted)">lbs</div>
         <div class="net-tons" id="netTons">0 tons</div>
         <div class="net-ticket" id="netTicket"></div>
+    </div>
+
+    <!-- Phase 2.7d: Recently Dismissed card. Lets the operator recover a capture
+         they cleared by mistake. Auto-loads on every poll. Collapsed by default. -->
+    <div id="dismissedCard" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.4);border-radius:8px">
+        <div onclick="toggleDismissedCard()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer">
+            <div style="font-size:.72rem;font-weight:700;color:var(--amber,#f59e0b);text-transform:uppercase;letter-spacing:.06em">
+                ⚠️ Recently Dismissed <span id="dismissedCount" style="background:var(--amber,#f59e0b);color:#080f14;font-size:.65rem;padding:1px 7px;border-radius:10px;margin-left:6px">0</span>
+            </div>
+            <div id="dismissedCaret" style="font-size:.8rem;color:var(--amber,#f59e0b);font-weight:700">▶</div>
+        </div>
+        <div id="dismissedBody" style="display:none;margin-top:8px">
+            <div style="font-size:.62rem;color:var(--muted);margin-bottom:6px;font-style:italic">
+                These were cleared in the last 30 min. Tap "Restore" to bring one back into the live feed.
+            </div>
+            <div id="dismissedList"></div>
+        </div>
     </div>
 
     <!-- Phase 2.7d: Mode-choice banner (LEED vs Walk-in) -->
@@ -399,7 +428,7 @@ const SUPABASE_URL  = "https://cyvvlngtojagfoaitoog.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
 const DEVICE_ID     = "dalmex-scale-01";
 const TICKET_PREFIX = "DX";
-const POLL_INTERVAL = 3000;
+const POLL_INTERVAL = 1000;  // Phase 2.7d: dropped 3000→1000 ms so newly-captured weights show on scale.html within 1 sec of Pi write (was up to 3 sec). Roughly 3x Supabase request volume but still trivial at our scale.
 // Phase 2.9: staleness thresholds for weight readings
 const STALE_WARN_MS  = 15 * 60 * 1000;   // 15 min — show warning, still keep reading
 const STALE_CLEAR_MS = 30 * 60 * 1000;   // 30 min — auto-clear, force fresh capture
@@ -1012,6 +1041,14 @@ async function pollWeights() {
         // Mark the wall-clock time of a successful network round-trip, success or empty.
         // The watchdog reads this to decide if iOS Safari has silently frozen the timer.
         lastSuccessfulPollAt = Date.now();
+        // Phase 2.7d: ANY successful round-trip should clear "Reconnecting..." red state,
+        // even if the scale is empty (weights.length === 0). Previously the early-return
+        // below skipped the updateStatus('on') call at the end, leaving the banner stuck
+        // red after a network handoff (e.g. cellular → home WiFi).
+        updateStatus('on', 'Listening...');
+        document.getElementById('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
+        // Phase 2.7d: keep the "Recently Dismissed" card fresh. Cheap; same time window as pending poll.
+        loadDismissedCard().catch(() => {});
         if (!weights || weights.length === 0) return;
 
         // Phase 2.9: Filter out any readings the user explicitly dismissed this session
@@ -1052,8 +1089,7 @@ async function pollWeights() {
             }
         }
 
-        updateStatus('on', 'Connected');
-        document.getElementById('lastSync').textContent = 'Synced ' + new Date().toLocaleTimeString();
+        updateStatus('on', 'Listening...');
     } catch (err) {
         console.error('Poll error:', err);
         updateStatus('off', 'Connection lost');
@@ -1333,9 +1369,20 @@ function showNet() {
 // ─────────────────────────────────────────────
 async function dismissGross() {
     if (!grossReading) return;
-    if (!confirm('Discard this gross reading? A fresh capture will be needed when the next truck pulls on.')) return;
+    const wt = Number(grossReading.weight_lbs || 0).toLocaleString();
+    const tm = new Date(grossReading.captured_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const ageMin = Math.round((Date.now() - new Date(grossReading.captured_at).getTime()) / 60000);
+    if (!confirm(
+        '⚠️ DISCARD GROSS WEIGHT?\n\n' +
+        '  Weight:  ' + wt + ' lbs\n' +
+        '  Time:    ' + tm + ' (' + ageMin + ' min ago)\n\n' +
+        'This hides the capture from the live feed.\n' +
+        'A NEW capture will be needed when the next truck pulls on.\n\n' +
+        'Tap OK only if this is a stale/wrong reading.\n' +
+        'Tap Cancel to keep it.'
+    )) return;
     const id = grossReading.id;
-    const ageMinutes = Math.round((Date.now() - new Date(grossReading.captured_at).getTime()) / 60000);
+    const ageMinutes = ageMin;
     dismissedWeightIds.add(id);
     if (tareReading) dismissedWeightIds.add(tareReading.id);
     grossReading = null;
@@ -1351,15 +1398,27 @@ async function dismissGross() {
             confirmed_by: ((typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName : 'operator') + ' (manual clear, ' + ageMinutes + ' min old)'
         });
     } catch (e) { console.warn('Dismiss gross PATCH failed (local-only):', e); }
-    showToast('Gross cleared. Waiting for next truck.', 'warn');
+    // Phase 2.7d: Refresh the "recently dismissed" feed so users can recover if they tap wrong
+    if (typeof loadDismissedCard === 'function') loadDismissedCard();
+    showToast('Gross ' + wt + ' lbs cleared. Tap "Recently Dismissed" below to restore.', 'warn');
     checkReady();
 }
 
 async function dismissTare() {
     if (!tareReading) return;
-    if (!confirm('Discard this tare reading? The Gross stays; a fresh empty-weight capture will be needed.')) return;
+    const wt = Number(tareReading.weight_lbs || 0).toLocaleString();
+    const tm = new Date(tareReading.captured_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const ageMin = Math.round((Date.now() - new Date(tareReading.captured_at).getTime()) / 60000);
+    if (!confirm(
+        '⚠️ DISCARD TARE WEIGHT?\n\n' +
+        '  Weight:  ' + wt + ' lbs\n' +
+        '  Time:    ' + tm + ' (' + ageMin + ' min ago)\n\n' +
+        'The Gross stays. A NEW empty-truck capture will be needed.\n\n' +
+        'Tap OK only if this is a stale/wrong tare.\n' +
+        'Tap Cancel to keep it.'
+    )) return;
     const id = tareReading.id;
-    const ageMinutes = Math.round((Date.now() - new Date(tareReading.captured_at).getTime()) / 60000);
+    const ageMinutes = ageMin;
     dismissedWeightIds.add(id);
     tareReading = null;
     resetTareCard();
@@ -1371,8 +1430,76 @@ async function dismissTare() {
             confirmed_by: ((typeof selectedDriverName !== 'undefined' && selectedDriverName) ? selectedDriverName : 'operator') + ' (manual clear, ' + ageMinutes + ' min old)'
         });
     } catch (e) { console.warn('Dismiss tare PATCH failed (local-only):', e); }
-    showToast('Tare cleared. Waiting for fresh empty-weight reading.', 'warn');
+    if (typeof loadDismissedCard === 'function') loadDismissedCard();
+    showToast('Tare ' + wt + ' lbs cleared. Tap "Recently Dismissed" below to restore.', 'warn');
     checkReady();
+}
+
+// ─────────────────────────────────────────────
+// Phase 2.7d: RECENTLY DISMISSED card
+// Shows captures the operator dismissed in the last 30 min, with one-tap restore.
+// Solves the case where you clear a "test" reading then forget — driver shows up
+// and the live feed is empty. Now you can recover instantly.
+// ─────────────────────────────────────────────
+function toggleDismissedCard() {
+    const body = document.getElementById('dismissedBody');
+    const caret = document.getElementById('dismissedCaret');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (caret) caret.textContent = isOpen ? '▶' : '▼';
+}
+
+async function loadDismissedCard() {
+    try {
+        const since = new Date(Date.now() - 30 * 60000).toISOString();
+        const rows = await sb(`scale_weights?device_id=eq.${DEVICE_ID}&status=eq.dismissed&captured_at=gte.${since}&order=captured_at.desc&limit=10`);
+        const card = document.getElementById('dismissedCard');
+        const countEl = document.getElementById('dismissedCount');
+        const listEl = document.getElementById('dismissedList');
+        if (!card || !listEl || !countEl) return;
+        if (!rows || rows.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+        card.style.display = 'block';
+        countEl.textContent = rows.length;
+        listEl.innerHTML = rows.map(r => {
+            const wt = Number(r.weight_lbs || 0).toLocaleString();
+            const tm = new Date(r.captured_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            const ageMin = Math.round((Date.now() - new Date(r.captured_at).getTime()) / 60000);
+            const who = (r.confirmed_by || 'operator').replace(/\s*\(manual clear[^)]*\)/, '');
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,0.15);border-radius:6px;margin-bottom:5px;flex-wrap:wrap">' +
+                '<div style="flex:1;min-width:140px">' +
+                    '<div style="font-family:var(--mono,monospace);font-weight:800;font-size:.95rem;color:var(--text,#fff)">' + wt + ' lbs</div>' +
+                    '<div style="font-size:.6rem;color:var(--muted)">' + tm + ' · ' + ageMin + ' min ago · cleared by ' + who + '</div>' +
+                '</div>' +
+                '<button onclick="restoreDismissed(\'' + r.id + '\')" style="padding:7px 14px;background:var(--amber,#f59e0b);color:#080f14;border:none;border-radius:6px;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">↺ Restore</button>' +
+            '</div>';
+        }).join('');
+    } catch (e) {
+        console.warn('loadDismissedCard failed:', e);
+    }
+}
+
+async function restoreDismissed(id) {
+    if (!confirm('Restore this capture to the live feed?\n\nIt will become available for pairing as Gross or Tare again.')) return;
+    try {
+        await sb(`scale_weights?id=eq.${id}`, 'PATCH', {
+            status: 'pending',
+            confirmed_at: null,
+            confirmed_by: null
+        });
+        // Also clear from local dismissed set so the next poll picks it up
+        if (typeof dismissedWeightIds !== 'undefined') dismissedWeightIds.delete(id);
+        showToast('Restored. Pull onto the scale or wait for it to appear in the live feed.', 'success');
+        await loadDismissedCard();
+        // Force an immediate re-poll so it shows fast
+        if (typeof pollWeights === 'function') pollWeights();
+    } catch (e) {
+        console.error('restoreDismissed failed:', e);
+        showToast('Restore failed — try refreshing the page.', 'error');
+    }
 }
 
 function resetGrossCard() {
@@ -2210,6 +2337,36 @@ function updateStatus(state, text) {
     dot.classList.add(state === 'on' ? 'on' : 'off');
     document.getElementById('statusText').textContent = text;
 }
+
+// Phase 2.7d: Real-time heartbeat counter. Ticks every 250ms showing seconds since
+// the last successful Supabase poll. Solves the "is this thing alive?" worry that
+// makes operators hit refresh and lose state. The counter is the visible proof:
+//   < 2s   → green, system is healthy
+//   2-5s   → still green, normal jitter
+//   5-15s  → amber, slow / network blip
+//   15s+   → red, watchdog will restart pollers soon
+let _hbCounterTimer = null;
+function startHeartbeatCounter() {
+    if (_hbCounterTimer) return;
+    const el = document.getElementById('hbCounter');
+    if (!el) return;
+    _hbCounterTimer = setInterval(() => {
+        if (typeof lastSuccessfulPollAt === 'undefined') return;
+        const ageMs = Date.now() - lastSuccessfulPollAt;
+        const ageSec = ageMs / 1000;
+        el.classList.remove('stale', 'dead');
+        if (ageSec < 5) {
+            el.textContent = ageSec.toFixed(1) + 's';
+        } else if (ageSec < 15) {
+            el.textContent = ageSec.toFixed(1) + 's';
+            el.classList.add('stale');
+        } else {
+            el.textContent = Math.round(ageSec) + 's';
+            el.classList.add('dead');
+        }
+    }, 250);
+}
+document.addEventListener('DOMContentLoaded', () => { setTimeout(startHeartbeatCounter, 500); });
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
