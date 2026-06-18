@@ -307,7 +307,7 @@
             <option value="">— Select hauler —</option>
             <option value="__other__">+ Other (type new hauler...)</option>
         </select>
-        <input type="text" class="walkin-input" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="checkReady()" style="display:none;">
+        <input type="text" class="walkin-input" id="walkinName" placeholder="e.g. ABC Trucking, Smith Demo" oninput="saveActiveSelections(); checkReady();" style="display:none;">
     </div>
 
     <!-- ====================================================
@@ -347,7 +347,7 @@
     </div>
 
     <!-- Project Selector -->
-    <select class="proj-select" id="projectSelect" onchange="checkReady()" style="display:none">
+    <select class="proj-select" id="projectSelect" onchange="saveActiveSelections(); checkReady();" style="display:none">
         <option value="">— Select Project —</option>
     </select>
 
@@ -454,6 +454,89 @@ let pollTimer    = null;
 let selectedHauler = null;
 let selectedZone = null;
 let isWalkinMode = false;
+
+// Phase 2.7d: Refresh-safe persistence keys.
+// These survive accidental browser refresh so the operator doesn't have to
+// re-pick project/zone/walk-in fields after hitting reload.
+// They're CLEARED after a successful ticket save so the next truck starts clean.
+const LS_KEY_PROJECT      = 'ds_current_project_id';
+const LS_KEY_ZONE         = 'ds_current_zone';
+const LS_KEY_WALKIN_NAME  = 'ds_current_walkin_name';
+const LS_KEY_WALKIN_HAULER= 'ds_current_walkin_hauler';
+
+function saveActiveSelections() {
+    try {
+        const projectId = document.getElementById('projectSelect')?.value || '';
+        if (projectId) localStorage.setItem(LS_KEY_PROJECT, projectId);
+        else localStorage.removeItem(LS_KEY_PROJECT);
+
+        if (selectedZone) localStorage.setItem(LS_KEY_ZONE, selectedZone);
+        else localStorage.removeItem(LS_KEY_ZONE);
+
+        const walkinName = document.getElementById('walkinName')?.value?.trim() || '';
+        if (walkinName) localStorage.setItem(LS_KEY_WALKIN_NAME, walkinName);
+        else localStorage.removeItem(LS_KEY_WALKIN_NAME);
+
+        const walkinHauler = document.getElementById('walkinHaulerSelect')?.value || '';
+        if (walkinHauler && walkinHauler !== '__other__') localStorage.setItem(LS_KEY_WALKIN_HAULER, walkinHauler);
+        else localStorage.removeItem(LS_KEY_WALKIN_HAULER);
+    } catch (e) { console.warn('saveActiveSelections failed:', e); }
+}
+
+function clearActiveSelections() {
+    try {
+        localStorage.removeItem(LS_KEY_PROJECT);
+        localStorage.removeItem(LS_KEY_ZONE);
+        localStorage.removeItem(LS_KEY_WALKIN_NAME);
+        localStorage.removeItem(LS_KEY_WALKIN_HAULER);
+    } catch (e) {}
+}
+
+function restoreActiveSelections(context) {
+    // context: 'leed' or 'walkin' — restores only the fields relevant to that mode
+    try {
+        if (context === 'leed') {
+            const savedProject = localStorage.getItem(LS_KEY_PROJECT);
+            if (savedProject) {
+                const sel = document.getElementById('projectSelect');
+                if (sel) {
+                    // Only restore if the option still exists (project must still belong to current hauler)
+                    const validOpt = Array.from(sel.options).some(o => o.value === savedProject);
+                    if (validOpt) sel.value = savedProject;
+                    else localStorage.removeItem(LS_KEY_PROJECT); // stale
+                }
+            }
+            const savedZone = localStorage.getItem(LS_KEY_ZONE);
+            if (savedZone) {
+                selectedZone = savedZone;
+                document.querySelectorAll('.zone-btn').forEach(btn => {
+                    btn.classList.toggle('selected', btn.textContent.trim() === selectedZone);
+                });
+            }
+        } else if (context === 'walkin') {
+            const savedHauler = localStorage.getItem(LS_KEY_WALKIN_HAULER);
+            const savedName = localStorage.getItem(LS_KEY_WALKIN_NAME);
+            const haulerSel = document.getElementById('walkinHaulerSelect');
+            const nameInput = document.getElementById('walkinName');
+            if (savedHauler && haulerSel) {
+                const validOpt = Array.from(haulerSel.options).some(o => o.value === savedHauler);
+                if (validOpt) {
+                    haulerSel.value = savedHauler;
+                    // Trigger the same logic as user picking — sets walkinName.value etc.
+                    if (typeof onWalkinHaulerChange === 'function') onWalkinHaulerChange();
+                } else {
+                    localStorage.removeItem(LS_KEY_WALKIN_HAULER);
+                }
+            }
+            // If user had typed a name (other-hauler case), restore that text
+            if (savedName && nameInput) {
+                nameInput.value = savedName;
+                if (haulerSel?.value === '__other__') nameInput.style.display = 'block';
+            }
+            // Note: walk-in mode hides the zone selector, so we don't restore zone here.
+        }
+    } catch (e) { console.warn('restoreActiveSelections failed:', e); }
+}
 let driverTickets = [];
 let haulerDrivers = [];
 let selectedDriverName = '';
@@ -492,6 +575,7 @@ function selectZone(zone) {
     document.querySelectorAll('.zone-btn').forEach(function(btn) {
         btn.classList.toggle('selected', btn.textContent.trim() === selectedZone);
     });
+    saveActiveSelections();
     checkReady();
 }
 
@@ -586,9 +670,15 @@ async function init() {
     ).join('');
 
     const savedHauler = localStorage.getItem('ds_driver_hauler');
+    const savedWalkinHauler = localStorage.getItem(LS_KEY_WALKIN_HAULER);
+    const savedWalkinName = localStorage.getItem(LS_KEY_WALKIN_NAME);
     if (savedHauler && haulers.includes(savedHauler)) {
         document.getElementById('modeBanner').style.display = 'none';
         await selectHauler(savedHauler);
+    } else if (savedWalkinHauler || savedWalkinName) {
+        // Phase 2.7d: Operator was in walk-in mode before refresh — auto-resume
+        document.getElementById('modeBanner').style.display = 'none';
+        activateWalkin();
     } else {
         document.getElementById('modeBanner').style.display = 'flex';
         document.getElementById('haulerSetup').style.display = 'none';
@@ -643,6 +733,9 @@ async function selectHauler(haulerName) {
     });
     if (filtered.length === 1) sel.value = filtered[0].id;
 
+    // Phase 2.7d: Restore project + zone from localStorage if user is resuming after refresh
+    restoreActiveSelections('leed');
+
     checkReady();
     loadRecentLoads();
 }
@@ -655,6 +748,8 @@ function changeHauler() {
     selectedDriverToken = '';
     selectedDriverId = '';
     localStorage.removeItem('ds_driver_hauler');
+    // Phase 2.7d: changing hauler invalidates the saved project/zone (they belong to the old hauler)
+    clearActiveSelections();
     document.getElementById('modeBanner').style.display = 'flex';
     document.getElementById('haulerSetup').style.display = 'none';
     document.getElementById('haulerBadge').style.display = 'none';
@@ -965,6 +1060,7 @@ function onWalkinHaulerChange() {
         input.style.display = 'none';
         input.value = sel.value || '';
     }
+    saveActiveSelections();
     checkReady();
 }
 
@@ -998,6 +1094,10 @@ function activateWalkin() {
 
     document.getElementById('projectSelect').style.display = 'none';
     hideZoneSelector();
+
+    // Phase 2.7d: Restore walk-in hauler + name from localStorage if user is resuming after refresh
+    restoreActiveSelections('walkin');
+
     checkReady();
 }
 
@@ -2134,6 +2234,9 @@ function resetPage() {
     manualTareValue = null;
     manualTareSource = null;
     manualTareLabel = '';
+    // Phase 2.7d: After a successful ticket, clear the in-progress refresh-safe selections
+    // so the next truck doesn't inherit stale project/zone/walkin data.
+    clearActiveSelections();
     // Reset live phase tracking
     liveRecent = [];
     currentLivePhase = 'idle';
