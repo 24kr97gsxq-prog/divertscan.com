@@ -1165,13 +1165,6 @@
                 <label class="form-label">Hauler</label>
                 <select class="form-input" id="editTktHauler" onchange="if(this.value==='__other'){var c=prompt('Enter hauler name:');if(c){var o=document.createElement('option');o.value=c;o.textContent=c;this.insertBefore(o,this.lastElementChild);this.value=c;}else{this.value='';}}">
                     <option value="">Select hauler...</option>
-                    <option value="Jaguar Waste Management">Jaguar Waste Management</option>
-                    <option value="Liberty Demolition">Liberty Demolition</option>
-                    <option value="B&B Waste">B&amp;B Waste</option>
-                    <option value="Ranger Waste Management LLC">Ranger Waste Management LLC</option>
-                    <option value="Rob Van">Rob Van</option>
-                    <option value="Robert Vandling">Robert Vandling</option>
-                    <option value="RAUL">RAUL</option>
                     <option value="__other">Other...</option>
                 </select>
             </div>
@@ -5602,7 +5595,7 @@ const DS = {
         this.showEditTicket(id);
     },
 
-    showEditTicket(ticketId) {
+    async showEditTicket(ticketId) {
         const t = this.state.tickets.find(x => x.id === ticketId);
         if (!t) return;
         this.closeModal('ticketDetailModal');
@@ -5620,23 +5613,28 @@ const DS = {
         document.getElementById('editTktTare').value = t.tare_lbs || 0;
         document.getElementById('editTktNet').value = t.net_lbs || 0;
         document.getElementById('editTktTons').value = t.net_tons || 0;
-        // Set hauler dropdown — add as option if not in list
+        // Set hauler dropdown — populate from approved_haulers table (controlled list)
         var haulerSel = document.getElementById('editTktHauler');
         var haulerVal = t.hauler || '';
-        if (haulerVal) {
-            var found = false;
-            for (var hi = 0; hi < haulerSel.options.length; hi++) {
-                if (haulerSel.options[hi].value === haulerVal) { found = true; break; }
+        try {
+            var approvedRows = await this.supabase('approved_haulers?select=name&order=name.asc');
+            var approvedNames = (approvedRows || []).map(function(r){ return r.name; });
+            this._approvedHaulers = approvedNames;
+            // Rebuild: placeholder, approved haulers, then Other...
+            var opts = '<option value="">Select hauler...</option>';
+            approvedNames.forEach(function(n){
+                opts += '<option value="' + DS.esc(n) + '">' + DS.esc(n) + '</option>';
+            });
+            // If the saved hauler is NOT an approved hauler, surface it clearly so it gets fixed
+            if (haulerVal && approvedNames.indexOf(haulerVal) === -1) {
+                opts += '<option value="' + DS.esc(haulerVal) + '">⚠ ' + DS.esc(haulerVal) + ' (not an approved hauler — reselect)</option>';
             }
-            if (!found) {
-                var newOpt = document.createElement('option');
-                newOpt.value = haulerVal;
-                newOpt.textContent = haulerVal;
-                haulerSel.insertBefore(newOpt, haulerSel.lastElementChild);
-            }
-            haulerSel.value = haulerVal;
-        } else {
-            haulerSel.value = '';
+            opts += '<option value="__other">Other...</option>';
+            haulerSel.innerHTML = opts;
+            haulerSel.value = haulerVal || '';
+        } catch (e) {
+            // Fallback: leave whatever options exist, set value if possible
+            haulerSel.value = haulerVal || '';
         }
         document.getElementById('editTktContainer').value = t.container_size || 30;
         if(document.getElementById('editTktZone'))document.getElementById('editTktZone').value = t.zone || '';
@@ -11321,9 +11319,7 @@ const DS = {
             grouped[h].push(t);
         });
         var sorted = Object.entries(grouped).sort(function(a, b) { return b[1].length - a[1].length; });
-        var approvedRows = await this.supabase('approved_haulers?select=name');
-        var approved = (approvedRows || []).map(function(r){ return r.name; });
-        this._approvedHaulers = approved;
+        var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
         var html = '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">' + sorted.length + ' unique hauler names • ' + tickets.length + ' total tickets</div>';
         html += '<div style="display:flex;flex-direction:column;gap:6px;">';
         sorted.forEach(function(pair, idx) {
@@ -11341,7 +11337,6 @@ const DS = {
             html += '<span style="flex:1;font-size:.8rem;font-weight:600;">' + name + '</span>';
             html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets ▼</span>';
             if (!isOk) {
-                html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);" onclick="event.stopPropagation();DS.approveHauler(\'' + name.replace(/'/g, "\\'") + '\')">✅ Approve</button>';
                 html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="event.stopPropagation();DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
             }
             html += '</div>';
@@ -11364,20 +11359,8 @@ const DS = {
         el.innerHTML = html;
     },
 
-    async approveHauler(name) {
-        if (!confirm('Approve "' + name + '" as a real hauler? It will stop showing the ⚠️ warning.')) return;
-        try {
-            const res = await this.supabase('approved_haulers', 'POST', { name: name });
-            if (res === null) { alert('Approve failed — check Supabase connection.'); return; }
-            if (this.addAuditEntry) this.addAuditEntry('HAULER_APPROVE', name);
-            this.loadHaulerMgmt();
-        } catch (e) {
-            alert('Approve failed: ' + e.message);
-        }
-    },
-
     async renameHauler(oldName) {
-        var approved = this._approvedHaulers || ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
+        var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
         var m = document.createElement('div');
         m.className = 'modal-overlay show';
         m.id = 'haulerRenameModal';
