@@ -5620,12 +5620,10 @@ const DS = {
             var approvedRows = await this.supabase('approved_haulers?select=name&order=name.asc');
             var approvedNames = (approvedRows || []).map(function(r){ return r.name; });
             this._approvedHaulers = approvedNames;
-            // Rebuild: placeholder, approved haulers, then Other...
             var opts = '<option value="">Select hauler...</option>';
             approvedNames.forEach(function(n){
                 opts += '<option value="' + DS.esc(n) + '">' + DS.esc(n) + '</option>';
             });
-            // If the saved hauler is NOT an approved hauler, surface it clearly so it gets fixed
             if (haulerVal && approvedNames.indexOf(haulerVal) === -1) {
                 opts += '<option value="' + DS.esc(haulerVal) + '">⚠ ' + DS.esc(haulerVal) + ' (not an approved hauler — reselect)</option>';
             }
@@ -5633,7 +5631,6 @@ const DS = {
             haulerSel.innerHTML = opts;
             haulerSel.value = haulerVal || '';
         } catch (e) {
-            // Fallback: leave whatever options exist, set value if possible
             haulerSel.value = haulerVal || '';
         }
         document.getElementById('editTktContainer').value = t.container_size || 30;
@@ -11319,7 +11316,9 @@ const DS = {
             grouped[h].push(t);
         });
         var sorted = Object.entries(grouped).sort(function(a, b) { return b[1].length - a[1].length; });
-        var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
+        var approvedRows = await this.supabase('approved_haulers?select=name');
+        var approved = (approvedRows || []).map(function(r){ return r.name; });
+        this._approvedHaulers = approved;
         var html = '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">' + sorted.length + ' unique hauler names • ' + tickets.length + ' total tickets</div>';
         html += '<div style="display:flex;flex-direction:column;gap:6px;">';
         sorted.forEach(function(pair, idx) {
@@ -11337,6 +11336,7 @@ const DS = {
             html += '<span style="flex:1;font-size:.8rem;font-weight:600;">' + name + '</span>';
             html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets ▼</span>';
             if (!isOk) {
+                html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);" onclick="event.stopPropagation();DS.approveHauler(\'' + name.replace(/'/g, "\\'") + '\')">✅ Approve</button>';
                 html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="event.stopPropagation();DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
             }
             html += '</div>';
@@ -11359,8 +11359,20 @@ const DS = {
         el.innerHTML = html;
     },
 
+    async approveHauler(name) {
+        if (!confirm('Approve "' + name + '" as a real hauler? It will stop showing the ⚠️ warning.')) return;
+        try {
+            const res = await this.supabase('approved_haulers', 'POST', { name: name });
+            if (res === null) { alert('Approve failed — check Supabase connection.'); return; }
+            if (this.addAuditEntry) this.addAuditEntry('HAULER_APPROVE', name);
+            this.loadHaulerMgmt();
+        } catch (e) {
+            alert('Approve failed: ' + e.message);
+        }
+    },
+
     async renameHauler(oldName) {
-        var approved = ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
+        var approved = this._approvedHaulers || ['Jaguar Waste Management', 'B&B Waste', 'Liberty Demolition', 'Ranger Waste Management LLC'];
         var m = document.createElement('div');
         m.className = 'modal-overlay show';
         m.id = 'haulerRenameModal';
