@@ -601,6 +601,18 @@
             </div>
 
             <!-- ============================================================
+                 PI HEALTH — temp/throttle/disk from pi_health.py (Phase 2.8)
+                 ============================================================ -->
+            <div class="card" id="piHealthCard">
+                <div class="card-title">
+                    <span class="icon">🌡️</span> Pi Health
+                    <span id="piHealthBeat" style="margin-left:8px;font-size:.6rem;font-weight:700;"></span>
+                    <button onclick="DS.loadPiHealth()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.7rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
+                </div>
+                <div id="piHealthBody" style="font-size:.75rem;color:var(--text-muted);text-align:center;padding:8px;">Loading...</div>
+            </div>
+
+            <!-- ============================================================
                  PI SCALE CAPTURES — Raw weight readings from WI-127 (NEW)
                  ============================================================ -->
             <div class="card" id="piCapturesCard" style="border-color:var(--warning);background:linear-gradient(135deg,var(--bg-card) 0%,rgba(245,158,11,0.04) 100%);">
@@ -1504,6 +1516,82 @@ const DS = {
         this._renderScaleFeed(data, false);
         document.getElementById('scaleCount').textContent = data.length + '+';
         document.getElementById('scaleMoreBtn').style.display = data.length >= this._scalePageSize ? 'block' : 'none';
+    },
+
+    // ============================================================
+    // PI HEALTH WIDGET (Phase 2.8)
+    // Reads pi_health rows pushed by /home/pi/pi_health.py every 5 min
+    // via pi-health.timer. Standalone from capture: OFFLINE here means
+    // check the Pi, but tickets may still be buffering locally fine.
+    // ============================================================
+    async loadPiHealth() {
+        var body = document.getElementById('piHealthBody');
+        var beat = document.getElementById('piHealthBeat');
+        if (!body) return;
+        var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        var rows = await this.supabase(
+            'pi_health?captured_at=gte.' + since +
+            '&order=captured_at.asc' +
+            '&select=captured_at,temp_f,throttled,under_voltage,disk_used_pct,mem_used_pct,uptime_hours,wifi_or_cell&limit=400'
+        );
+        if (!rows || rows.length === 0) {
+            body.innerHTML = '<div style="padding:8px;color:var(--text-dim);">No health data in the last 24h.<br>Check pi-health.timer on the Pi.</div>';
+            if (beat) { beat.textContent = '\u25CF NO DATA'; beat.style.color = 'var(--danger)'; }
+            return;
+        }
+
+        var last = rows[rows.length - 1];
+        var ageMin = (Date.now() - new Date(last.captured_at).getTime()) / 60000;
+        var online = ageMin <= 15;
+        if (beat) {
+            beat.textContent = online ? '\u25CF ONLINE' : '\u25CF OFFLINE ' + Math.round(ageMin) + 'm';
+            beat.style.color = online ? 'var(--success)' : 'var(--danger)';
+        }
+
+        // Temp bands: bay runs 120-150F normal; Pi throttles ~185F.
+        var t = last.temp_f || 0;
+        var tc = t < 155 ? 'var(--success)' : t < 172 ? 'var(--warning)' : 'var(--danger)';
+        var hi = rows.reduce(function(m, r) { return Math.max(m, r.temp_f || 0); }, 0);
+        var lo = rows.reduce(function(m, r) { return Math.min(m, r.temp_f || 999); }, 999);
+
+        var warn = '';
+        if (last.throttled) warn += '<div style="color:var(--danger);font-weight:700;margin-bottom:4px;">🔥 CPU THROTTLING \u2014 too hot, check airflow/dust</div>';
+        if (last.under_voltage) warn += '<div style="color:var(--danger);font-weight:700;margin-bottom:4px;">\u26A1 UNDER-VOLTAGE \u2014 check power supply</div>';
+        if ((last.disk_used_pct || 0) > 85) warn += '<div style="color:var(--warning);font-weight:700;margin-bottom:4px;">💾 Disk ' + last.disk_used_pct + '% full</div>';
+
+        body.style.textAlign = 'left';
+        body.innerHTML =
+            '<div style="display:flex;gap:12px;align-items:center;margin-bottom:6px;">' +
+                '<div style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:' + tc + ';">' + t.toFixed(1) + '&deg;F</div>' +
+                '<div style="font-size:.65rem;color:var(--text-dim);">24h high <b style="color:var(--text-muted)">' + hi.toFixed(1) + '&deg;</b>' +
+                ' &bull; low <b style="color:var(--text-muted)">' + lo.toFixed(1) + '&deg;</b></div>' +
+            '</div>' +
+            warn +
+            this._piHealthSpark(rows, lo, hi) +
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:.65rem;color:var(--text-dim);margin-top:6px;">' +
+                '<span>💾 Disk ' + (last.disk_used_pct != null ? last.disk_used_pct + '%' : '\u2014') + '</span>' +
+                '<span>🧠 Mem ' + (last.mem_used_pct != null ? last.mem_used_pct + '%' : '\u2014') + '</span>' +
+                '<span>\u23F1 Up ' + (last.uptime_hours != null ? (last.uptime_hours >= 48 ? Math.round(last.uptime_hours / 24) + 'd' : last.uptime_hours + 'h') : '\u2014') + '</span>' +
+                '<span>📡 ' + (last.wifi_or_cell === 'usb0' ? 'Cellular' : (last.wifi_or_cell || '\u2014')) + '</span>' +
+                '<span style="margin-left:auto;">' + new Date(last.captured_at).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) + '</span>' +
+            '</div>';
+    },
+
+    // Inline SVG sparkline of last 24h temps. No libraries.
+    _piHealthSpark(rows, lo, hi) {
+        if (rows.length < 2) return '';
+        var W = 300, H = 40, span = Math.max(hi - lo, 1);
+        var t0 = new Date(rows[0].captured_at).getTime();
+        var t1 = new Date(rows[rows.length - 1].captured_at).getTime();
+        var tSpan = Math.max(t1 - t0, 1);
+        var pts = rows.map(function(r) {
+            var x = ((new Date(r.captured_at).getTime() - t0) / tSpan) * W;
+            var y = H - (((r.temp_f || lo) - lo) / span) * (H - 6) - 3;
+            return x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+        return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:40px;display:block;" preserveAspectRatio="none">' +
+            '<polyline points="' + pts + '" fill="none" stroke="var(--warning)" stroke-width="1.5"/>' +
+            '</svg>';
     },
 
     // ============================================================
@@ -4045,6 +4133,7 @@ const DS = {
                 if (tab === 'scaleTab') {
                     Promise.all([
                         this.loadOperationalPulse(),
+                        this.loadPiHealth(),
                         this.loadScaleFeed(),
                         this.loadPiCaptures(),
                         this.loadDrivers(),
