@@ -892,7 +892,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Password</label>
-                <input type="text" class="form-input" id="newClientPassword" placeholder="Set a password">
+                <input type="text" class="form-input" id="newClientPassword" placeholder="Set a password (8+ characters)">
             </div>
         </div>
         <div class="form-group">
@@ -11541,17 +11541,46 @@ const DS = {
     // ============================================================
     _clients: [],
 
+    // ============================================================
+    // ADMIN UNLOCK (Phase 2.9)
+    // client_accounts / client_logins are RLS-locked since the July
+    // 4-5 security overhaul. Management now goes through passphrase-
+    // gated security-definer RPCs (admin_unlock_setup.sql). The
+    // passphrase is asked once per session and held in memory only —
+    // never stored, never in the repo, never in localStorage.
+    // ============================================================
+    _adminPass: null,
+    async getAdminPass(forceAsk) {
+        if (this._adminPass && !forceAsk) return this._adminPass;
+        var p = prompt('Admin passphrase:');
+        if (!p) return null;
+        var ok = await this.supabase('rpc/admin_check_pass', 'POST', { admin_pass: p });
+        if (ok === true) { this._adminPass = p; return p; }
+        this._adminPass = null;
+        this.showToast(ok === false ? '\u274C Wrong admin passphrase' : '\u274C Could not verify \u2014 check connection');
+        return null;
+    },
+    _adminLockedHtml(retryFn) {
+        return '<div style="text-align:center;padding:12px;">' +
+            '<div style="font-size:1.3rem;margin-bottom:6px;">\uD83D\uDD12</div>' +
+            '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">Admin passphrase required</div>' +
+            '<button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px;" onclick="' + retryFn + '">\uD83D\uDD13 Unlock</button></div>';
+    },
+
     async loadClients() {
         var el = document.getElementById('clientList');
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
 
-        var clients = await this.supabase('client_accounts?order=name.asc');
-        if (!clients) { el.innerHTML = '<div style="color:var(--danger)">Failed to load. Run create_client_portal.sql first.</div>'; return; }
+        var pass = await this.getAdminPass();
+        if (!pass) { el.innerHTML = this._adminLockedHtml('DS.loadClients()'); return; }
+
+        var data = await this.supabase('rpc/admin_list_clients', 'POST', { admin_pass: pass });
+        if (!data || !data.clients) { el.innerHTML = '<div style="color:var(--danger)">Failed to load. Run admin_unlock_setup.sql first.</div>'; return; }
+        var clients = data.clients;
         this._clients = clients;
 
-        var links = await this.supabase('client_project_access?select=client_id,project_id');
         var clientProjects = {};
-        if (links) links.forEach(function(l) {
+        (data.access || []).forEach(function(l) {
             if (!clientProjects[l.client_id]) clientProjects[l.client_id] = [];
             clientProjects[l.client_id].push(l.project_id);
         });
@@ -11585,20 +11614,23 @@ const DS = {
     async loadLoginLog() {
         var el = document.getElementById('loginLogContent');
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
+
+        var pass = await this.getAdminPass();
+        if (!pass) { el.innerHTML = this._adminLockedHtml('DS.loadLoginLog()'); return; }
+
         // Phase 2.7d: Only show last 7 days of login history (keep view focused on recent activity)
-        var sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
-        var logs = await this.supabase('client_logins?logged_in_at=gte.' + sevenDaysAgo + '&order=logged_in_at.desc&limit=50');
+        var logs = await this.supabase('rpc/admin_list_logins', 'POST', { admin_pass: pass, p_days: 7 });
         if (!logs || !logs.length) {
             el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No logins in the last 7 days.</div>';
             return;
         }
-        var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' login' + (logs.length===1?'':'s') + ' · last 7 days</div>';
+        var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' login' + (logs.length===1?'':'s') + ' \u00B7 last 7 days</div>';
         logs.forEach(function(log) {
             var dt = log.logged_in_at ? new Date(log.logged_in_at) : null;
             var timeStr = dt ? dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
             var ago = DS.timeAgo(log.logged_in_at);
             var ua = log.user_agent || '';
-            var device = ua.indexOf('iPad') >= 0 ? '📱 iPad' : ua.indexOf('iPhone') >= 0 ? '📱 iPhone' : ua.indexOf('Android') >= 0 ? '📱 Android' : '💻 Desktop';
+            var device = ua.indexOf('iPad') >= 0 ? '\uD83D\uDCF1 iPad' : ua.indexOf('iPhone') >= 0 ? '\uD83D\uDCF1 iPhone' : ua.indexOf('Android') >= 0 ? '\uD83D\uDCF1 Android' : '\uD83D\uDCBB Desktop';
             html += '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;font-size:.7rem">' +
                 '<div style="font-size:.9rem;flex-shrink:0">' + device + '</div>' +
                 '<div style="flex:1"><div style="font-weight:600">' + DS.esc(log.client_name || 'Unknown') + '</div>' +
@@ -11606,7 +11638,7 @@ const DS = {
                 '<div style="text-align:right;flex-shrink:0"><div style="font-weight:500">' + ago + '</div>' +
                 '<div style="font-size:.55rem;color:var(--text-dim)">' + timeStr + '</div></div></div>';
         });
-        html += '<button class="btn btn-sm btn-outline mt-8" onclick="DS.loadLoginLog()">🔄 Refresh</button>';
+        html += '<button class="btn btn-sm btn-outline mt-8" onclick="DS.loadLoginLog()">\uD83D\uDD04 Refresh</button>';
         el.innerHTML = html;
     },
 
@@ -11636,22 +11668,24 @@ const DS = {
         var company = document.getElementById('newClientCompany').value.trim();
         if (!name) { this.showToast('Contact name required'); return; }
         if (!email) { this.showToast('Email required'); return; }
-        if (!password || password.length < 4) { this.showToast('Password must be at least 4 characters'); return; }
+        if (!password || password.length < 8) { this.showToast('Password must be at least 8 characters'); return; }
+
+        var pass = await this.getAdminPass();
+        if (!pass) return;
+
+        var projIds = [];
+        document.querySelectorAll('.newClientProjCb:checked').forEach(function(cb) { projIds.push(cb.value); });
 
         this.showLoading('Creating client...');
-        var hash = await this.hashClientPassword(password);
-
-        var result = await this.supabase('client_accounts', 'POST', { name: name, email: email, company: company || null, password_hash: hash, is_active: true });
-        if (!result || result.length === 0) { this.hideLoading(); this.showToast('Failed - email may already exist'); return; }
-        var clientId = result[0].id;
-        var checks = document.querySelectorAll('.newClientProjCb:checked');
-        for (var i = 0; i < checks.length; i++) {
-            await this.supabase('client_project_access', 'POST', { client_id: clientId, project_id: checks[i].value });
-        }
+        var result = await this.supabase('rpc/admin_upsert_client', 'POST', {
+            admin_pass: pass, p_id: null, p_name: name, p_email: email,
+            p_company: company || null, p_password: password, p_project_ids: projIds
+        });
         this.hideLoading();
+        if (!result) { this.showToast('Failed - email may already exist'); return; }
         this.closeModal('newClientModal');
         this.showToast('Client "' + name + '" created! Login: ' + email);
-        this.addAuditEntry('CLIENT_CREATE', name + ' <' + email + '> - ' + checks.length + ' projects');
+        this.addAuditEntry('CLIENT_CREATE', name + ' <' + email + '> - ' + projIds.length + ' projects');
         this.loadClients();
     },
 
@@ -11689,21 +11723,24 @@ const DS = {
         var company = document.getElementById('editClientCompany').value.trim();
         var password = document.getElementById('editClientPassword').value;
         if (!name || !email) { this.showToast('Name and email required'); return; }
+        if (password && password.length < 8) { this.showToast('New password must be at least 8 characters'); return; }
+
+        var pass = await this.getAdminPass();
+        if (!pass) return;
+
+        var projIds = [];
+        document.querySelectorAll('.editClientProjCb:checked').forEach(function(cb) { projIds.push(cb.value); });
+
         this.showLoading('Saving...');
-        var updates = { name: name, email: email, company: company || null, updated_at: new Date().toISOString() };
-        if (password && password.length >= 4) {
-            updates.password_hash = await this.hashClientPassword(password);
-        }
-        await this.supabase('client_accounts?id=eq.' + id, 'PATCH', updates);
-        await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
-        var checks = document.querySelectorAll('.editClientProjCb:checked');
-        for (var i = 0; i < checks.length; i++) {
-            await this.supabase('client_project_access', 'POST', { client_id: id, project_id: checks[i].value });
-        }
+        var result = await this.supabase('rpc/admin_upsert_client', 'POST', {
+            admin_pass: pass, p_id: id, p_name: name, p_email: email,
+            p_company: company || null, p_password: password || null, p_project_ids: projIds
+        });
         this.hideLoading();
+        if (!result) { this.showToast('Save failed'); return; }
         this.closeModal('editClientModal');
         this.showToast('Client updated');
-        this.addAuditEntry('CLIENT_UPDATE', name + ' - ' + checks.length + ' projects');
+        this.addAuditEntry('CLIENT_UPDATE', name + ' - ' + projIds.length + ' projects');
         this.loadClients();
     },
 
@@ -11713,10 +11750,14 @@ const DS = {
         var c = (this._clients || []).find(function(x) { return x.id === id; });
         var clientName = c ? c.name : 'this client';
         if (!confirm('Delete "' + clientName + '"? They will lose portal access.')) return;
+
+        var pass = await this.getAdminPass();
+        if (!pass) return;
+
         this.showLoading('Deleting...');
-        await this.supabase('client_project_access?client_id=eq.' + id, 'DELETE');
-        await this.supabase('client_accounts?id=eq.' + id, 'DELETE');
+        var result = await this.supabase('rpc/admin_delete_client', 'POST', { admin_pass: pass, p_id: id });
         this.hideLoading();
+        if (result === null) { this.showToast('Delete failed'); return; }
         this.closeModal('editClientModal');
         this.showToast('"' + clientName + '" removed');
         this.addAuditEntry('CLIENT_DELETE', clientName);
