@@ -28,8 +28,8 @@ import time
 import urllib.request
 
 # ---- FILL THESE IN ON THE PI (same values as scale_capture.py) ----
-SUPABASE_URL = "YOUR_SUPABASE_URL"          # e.g. https://xxxx.supabase.co
-SUPABASE_ANON_KEY = "YOUR_ANON_KEY"
+SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co"          # e.g. https://xxxx.supabase.co
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g"
 # -------------------------------------------------------------------
 
 TIMEOUT = 15  # seconds; cellular can be slow
