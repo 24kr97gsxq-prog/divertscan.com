@@ -5806,7 +5806,29 @@ const DS = {
         if(document.getElementById('editTktZone'))document.getElementById('editTktZone').value = t.zone || '';
         document.getElementById('editTktDriver').value = t.driver_name || '';
         if(document.getElementById('editTktWeigher'))document.getElementById('editTktWeigher').value = t.weigher || '';
-        if(document.getElementById('editTktTareSource'))document.getElementById('editTktTareSource').value = t.tare_source || 'measured';
+        // Tare-source fix (July 10): the dropdown must carry the ticket's REAL value.
+        // Driver-flow tickets store granular sources (pi_capture, driver_avg, fleet_default,
+        // manual_typed, manual); old paper tickets store null. Previously the select only knew
+        // measured/estimated, so any other value silently displayed as "Measured" and got
+        // OVERWRITTEN on save. Now every value round-trips unchanged unless deliberately edited.
+        var tsSel = document.getElementById('editTktTareSource');
+        if (tsSel) {
+            var tsVal = t.tare_source || '';
+            var tsOpts = [
+                ['', '\u2014 not recorded \u2014'],
+                ['measured', 'Measured (weighed on scale)'],
+                ['estimated', 'Estimated (standard/averaged)'],
+                ['pi_capture', 'Measured \u2014 Pi scale capture'],
+                ['driver_avg', 'Estimated \u2014 driver average'],
+                ['fleet_default', 'Estimated \u2014 fleet average'],
+                ['manual_typed', 'Estimated \u2014 driver typed'],
+                ['manual', 'Estimated \u2014 manual']
+            ];
+            if (tsVal && !tsOpts.some(function(o){ return o[0] === tsVal; })) tsOpts.push([tsVal, tsVal]);
+            tsSel.innerHTML = tsOpts.map(function(o){
+                return '<option value="' + o[0] + '"' + (o[0] === tsVal ? ' selected' : '') + '>' + o[1] + '</option>';
+            }).join('');
+        }
         document.getElementById('editTktNotes').value = t.notes || '';
 
         // Build material sliders for edit
@@ -6159,7 +6181,7 @@ const DS = {
             zone: document.getElementById('editTktZone')?.value || null,
             driver_name: document.getElementById('editTktDriver').value.trim() || null,
             weigher: (document.getElementById('editTktWeigher') ? document.getElementById('editTktWeigher').value.trim() : '') || null,
-            tare_source: (document.getElementById('editTktTareSource') ? document.getElementById('editTktTareSource').value : 'measured') || 'measured',
+            tare_source: (document.getElementById('editTktTareSource') ? (document.getElementById('editTktTareSource').value || null) : null),
             notes: document.getElementById('editTktNotes').value.trim() || null,
             diversion_pct: diversionPct,
             diverted_tons: divertedTons,
