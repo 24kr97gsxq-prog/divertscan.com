@@ -1175,7 +1175,7 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Hauler</label>
-                <select class="form-input" id="editTktHauler" onchange="if(this.value==='__other'){var c=prompt('Enter hauler name:');if(c){var o=document.createElement('option');o.value=c;o.textContent=c;this.insertBefore(o,this.lastElementChild);this.value=c;}else{this.value='';}}">
+                <select class="form-input" id="editTktHauler" onchange="if(this.value==='__other'){var c=prompt('Enter hauler name:');if(c){var o=document.createElement('option');o.value=c;o.textContent=c;this.insertBefore(o,this.lastElementChild);this.value=c;}else{this.value='';}}DS.autofillProjectFromHauler(this.value);">
                     <option value="">Select hauler...</option>
                     <option value="__other">Other...</option>
                 </select>
@@ -5717,9 +5717,17 @@ const DS = {
         var haulerSel = document.getElementById('editTktHauler');
         var haulerVal = t.hauler || '';
         try {
-            var approvedRows = await this.supabase('approved_haulers?select=name&order=name.asc');
+            var approvedRows = await this.supabase('approved_haulers?select=name,default_project_id&order=name.asc');
             var approvedNames = (approvedRows || []).map(function(r){ return r.name; });
             this._approvedHaulers = approvedNames;
+            // PR #3: cache hauler→default-project so autofillProjectFromHauler works
+            // even if the Hauler Management card was never opened this session.
+            this._haulerDefaultProj = this._haulerDefaultProj || {};
+            (approvedRows || []).forEach(function(r){ this._haulerDefaultProj[r.name] = r.default_project_id || ''; }.bind(this));
+            if (!this._haulerProjects) {
+                this._haulerProjects = {};
+                (this.state.projects || []).forEach(function(p){ this._haulerProjects[p.id] = p.name; }.bind(this));
+            }
             var opts = '<option value="">Select hauler...</option>';
             approvedNames.forEach(function(n){
                 opts += '<option value="' + DS.esc(n) + '">' + DS.esc(n) + '</option>';
@@ -11412,6 +11420,7 @@ const DS = {
         this._haulerTickets = tickets;
         var projects = await this.supabase('projects?select=id,name');
         this._haulerProjects = {};
+        this._haulerProjectList = (projects || []).filter(function(p){ return p.id !== '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590'; });
         if (projects) projects.forEach(function(p) { this._haulerProjects[p.id] = p.name; }.bind(this));
         var grouped = {};
         tickets.forEach(function(t) {
@@ -11420,9 +11429,18 @@ const DS = {
             grouped[h].push(t);
         });
         var sorted = Object.entries(grouped).sort(function(a, b) { return b[1].length - a[1].length; });
-        var approvedRows = await this.supabase('approved_haulers?select=name');
+        // PR #3: pull name + default project, and the many-to-many project assignments.
+        var approvedRows = await this.supabase('approved_haulers?select=name,default_project_id');
         var approved = (approvedRows || []).map(function(r){ return r.name; });
         this._approvedHaulers = approved;
+        this._haulerDefaultProj = {};
+        (approvedRows || []).forEach(function(r){ this._haulerDefaultProj[r.name] = r.default_project_id || ''; }.bind(this));
+        var hpRows = await this.supabase('hauler_projects?select=hauler_name,project_id') || [];
+        this._haulerProjMap = {};
+        hpRows.forEach(function(r){
+            if (!this._haulerProjMap[r.hauler_name]) this._haulerProjMap[r.hauler_name] = [];
+            this._haulerProjMap[r.hauler_name].push(r.project_id);
+        }.bind(this));
         var html = '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">' + sorted.length + ' unique hauler names • ' + tickets.length + ' total tickets</div>';
         html += '<div style="display:flex;flex-direction:column;gap:6px;">';
         sorted.forEach(function(pair, idx) {
@@ -11449,7 +11467,34 @@ const DS = {
                 html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;border-color:rgba(239,68,68,0.4);color:var(--danger);" onclick="event.stopPropagation();DS.removeApprovedHauler(\'' + name.replace(/'/g, "\\'") + '\')" title="Remove from Select Hauler dropdown (tickets untouched)">🚫 Unlist</button>';
             }
             html += '</div>';
-            html += '<div id="' + safeId + '" style="display:none;padding:6px 10px;background:rgba(0,0,0,0.15);max-height:250px;overflow-y:auto;">';
+            html += '<div id="' + safeId + '" style="display:none;padding:6px 10px;background:rgba(0,0,0,0.15);max-height:400px;overflow-y:auto;">';
+            // PR #3: project-assignment UI, approved rows only. Lets a hauler carry a
+            // default project (auto-filled on tickets) plus a list of other projects.
+            if (isOk) {
+                var nmeFor = name.replace(/'/g, "\\'");
+                var curDefault = (this._haulerDefaultProj || {})[name] || '';
+                var assigned = (this._haulerProjMap || {})[name] || [];
+                html += '<div style="padding:8px;margin-bottom:8px;border:1px solid rgba(96,165,250,0.3);border-radius:8px;background:rgba(96,165,250,0.04);">';
+                html += '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:#60a5fa;font-weight:700;margin-bottom:6px;">📌 Projects for this hauler</div>';
+                // Default project dropdown (the auto-fill target)
+                html += '<label style="font-size:.65rem;color:var(--text-muted);display:block;margin-bottom:3px;">Default project (auto-fills on tickets):</label>';
+                html += '<select onchange="DS.setHaulerDefaultProject(\'' + nmeFor + '\', this.value)" style="width:100%;padding:6px 8px;font-size:.75rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);margin-bottom:8px;">';
+                html += '<option value="">— none —</option>';
+                (this._haulerProjectList || []).forEach(function(p){
+                    html += '<option value="' + p.id + '"' + (p.id === curDefault ? ' selected' : '') + '>' + DS.esc(p.name) + '</option>';
+                });
+                html += '</select>';
+                // Other projects (checkboxes) — quick-pick suggestions, no auto-fill
+                html += '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:3px;">Also works these projects:</div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+                (this._haulerProjectList || []).forEach(function(p){
+                    var on = assigned.indexOf(p.id) >= 0;
+                    html += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:3px 7px;border-radius:12px;cursor:pointer;border:1px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'rgba(0,201,167,0.12)' : 'transparent') + ';">';
+                    html += '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="DS.toggleHaulerProject(\'' + nmeFor + '\', \'' + p.id + '\', this.checked)" style="margin:0;"> ' + DS.esc(p.name);
+                    html += '</label>';
+                });
+                html += '</div></div>';
+            }
             html += '<table style="width:100%;font-size:.7rem;border-collapse:collapse;">';
             html += '<tr style="color:var(--text-muted);border-bottom:1px solid var(--border);"><th style="text-align:left;padding:3px 4px;">Date</th><th style="text-align:left;padding:3px 4px;">Ticket#</th><th style="text-align:right;padding:3px 4px;">Tons</th><th style="text-align:left;padding:3px 4px;">Project</th></tr>';
             tix.forEach(function(t) {
@@ -11546,6 +11591,35 @@ const DS = {
             }
         } catch (e) { console.warn('approved_haulers sync issue (tickets already re-pointed):', e); }
 
+        // 2b. PR #3: carry hauler→project mappings from old name to new so they don't
+        // orphan. Move the default project (if the survivor has none) and re-point
+        // any hauler_projects rows. Best-effort — failures here don't block the rename.
+        try {
+            var oldDefault = (this._haulerDefaultProj || {})[oldName] || '';
+            var newDefault = (this._haulerDefaultProj || {})[newName] || '';
+            if (oldDefault && !newDefault) {
+                await this.supabaseUpdate('approved_haulers?name=eq.' + encodeURIComponent(newName), { default_project_id: oldDefault });
+            }
+            // Re-point join-table rows. Duplicates (same project already on survivor)
+            // are dropped by the unique(hauler_name, project_id) constraint — delete
+            // any old-name rows that would collide, then move the rest.
+            var oldRows = await this.supabase('hauler_projects?hauler_name=eq.' + encodeURIComponent(oldName) + '&select=id,project_id') || [];
+            var newRows = await this.supabase('hauler_projects?hauler_name=eq.' + encodeURIComponent(newName) + '&select=project_id') || [];
+            var newProjIds = newRows.map(function(r){ return r.project_id; });
+            for (var i = 0; i < oldRows.length; i++) {
+                var row = oldRows[i];
+                if (newProjIds.indexOf(row.project_id) >= 0) {
+                    // survivor already has this project — just delete the old-name row
+                    await fetch(this.state.supabaseUrl + '/rest/v1/hauler_projects?id=eq.' + row.id, {
+                        method: 'DELETE',
+                        headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
+                    });
+                } else {
+                    await this.supabaseUpdate('hauler_projects?id=eq.' + row.id, { hauler_name: newName });
+                }
+            }
+        } catch (e) { console.warn('hauler_projects mapping carry-over issue (tickets already re-pointed):', e); }
+
         // 3. Audit trail \u2014 matches HAULER_APPROVE / DRIVER_RENAME pattern.
         if (this.addAuditEntry) {
             this.addAuditEntry('HAULER_RENAME', oldName + ' \u2192 ' + newName + ' (' + affected + ' tickets)');
@@ -11574,6 +11648,67 @@ const DS = {
             this.showToast('✅ Removed from dropdown: ' + name);
             this.loadHaulerMgmt();
         } catch (e) { this.showToast('❌ ' + (e.message || 'Remove failed')); }
+    },
+
+    // PR #3: set a hauler's default project (the one auto-filled on tickets).
+    // Empty value clears it. Updates approved_haulers.default_project_id by name.
+    async setHaulerDefaultProject(name, projectId) {
+        try {
+            var body = { default_project_id: projectId || null };
+            var res = await this.supabaseUpdate('approved_haulers?name=eq.' + encodeURIComponent(name), body);
+            if (res === false) { this.showToast('❌ Could not set default project'); return; }
+            if (!this._haulerDefaultProj) this._haulerDefaultProj = {};
+            this._haulerDefaultProj[name] = projectId || '';
+            var projName = (this._haulerProjects || {})[projectId] || '(none)';
+            if (this.addAuditEntry) this.addAuditEntry('HAULER_DEFAULT_PROJECT', name + ' → ' + projName);
+            this.showToast(projectId ? '✅ Default project set: ' + projName : '✅ Default project cleared');
+        } catch (e) { this.showToast('❌ ' + (e.message || 'Failed')); }
+    },
+
+    // PR #3: add/remove a hauler↔project link in hauler_projects.
+    async toggleHaulerProject(name, projectId, on) {
+        try {
+            if (on) {
+                var created = await this.supabase('hauler_projects', 'POST', { hauler_name: name, project_id: projectId });
+                if (created === null) { this.showToast('❌ Could not add project'); return; }
+            } else {
+                var r = await fetch(this.state.supabaseUrl + '/rest/v1/hauler_projects?hauler_name=eq.' + encodeURIComponent(name) + '&project_id=eq.' + encodeURIComponent(projectId), {
+                    method: 'DELETE',
+                    headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
+                });
+                if (!r.ok) { this.showToast('❌ Could not remove project'); return; }
+            }
+            if (!this._haulerProjMap) this._haulerProjMap = {};
+            var list = this._haulerProjMap[name] || [];
+            if (on) { if (list.indexOf(projectId) < 0) list.push(projectId); }
+            else { list = list.filter(function(id){ return id !== projectId; }); }
+            this._haulerProjMap[name] = list;
+            var projName = (this._haulerProjects || {})[projectId] || projectId;
+            if (this.addAuditEntry) this.addAuditEntry('HAULER_PROJECT_' + (on ? 'ADD' : 'REMOVE'), name + ' ' + (on ? '+ ' : '- ') + projName);
+        } catch (e) { this.showToast('❌ ' + (e.message || 'Failed')); }
+    },
+
+    // PR #3: when a hauler is picked on the ticket form, auto-fill the project from
+    // that hauler's default — but ONLY if the project field is currently empty, so a
+    // project the user already set is never overwritten. The value stays editable.
+    autofillProjectFromHauler(haulerName) {
+        try {
+            if (!haulerName || haulerName === '__other') return;
+            var projSel = document.getElementById('editTktProject');
+            if (!projSel) return;
+            if (projSel.value) return; // don't override an existing choice
+            var defId = (this._haulerDefaultProj || {})[haulerName];
+            if (!defId) return;
+            // only set if that project is actually an option in the dropdown
+            var found = false;
+            for (var i = 0; i < projSel.options.length; i++) {
+                if (projSel.options[i].value === defId) { found = true; break; }
+            }
+            if (!found) return;
+            projSel.value = defId;
+            var projName = (this._haulerProjects || {})[defId] || '';
+            if (projName) this.showToast('📌 Project auto-filled: ' + projName + ' (editable)');
+        } catch (e) { /* non-fatal */ }
     },
 
     async supabaseUpdate(path, body) {
