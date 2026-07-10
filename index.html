@@ -11441,7 +11441,12 @@ const DS = {
             html += '<span style="font-size:.7rem;color:var(--text-muted);">' + count + ' tickets ▼</span>';
             if (!isOk) {
                 html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);" onclick="event.stopPropagation();DS.approveHauler(\'' + name.replace(/'/g, "\\'") + '\')">✅ Approve</button>';
-                html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="event.stopPropagation();DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename</button>';
+            }
+            // Rename/merge available on ALL rows. Approved dupes (e.g. the two Ranger
+            // entries) were hidden before because the button was gated on !isOk.
+            html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;" onclick="event.stopPropagation();DS.renameHauler(\'' + name.replace(/'/g, "\\'") + '\')">✏️ Rename / Merge</button>';
+            if (isOk) {
+                html += '<button class="btn btn-sm btn-outline" style="padding:4px 8px;font-size:.65rem;border-color:rgba(239,68,68,0.4);color:var(--danger);" onclick="event.stopPropagation();DS.removeApprovedHauler(\'' + name.replace(/'/g, "\\'") + '\')" title="Remove from Select Hauler dropdown (tickets untouched)">🚫 Unlist</button>';
             }
             html += '</div>';
             html += '<div id="' + safeId + '" style="display:none;padding:6px 10px;background:rgba(0,0,0,0.15);max-height:250px;overflow-y:auto;">';
@@ -11507,16 +11512,68 @@ const DS = {
         var newName = custom || sel;
         if (!newName) { this.showToast('Select or enter a hauler name'); return; }
         if (newName === oldName) { this.showToast('Name is the same'); return; }
-        if (!confirm('Rename all "' + oldName + '" tickets to "' + newName + '"?')) return;
+
+        // SAFE ROUTE: count exactly how many tickets this will re-point before writing.
+        var affected = (this._haulerTickets || []).filter(function(t) {
+            return (t.hauler || '(empty)') === oldName;
+        }).length;
+
+        var isMerge = (this._approvedHaulers || []).indexOf(newName) >= 0
+            || (this._haulerTickets || []).some(function(t){ return (t.hauler||'(empty)') === newName; });
+        var verb = isMerge ? 'MERGE' : 'rename';
+        var msg = verb + ' "' + oldName + '" \u2192 "' + newName + '"\n\n'
+            + 'This will re-point ' + affected + ' ticket' + (affected === 1 ? '' : 's') + '.\n'
+            + (isMerge ? '"' + newName + '" already exists \u2014 its tickets will be combined.\n' : '')
+            + '\nContinue?';
+        if (!confirm(msg)) return;
+
+        // 1. Re-point every ticket carrying the old hauler string.
         var url = 'tickets?hauler=eq.' + encodeURIComponent(oldName);
         var res = await this.supabaseUpdate(url, { hauler: newName });
-        if (res !== false) {
-            this.showToast('✅ Renamed to ' + newName);
-            document.getElementById('haulerRenameModal').remove();
-            this.loadHaulerMgmt();
-        } else {
-            this.showToast('❌ Rename failed');
+        if (res === false) { this.showToast('❌ Rename failed'); return; }
+
+        // 2. Keep approved_haulers clean: ensure survivor is approved, drop the dead name.
+        try {
+            var approved = this._approvedHaulers || [];
+            if (approved.indexOf(newName) < 0) {
+                await this.supabase('approved_haulers', 'POST', { name: newName });
+            }
+            if (approved.indexOf(oldName) >= 0) {
+                await fetch(this.state.supabaseUrl + '/rest/v1/approved_haulers?name=eq.' + encodeURIComponent(oldName), {
+                    method: 'DELETE',
+                    headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
+                });
+            }
+        } catch (e) { console.warn('approved_haulers sync issue (tickets already re-pointed):', e); }
+
+        // 3. Audit trail \u2014 matches HAULER_APPROVE / DRIVER_RENAME pattern.
+        if (this.addAuditEntry) {
+            this.addAuditEntry('HAULER_RENAME', oldName + ' \u2192 ' + newName + ' (' + affected + ' tickets)');
         }
+
+        this.showToast('✅ ' + (isMerge ? 'Merged' : 'Renamed') + ' \u2192 ' + newName + ' (' + affected + ' tickets)');
+        var modal = document.getElementById('haulerRenameModal');
+        if (modal) modal.remove();
+        this.loadHaulerMgmt();
+    },
+
+    // Remove a hauler from the approved list so it stops appearing in the Select
+    // Hauler dropdown. Tickets are NOT touched \u2014 historical data stays intact.
+    // Reversible: re-approve any time via the ✅ Approve button.
+    async removeApprovedHauler(name) {
+        if (!confirm('Remove "' + name + '" from the Select Hauler dropdown?\n\n'
+            + 'Existing tickets keep this hauler name \u2014 nothing is deleted.\n'
+            + 'You can re-approve it later. Continue?')) return;
+        try {
+            var r = await fetch(this.state.supabaseUrl + '/rest/v1/approved_haulers?name=eq.' + encodeURIComponent(name), {
+                method: 'DELETE',
+                headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
+            });
+            if (!r.ok) { this.showToast('❌ Remove failed'); return; }
+            if (this.addAuditEntry) this.addAuditEntry('HAULER_UNLIST', name);
+            this.showToast('✅ Removed from dropdown: ' + name);
+            this.loadHaulerMgmt();
+        } catch (e) { this.showToast('❌ ' + (e.message || 'Remove failed')); }
     },
 
     async supabaseUpdate(path, body) {
