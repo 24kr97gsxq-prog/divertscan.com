@@ -454,6 +454,63 @@
             </div>
         </div>
 
+        <!-- ========== HAULERS TAB ========== -->
+        <div id="haulersTab" class="tab-content">
+            <!-- Header card with summary stats -->
+            <div class="card" style="border-color:#00c9a7;background:linear-gradient(135deg,var(--bg-card) 0%,rgba(0,201,167,0.05) 100%);">
+                <div class="card-title">
+                    <span class="icon">🏢</span> Hauler Performance
+                    <button onclick="DS.loadHaulersTab()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.75rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
+                </div>
+                <p style="font-size:.65rem;color:var(--text-muted);margin:2px 0 0;">Internal view — includes CO₂e. Not for customer/LEED reports.</p>
+                <div id="haulersTabSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px;">
+                    <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;text-align:center;">
+                        <div id="htTotal" style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:var(--primary);">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Haulers</div>
+                    </div>
+                    <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;text-align:center;">
+                        <div id="htLoads" style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:var(--cyan);">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Loads</div>
+                    </div>
+                    <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;text-align:center;">
+                        <div id="htTons" style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:var(--success);">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Total Tons</div>
+                    </div>
+                    <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;text-align:center;">
+                        <div id="htDiv" style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:var(--warning);">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Avg Diversion</div>
+                    </div>
+                    <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;text-align:center;">
+                        <div id="htCo2e" style="font-family:var(--mono);font-size:1.4rem;font-weight:800;color:#a855f7;">—</div>
+                        <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">CO₂e Avoided</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter / search card -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🔍</span> Search & Sort</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                    <input type="text" id="htSearch" placeholder="Search hauler..." oninput="DS.renderHaulersTab()" style="flex:1;min-width:160px;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
+                    <select id="htSort" onchange="DS.renderHaulersTab()" style="padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.8rem;">
+                        <option value="tons_desc">Most Tons</option>
+                        <option value="tons_asc">Fewest Tons</option>
+                        <option value="loads_desc">Most Loads</option>
+                        <option value="div_desc">Best Diversion</option>
+                        <option value="name_asc">Name A→Z</option>
+                        <option value="recent">Most Recent</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Hauler list card -->
+            <div class="card">
+                <div id="haulersTabList" style="font-size:.8rem;">
+                    <div style="text-align:center;padding:20px;color:var(--text-dim);">Tap Refresh to load haulers</div>
+                </div>
+            </div>
+        </div>
+
         <!-- ========== REPORTS TAB ========== -->
         <div id="reportsTab" class="tab-content">
             <!-- Project Header & View Toggle -->
@@ -965,6 +1022,9 @@
         <button class="nav-btn" data-tab="driversTab" style="position:relative">
             <span class="nav-icon">🚛</span> Drivers
             <span id="driversNavBadge" style="display:none;position:absolute;top:2px;right:calc(50% - 16px);background:var(--warning);color:#080f14;font-size:0.55rem;font-weight:700;padding:1px 5px;border-radius:6px;min-width:16px;text-align:center">0</span>
+        </button>
+        <button class="nav-btn" data-tab="haulersTab">
+            <span class="nav-icon">🏢</span> Haulers
         </button>
         <button class="nav-btn" data-tab="reportsTab">
             <span class="nav-icon">📊</span> Reports
@@ -4115,6 +4175,7 @@ const DS = {
                 }
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'driversTab') this.loadDriversTab();
+                if (tab === 'haulersTab') this.loadHaulersTab();
                 if (tab === 'projectsTab') this.renderProjectList();
                 // Audit + Scale tabs each fire several Supabase queries. Run them in
                 // parallel via Promise.all (these don't depend on each other) so the
@@ -11709,6 +11770,146 @@ const DS = {
             var projName = (this._haulerProjects || {})[defId] || '';
             if (projName) this.showToast('📌 Project auto-filled: ' + projName + ' (editable)');
         } catch (e) { /* non-fatal */ }
+    },
+
+    // ============================================================
+    // HAULERS TAB — internal per-hauler performance (mirrors Drivers tab).
+    // Includes CO₂e (internal-only). Never surfaced on customer/LEED pages.
+    // ============================================================
+    async loadHaulersTab() {
+        var listEl = document.getElementById('haulersTabList');
+        if (!listEl) return;
+        listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);">Loading haulers...</div>';
+        try {
+            // One pull of all tickets with the fields we need for rollups.
+            var tickets = await this.supabase('tickets?select=hauler,net_tons,diverted_tons,diversion_pct,co2e_avoided,project_id,captured_at,ticket_date,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=captured_at.desc&limit=20000') || [];
+            var projects = await this.supabase('projects?select=id,name') || [];
+            var projName = {};
+            projects.forEach(function(p){ projName[p.id] = p.name; });
+            this._haulerStatsProjName = projName;
+
+            var byHauler = {};
+            tickets.forEach(function(t){
+                var h = (t.hauler && t.hauler.trim()) ? t.hauler.trim() : '(no hauler)';
+                if (!byHauler[h]) {
+                    byHauler[h] = { name: h, loads: 0, tons: 0, diverted: 0, co2e: 0, lastLoad: null, byProject: {}, mat: {} };
+                }
+                var e = byHauler[h];
+                var nt = Number(t.net_tons) || 0;
+                e.loads++;
+                e.tons += nt;
+                e.diverted += Number(t.diverted_tons) || (nt * ((t.diversion_pct || 0) / 100));
+                e.co2e += Number(t.co2e_avoided) || 0;
+                var when = t.captured_at || t.ticket_date || null;
+                if (when && (!e.lastLoad || when > e.lastLoad)) e.lastLoad = when;
+                // per-project tonnage
+                var pid = t.project_id || '(none)';
+                if (!e.byProject[pid]) e.byProject[pid] = { loads: 0, tons: 0 };
+                e.byProject[pid].loads++;
+                e.byProject[pid].tons += nt;
+                // material breakdown (pct → tons)
+                Object.keys(DS.MATERIALS).forEach(function(k){
+                    var pct = Number(t[k + '_pct']) || 0;
+                    if (pct > 0) e.mat[k] = (e.mat[k] || 0) + (nt * pct / 100);
+                });
+            });
+
+            this._haulerStatsCache = Object.values(byHauler);
+
+            // Summary tiles
+            var tot = this._haulerStatsCache;
+            var sLoads = 0, sTons = 0, sDiv = 0, sCo2e = 0;
+            tot.forEach(function(e){ sLoads += e.loads; sTons += e.tons; sDiv += e.diverted; sCo2e += e.co2e; });
+            var setTxt = function(id, v){ var el = document.getElementById(id); if (el) el.textContent = v; };
+            setTxt('htTotal', tot.length);
+            setTxt('htLoads', sLoads);
+            setTxt('htTons', sTons.toFixed(1));
+            setTxt('htDiv', (sTons > 0 ? Math.round(sDiv / sTons * 100) : 0) + '%');
+            setTxt('htCo2e', this.fmt ? this.fmt(sCo2e) : sCo2e.toFixed(1));
+
+            this.renderHaulersTab();
+        } catch (e) {
+            listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--danger);">Error: ' + (e.message || e) + '</div>';
+        }
+    },
+
+    renderHaulersTab() {
+        var listEl = document.getElementById('haulersTabList');
+        if (!listEl || !this._haulerStatsCache) return;
+        var search = (document.getElementById('htSearch') ? document.getElementById('htSearch').value : '').toLowerCase().trim();
+        var sort = document.getElementById('htSort') ? document.getElementById('htSort').value : 'tons_desc';
+
+        var arr = this._haulerStatsCache.slice();
+        if (search) arr = arr.filter(function(e){ return e.name.toLowerCase().indexOf(search) >= 0; });
+        arr.sort(function(a, b){
+            switch (sort) {
+                case 'tons_asc': return a.tons - b.tons;
+                case 'loads_desc': return b.loads - a.loads;
+                case 'div_desc': return (b.tons ? b.diverted / b.tons : 0) - (a.tons ? a.diverted / a.tons : 0);
+                case 'name_asc': return a.name.localeCompare(b.name);
+                case 'recent': return (b.lastLoad || '').localeCompare(a.lastLoad || '');
+                case 'tons_desc':
+                default: return b.tons - a.tons;
+            }
+        });
+
+        if (arr.length === 0) { listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);">No haulers match.</div>'; return; }
+
+        var self = this;
+        listEl.innerHTML = arr.map(function(e, i){
+            var rate = e.tons > 0 ? Math.round(e.diverted / e.tons * 100) : 0;
+            var rc = rate >= 75 ? 'var(--success)' : rate >= 50 ? 'var(--warning)' : 'var(--danger)';
+            var last = e.lastLoad ? new Date(e.lastLoad).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+            var projCount = Object.keys(e.byProject).length;
+            var safeId = 'haulerStat_' + i;
+            var h = '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">';
+            h += '<div style="display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;background:var(--bg-input);" onclick="var d=document.getElementById(\'' + safeId + '\');if(!d.dataset.loaded){DS.openHaulerDetail(' + i + ',\'' + safeId + '\');d.dataset.loaded=1;}d.style.display=d.style.display===\'none\'?\'block\':\'none\';">';
+            h += '<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:.9rem;">' + DS.esc(e.name) + '</div>';
+            h += '<div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">' + projCount + ' project' + (projCount === 1 ? '' : 's') + ' · last ' + last + '</div></div>';
+            h += '<div style="text-align:right;flex-shrink:0;">';
+            h += '<div style="font-family:var(--mono);font-weight:800;font-size:.95rem;color:var(--cyan);">' + e.tons.toFixed(1) + ' T</div>';
+            h += '<div style="font-size:.65rem;color:var(--text-muted);">' + e.loads + ' loads · <span style="color:' + rc + ';font-weight:700;">' + rate + '%</span></div>';
+            h += '</div><span style="color:var(--text-dim);font-size:.7rem;margin-left:4px;">▼</span></div>';
+            h += '<div id="' + safeId + '" style="display:none;padding:10px 12px;background:rgba(0,0,0,0.15);"></div>';
+            h += '</div>';
+            return h;
+        }).join('');
+    },
+
+    // Expand a hauler row — per-project + material + CO₂e detail (internal).
+    openHaulerDetail(idx, safeId) {
+        var e = (this._haulerStatsCache || [])[idx];
+        var el = document.getElementById(safeId);
+        if (!e || !el) return;
+        var projName = this._haulerStatsProjName || {};
+        var rate = e.tons > 0 ? Math.round(e.diverted / e.tons * 100) : 0;
+
+        // Per-project rows (sorted by tons)
+        var projRows = Object.keys(e.byProject).sort(function(a, b){ return e.byProject[b].tons - e.byProject[a].tons; }).map(function(pid){
+            var p = e.byProject[pid];
+            var nm = pid === '(none)' ? '(no project)' : (projName[pid] || '(unknown)');
+            return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.75rem;"><span>' + DS.esc(nm) + '</span><span style="font-family:var(--mono);font-weight:700;">' + p.loads + ' · ' + p.tons.toFixed(2) + ' T</span></div>';
+        }).join('');
+
+        // Material breakdown
+        var matKeys = Object.keys(e.mat).sort(function(a, b){ return e.mat[b] - e.mat[a]; });
+        var matRows = matKeys.length === 0 ? '<div style="font-size:.7rem;color:var(--text-dim);">No material data</div>' :
+            matKeys.map(function(k){
+                var m = DS.MATERIALS[k] || { name: k, icon: '' };
+                var pct = e.tons > 0 ? Math.round(e.mat[k] / e.tons * 100) : 0;
+                return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.75rem;"><span>' + m.icon + ' ' + DS.esc(m.name) + '</span><span style="font-family:var(--mono);">' + e.mat[k].toFixed(2) + ' T (' + pct + '%)</span></div>';
+            }).join('');
+
+        var html = '';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px;margin-bottom:10px;">';
+        html += '<div style="text-align:center;padding:6px;background:var(--bg-card);border-radius:6px;"><div style="font-family:var(--mono);font-weight:800;color:var(--cyan);">' + e.loads + '</div><div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;">Loads</div></div>';
+        html += '<div style="text-align:center;padding:6px;background:var(--bg-card);border-radius:6px;"><div style="font-family:var(--mono);font-weight:800;color:var(--success);">' + e.tons.toFixed(1) + '</div><div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;">Tons</div></div>';
+        html += '<div style="text-align:center;padding:6px;background:var(--bg-card);border-radius:6px;"><div style="font-family:var(--mono);font-weight:800;color:var(--warning);">' + rate + '%</div><div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;">Diverted</div></div>';
+        html += '<div style="text-align:center;padding:6px;background:var(--bg-card);border-radius:6px;"><div style="font-family:var(--mono);font-weight:800;color:#a855f7;">' + (this.fmt ? this.fmt(e.co2e) : e.co2e.toFixed(1)) + '</div><div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;">CO₂e</div></div>';
+        html += '</div>';
+        html += '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:700;margin:6px 0 4px;">By Project</div>' + projRows;
+        html += '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:700;margin:10px 0 4px;">Materials</div>' + matRows;
+        el.innerHTML = html;
     },
 
     async supabaseUpdate(path, body) {
