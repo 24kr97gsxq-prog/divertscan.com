@@ -64,6 +64,24 @@
 </head>
 <body>
 
+<!-- ===== AUTH GATE (Phase 3) =====
+     Page renders nothing and makes zero data calls until a valid
+     Supabase Auth session exists. Session persists in the browser,
+     so this is a one-time login, not per-visit. -->
+<div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:340px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px">
+    <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">Divert<span style="color:var(--cyan)">Scan</span></div>
+    <div style="font-size:.72rem;color:var(--dim);margin-bottom:18px">Internal report — sign in to continue</div>
+    <input id="agEmail" type="email" autocomplete="username" placeholder="Email"
+      style="width:100%;padding:11px;margin-bottom:9px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:.85rem">
+    <input id="agPass" type="password" autocomplete="current-password" placeholder="Password"
+      style="width:100%;padding:11px;margin-bottom:9px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:.85rem">
+    <button id="agBtn" onclick="agLogin()"
+      style="width:100%;padding:11px;background:var(--cyan);border:none;border-radius:8px;color:#04201b;font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer">Sign In</button>
+    <div id="agErr" style="display:none;margin-top:10px;font-size:.72rem;color:var(--red);text-align:center"></div>
+  </div>
+</div>
+
 <header class="hdr">
     <a href="index.html" class="back-btn">← Back</a>
     <h1><span>All Haulers</span> Report</h1>
@@ -120,14 +138,81 @@
 const SUPABASE_URL = "https://cyvvlngtojagfoaitoog.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g";
 
+// ===== AUTH GATE =====
+const AG_STORE = 'ds_session';
+let agSession = null;
+
+function agSave(sess) {
+    agSession = sess;
+    try { localStorage.setItem(AG_STORE, JSON.stringify(sess)); } catch (e) {}
+}
+function agLoad() {
+    try {
+        const raw = localStorage.getItem(AG_STORE);
+        if (!raw) return null;
+        const sess = JSON.parse(raw);
+        // expires_at is epoch seconds; treat as stale 60s early
+        if (!sess || !sess.access_token) return null;
+        if (sess.expires_at && (sess.expires_at - 60) * 1000 < Date.now()) return null;
+        return sess;
+    } catch (e) { return null; }
+}
+function agClear() {
+    agSession = null;
+    try { localStorage.removeItem(AG_STORE); } catch (e) {}
+}
+
+async function agLogin() {
+    const btn = document.getElementById('agBtn');
+    const err = document.getElementById('agErr');
+    const email = document.getElementById('agEmail').value.trim();
+    const pass = document.getElementById('agPass').value;
+    err.style.display = 'none';
+    if (!email || !pass) { err.textContent = 'Enter email and password'; err.style.display = 'block'; return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    try {
+        const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+            method: 'POST',
+            headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: pass })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.access_token) {
+            err.textContent = data.error_description || data.msg || 'Invalid email or password';
+            err.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+            return;
+        }
+        agSave(data);
+        document.getElementById('authGate').style.display = 'none';
+        init();
+    } catch (e) {
+        err.textContent = 'Connection error — try again';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+    }
+}
+
+// Every data call now carries the USER's JWT, not the anon key.
 async function sb(endpoint) {
+    if (!agSession) return [];
     const res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
         headers: {
             'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Authorization': 'Bearer ' + agSession.access_token,
             'Content-Type': 'application/json'
         }
     });
+    if (res.status === 401 || res.status === 403) {
+        // session died — bounce back to login
+        agClear();
+        document.getElementById('authGate').style.display = 'flex';
+        return [];
+    }
     if (!res.ok) return [];
     return res.json();
 }
@@ -265,7 +350,20 @@ function exportCSV() {
     a.click();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function () {
+    const sess = agLoad();
+    if (sess) {
+        agSession = sess;
+        document.getElementById('authGate').style.display = 'none';
+        init();
+    }
+    // else: gate stays up, init() is never called, no data is fetched
+});
+
+// Enter key submits the login form
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && document.getElementById('authGate').style.display !== 'none') agLogin();
+});
 </script>
 </body>
 </html>
