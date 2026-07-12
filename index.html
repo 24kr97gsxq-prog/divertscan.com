@@ -142,6 +142,85 @@
 
 </head>
 <body>
+
+<!-- ===== AUTH GATE (Phase 3) =====
+     Admin app renders nothing and makes zero data calls until a valid
+     Supabase Auth session exists. Session persists, so this is a one-time
+     login. Every data request now carries the user's JWT, which is what
+     lets RLS be locked down to `authenticated`. -->
+<div id="authGate" style="position:fixed;inset:0;z-index:99999;background:#0a0f14;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif">
+  <div style="width:100%;max-width:340px;background:#0d1a24;border:1px solid #2a4058;border-radius:14px;padding:24px">
+    <div style="font-size:1.05rem;font-weight:700;color:#f8fafc;margin-bottom:4px">Divert<span style="color:#00c9a7">Scan</span></div>
+    <div style="font-size:.72rem;color:#8da4be;margin-bottom:18px">Admin — sign in to continue</div>
+    <input id="agEmail" type="email" autocomplete="username" placeholder="Email"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <input id="agPass" type="password" autocomplete="current-password" placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <button id="agBtn" onclick="agLogin()"
+      style="width:100%;padding:11px;background:#00c9a7;border:none;border-radius:8px;color:#04201b;font-size:.85rem;font-weight:700;cursor:pointer">Sign In</button>
+    <div id="agErr" style="display:none;margin-top:10px;font-size:.72rem;color:#ef4444;text-align:center"></div>
+  </div>
+</div>
+
+<script>
+const AG_STORE = 'ds_session';
+let agSession = null;
+
+function agSave(x){ agSession = x; try{ localStorage.setItem(AG_STORE, JSON.stringify(x)); }catch(e){} }
+function agLoad(){
+  try{
+    const raw = localStorage.getItem(AG_STORE);
+    if(!raw) return null;
+    const x = JSON.parse(raw);
+    if(!x || !x.access_token) return null;
+    if(x.expires_at && (x.expires_at - 60) * 1000 < Date.now()) return null;
+    return x;
+  }catch(e){ return null; }
+}
+function agClear(){ agSession = null; try{ localStorage.removeItem(AG_STORE); }catch(e){} }
+function agShow(){ var g=document.getElementById('authGate'); if(g) g.style.display='flex'; }
+function agHide(){ var g=document.getElementById('authGate'); if(g) g.style.display='none'; }
+
+async function agLogin(){
+  var btn=document.getElementById('agBtn'), err=document.getElementById('agErr');
+  var email=document.getElementById('agEmail').value.trim();
+  var pass=document.getElementById('agPass').value;
+  err.style.display='none';
+  if(!email || !pass){ err.textContent='Enter email and password'; err.style.display='block'; return; }
+
+  // The anon key's only remaining job is talking to the auth endpoint.
+  var url = (window.DS && DS.state && DS.state.supabaseUrl) || localStorage.getItem('ds_supabase_url');
+  var key = (window.DS && DS.state && DS.state.supabaseKey) || localStorage.getItem('ds_supabase_key');
+  if(!url || !key){ err.textContent='Supabase not configured on this device'; err.style.display='block'; return; }
+
+  btn.disabled=true; btn.textContent='Signing in...';
+  try{
+    var res = await fetch(url + '/auth/v1/token?grant_type=password', {
+      method:'POST',
+      headers:{ 'apikey': key, 'Content-Type':'application/json' },
+      body: JSON.stringify({ email: email, password: pass })
+    });
+    var data = await res.json();
+    if(!res.ok || !data.access_token){
+      err.textContent = data.error_description || data.msg || 'Invalid email or password';
+      err.style.display='block';
+      btn.disabled=false; btn.textContent='Sign In';
+      return;
+    }
+    agSave(data);
+    agHide();
+    DS.init();
+  }catch(e){
+    err.textContent='Connection error — try again';
+    err.style.display='block';
+    btn.disabled=false; btn.textContent='Sign In';
+  }
+}
+document.addEventListener('keydown', function(e){
+  var g=document.getElementById('authGate');
+  if(e.key==='Enter' && g && g.style.display!=='none') agLogin();
+});
+</script>
     <div class="app-shell">
         <!-- ============================================================
              HEADER
@@ -1961,7 +2040,7 @@ const DS = {
         const orphansPromise = lengthQuery('scale_weights?ticket_id=is.null&status=eq.pending&captured_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
 
         // 4. Tickets created (last 7d)
-        const ticketsPromise = lengthQuery('tickets?created_at=gte.' + sevenDaysAgo + '&select=id&limit=10000');
+        const ticketsPromise = lengthQuery('tickets?created_at=gte.' + sevenDaysAgo + '&select=id');
 
         // 5. Client logins (last 7d)
         const loginsPromise = lengthQuery('client_logins?logged_in_at=gte.' + sevenDaysAgo + '&select=id&limit=1000');
@@ -2037,7 +2116,7 @@ const DS = {
             const drivers = await this.supabase('drivers?select=*&order=hauler.asc,driver_name.asc') || [];
 
             // Fetch all tickets with driver info (includes orphans where driver_id is null)
-            const tickets = await this.supabase('tickets?select=id,ticket_number,ticket_date,captured_at,created_at,driver_id,driver_name,hauler,net_tons,project_id&order=captured_at.desc&limit=10000') || [];
+            const tickets = await this.supabase('tickets?select=id,ticket_number,ticket_date,captured_at,created_at,driver_id,driver_name,hauler,net_tons,project_id&order=captured_at.desc') || [];
 
             // Build a stats map keyed by driver_id (for linked tickets)
             const statsByDriverId = {};
@@ -2446,7 +2525,7 @@ const DS = {
             if (!drivers) throw new Error('No data');
 
             // Enrich with ticket counts per driver (one query for all drivers)
-            const tickets = await this.supabase('tickets?driver_id=not.is.null&select=driver_id,net_tons,captured_at&order=captured_at.desc&limit=10000') || [];
+            const tickets = await this.supabase('tickets?driver_id=not.is.null&select=driver_id,net_tons,captured_at&order=captured_at.desc') || [];
 
             const statsByDriver = {};
             tickets.forEach(t => {
@@ -4533,6 +4612,9 @@ const DS = {
             this.showToast('Configure Supabase in Audit > Settings');
             return null;
         }
+        // Data access requires a signed-in user; the anon key is not enough
+        // once RLS is locked to `authenticated`.
+        if (!agSession) { agShow(); return null; }
 
         // ============================================================
         // LIGHT CACHE — speed up repeat reads on slow-changing tables
@@ -4573,7 +4655,7 @@ const DS = {
         const url = `${this.state.supabaseUrl}/rest/v1/${endpoint}`;
         const headers = {
             'apikey': this.state.supabaseKey,
-            'Authorization': `Bearer ${this.state.supabaseKey}`,
+            'Authorization': `Bearer ${agSession.access_token}`,
             'Content-Type': 'application/json'
         };
         if (method === 'POST' || method === 'PATCH') {
@@ -12545,7 +12627,13 @@ const DS = {
 // ============================================================
 // BOOT
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => DS.init());
+document.addEventListener('DOMContentLoaded', () => {
+    // NOTE: supabaseUrl/Key are loaded inside DS.init(), which the gate blocks
+    // until sign-in. agLogin() therefore reads them straight from localStorage.
+    const sess = agLoad();
+    if (sess) { agSession = sess; agHide(); DS.init(); }
+    // else: gate stays up; DS.init() is never called; no data is fetched
+});
 
 // PWA Service Worker
 if ('serviceWorker' in navigator) {
