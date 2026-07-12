@@ -125,6 +125,21 @@ h1 span{color:var(--cyan)}
 </head>
 <body>
 
+<!-- ===== AUTH GATE (Phase 3) — internal diagnostic tool ===== -->
+<div id="authGate" style="position:fixed;inset:0;z-index:99999;background:#0a0f14;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif">
+  <div style="width:100%;max-width:340px;background:#0d1a24;border:1px solid #2a4058;border-radius:14px;padding:24px">
+    <div style="font-size:1.05rem;font-weight:700;color:#f8fafc;margin-bottom:4px">Scale <span style="color:#00c9a7">Debug</span></div>
+    <div style="font-size:.72rem;color:#8da4be;margin-bottom:18px">Internal tool — sign in to continue</div>
+    <input id="agEmail" type="email" autocomplete="username" placeholder="Email"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <input id="agPass" type="password" autocomplete="current-password" placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <button id="agBtn" onclick="agLogin()"
+      style="width:100%;padding:11px;background:#00c9a7;border:none;border-radius:8px;color:#04201b;font-size:.85rem;font-weight:700;cursor:pointer">Sign In</button>
+    <div id="agErr" style="display:none;margin-top:10px;font-size:.72rem;color:#ef4444;text-align:center"></div>
+  </div>
+</div>
+
 <div class="wrap">
 
 <header>
@@ -432,13 +447,43 @@ let pollTimer = null;
 let autoOn = true;
 let lastReadings = [];
 
+// ===== AUTH GATE =====
+var AG_STORE='ds_session', agSession=null;
+function agSave(x){agSession=x;try{localStorage.setItem(AG_STORE,JSON.stringify(x));}catch(e){}}
+function agLoad(){try{var raw=localStorage.getItem(AG_STORE);if(!raw)return null;var x=JSON.parse(raw);
+if(!x||!x.access_token)return null;if(x.expires_at&&(x.expires_at-60)*1000<Date.now())return null;return x;}catch(e){return null;}}
+function agClear(){agSession=null;try{localStorage.removeItem(AG_STORE);}catch(e){}}
+function agShow(){var g=document.getElementById('authGate');if(g)g.style.display='flex';}
+function agHide(){var g=document.getElementById('authGate');if(g)g.style.display='none';}
+
+async function agLogin(){
+var btn=document.getElementById('agBtn'),err=document.getElementById('agErr');
+var email=document.getElementById('agEmail').value.trim(),pass=document.getElementById('agPass').value;
+err.style.display='none';
+if(!email||!pass){err.textContent='Enter email and password';err.style.display='block';return;}
+btn.disabled=true;btn.textContent='Signing in...';
+try{
+  var r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:pass})});
+  var d=await r.json();
+  if(!r.ok||!d.access_token){err.textContent=d.error_description||d.msg||'Invalid email or password';
+    err.style.display='block';btn.disabled=false;btn.textContent='Sign In';return;}
+  agSave(d);agHide();agBoot();
+}catch(e){err.textContent='Connection error — try again';err.style.display='block';
+  btn.disabled=false;btn.textContent='Sign In';}
+}
+document.addEventListener('keydown',function(e){var g=document.getElementById('authGate');
+if(e.key==='Enter'&&g&&g.style.display!=='none')agLogin();});
+
 async function sb(endpoint) {
+    if (!agSession) { agShow(); return []; }
     const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
     const opts = {
         method: 'GET',
         headers: {
             'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Authorization': 'Bearer ' + agSession.access_token,
             'Content-Type': 'application/json',
         },
     };
@@ -890,14 +935,16 @@ function fallbackCopy(text) {
     document.body.removeChild(ta);
 }
 
-// Start
-document.getElementById('deviceLabel').textContent = DEVICE_ID;
-loadOnce();
-pollTimer = setInterval(loadOnce, 1500);
-
-// History view: load once at startup, refresh every 5 minutes
-loadHistory();
-setInterval(() => { if (autoOn) loadHistory(); }, 5 * 60 * 1000);
+// Start — only after sign-in
+function agBoot() {
+    document.getElementById('deviceLabel').textContent = DEVICE_ID;
+    loadOnce();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(loadOnce, 1500);
+    loadHistory();
+    setInterval(() => { if (autoOn) loadHistory(); }, 5 * 60 * 1000);
+}
+(function(){ var sess = agLoad(); if (sess) { agSession = sess; agHide(); agBoot(); } })();
 </script>
 </body>
 </html>
