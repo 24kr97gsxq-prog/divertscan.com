@@ -70,6 +70,21 @@ body{font-family:var(--font);background:var(--bg-deep);color:var(--text);min-hei
 </style>
 </head>
 <body>
+
+<!-- ===== AUTH GATE (Phase 3) — internal portfolio view, sign-in required ===== -->
+<div id="authGate" style="position:fixed;inset:0;z-index:99999;background:#0a0f14;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif">
+  <div style="width:100%;max-width:340px;background:#0d1a24;border:1px solid #2a4058;border-radius:14px;padding:24px">
+    <div style="font-size:1.05rem;font-weight:700;color:#f8fafc;margin-bottom:4px">Divert<span style="color:#00c9a7">Scan</span></div>
+    <div style="font-size:.72rem;color:#8da4be;margin-bottom:18px">Internal report — sign in to continue</div>
+    <input id="agEmail" type="email" autocomplete="username" placeholder="Email"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <input id="agPass" type="password" autocomplete="current-password" placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:9px;background:#0a0f14;border:1px solid #2a4058;border-radius:8px;color:#f8fafc;font-size:.85rem">
+    <button id="agBtn" onclick="agLogin()"
+      style="width:100%;padding:11px;background:#00c9a7;border:none;border-radius:8px;color:#04201b;font-size:.85rem;font-weight:700;cursor:pointer">Sign In</button>
+    <div id="agErr" style="display:none;margin-top:10px;font-size:.72rem;color:#ef4444;text-align:center"></div>
+  </div>
+</div>
 <div class="back-bar no-print">
     <a href="index.html">&larr; Back to DivertScan</a>
     <span class="title">All Projects Portfolio</span>
@@ -90,7 +105,55 @@ var SUPABASE_URL=localStorage.getItem('ds_supabase_url')||'https://cyvvlngtojagf
 var SUPABASE_KEY=localStorage.getItem('ds_supabase_key')||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
 var MATERIALS={wood:{name:'Wood/Lumber',icon:'\u{1FAB5}',color:'#92400e'},plastic:{name:'Plastics',icon:'\u267B\uFE0F',color:'#fbbf24'},occ:{name:'Cardboard/OCC',icon:'\u{1F4E6}',color:'#d97706'},metal:{name:'Steel/Metal',icon:'\u{1F529}',color:'#6b7280'},concrete:{name:'Concrete',icon:'\u{1F9F1}',color:'#78716c'},block:{name:'Block/Brick',icon:'\u{1F9F1}',color:'#a16207'},landfill:{name:'Landfill',icon:'\u{1F5D1}\uFE0F',color:'#ef4444'}};
 var matKeys=Object.keys(MATERIALS);
-async function sb(ep){try{var r=await fetch(SUPABASE_URL+'/rest/v1/'+ep,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Accept':'application/json'}});if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+// ===== AUTH GATE =====
+var AG_STORE='ds_session', agSession=null;
+function agSave(x){agSession=x;try{localStorage.setItem(AG_STORE,JSON.stringify(x));}catch(e){}}
+function agLoad(){try{var raw=localStorage.getItem(AG_STORE);if(!raw)return null;var x=JSON.parse(raw);
+if(!x||!x.access_token)return null;if(x.expires_at&&(x.expires_at-60)*1000<Date.now())return null;return x;}catch(e){return null;}}
+function agClear(){agSession=null;try{localStorage.removeItem(AG_STORE);}catch(e){}}
+function agShow(){var g=document.getElementById('authGate');if(g)g.style.display='flex';}
+function agHide(){var g=document.getElementById('authGate');if(g)g.style.display='none';}
+
+async function agLogin(){
+var btn=document.getElementById('agBtn'),err=document.getElementById('agErr');
+var email=document.getElementById('agEmail').value.trim(),pass=document.getElementById('agPass').value;
+err.style.display='none';
+if(!email||!pass){err.textContent='Enter email and password';err.style.display='block';return;}
+btn.disabled=true;btn.textContent='Signing in...';
+try{
+  var r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:pass})});
+  var d=await r.json();
+  if(!r.ok||!d.access_token){err.textContent=d.error_description||d.msg||'Invalid email or password';
+    err.style.display='block';btn.disabled=false;btn.textContent='Sign In';return;}
+  agSave(d);agHide();load();
+}catch(e){err.textContent='Connection error — try again';err.style.display='block';
+  btn.disabled=false;btn.textContent='Sign In';}
+}
+document.addEventListener('keydown',function(e){var g=document.getElementById('authGate');
+if(e.key==='Enter'&&g&&g.style.display!=='none')agLogin();});
+
+// PostgREST silently caps responses at 1000 rows regardless of ?limit=.
+// Page with Range headers so totals are never computed from a truncated set.
+async function sb(ep){
+if(!agSession)return null;
+var PAGE=1000,out=[],from=0;
+for(var g=0;g<50;g++){
+  try{
+    var r=await fetch(SUPABASE_URL+'/rest/v1/'+ep,{headers:{
+      'apikey':SUPABASE_KEY,'Authorization':'Bearer '+agSession.access_token,'Accept':'application/json',
+      'Range-Unit':'items','Range':from+'-'+(from+PAGE-1)}});
+    if(r.status===401||r.status===403){agClear();agShow();return null;}
+    if(!r.ok)break;
+    var batch=await r.json();
+    if(!Array.isArray(batch)||batch.length===0)break;
+    out=out.concat(batch);
+    if(batch.length<PAGE)break;
+    from+=PAGE;
+  }catch(e){break;}
+}
+return out;}
 function pc(p){return p>=50?'var(--success)':p>=25?'var(--warning)':'var(--danger)';}
 function pb(p){return p>=50?'var(--success-light)':p>=25?'var(--warning-light)':'var(--danger-light)';}
 function pl(p){return p>=75?'\u{1F3C6} Excellent':p>=50?'\u2705 On Track':p>=25?'\u26A0\uFE0F Below Target':'\u{1F534} Critical';}
@@ -98,12 +161,12 @@ function aa(d){if(!d)return{label:'No activity',dot:'var(--text-dim)'};var days=
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 var PD=[];
 async function load(){
-var projects=await sb('projects?select=id,name,waste_hauler,leed_version,leed_target,location,client,general_contractor&order=name.asc');
-var tickets=await sb('tickets?select=id,project_id,ticket_date,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,hauler,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,landfill_pct&order=ticket_date.desc&limit=5000');
+var projects=await sb('projects?select=id,name,leed_version,leed_target,location,client,general_contractor&active=eq.true&order=name.asc');
+var tickets=await sb('tickets?select=id,project_id,ticket_date,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,hauler,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,landfill_pct&order=ticket_date.desc');
 if(!projects){document.getElementById('portfolioContent').innerHTML='<div style="text-align:center;padding:40px;color:var(--danger);">\u26A0\uFE0F Could not connect.<br><br><a href="index.html" style="color:var(--primary)">\u2190 Back</a></div>';return;}
 if(!tickets)tickets=[];
 var pm={};
-projects.forEach(function(p){pm[p.id]={id:p.id,name:p.name||'Untitled',hauler:p.waste_hauler||'',leed:p.leed_version||'v4',target:p.leed_target||50,tc:0,tt:0,dt:0,lt:0,dp:0,co:0,ld:null,mt:{}};matKeys.forEach(function(k){pm[p.id].mt[k]=0;});});
+projects.forEach(function(p){pm[p.id]={id:p.id,name:p.name||'Untitled',hauler:'',leed:p.leed_version||'v4',target:p.leed_target||50,tc:0,tt:0,dt:0,lt:0,dp:0,co:0,ld:null,mt:{}};matKeys.forEach(function(k){pm[p.id].mt[k]=0;});});
 var md={};
 tickets.forEach(function(t){var p=pm[t.project_id];if(!p)return;p.tc++;p.tt+=parseFloat(t.net_tons)||0;p.dt+=parseFloat(t.diverted_tons)||0;p.lt+=parseFloat(t.landfill_tons)||0;p.co+=parseFloat(t.co2e_avoided)||0;if(!p.hauler&&t.hauler)p.hauler=t.hauler;if(t.ticket_date&&(!p.ld||t.ticket_date>p.ld))p.ld=t.ticket_date;matKeys.forEach(function(k){p.mt[k]+=parseFloat(t[k+'_tons'])||0;});var mk=(t.ticket_date||'').substring(0,7);if(mk.length>=7){if(!md[mk])md[mk]={t:0,d:0,c:0};md[mk].t+=parseFloat(t.net_tons)||0;md[mk].d+=parseFloat(t.diverted_tons)||0;md[mk].c++;}});
 PD=[];Object.keys(pm).forEach(function(id){var p=pm[id];if(p.tt>0)p.dp=(p.dt/p.tt)*100;PD.push(p);});PD.sort(function(a,b){return b.tt-a.tt;});
@@ -148,7 +211,7 @@ h+='<div class="print-footer">Dalmex Recycling LLC \u2022 TCEQ RN103219481 \u202
 el.innerHTML=h;}
 window.xPDF=function(){window.print();};
 window.xCSV=function(){var hd=['Project','Tickets','Net Tons','Diverted Tons','Landfill Tons','Diversion %','CO2e (mt)','Hauler','Last Activity'];var rows=[hd.join(',')];PD.forEach(function(p){if(p.tc===0)return;rows.push(['"'+(p.name||'').replace(/"/g,'""')+'"',p.tc,p.tt.toFixed(2),p.dt.toFixed(2),p.lt.toFixed(2),p.dp.toFixed(1),p.co.toFixed(2),'"'+(p.hauler||'').replace(/"/g,'""')+'"',p.ld||''].join(','));});var bl=new Blob([rows.join('\n')],{type:'text/csv'});var u=URL.createObjectURL(bl);var a=document.createElement('a');a.href=u;a.download='DivertScan_Portfolio_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);};
-load();
+(function(){var sess=agLoad();if(sess){agSession=sess;agHide();load();}})();
 })();
 </script>
 </body>
