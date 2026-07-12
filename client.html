@@ -363,6 +363,27 @@ if(!m||m==='GET')o.headers['Accept']='application/json';if(b)o.body=JSON.stringi
 if(m==='PATCH'||m==='POST')o.headers['Prefer']='return=representation';
 try{var r=await fetch(SB+'/rest/v1/'+e,o);if(!r.ok)return null;var t=await r.text();return t?JSON.parse(t):[];}catch(x){return null;}},
 
+// PostgREST silently caps every response at 1000 rows regardless of ?limit=.
+// Any ticket query that crosses that boundary would quietly drop rows and produce
+// a LEED report with understated tonnage. apiAll() pages with Range headers so
+// report totals are always computed from the COMPLETE set.
+async apiAll(e){var PAGE=1000,out=[],from=0;
+for(var g=0;g<50;g++){
+  var o={method:'GET',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json',
+    'Accept':'application/json','Range-Unit':'items','Range':from+'-'+(from+PAGE-1)}};
+  try{
+    var r=await fetch(SB+'/rest/v1/'+e,o);
+    if(!r.ok)break;
+    var t=await r.text();
+    var batch=t?JSON.parse(t):[];
+    if(!Array.isArray(batch)||batch.length===0)break;
+    out=out.concat(batch);
+    if(batch.length<PAGE)break;
+    from+=PAGE;
+  }catch(x){break;}
+}
+return out;},
+
 async hp(pw){var s='divertscan_salt_'+pw;if(window.crypto&&window.crypto.subtle){var d=new TextEncoder().encode(s);var h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');}return null;},
 
 // AUTH
@@ -415,7 +436,7 @@ return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\'
 '<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
-P.tx=await P.api('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];
+P.tx=await P.apiAll('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];
 document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');
 P.renderDash();}else{P._up=id;P.showUForm();}},
 
@@ -508,7 +529,7 @@ try{
   var url='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
     '&select=driver_id,driver_name,hauler,net_tons,captured_at,created_at,ticket_date,project_id'+
     '&order=captured_at.desc';
-  var tickets=await P.api(url);
+  var tickets=await P.apiAll(url);
   if(!tickets)tickets=[];
 
   // Group by driver_id, accumulate stats — track project set per driver (for display)
@@ -677,7 +698,7 @@ P.toast('Loading driver detail...');
 var url='tickets?driver_id=eq.'+driverId+'&project_id=in.('+allowedProjIds.join(',')+')'+
   '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,project_id,zone,scan_type,audit_id'+
   '&order=ticket_date.desc';
-var tix=await P.api(url)||[];
+var tix=await P.apiAll(url)||[];
 // Defense-in-depth filter
 tix=tix.filter(function(t){return allowedProjIds.indexOf(t.project_id)>=0;});
 
@@ -1212,14 +1233,17 @@ w.document.close();},
 showUForm(){var proj=P.pj.find(function(p){return p.id===P._up;});if(!proj)return;
 document.getElementById('uForm').classList.remove('hidden');document.getElementById('uBanner').textContent=proj.name;
 P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();P.renderPL('uProjList','upload');
-// Populate hauler dropdown from known haulers across projects
-var haulers=[];P.pj.forEach(function(p){if(p.waste_hauler&&haulers.indexOf(p.waste_hauler)<0)haulers.push(p.waste_hauler);});
-var knownHaulers=['Jaguar Waste Management','Liberty Demolition','B&B Waste','Ranger Waste','Rob Van'];
-knownHaulers.forEach(function(h){if(haulers.indexOf(h)<0)haulers.push(h);});
+// Hauler dropdown reads approved_haulers (single source of truth).
+// Was a hard-coded list containing 'B&B Waste', 'Ranger Waste' and 'Rob Van' —
+// none of which exist in the database — and omitting Mockingbird Waste entirely.
 var sel=document.getElementById('uHauler');
+sel.innerHTML='<option value="">Loading haulers...</option>';
+P.api('approved_haulers?select=name&order=name.asc').then(function(rows){
+var haulers=(rows||[]).map(function(r){return r.name;});
 sel.innerHTML='<option value="">Select hauler...</option>'+haulers.map(function(h){
 return '<option value="'+P.esc(h)+'"'+(proj.waste_hauler&&proj.waste_hauler===h?' selected':'')+'>'+P.esc(h)+'</option>';
 }).join('')+'<option value="__other">Other (type below)</option>';
+});
 sel.onchange=function(){if(sel.value==='__other'){var custom=prompt('Enter hauler name:');if(custom){var opt=document.createElement('option');opt.value=custom;opt.textContent=custom;sel.insertBefore(opt,sel.lastElementChild);sel.value=custom;}}};},
 filterUploadProjects(q){q=(q||'').toLowerCase();var el=document.getElementById('uProjList');
 if(!q){P.renderPL('uProjList','upload');return;}
@@ -1265,7 +1289,7 @@ if(!ids.length){el.innerHTML='<div style="text-align:center;padding:10px;color:v
 var items=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&order=created_at.desc&limit=50');
 if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No submissions yet</div>';return;}
 var aIds=items.filter(function(q){return q.assigned_ticket_id;}).map(function(q){return q.assigned_ticket_id;});
-var tm={};if(aIds.length){var tks=await P.api('tickets?id=in.('+aIds.join(',')+')&select=id,ticket_number');if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
+var tm={};if(aIds.length){var tks=await P.apiAll('tickets?id=in.('+aIds.join(',')+')&select=id,ticket_number');if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
 var pm={};P.pj.forEach(function(p){pm[p.id]=p.name;});
 el.innerHTML=items.map(function(q){var an=q.assigned_ticket_id?tm[q.assigned_ticket_id]:null;var sc,sl;
 if(q.status==='pending'){sc='var(--warning)';sl='⏳ Pending';}else if(q.status==='approved'&&an){sc='var(--success)';sl='✅ #'+an;}
@@ -1592,7 +1616,7 @@ if(!allowedProjIds.length){P.toast('No projects assigned');return;}
 var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
   '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone,audit_id'+
   '&order=ticket_date.desc';
-var tickets=await P.api(tixUrl)||[];
+var tickets=await P.apiAll(tixUrl)||[];
 
 // Group tickets by driver_id, scoped to allowed projects
 var byDriver={};
@@ -1758,7 +1782,7 @@ if(!allowedProjIds.length){P.toast('No projects assigned');return;}
 var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
   '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone,audit_id'+
   '&order=ticket_date.desc';
-var tickets=await P.api(tixUrl)||[];
+var tickets=await P.apiAll(tixUrl)||[];
 
 var byDriver={};
 tickets.forEach(function(t){
