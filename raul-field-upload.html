@@ -642,6 +642,7 @@ const FIELD_USER = 'Raul Sanchez';
 let state = {
   projects: [],
   haulers: [],
+  haulerProjects: {},   // hauler_id -> [project_id]  (from hauler_projects table)
   selectedHauler: null,
   selectedProject: null,
   ticketPhotos: [],
@@ -656,33 +657,45 @@ async function init() {
   await loadProjects();
 }
 
+async function sbGet(endpoint) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + endpoint, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY
+    }
+  });
+  if (!res.ok) throw new Error('Request failed: ' + endpoint);
+  return res.json();
+}
+
 async function loadProjects() {
   try {
-    const response = await fetch(SUPABASE_URL + '/rest/v1/projects?select=*&order=name.asc', {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY
-      }
+    // Source of truth: approved_haulers + hauler_projects.
+    // Do NOT derive haulers from projects.waste_hauler (legacy free-text field
+    // containing values like "Ranger (Medline)" that are not real haulers).
+    const [projects, approved, links] = await Promise.all([
+      sbGet('projects?select=*&active=eq.true&order=name.asc'),
+      sbGet('approved_haulers?select=id,name&order=name.asc'),
+      sbGet('hauler_projects?select=hauler_id,project_id')
+    ]);
+
+    state.projects = projects;
+
+    // hauler_id -> [project_id]
+    state.haulerProjects = {};
+    links.forEach(l => {
+      if (!l.hauler_id || !l.project_id) return;
+      if (!state.haulerProjects[l.hauler_id]) state.haulerProjects[l.hauler_id] = [];
+      state.haulerProjects[l.hauler_id].push(l.project_id);
     });
-    
-    if (response.ok) {
-      state.projects = await response.json();
-      
-      // Extract unique haulers
-      const haulerSet = new Set();
-      state.projects.forEach(p => {
-        if (p.waste_hauler) haulerSet.add(p.waste_hauler);
-      });
-      state.haulers = Array.from(haulerSet).sort();
-      
-      // Add "All" option at beginning
-      state.haulers.unshift('All Projects');
-      
-      renderHaulerTabs();
-      selectHauler('All Projects');
-    } else {
-      throw new Error('Failed to load projects');
-    }
+
+    // Tabs = the real approved haulers, by id
+    state.haulers = [{ id: null, name: 'All Projects' }].concat(
+      approved.map(h => ({ id: h.id, name: h.name }))
+    );
+
+    renderHaulerTabs();
+    selectHauler(null);
   } catch (err) {
     console.error(err);
     document.getElementById('projectList').innerHTML = `
@@ -700,12 +713,12 @@ async function loadProjects() {
 function renderHaulerTabs() {
   const container = document.getElementById('haulerTabs');
   container.innerHTML = state.haulers.map(h => `
-    <button class="hauler-tab ${state.selectedHauler === h ? 'active' : ''}" onclick="selectHauler('${h}')">${h}</button>
+    <button class="hauler-tab ${state.selectedHauler === h.id ? 'active' : ''}" onclick="selectHauler(${h.id ? "'" + h.id + "'" : 'null'})">${h.name}</button>
   `).join('');
 }
 
-function selectHauler(hauler) {
-  state.selectedHauler = hauler;
+function selectHauler(haulerId) {
+  state.selectedHauler = haulerId;   // uuid, or null for "All Projects"
   state.selectedProject = null;
   renderHaulerTabs();
   renderProjectList();
@@ -716,8 +729,9 @@ function renderProjectList() {
   const container = document.getElementById('projectList');
   
   let filtered = state.projects;
-  if (state.selectedHauler && state.selectedHauler !== 'All Projects') {
-    filtered = state.projects.filter(p => p.waste_hauler === state.selectedHauler);
+  if (state.selectedHauler) {
+    const allowed = state.haulerProjects[state.selectedHauler] || [];
+    filtered = state.projects.filter(p => allowed.indexOf(p.id) !== -1);
   }
   
   if (filtered.length === 0) {
