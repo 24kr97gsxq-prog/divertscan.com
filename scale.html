@@ -425,7 +425,7 @@
 
 <div class="status-bar">
     <span id="deviceLabel">Dalmex Scale 01</span>
-    <a href="scale-debug.html" style="color:var(--dim);text-decoration:none;font-size:.65rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;opacity:.7;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🔧 debug</a>
+    <!-- debug link removed: scale-debug is an internal, login-gated tool -->
     <span id="lastSync">—</span>
 </div>
 
@@ -449,6 +449,8 @@ const AGE_CHECK_MS   = 30 * 1000;        // re-evaluate ages every 30 sec
 let grossReading = null;
 let tareReading  = null;
 let projects     = [];
+let approvedHaulers = [];   // [{id,name}] from approved_haulers
+let haulerProjects  = {};   // hauler_id -> [project_id] from hauler_projects
 let nextTicketNum = null;
 let pollTimer    = null;
 let selectedHauler = null;
@@ -658,15 +660,26 @@ async function init() {
     document.addEventListener("touchstart", initAudio, { once: true });
     document.addEventListener("click", initAudio, { once: true });
 
-    projects = await sb('projects?select=id,name,waste_hauler,leed_version&order=name.asc') || [];
+    // SOURCE OF TRUTH: approved_haulers + hauler_projects.
+    // projects.waste_hauler is DEPRECATED free text — it still contains junk like
+    // "Ranger (Medline)" (a hauler+project mashed together) and "Ranger Waste
+    // Management, LLC" (comma variant that matches no real hauler). Never read it.
+    projects       = await sb('projects?select=id,name,leed_version&active=eq.true&order=name.asc') || [];
+    approvedHaulers = await sb('approved_haulers?select=id,name&order=name.asc') || [];
+    const hpLinks  = await sb('hauler_projects?select=hauler_id,project_id') || [];
 
-    const haulerSet = {};
-    projects.forEach(p => { if (p.waste_hauler) haulerSet[p.waste_hauler] = true; });
-    const haulers = Object.keys(haulerSet).sort();
+    // hauler_id -> [project_id]
+    haulerProjects = {};
+    hpLinks.forEach(l => {
+        if (!l.hauler_id || !l.project_id) return;
+        (haulerProjects[l.hauler_id] = haulerProjects[l.hauler_id] || []).push(l.project_id);
+    });
+
+    const haulers = approvedHaulers.map(h => h.name);
 
     const btnContainer = document.getElementById('haulerButtons');
-    btnContainer.innerHTML = haulers.map(h =>
-        `<button onclick="selectHauler('${h.replace(/'/g, "\\'")}')" style="padding:16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:700;cursor:pointer;text-align:left;">🚛 ${h}</button>`
+    btnContainer.innerHTML = approvedHaulers.map(h =>
+        `<button onclick="selectHauler('${h.name.replace(/'/g, "\\'")}')" style="padding:16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:1rem;font-weight:700;cursor:pointer;text-align:left;">🚛 ${h.name}</button>`
     ).join('');
 
     const savedHauler = localStorage.getItem('ds_driver_hauler');
@@ -724,7 +737,10 @@ async function selectHauler(haulerName) {
 
     const sel = document.getElementById('projectSelect');
     sel.innerHTML = '<option value="">— Select Project —</option>';
-    const filtered = projects.filter(p => p.waste_hauler === haulerName);
+    // Scope projects through hauler_projects (real FK), not the legacy text field.
+    const hRec    = approvedHaulers.find(h => h.name === haulerName);
+    const allowed = hRec ? (haulerProjects[hRec.id] || []) : [];
+    const filtered = projects.filter(p => allowed.indexOf(p.id) !== -1);
     filtered.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
@@ -1035,11 +1051,7 @@ function selectMode(mode) {
 function populateWalkinHaulerDropdown() {
     const sel = document.getElementById('walkinHaulerSelect');
     if (!sel) return;
-    const haulerSet = {};
-    (projects || []).forEach(p => {
-        if (p.waste_hauler && p.waste_hauler.trim()) haulerSet[p.waste_hauler.trim()] = true;
-    });
-    const haulers = Object.keys(haulerSet).sort();
+    const haulers = (approvedHaulers || []).map(h => h.name);
     const opts = ['<option value="">— Select hauler —</option>'];
     haulers.forEach(h => {
         opts.push('<option value="' + h.replace(/"/g, '&quot;') + '">' + h + '</option>');
@@ -2112,7 +2124,10 @@ async function confirmTicket() {
                 ticket_number: ticketNum,
                 ticket_date: today, service_date: today,
                 gross_lbs: grossLbs, tare_lbs: tareLbs, net_lbs: netLbs, net_tons: netTons,
-                hauler: selectedHauler || proj?.waste_hauler || 'Dalmex Scale',
+                // Only ever write a canonical hauler name (from approved_haulers).
+                // The old `proj?.waste_hauler` fallback could write junk like
+                // "Ranger (Medline)" into tickets.hauler and orphan the row.
+                hauler: selectedHauler || 'Dalmex Scale',
                 container_size: 30,
                 scan_type: 'pi_scale',
                 diversion_pct: diversionPct,
