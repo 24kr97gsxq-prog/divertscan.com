@@ -535,6 +535,19 @@ document.addEventListener('keydown', function(e){
 
         <!-- ========== HAULERS TAB ========== -->
         <div id="haulersTab" class="tab-content">
+
+            <!-- Driver scale links: one permanent URL per hauler. The token pins
+                 the hauler, so a driver only ever sees THEIR drivers and THEIR
+                 projects. Text it once; they bookmark it. -->
+            <div class="card" style="border-color:#f59e0b;background:linear-gradient(135deg,var(--bg-card) 0%,rgba(245,158,11,0.05) 100%);">
+                <div class="card-title">
+                    <span class="icon">🔗</span> Driver Scale Links
+                    <button onclick="DS.loadHaulerLinks()" style="margin-left:auto;background:none;border:none;color:var(--primary);font-size:.75rem;cursor:pointer;font-weight:600;">🔄 Refresh</button>
+                </div>
+                <p style="font-size:.65rem;color:var(--text-muted);margin:2px 0 8px;">Text each hauler their link. It opens the scale page locked to their company — their drivers, their projects only. Bookmark once, no password.</p>
+                <div id="haulerLinksList"><div style="text-align:center;padding:14px;color:var(--text-dim);font-size:.75rem;">Loading links...</div></div>
+            </div>
+
             <!-- Header card with summary stats -->
             <div class="card" style="border-color:#00c9a7;background:linear-gradient(135deg,var(--bg-card) 0%,rgba(0,201,167,0.05) 100%);">
                 <div class="card-title">
@@ -4254,7 +4267,7 @@ const DS = {
                 }
                 if (tab === 'reportsTab') this.renderReports();
                 if (tab === 'driversTab') this.loadDriversTab();
-                if (tab === 'haulersTab') this.loadHaulersTab();
+                if (tab === 'haulersTab') { this.loadHaulersTab(); this.loadHaulerLinks(); }
                 if (tab === 'projectsTab') this.renderProjectList();
                 // Audit + Scale tabs each fire several Supabase queries. Run them in
                 // parallel via Promise.all (these don't depend on each other) so the
@@ -11880,13 +11893,77 @@ const DS = {
     // HAULERS TAB — internal per-hauler performance (mirrors Drivers tab).
     // Includes CO₂e (internal-only). Never surfaced on customer/LEED pages.
     // ============================================================
+    async loadHaulerLinks() {
+        var el = document.getElementById('haulerLinksList');
+        if (!el) return;
+        el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--text-dim);font-size:.75rem;">Loading links...</div>';
+        try {
+            var rows = await this.supabase('approved_haulers?select=id,name,access_token&order=name.asc') || [];
+            if (!rows.length) { el.innerHTML = '<div style="padding:10px;color:var(--text-dim);font-size:.75rem;">No haulers found.</div>'; return; }
+
+            var html = rows.map(function (h) {
+                if (!h.access_token) {
+                    return '<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">' +
+                        '<div style="flex:1;min-width:0;"><div style="font-size:.8rem;font-weight:700;">' + h.name + '</div>' +
+                        '<div style="font-size:.62rem;color:var(--danger);">No link yet</div></div>' +
+                        '<button class="btn btn-sm btn-outline" style="width:auto;padding:5px 10px;font-size:.65rem;" onclick="DS.newHaulerLink(\'' + h.id + '\')">Generate</button></div>';
+                }
+                var url = 'https://divertscan.com/scale.html?k=' + h.access_token;
+                return '<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-size:.8rem;font-weight:700;">🚛 ' + h.name + '</div>' +
+                        '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + url + '</div>' +
+                    '</div>' +
+                    '<button class="btn btn-sm" style="width:auto;padding:5px 10px;font-size:.65rem;" onclick="DS.copyHaulerLink(\'' + url + '\',this)">📋 Copy</button>' +
+                    '<button class="btn btn-sm btn-outline" style="width:auto;padding:5px 8px;font-size:.65rem;" title="Revoke the old link and issue a new one" onclick="DS.newHaulerLink(\'' + h.id + '\')">↻</button>' +
+                '</div>';
+            }).join('');
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div style="padding:10px;color:var(--danger);font-size:.75rem;">Could not load links.</div>';
+        }
+    },
+
+    copyHaulerLink(url, btn) {
+        var done = function () {
+            if (!btn) return;
+            var old = btn.innerHTML;
+            btn.innerHTML = '✅ Copied';
+            setTimeout(function () { btn.innerHTML = old; }, 1400);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done).catch(function () { done(); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = url; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta); done();
+        }
+        this.showToast('🔗 Link copied — paste into Messages');
+    },
+
+    // Regenerate a hauler's token. The OLD link stops working immediately —
+    // use this if a link is forwarded to someone who shouldn't have it.
+    async newHaulerLink(haulerId) {
+        if (!confirm('Issue a new link for this hauler?\n\nTheir current link will STOP WORKING and every driver will need the new one.')) return;
+        var tok = '';
+        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var buf = new Uint8Array(12);
+        (window.crypto || window.msCrypto).getRandomValues(buf);
+        for (var i = 0; i < buf.length; i++) tok += chars[buf[i] % chars.length];
+        var res = await this.supabase('approved_haulers?id=eq.' + haulerId, 'PATCH', { access_token: tok });
+        if (res === null) { this.showToast('❌ Could not update link'); return; }
+        this.showToast('✅ New link issued');
+        this.loadHaulerLinks();
+    },
+
     async loadHaulersTab() {
         var listEl = document.getElementById('haulersTabList');
         if (!listEl) return;
         listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);">Loading haulers...</div>';
         try {
             // One pull of all tickets with the fields we need for rollups.
-            var tickets = await this.supabase('tickets?select=hauler,net_tons,diverted_tons,diversion_pct,co2e_avoided,project_id,captured_at,ticket_date,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=captured_at.desc&limit=20000') || [];
+            var tickets = await this.supabase('tickets?select=hauler,net_tons,diverted_tons,diversion_pct,co2e_avoided,project_id,captured_at,ticket_date,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=captured_at.desc') || [];
             var projects = await this.supabase('projects?select=id,name') || [];
             var projName = {};
             projects.forEach(function(p){ projName[p.id] = p.name; });
@@ -12047,22 +12124,25 @@ const DS = {
     // passphrase is asked once per session and held in memory only —
     // never stored, never in the repo, never in localStorage.
     // ============================================================
+    // PASSPHRASE RETIRED 2026-07-12.
+    // It existed because index.html used to be a public page with no login —
+    // the passphrase was the only thing protecting client credential
+    // management. The app now requires a Supabase Auth sign-in, so identity is
+    // already proven by the JWT, and _admin_ok() in the database checks
+    // auth.uid() instead of a string. Asking for a second password to prove the
+    // same thing was pure friction.
+    //
+    // getAdminPass() is kept (returns a dummy) so the ~6 call sites and the
+    // RPC signatures don't all have to change at once. The value is ignored
+    // server-side.
     _adminPass: null,
     async getAdminPass(forceAsk) {
-        if (this._adminPass && !forceAsk) return this._adminPass;
-        var p = prompt('Admin passphrase:');
-        if (!p) return null;
-        var ok = await this.supabase('rpc/admin_check_pass', 'POST', { admin_pass: p });
-        if (ok === true) { this._adminPass = p; return p; }
-        this._adminPass = null;
-        this.showToast(ok === false ? '\u274C Wrong admin passphrase' : '\u274C Could not verify \u2014 check connection');
-        return null;
+        return 'auth';   // ignored by the DB; auth.uid() is the real check
     },
     _adminLockedHtml(retryFn) {
         return '<div style="text-align:center;padding:12px;">' +
-            '<div style="font-size:1.3rem;margin-bottom:6px;">\uD83D\uDD12</div>' +
-            '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">Admin passphrase required</div>' +
-            '<button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px;" onclick="' + retryFn + '">\uD83D\uDD13 Unlock</button></div>';
+            '<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:8px;">Could not load \u2014 check connection</div>' +
+            '<button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px;" onclick="' + retryFn + '">\u21BB Retry</button></div>';
     },
 
     async loadClients() {
