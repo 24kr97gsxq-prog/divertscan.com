@@ -674,15 +674,60 @@ async function init() {
     document.addEventListener("touchstart", initAudio, { once: true });
     document.addEventListener("click", initAudio, { once: true });
 
-    // SOURCE OF TRUTH: approved_haulers + hauler_projects.
-    // projects.waste_hauler is DEPRECATED free text — it still contains junk like
-    // "Ranger (Medline)" (a hauler+project mashed together) and "Ranger Waste
-    // Management, LLC" (comma variant that matches no real hauler). Never read it.
+    // ── HAULER TOKEN MODE (?k=...) ──────────────────────────────────────────
+    // Each hauler gets a permanent link: scale.html?k=<token>. The token pins the
+    // hauler, so a driver only ever sees THEIR company's drivers and THEIR
+    // company's projects. A Jaguar driver cannot log a load against Ranger's job.
+    // Token is remembered, so the link is bookmarked once and never typed again.
+    let haulerToken = new URLSearchParams(location.search).get('k');
+    if (haulerToken) {
+        localStorage.setItem('ds_hauler_token', haulerToken);
+    } else {
+        haulerToken = localStorage.getItem('ds_hauler_token');
+    }
+
+    if (haulerToken) {
+        // One RPC returns the hauler + exactly the projects it is cleared to haul.
+        const rows = await rpc('scale_hauler_by_token', { p_token: haulerToken }) || [];
+        if (rows.length === 0) {
+            // Bad/revoked token, or hauler has no projects assigned.
+            localStorage.removeItem('ds_hauler_token');
+            document.getElementById('modeBanner').style.display = 'none';
+            document.getElementById('haulerSetup').style.display = 'none';
+            document.querySelector('.main').insertAdjacentHTML('afterbegin',
+                '<div style="padding:20px;margin-bottom:12px;border:1px solid var(--red);border-radius:10px;background:rgba(220,38,38,.08);color:var(--red);font-weight:700;text-align:center">' +
+                'This link is not valid. Ask Dalmex for your company\'s scale link.</div>');
+            return;
+        }
+
+        const hid  = rows[0].hauler_id;
+        const hnm  = rows[0].hauler_name;
+
+        approvedHaulers = [{ id: hid, name: hnm }];
+        projects        = rows.map(r => ({ id: r.project_id, name: r.project_name, leed_version: r.leed_version }));
+        haulerProjects  = {}; haulerProjects[hid] = projects.map(p => p.id);
+
+        document.getElementById('modeBanner').style.display = 'none';
+        await selectHauler(hnm);
+
+        // Same boot sequence as operator mode.
+        await refreshNextTicketNum();
+        updateStatus('on', 'Listening...');
+        pollWeights();
+        pollTimer = setInterval(pollWeights, POLL_INTERVAL);
+        if (ageCheckTimer) clearInterval(ageCheckTimer);
+        ageCheckTimer = setInterval(checkReadingAges, AGE_CHECK_MS);
+        startLivePhasePoll();
+        startResumeWatchdog();
+        return;
+    }
+    // ── END TOKEN MODE ──────────────────────────────────────────────────────
+
+    // No token: operator/walk-in mode (the scale house tablet). Full lists.
     projects       = await sb('projects?select=id,name,leed_version&active=eq.true&order=name.asc') || [];
     approvedHaulers = await sb('approved_haulers?select=id,name&order=name.asc') || [];
     const hpLinks  = await sb('hauler_projects?select=hauler_id,project_id') || [];
 
-    // hauler_id -> [project_id]
     haulerProjects = {};
     hpLinks.forEach(l => {
         if (!l.hauler_id || !l.project_id) return;
