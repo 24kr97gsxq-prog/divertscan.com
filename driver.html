@@ -256,8 +256,25 @@ async function init() {
         document.getElementById('bookmarkBanner').classList.add('show');
     }
 
+    // Driver lookup goes through a SECURITY DEFINER RPC so `drivers` can stay
+    // unreadable to anon — tokens are no longer enumerable in bulk.
+    async function rpc(fn, args) {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(args || {})
+        });
+        if (!res.ok) return null;
+        const t = await res.text();
+        return t ? JSON.parse(t) : null;
+    }
+
     // Fetch driver record
-    const drivers = await sb('drivers?driver_token=eq.' + encodeURIComponent(token) + '&limit=1');
+    const drivers = await rpc('driver_by_token', { p_token: token });
     if (!drivers || drivers.length === 0) {
         showError();
         return;
@@ -269,15 +286,7 @@ async function init() {
     document.title = driverInfo.driver_name + ' — Loadbook';
 
     // Update last_seen_at (fire and forget)
-    fetch(SUPABASE_URL + '/rest/v1/drivers?id=eq.' + driverInfo.id, {
-        method: 'PATCH',
-        headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ last_seen_at: new Date().toISOString() })
-    }).catch(() => {});
+    rpc('driver_touch', { p_token: token }).catch(() => {});
 
     // Fetch all loads via v_driver_logbook
     const loads = await sb('v_driver_logbook?driver_token=eq.' + encodeURIComponent(token) + '&order=captured_at.desc') || [];
