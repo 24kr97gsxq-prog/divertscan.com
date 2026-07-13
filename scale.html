@@ -450,6 +450,7 @@ let grossReading = null;
 let tareReading  = null;
 let projects     = [];
 let approvedHaulers = [];   // [{id,name}] from approved_haulers
+let isTokenMode = false;    // true when opened via ?k=<hauler token>
 let haulerProjects  = {};   // hauler_id -> [project_id] from hauler_projects
 let nextTicketNum = null;
 let pollTimer    = null;
@@ -707,8 +708,23 @@ async function init() {
         projects        = rows.map(r => ({ id: r.project_id, name: r.project_name, leed_version: r.leed_version }));
         haulerProjects  = {}; haulerProjects[hid] = projects.map(p => p.id);
 
+        isTokenMode = true;
         document.getElementById('modeBanner').style.display = 'none';
         await selectHauler(hnm);
+
+        // In token mode the LINK is the company. Remove the "tap to change"
+        // escape hatch entirely — otherwise a Jaguar driver could switch to
+        // Ranger and log a load against someone else's project, which is the
+        // exact thing the token exists to prevent.
+        const badge = document.getElementById('haulerBadge');
+        if (badge) {
+            badge.onclick = null;
+            badge.style.cursor = 'default';
+            const hint = badge.querySelector('div[style*="tap to change"], div:last-child');
+            badge.querySelectorAll('div').forEach(d => {
+                if (d.textContent.trim() === 'tap to change') d.remove();
+            });
+        }
 
         // Same boot sequence as operator mode.
         await refreshNextTicketNum();
@@ -816,6 +832,8 @@ async function selectHauler(haulerName) {
 }
 
 function changeHauler() {
+    // Token mode: the hauler is fixed by the link. Nothing to change.
+    if (isTokenMode) return;
     selectedHauler = null;
     selectedZone = null;
     isWalkinMode = false;
