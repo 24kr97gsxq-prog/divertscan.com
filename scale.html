@@ -171,7 +171,7 @@
         .driver-section.show{display:block}
         .driver-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;margin-bottom:8px}
         .driver-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-        .driver-btn{padding:10px 14px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s;min-height:42px}
+        .driver-btn{padding:14px 16px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--sans);font-size:.95rem;font-weight:700;cursor:pointer;transition:all .15s;min-height:52px}
         .driver-btn:active{transform:scale(.95)}
         .driver-btn.selected{border-color:var(--cyan);background:var(--cyan-glow);color:var(--cyan);box-shadow:0 0 12px rgba(0,201,167,.15)}
         .driver-btn-new{border-style:dashed;color:var(--amber);border-color:rgba(245,158,11,.4)}
@@ -315,39 +315,14 @@
          ==================================================== -->
     <div class="driver-section" id="driverSection">
         <div class="driver-label">👤 Driver</div>
-        <div class="driver-hint" id="driverHint">Tap your name (or "New" if not listed)</div>
+        <div class="driver-hint" id="driverHint">Tap your name</div>
         <div class="driver-buttons" id="driverButtons"></div>
         <input type="text" class="driver-input" id="driverInput" placeholder="Type your name (e.g. Bob G)" autocomplete="name" oninput="onDriverInput()" onblur="commitDriverName()">
 
-        <!-- "My Loadbook" persistent banner — appears once a driver is selected.
-             Solves the discoverability problem: drivers couldn't find their loadbook
-             because the only buttons were a tiny icon in the picker + a one-shot
-             popup after ticket success. This banner stays visible through the entire
-             scanning flow so they can open the loadbook ANY time. -->
-        <div id="driverLoadbookBanner" style="display:none;margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,rgba(0,201,167,.18),rgba(0,201,167,.06));border:1.5px solid var(--cyan);border-radius:12px;box-shadow:0 0 14px rgba(0,201,167,.12);">
-            <div style="display:flex;align-items:center;gap:12px;">
-                <div style="font-size:1.8rem;line-height:1;flex-shrink:0;">📒</div>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);font-weight:700;margin-bottom:1px;">Your Loadbook</div>
-                    <div style="font-size:.78rem;color:var(--muted);font-weight:500;line-height:1.3;">See every load you've delivered — tonnage, dates, and totals.</div>
-                </div>
-            </div>
-            <div style="display:flex;gap:6px;margin-top:10px;">
-                <button onclick="openLoadbook()" style="flex:1;padding:11px 0;background:var(--cyan);color:#080f14;border:none;border-radius:9px;font-family:var(--sans);font-weight:800;font-size:.85rem;cursor:pointer;letter-spacing:.02em;">▶ Open My Loadbook</button>
-                <button onclick="copyLoadbookUrl()" title="Copy link to share or save" style="padding:11px 14px;background:transparent;border:1.5px solid var(--cyan);color:var(--cyan);border-radius:9px;font-family:var(--sans);font-weight:700;font-size:.75rem;cursor:pointer;white-space:nowrap;">📋 Copy</button>
-            </div>
-            <div style="font-size:.6rem;color:var(--dim);margin-top:8px;font-style:italic;text-align:center;">Tip: bookmark the loadbook page on your phone to save it for next time.</div>
-        </div>
-
-        <div id="driverPhoneRow" style="display:none;margin-top:10px;">
-            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px;">📱 Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-style:italic;">— optional, for backup access to your loadbook</span></div>
-            <input type="tel" class="driver-input show" id="driverPhone" placeholder="(555) 123-4567" autocomplete="tel" oninput="onDriverPhoneInput()" onblur="commitDriverPhone()" style="border-color:var(--border);">
-            <div id="driverPhoneStatus" style="font-size:.6rem;color:var(--dim);margin-top:4px;font-style:italic;"></div>
-        </div>
     </div>
 
     <!-- Project Selector -->
-    <select class="proj-select" id="projectSelect" onchange="saveActiveSelections(); checkReady();" style="display:none">
+    <select class="proj-select" id="projectSelect" onchange="onProjectChange()" style="display:none">
         <option value="">— Select Project —</option>
     </select>
 
@@ -427,6 +402,36 @@
     <span id="deviceLabel">Dalmex Scale 01</span>
     <!-- debug link removed: scale-debug is an internal, login-gated tool -->
     <span id="lastSync">—</span>
+<!-- ═══ MY LOADBOOK + PHONE — moved BELOW the scanning flow ═══
+     These used to sit directly under the driver picker, in the exact spot where a
+     driver needs to move fast (name → project → drive on). They are "later, at
+     home" things, so they now live at the bottom, out of the critical path. -->
+        <!-- "My Loadbook" persistent banner — appears once a driver is selected.
+             Solves the discoverability problem: drivers couldn't find their loadbook
+             because the only buttons were a tiny icon in the picker + a one-shot
+             popup after ticket success. This banner stays visible through the entire
+             scanning flow so they can open the loadbook ANY time. -->
+        <div id="driverLoadbookBanner" style="display:none;margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,rgba(0,201,167,.18),rgba(0,201,167,.06));border:1.5px solid var(--cyan);border-radius:12px;box-shadow:0 0 14px rgba(0,201,167,.12);">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="font-size:1.8rem;line-height:1;flex-shrink:0;">📒</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);font-weight:700;margin-bottom:1px;">Your Loadbook</div>
+                    <div style="font-size:.78rem;color:var(--muted);font-weight:500;line-height:1.3;">See every load you've delivered — tonnage, dates, and totals.</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:10px;">
+                <button onclick="openLoadbook()" style="flex:1;padding:11px 0;background:var(--cyan);color:#080f14;border:none;border-radius:9px;font-family:var(--sans);font-weight:800;font-size:.85rem;cursor:pointer;letter-spacing:.02em;">▶ Open My Loadbook</button>
+                <button onclick="copyLoadbookUrl()" title="Copy link to share or save" style="padding:11px 14px;background:transparent;border:1.5px solid var(--cyan);color:var(--cyan);border-radius:9px;font-family:var(--sans);font-weight:700;font-size:.75rem;cursor:pointer;white-space:nowrap;">📋 Copy</button>
+            </div>
+            <div style="font-size:.6rem;color:var(--dim);margin-top:8px;font-style:italic;text-align:center;">Tip: bookmark the loadbook page on your phone to save it for next time.</div>
+        </div>
+
+        <div id="driverPhoneRow" style="display:none;margin-top:10px;">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:4px;">📱 Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);font-style:italic;">— optional, for backup access to your loadbook</span></div>
+            <input type="tel" class="driver-input show" id="driverPhone" placeholder="(555) 123-4567" autocomplete="tel" oninput="onDriverPhoneInput()" onblur="commitDriverPhone()" style="border-color:var(--border);">
+            <div id="driverPhoneStatus" style="font-size:.6rem;color:var(--dim);margin-top:4px;font-style:italic;"></div>
+        </div>
+
 </div>
 
 <script>
@@ -578,6 +583,29 @@ function selectZone(zone) {
     document.querySelectorAll('.zone-btn').forEach(function(btn) {
         btn.classList.toggle('selected', btn.textContent.trim() === selectedZone);
     });
+    saveActiveSelections();
+    checkReady();
+}
+
+// Zones are ONLY used on the Children's Hospital job. Showing A/B/D/E/F on every
+// other project is 5 buttons of noise a driver scrolls past on every single load.
+function projectUsesZones(projectId) {
+    const p = (projects || []).find(x => x.id === projectId);
+    return !!(p && /children/i.test(p.name || ''));
+}
+
+function onProjectChange() {
+    const pid = document.getElementById('projectSelect').value;
+    if (pid && projectUsesZones(pid)) {
+        showZoneSelector();
+    } else {
+        hideZoneSelector();
+    }
+    // Remember the project. Most drivers run the same job all week, so we
+    // pre-select it next time rather than making them hunt for it every load.
+    if (pid && selectedDriverName) {
+        try { localStorage.setItem('ds_last_project_' + selectedDriverName, pid); } catch (e) {}
+    }
     saveActiveSelections();
     checkReady();
 }
@@ -885,7 +913,11 @@ async function loadDriverPicker(haulerName) {
         html = drivers.map(d => {
             const safeName = d.driver_name.replace(/'/g, "\\'");
             const tokenAttr = d.driver_token ? d.driver_token.replace(/'/g, "\\'") : '';
-            return `<div class="driver-btn-wrap" style="display:flex;align-items:stretch;gap:4px"><button class="driver-btn" onclick="selectDriver('${safeName}')" style="flex:1">${d.driver_name}</button>${tokenAttr ? `<button class="driver-btn-loadbook" onclick="openLoadbookFor('${tokenAttr}', event)" title="View Loadbook" style="padding:0 12px;border:2px solid var(--border);border-radius:10px;background:var(--card);color:var(--cyan);font-family:var(--sans);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .15s;min-height:42px;flex-shrink:0">📒</button>` : ''}</div>`;
+            // One name = one button. The per-driver 📒 buttons were removed:
+            // 11 drivers meant 11 loadbook buttons cluttering the grid, and nobody
+            // ever opens someone else's loadbook. There is now ONE "My Loadbook"
+            // banner that appears after you tap your name.
+            return `<button class="driver-btn" onclick="selectDriver('${safeName}')">${d.driver_name}</button>`;
         }).join('');
         html += '<button class="driver-btn driver-btn-new" onclick="showNewDriverInput()">+ New driver</button>';
     }
@@ -932,6 +964,22 @@ async function selectDriver(name) {
             showPhoneRow(driver);
         }
     }
+
+    // Pre-select the project this driver ran last time. Most drivers are on the
+    // same job all week — this saves them a scroll and a tap on every load.
+    // They can still change it; it's a default, not a lock.
+    try {
+        const last = localStorage.getItem('ds_last_project_' + name);
+        const sel = document.getElementById('projectSelect');
+        if (last && sel && !sel.value) {
+            const exists = Array.prototype.some.call(sel.options, o => o.value === last);
+            if (exists) {
+                sel.value = last;
+                onProjectChange();   // also decides whether Zone shows
+            }
+        }
+    } catch (e) {}
+
     checkReady();
 }
 
