@@ -962,6 +962,8 @@ async function selectDriver(name) {
         }
     }
 
+    loadRecentLoads();   // list is per-driver now, so refresh it
+
     // Pre-select the project this driver ran last time. Most drivers are on the
     // same job all week — this saves them a scroll and a tap on every load.
     // They can still change it; it's a default, not a lock.
@@ -2418,10 +2420,21 @@ async function loadRecentLoads() {
         el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">Select your company to see loads</div>';
         return;
     }
+    // Scope to the SELECTED DRIVER, not the whole company. This said "YOUR recent
+    // loads" but was showing every load the hauler had run — so Willie G could see
+    // James's tonnage, and the list never changed when you switched names.
     const haulerFilter = encodeURIComponent(selectedHauler);
-    let data = await sb(`tickets?hauler=eq.${haulerFilter}&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,zone,driver_name,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=ticket_date.desc,captured_at.desc&limit=5`);
+    let q = `tickets?hauler=eq.${haulerFilter}`;
+    if (selectedDriverName) {
+        q += `&driver_name=eq.${encodeURIComponent(selectedDriverName)}`;
+    }
+    q += `&select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,captured_at,notes,project_id,scale_ticket_image,debris_images,scan_type,zone,driver_name,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct&order=ticket_date.desc,captured_at.desc&limit=5`;
+
+    let data = await sb(q);
     if (!data || data.length === 0) {
-        el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedHauler + '</div>';
+        el.innerHTML = selectedDriverName
+            ? '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">No loads yet for ' + selectedDriverName + '</div>'
+            : '<div style="color:var(--dim);font-size:.7rem;padding:8px 0;">Tap your name to see your loads</div>';
         return;
     }
     driverTickets = data;
