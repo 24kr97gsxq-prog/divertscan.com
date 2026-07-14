@@ -166,6 +166,12 @@
 const AG_STORE = 'ds_session';
 let agSession = null;
 
+// Published Supabase endpoint + anon key. These are NOT secret — they appear in
+// the HTML of scale.html, driver.html, client.html and every report page. RLS is
+// what protects the data, not the obscurity of this key.
+const AG_URL = 'https://cyvvlngtojagfoaitoog.supabase.co';
+const AG_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZsbmd0b2phZ2ZvYWl0b29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyODk4OTAsImV4cCI6MjA4NDg2NTg5MH0.CltpTET2wFfl5kaHFOGmUS8tR8bRFCjbtWDdVrC5r0g';
+
 function agSave(x){ agSession = x; try{ localStorage.setItem(AG_STORE, JSON.stringify(x)); }catch(e){} }
 function agLoad(){
   try{
@@ -188,10 +194,20 @@ async function agLogin(){
   err.style.display='none';
   if(!email || !pass){ err.textContent='Enter email and password'; err.style.display='block'; return; }
 
-  // The anon key's only remaining job is talking to the auth endpoint.
-  var url = (window.DS && DS.state && DS.state.supabaseUrl) || localStorage.getItem('ds_supabase_url');
-  var key = (window.DS && DS.state && DS.state.supabaseKey) || localStorage.getItem('ds_supabase_key');
-  if(!url || !key){ err.textContent='Supabase not configured on this device'; err.style.display='block'; return; }
+  // Fall back to the published constants. The gate used to depend on
+  // localStorage values that are SET behind the gate — so clearing Safari data
+  // locked you out of your own admin app with "Supabase not configured on this
+  // device". The anon key is public anyway (it ships in the HTML of every other
+  // page), so there is no cost to hard-coding it here.
+  var url = (window.DS && DS.state && DS.state.supabaseUrl) || localStorage.getItem('ds_supabase_url') || AG_URL;
+  var key = (window.DS && DS.state && DS.state.supabaseKey) || localStorage.getItem('ds_supabase_key') || AG_KEY;
+  if(!url || !key){ err.textContent='Supabase not configured'; err.style.display='block'; return; }
+
+  // Persist them so DS.init() finds them after sign-in.
+  try {
+    if (!localStorage.getItem('ds_supabase_url')) localStorage.setItem('ds_supabase_url', url);
+    if (!localStorage.getItem('ds_supabase_key')) localStorage.setItem('ds_supabase_key', key);
+  } catch (e) {}
 
   btn.disabled=true; btn.textContent='Signing in...';
   try{
