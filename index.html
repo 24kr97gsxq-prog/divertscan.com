@@ -1669,7 +1669,7 @@ const DS = {
 
         const hauler = document.getElementById('scaleFilterHauler').value;
         const project = document.getElementById('scaleFilterProject').value;
-        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize;
+        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=' + this._sortOrderClause() + '&limit=' + this._scalePageSize;
         if (hauler) q += '&hauler=eq.' + encodeURIComponent(hauler);
         if (project) q += '&project_id=eq.' + project;
 
@@ -3752,7 +3752,7 @@ const DS = {
         const offset = this._scalePage * this._scalePageSize;
         const hauler = document.getElementById('scaleFilterHauler').value;
         const project = document.getElementById('scaleFilterProject').value;
-        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=ticket_date.desc,captured_at.desc&limit=' + this._scalePageSize + '&offset=' + offset;
+        let q = 'tickets?select=id,ticket_number,ticket_date,net_tons,net_lbs,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,scan_type,captured_at,notes,project_id,container_size,wood_pct,occ_pct,metal_pct,plastic_pct,concrete_pct,block_pct,landfill_pct,scale_ticket_image,debris_images,audit_id,zone&order=' + this._sortOrderClause() + '&limit=' + this._scalePageSize + '&offset=' + offset;
         if (hauler) q += '&hauler=eq.' + encodeURIComponent(hauler);
         if (project) q += '&project_id=eq.' + project;
         const data = await this.supabase(q);
@@ -12483,6 +12483,21 @@ const DS = {
         try { return localStorage.getItem('ds_sort') || 'added_desc'; } catch(e) { return 'added_desc'; }
     },
 
+    // Turn the sort preference into a DB-level ORDER BY. Previously the query
+    // was ALWAYS ordered by ticket_date, so "Newest added" only re-sorted the
+    // page ticket_date had already returned — a just-approved ticket with an old
+    // load date (e.g. a scanned paper ticket) never made it into that page, so
+    // it looked like it vanished. Now the DB orders by what you actually picked.
+    _sortOrderClause() {
+        switch (this._getSortPref()) {
+            case 'added_asc':  return 'created_at.asc';
+            case 'date_desc':  return 'ticket_date.desc,captured_at.desc';
+            case 'date_asc':   return 'ticket_date.asc,captured_at.asc';
+            case 'added_desc':
+            default:           return 'created_at.desc';
+        }
+    },
+
     _sortTickets(tickets) {
         if (!Array.isArray(tickets) || tickets.length === 0) return tickets || [];
         const pref = this._getSortPref();
@@ -12528,6 +12543,10 @@ const DS = {
         } catch(e) {}
         // PERF: re-sort means a new "first page" — reset pagination cursor
         this._ticketsRendered = this._ticketPageSize;
+        // The ORDER BY is now applied in the DB query, so a sort change must
+        // RE-FETCH, not just re-sort the current page. Reset + reload.
+        this._scalePage = 0;
+        try { if (typeof this.loadScaleFeed === 'function') this.loadScaleFeed(); } catch(e) {}
         // Re-render tickets list if function exists
         try { if (typeof this.renderTickets === 'function') this.renderTickets(this._lastTicketFilter || 'all'); } catch(e) {}
         // Re-render reports (monthly cards) if reports tab is visible
