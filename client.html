@@ -400,13 +400,12 @@ P.cl=c[0];
 try{localStorage.setItem('ds_cid',P.cl.id);}catch(x){}await P.loadPj();P.showApp();
 }catch(x){ld.style.display='none';err.textContent='Error: '+x.message;err.style.display='block';}},
 
-async loadPj(){var a=await P.api('client_project_access?client_id=eq.'+P.cl.id+'&select=project_id');
-if(!a||!a.length){P.pj=[];return;}var ids=a.map(function(x){return x.project_id;});
-P.pj=await P.api('projects?id=in.('+ids.join(',')+')&order=name')||[];
-// Phase 2.7d: defense-in-depth — never expose the walk-in placeholder project to clients
-// even if a client_project_access row somehow points to it.
-var WALKIN_PLACEHOLDER_ID='6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
-P.pj=P.pj.filter(function(p){return p.id!==WALKIN_PLACEHOLDER_ID;});},
+async loadPj(){
+// Reads now go through the client_projects RPC (SECURITY DEFINER). The lockdown
+// closed client_project_access and projects to the anon key, which blanked the
+// portal; the RPC returns exactly this client's projects without reopening the
+// tables. Walk-in placeholder is already filtered server-side.
+P.pj=await P.api('rpc/client_projects','POST',{p_cid:P.cl.id})||[];},
 
 showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';
 try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
@@ -525,12 +524,11 @@ if(subtitle)subtitle.textContent='Loading...';
 var allowedProjIds=P.pj.map(function(p){return p.id;});
 
 try{
-  // Query tickets ONLY from this client's projects, only ones with a driver_id
-  var url='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
-    '&select=driver_id,driver_name,hauler,net_tons,captured_at,created_at,ticket_date,project_id'+
-    '&order=captured_at.desc';
-  var tickets=await P.apiAll(url);
+  // Tickets via client_tickets RPC (SECURITY DEFINER, full history, scoped to
+  // this client's projects). Filter to driver-attributed rows in JS.
+  var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
   if(!tickets)tickets=[];
+  tickets=tickets.filter(function(t){return t.driver_id;});
 
   // Group by driver_id, accumulate stats — track project set per driver (for display)
   var driversMap={};
@@ -1613,10 +1611,8 @@ P.toast('Building PDF...');
 // Build driverId -> tickets map by fetching all tickets across client's projects with driver_id
 var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects assigned');return;}
-var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
-  '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone,audit_id'+
-  '&order=ticket_date.desc';
-var tickets=await P.apiAll(tixUrl)||[];
+var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+tickets=tickets.filter(function(t){return t.driver_id;});
 
 // Group tickets by driver_id, scoped to allowed projects
 var byDriver={};
@@ -1779,10 +1775,8 @@ var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects assigned');return;}
 
 // Fetch tickets for detail sheets
-var tixUrl='tickets?project_id=in.('+allowedProjIds.join(',')+')&driver_id=not.is.null'+
-  '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,hauler,driver_id,driver_name,project_id,zone,audit_id'+
-  '&order=ticket_date.desc';
-var tickets=await P.apiAll(tixUrl)||[];
+var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+tickets=tickets.filter(function(t){return t.driver_id;});
 
 var byDriver={};
 tickets.forEach(function(t){
