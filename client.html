@@ -384,6 +384,19 @@ for(var g=0;g<50;g++){
 }
 return out;},
 
+// Session cache for the full client ticket set. client_tickets is identical for
+// every caller ({p_cid:P.cl.id}) and returns the client's entire history — it was
+// being re-fetched 3–5× per session (driver list, each driver detail, monthly
+// report), each a full download. Fetch once, reuse; invalidate on data edits via
+// P.clearTixCache(). force=true bypasses the cache (post-edit refresh).
+async allTix(force){
+  if(!force&&P._allTixCache)return P._allTixCache;
+  var rows=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+  P._allTixCache=rows;
+  return rows;
+},
+clearTixCache(){P._allTixCache=null;},
+
 async hp(pw){var s='divertscan_salt_'+pw;if(window.crypto&&window.crypto.subtle){var d=new TextEncoder().encode(s);var h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');}return null;},
 
 // AUTH
@@ -411,7 +424,7 @@ showApp(){document.getElementById('vLogin').classList.add('hidden');document.get
 try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
 P.go('dash');P.loadBadge();},
 
-logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];try{localStorage.removeItem('ds_cid');}catch(x){}
+logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];P._allTixCache=null;try{localStorage.removeItem('ds_cid');}catch(x){}
 document.getElementById('nav').style.display='none';['vDash','vUpload','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
 document.getElementById('vLogin').classList.remove('hidden');document.getElementById('lPw').value='';},
 
@@ -435,7 +448,7 @@ return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\'
 '<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
-P.tx=(await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[]).filter(function(t){return t.project_id===id;});
+P.tx=(await P.allTix()).filter(function(t){return t.project_id===id;});
 document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');
 P.renderDash();}else{P._up=id;P.showUForm();}},
 
@@ -447,7 +460,7 @@ editProj(){if(P.cp)P.editPjById(P.cp.id);},
 async saveProj(){if(!P._editPj)return;
 var upd={name:document.getElementById('epName').value.trim(),client:document.getElementById('epClient').value.trim(),
 waste_hauler:document.getElementById('epHauler').value.trim(),location:document.getElementById('epLoc').value.trim()};
-await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);
+await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);P.clearTixCache();
 if(P.cp&&P.cp.id===P._editPj.id)Object.assign(P.cp,upd);
 document.getElementById('editProjDtl').remove();P.renderDash();P.toast('Project updated');},
 
@@ -469,7 +482,7 @@ document.body.appendChild(el);},
 async savePjEdit(){if(!P._editPj)return;
 var upd={name:document.getElementById('epName').value.trim(),client:document.getElementById('epClient').value.trim(),
 waste_hauler:document.getElementById('epHauler').value.trim(),location:document.getElementById('epLoc').value.trim()};
-await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);
+await P.api('projects?id=eq.'+P._editPj.id,'PATCH',upd);Object.assign(P._editPj,upd);P.clearTixCache();
 document.getElementById('editProjDtl').remove();
 if(P.cp&&P.cp.id===P._editPj.id){Object.assign(P.cp,upd);P.renderDash();}
 P.toast('Project updated');},
@@ -523,9 +536,9 @@ if(subtitle)subtitle.textContent='Loading...';
 var allowedProjIds=P.pj.map(function(p){return p.id;});
 
 try{
-  // Tickets via client_tickets RPC (SECURITY DEFINER, full history, scoped to
-  // this client's projects). Filter to driver-attributed rows in JS.
-  var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+  // Tickets via session cache (client_tickets, SECURITY DEFINER, full history,
+  // scoped to this client's projects). Filter to driver-attributed rows in JS.
+  var tickets=await P.allTix();
   if(!tickets)tickets=[];
   tickets=tickets.filter(function(t){return t.driver_id;});
 
@@ -692,10 +705,9 @@ var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects');return;}
 
 P.toast('Loading driver detail...');
-// Full history via client_tickets RPC (SECURITY DEFINER, bypasses anon RLS
-// 30-day cap), then narrow to this driver. Prior direct tickets read was
-// silently truncated to the RLS window — same bug class as the main report.
-var tix=(await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[]).filter(function(t){return t.driver_id===driverId;});
+// Full history via session cache (client_tickets), then narrow to this driver.
+// Cached, so tapping a driver is near-instant if the list was already loaded.
+var tix=(await P.allTix()).filter(function(t){return t.driver_id===driverId;});
 // Defense-in-depth filter: enforce project scoping regardless of RPC
 tix=tix.filter(function(t){return allowedProjIds.indexOf(t.project_id)>=0;});
 
@@ -1013,7 +1025,8 @@ var sumG=0,sumT=0,sumN=0;
 tix.forEach(function(t,i){
   var g=Number(t.gross_lbs||0),ta=Number(t.tare_lbs||0),tn=Number(t.net_tons||0);
   sumG+=g;sumT+=ta;sumN+=tn;
-  var r=ws.addRow([t.ticket_date||'',t.ticket_number||'',projNameById[t.project_id]||'',t.zone||'',g,ta,tn,(t.diversion_pct||0)+'%',t.audit_id||'']);
+  var _d=(t.ticket_date||'');var _dm=_d.match(/^(\d{4})-(\d{2})-(\d{2})/);var _df=_dm?(_dm[2]+'/'+_dm[3]+'/'+_dm[1]):_d;
+  var r=ws.addRow([_df,t.ticket_number||'',projNameById[t.project_id]||'',t.zone||'',g,ta,tn,(t.diversion_pct||0)+'%',t.audit_id||'']);
   r.eachCell(function(c){c.font={size:10};c.border=bdrAll;});
   if(i%2===1)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:alt};});
   r.getCell(5).numFmt='#,##0';r.getCell(6).numFmt='#,##0';r.getCell(7).numFmt='0.00';
@@ -1675,7 +1688,7 @@ P.toast('Building PDF...');
 // Build driverId -> tickets map by fetching all tickets across client's projects with driver_id
 var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects assigned');return;}
-var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+var tickets=await P.allTix();
 tickets=tickets.filter(function(t){return t.driver_id;});
 
 // Group tickets by driver_id, scoped to allowed projects
@@ -1839,7 +1852,7 @@ var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects assigned');return;}
 
 // Fetch tickets for detail sheets
-var tickets=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+var tickets=await P.allTix();
 tickets=tickets.filter(function(t){return t.driver_id;});
 
 var byDriver={};
