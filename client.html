@@ -692,11 +692,11 @@ var allowedProjIds=P.pj.map(function(p){return p.id;});
 if(!allowedProjIds.length){P.toast('No projects');return;}
 
 P.toast('Loading driver detail...');
-var url='tickets?driver_id=eq.'+driverId+'&project_id=in.('+allowedProjIds.join(',')+')'+
-  '&select=id,ticket_number,ticket_date,captured_at,net_lbs,net_tons,gross_lbs,tare_lbs,diversion_pct,diverted_tons,co2e_avoided,hauler,project_id,zone,scan_type,audit_id'+
-  '&order=ticket_date.desc';
-var tix=await P.apiAll(url)||[];
-// Defense-in-depth filter
+// Full history via client_tickets RPC (SECURITY DEFINER, bypasses anon RLS
+// 30-day cap), then narrow to this driver. Prior direct tickets read was
+// silently truncated to the RLS window — same bug class as the main report.
+var tix=(await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[]).filter(function(t){return t.driver_id===driverId;});
+// Defense-in-depth filter: enforce project scoping regardless of RPC
 tix=tix.filter(function(t){return allowedProjIds.indexOf(t.project_id)>=0;});
 
 P._driverDtlCache={driver:d,tickets:tix};
