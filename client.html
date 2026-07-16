@@ -699,52 +699,12 @@ var tix=(await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[]).filter(fu
 // Defense-in-depth filter: enforce project scoping regardless of RPC
 tix=tix.filter(function(t){return allowedProjIds.indexOf(t.project_id)>=0;});
 
+// Cache holds the FULL history; filter state drives what's displayed/exported.
 P._driverDtlCache={driver:d,tickets:tix};
-
-// Build project name lookup
-var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
-
-// Compute totals
-var tons=0,div=0,co2=0;
-tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;co2+=+(t.co2e_avoided)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;
-var rc=rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)';
-var isNL=P.cp&&P.cp.leed_version==='none'; // legacy LEED check unused here but kept for parity
-
-// Project breakdown
-var byProj={};
-tix.forEach(function(t){
-  var pn=projNameById[t.project_id]||'(Unknown)';
-  if(!byProj[pn])byProj[pn]={loads:0,tons:0};
-  byProj[pn].loads++;byProj[pn].tons+=+(t.net_tons)||0;
-});
-var projRows='';
-Object.keys(byProj).sort(function(a,b){return byProj[b].tons-byProj[a].tons;}).forEach(function(pn){
-  var pd=byProj[pn];
-  projRows+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.75rem"><span>'+P.esc(pn)+'</span><span style="font-family:var(--mono);font-weight:700">'+pd.loads+' loads · '+pd.tons.toFixed(2)+' T</span></div>';
-});
-
-// Ticket table HTML
-var tixRows='';
-tix.forEach(function(t){
-  var dp=t.diversion_pct||0;
-  var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
-  var pn=projNameById[t.project_id]||'';
-  tixRows+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer">'+
-    '<td style="white-space:nowrap">'+P.fdt(t)+'</td>'+
-    '<td class="bld">'+P.esc(t.ticket_number||'')+'</td>'+
-    '<td>'+P.esc(pn)+'</td>'+
-    '<td class="ctr" style="color:var(--warning);font-weight:600">'+(t.zone||'')+'</td>'+
-    '<td class="r m">'+P.f(t.gross_lbs)+'</td>'+
-    '<td class="r m">'+P.f(t.tare_lbs)+'</td>'+
-    '<td class="r m bld">'+P.f(t.net_tons)+'</td>'+
-    '<td class="r m" style="'+dc+'">'+dp+'%</td>'+
-  '</tr>';
-});
+P._drvFilter={from:null,to:null,chip:'all'};
 
 var el=document.createElement('div');el.id='drvDtl';
 el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-var clientLabel=P.cl&&P.cl.name?P.cl.name:'Your projects';
 
 var hasToken=!!d.token;
 
@@ -757,9 +717,116 @@ el.innerHTML='<div class="topnav" style="z-index:201">'+
     (hasToken?'<div class="b bsm" onclick="P.openDriverLoadbook(\''+d.token+'\')" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem">📒 Loadbook</div>':'')+
     '<div onclick="document.getElementById(\'drvDtl\').remove()" style="background:rgba(255,255,255,.15);color:#fff;font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕</div>'+
   '</div></div>'+
-  '<div class="wrap">'+
+  '<div class="wrap">'+P.drvFilterBar()+'<div id="drvBody"></div></div>';
+document.body.appendChild(el);
+P.renderDrvBody();
+},
+
+// Date-filter helpers for the driver-detail panel ------------------------
+// Returns the cached tickets narrowed to the active [from,to] window.
+// Uses ticket_date (present on every row, incl. imported historicals with
+// null captured_at) so filtering never silently drops history.
+_drvFiltered(){
+  var c=P._driverDtlCache;if(!c)return[];
+  var f=P._drvFilter||{};
+  if(!f.from&&!f.to)return c.tickets.slice();
+  return c.tickets.filter(function(t){
+    var d=t.ticket_date||'';if(!d)return false;
+    if(f.from&&d<f.from)return false;
+    if(f.to&&d>f.to)return false;
+    return true;
+  });
+},
+// Human label for the active window, for headers/exports.
+_drvPeriodLabel(){
+  var f=P._drvFilter||{};
+  if(!f.from&&!f.to)return'All time';
+  var a=f.from?P.fd(f.from):'…',b=f.to?P.fd(f.to):'…';
+  return a+' to '+b;
+},
+// ISO helpers for chip presets (local time).
+_iso(dt){var y=dt.getFullYear(),m=('0'+(dt.getMonth()+1)).slice(-2),da=('0'+dt.getDate()).slice(-2);return y+'-'+m+'-'+da;},
+setDrvChip(chip){
+  var now=new Date(),from=null,to=null;
+  var day=now.getDay(); // 0=Sun
+  if(chip==='today'){from=to=P._iso(now);}
+  else if(chip==='yesterday'){var y=new Date(now);y.setDate(now.getDate()-1);from=to=P._iso(y);}
+  else if(chip==='week'){var s=new Date(now);s.setDate(now.getDate()-day);from=P._iso(s);to=P._iso(now);}
+  else if(chip==='lastweek'){var e=new Date(now);e.setDate(now.getDate()-day-1);var s2=new Date(e);s2.setDate(e.getDate()-6);from=P._iso(s2);to=P._iso(e);}
+  else if(chip==='month'){from=P._iso(new Date(now.getFullYear(),now.getMonth(),1));to=P._iso(now);}
+  else if(chip==='lastmonth'){from=P._iso(new Date(now.getFullYear(),now.getMonth()-1,1));to=P._iso(new Date(now.getFullYear(),now.getMonth(),0));}
+  else{from=null;to=null;chip='all';}
+  P._drvFilter={from:from,to:to,chip:chip};
+  P.renderDrvBody();
+},
+setDrvDate(which,val){
+  P._drvFilter=P._drvFilter||{from:null,to:null,chip:'custom'};
+  P._drvFilter[which]=val||null;P._drvFilter.chip='custom';
+  P.renderDrvBody();
+},
+drvClearFilter(){P._drvFilter={from:null,to:null,chip:'all'};P.renderDrvBody();},
+drvFilterBar(){
+  var chips=[['all','All'],['today','Today'],['yesterday','Yesterday'],['week','This Week'],['lastweek','Last Week'],['month','This Month'],['lastmonth','Last Month']];
+  var f=P._drvFilter||{chip:'all'};
+  var chipHtml=chips.map(function(c){
+    var on=f.chip===c[0];
+    return '<div onclick="P.setDrvChip(\''+c[0]+'\')" style="padding:5px 11px;border-radius:14px;font-size:.7rem;cursor:pointer;white-space:nowrap;border:1px solid '+(on?'var(--primary)':'var(--border)')+';background:'+(on?'var(--primary-glow)':'transparent')+';color:'+(on?'var(--primary)':'var(--text-m)')+';font-weight:'+(on?'700':'500')+'">'+c[1]+'</div>';
+  }).join('');
+  return '<div class="c" style="padding:12px">'+
+    '<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin-bottom:8px">'+chipHtml+'</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--text-m);flex-wrap:wrap">'+
+      '<span>From</span><input type="date" class="fi" style="width:auto;padding:6px 8px;font-size:.75rem" value="'+(f.from||'')+'" onchange="P.setDrvDate(\'from\',this.value)">'+
+      '<span>To</span><input type="date" class="fi" style="width:auto;padding:6px 8px;font-size:.75rem" value="'+(f.to||'')+'" onchange="P.setDrvDate(\'to\',this.value)">'+
+      ((f.from||f.to)?'<div onclick="P.drvClearFilter()" style="padding:5px 10px;border-radius:6px;font-size:.7rem;cursor:pointer;border:1px solid var(--border);color:var(--text-m)">✕ Clear</div>':'')+
+    '</div></div>';
+},
+// Renders summary + Projects Served + ticket table against the FILTERED set.
+renderDrvBody(){
+  var c=P._driverDtlCache;if(!c)return;
+  var d=c.driver;
+  var tix=P._drvFiltered();
+  var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
+
+  var tons=0,div=0;
+  tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
+  var rate=tons>0?Math.round(div/tons*100):0;
+  var rc=rate>=75?'var(--success)':rate>=50?'var(--warning)':'var(--danger)';
+
+  var byProj={};
+  tix.forEach(function(t){
+    var pn=projNameById[t.project_id]||'(Unknown)';
+    if(!byProj[pn])byProj[pn]={loads:0,tons:0};
+    byProj[pn].loads++;byProj[pn].tons+=+(t.net_tons)||0;
+  });
+  var projRows='';
+  Object.keys(byProj).sort(function(a,b){return byProj[b].tons-byProj[a].tons;}).forEach(function(pn){
+    var pd=byProj[pn];
+    projRows+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.75rem"><span>'+P.esc(pn)+'</span><span style="font-family:var(--mono);font-weight:700">'+pd.loads+' loads · '+pd.tons.toFixed(2)+' T</span></div>';
+  });
+
+  var tixRows='';
+  tix.forEach(function(t){
+    var dp=t.diversion_pct||0;
+    var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
+    var pn=projNameById[t.project_id]||'';
+    tixRows+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer">'+
+      '<td style="white-space:nowrap">'+P.fdt(t)+'</td>'+
+      '<td class="bld">'+P.esc(t.ticket_number||'')+'</td>'+
+      '<td>'+P.esc(pn)+'</td>'+
+      '<td class="ctr" style="color:var(--warning);font-weight:600">'+(t.zone||'')+'</td>'+
+      '<td class="r m">'+P.f(t.gross_lbs)+'</td>'+
+      '<td class="r m">'+P.f(t.tare_lbs)+'</td>'+
+      '<td class="r m bld">'+P.f(t.net_tons)+'</td>'+
+      '<td class="r m" style="'+dc+'">'+dp+'%</td>'+
+    '</tr>';
+  });
+
+  var clientLabel=P.cl&&P.cl.name?P.cl.name:'Your projects';
+  var periodLabel=P._drvPeriodLabel();
+  var body=document.getElementById('drvBody');if(!body)return;
+  body.innerHTML=
     '<div class="c">'+
-      '<div style="font-size:.7rem;color:var(--text-m);margin-bottom:8px">🚛 '+P.esc(d.hauler)+' · '+clientLabel+'</div>'+
+      '<div style="font-size:.7rem;color:var(--text-m);margin-bottom:8px">🚛 '+P.esc(d.hauler)+' · '+clientLabel+' · <span style="color:var(--primary);font-weight:600">'+P.esc(periodLabel)+'</span></div>'+
       '<div class="sg">'+
         '<div class="sc"><div class="sv">'+tix.length+'</div><div class="sl">Loads</div></div>'+
         '<div class="sc"><div class="sv">'+P.f(tons)+'</div><div class="sl">Total T</div></div>'+
@@ -768,19 +835,18 @@ el.innerHTML='<div class="topnav" style="z-index:201">'+
       '</div>'+
     '</div>'+
     (projRows?'<div class="c"><div class="ct">🏗️ Projects Served</div>'+projRows+'</div>':'')+
-    '<div class="c"><div class="ct">📋 All Tickets ('+tix.length+')</div>'+
+    '<div class="c"><div class="ct">📋 Tickets ('+tix.length+')</div>'+
       (tix.length===0
-        ?'<div style="text-align:center;padding:20px;color:var(--text-d);font-size:.8rem">No tickets visible to your account for this driver.</div>'
+        ?'<div style="text-align:center;padding:20px;color:var(--text-d);font-size:.8rem">No tickets in this date range.</div>'
         :'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tx"><thead><tr><th>Date</th><th>Ticket #</th><th>Project</th><th class="ctr">Zone</th><th class="r">Gross</th><th class="r">Tare</th><th class="r">Net T</th><th class="r">Div %</th></tr></thead><tbody>'+tixRows+'</tbody></table></div>')+
-    '</div>'+
-  '</div>';
-document.body.appendChild(el);
+    '</div>';
 },
 
 // Phase 2.7d: PDF export for the open driver detail
 exportDriverDtlPDF(){
 var c=P._driverDtlCache;if(!c){P.toast('No driver loaded');return;}
-var d=c.driver,tix=c.tickets;
+var d=c.driver,tix=P._drvFiltered();
+var activePeriod=P._drvPeriodLabel();
 var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
 var projByDriver={};
 // Collect distinct projects this driver touched, with full project metadata
@@ -838,6 +904,7 @@ html+='<div class="subtitle">'+P.esc(d.hauler)+' \u00b7 '+P.esc(clientName)+' \u
 // Phase 2.7d Item #6: Report generated metadata
 html+='<div class="report-meta">';
 html+='<div><strong>Report ID:</strong><br>'+reportId+'</div>';
+html+='<div><strong>Filter:</strong><br>'+P.esc(activePeriod)+'</div>';
 html+='<div><strong>Date Range:</strong><br>'+dateRange+'</div>';
 html+='<div><strong>Generated:</strong><br>'+todayFull+'</div>';
 html+='<div><strong>Compiled by:</strong><br>'+P.esc(clientName)+(clientCompany?' ('+P.esc(clientCompany)+')':'')+'</div>';
@@ -915,7 +982,8 @@ w.document.write(html);w.document.close();
 async exportDriverDtlXLSX(){
 if(typeof ExcelJS==='undefined'){P.toast('Excel loading...');return;}
 var c=P._driverDtlCache;if(!c){P.toast('No driver loaded');return;}
-var d=c.driver,tix=c.tickets;
+var d=c.driver,tix=P._drvFiltered();
+var activePeriod=P._drvPeriodLabel();
 var projNameById={};P.pj.forEach(function(p){projNameById[p.id]=p.name;});
 var tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
 
@@ -932,7 +1000,7 @@ t1.fill={type:'pattern',pattern:'solid',fgColor:dark};
 t1.alignment={horizontal:'center'};ws.getRow(1).height=28;
 
 ws.mergeCells('A2:H2');
-ws.getCell('A2').value=d.hauler+' · '+tix.length+' loads · '+tons.toFixed(2)+' T';
+ws.getCell('A2').value=d.hauler+' · '+activePeriod+' · '+tix.length+' loads · '+tons.toFixed(2)+' T';
 ws.getCell('A2').font={bold:true,size:11,color:dark};
 ws.getCell('A2').alignment={horizontal:'center'};
 ws.addRow([]);
@@ -969,12 +1037,13 @@ P.toast('Downloaded!');
 // Phase 2.7d: Email driver report (mailto link with summary)
 emailDriverDtl(){
 var c=P._driverDtlCache;if(!c){P.toast('No driver loaded');return;}
-var d=c.driver,tix=c.tickets;
+var d=c.driver,tix=P._drvFiltered();
+var activePeriod=P._drvPeriodLabel();
 var tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
 var rate=tons>0?Math.round(div/tons*100):0;
 var clientName=P.cl&&P.cl.name?P.cl.name:'';
 var subj=clientName+' — '+d.driver_name+' Driver Performance Report';
-var body='Hi,\n\nDriver report for '+d.driver_name+' ('+d.hauler+'):\n\nLoads: '+tix.length+'\nTotal Tons: '+tons.toFixed(2)+'\nDiverted: '+div.toFixed(2)+' T\nDiversion Rate: '+rate+'%\n\nBest,\n'+(P.cl?P.cl.name:'');
+var body='Hi,\n\nDriver report for '+d.driver_name+' ('+d.hauler+'):\n\nPeriod: '+activePeriod+'\nLoads: '+tix.length+'\nTotal Tons: '+tons.toFixed(2)+'\nDiverted: '+div.toFixed(2)+' T\nDiversion Rate: '+rate+'%\n\nBest,\n'+(P.cl?P.cl.name:'');
 window.location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 },
 
