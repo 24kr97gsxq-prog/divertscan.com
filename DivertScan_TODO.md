@@ -1,209 +1,192 @@
-# DIVERTSCAN — MASTER TO-DO (priority-ordered)
+# DIVERTSCAN — MASTER TO-DO
 
-**Last updated: Monday, July 13, 2026 — afternoon.** Replaces the July 12 version.
-Update the date whenever you change something.
+**Last updated: Wednesday, July 15, 2026 — evening.**
+Update the date whenever you change something. This replaces all prior versions.
 
-**System status:** Fully operational and VERIFIED end-to-end. A live load was run
-through the scale on Jul 13 (ticket DX-00046 — Jaguar / Willie G / 2554 Irving) and
-the whole chain worked: scale → Pi → Supabase → scale page → ticket → loadbook.
-Admin app, reports and scale-debug are behind a Supabase Auth login. RLS is locked
-to `authenticated` for all business data, with narrow anon carve-outs for the Pi and
-the public scale page. Hauler↔project model rebuilt on real FKs. Per-hauler driver
-links are live.
+**System status:** Live and in daily use. Drivers are logging real loads through the
+scale page (Jaguar rolled out; Stephan + Willie G actively using it). Admin app,
+reports, scale-debug, and the client portal are all working. Pi capturing + syncing.
 
 ---
 
-## ⚠️ READ THIS FIRST — THE LESSON FROM THE JULY 11–13 LOCKDOWN
+## ⚠️ READ FIRST — THE LESSON THAT KEEPS REPEATING
 
-The RLS lockdown (Migration 5) **silently broke three live write paths.** None threw
-a visible error. All three were found by accident, days later:
+The RLS lockdown (Migration 5) silently broke **four** live write/link paths. Each
+failed with NO visible error and was found days later by accident:
 
-1. **Raul's photo uploads** → `photo_queue` INSERT denied. Broken ~2 days. Photos
-   still reached Storage; the queue rows didn't. 9 photos were orphaned and had to be
-   backfilled from `storage.objects`.
-2. **Ticket creation** → `tickets` INSERT/UPDATE/SELECT denied. This would have killed
-   the driver rollout on day one — a driver crosses the scale and the load is simply
-   lost. Caught only because we tested before sending the links.
-3. **Every scale reading** → `leed_audit_log` INSERT denied. **No scale reading synced
-   to Supabase from Sat night until Mon 1pm.** `scale_capture.py` writes to TWO tables
-   (`scale_weights` AND `leed_audit_log`); the audit-log write was missed. Nothing was
-   lost ONLY because the Pi buffers locally and retries — `pending` climbed, and the
-   queue drained the instant the policy was added.
+1. Raul's photo uploads → `photo_queue` INSERT denied (~2 days).
+2. Ticket creation → `tickets` INSERT/UPDATE/SELECT denied.
+3. Every scale reading → `leed_audit_log` INSERT denied (2 days, Pi buffered locally).
+4. Scale-weight → ticket **linkage** → `scale_weights` UPDATE denied (the "?" in Live Scale). **← still open, see below.**
 
-**The mistake:** we enumerated what to BLOCK by reading code, and assumed the grep had
-found every call. It hadn't.
-
-**The rule going forward: after ANY RLS change, test every write path end to end.**
-Not by reading code — by actually driving a truck across the scale, actually uploading
-a photo as Raul, actually generating a client report. A path that looks right in the
-policy list can still be dead.
+**The rule: after ANY security/RLS change, TEST EVERY WRITE PATH END TO END.**
+Drive a truck across the scale. Upload a photo as Raul. Open a client report.
+Reading the policy list is not enough — a path that looks fine can be dead.
+The full, current list of what anon may do is at the BOTTOM of this file. Keep it current.
 
 ---
 
-## ✅ DONE — July 11–13
+## 🔴 OPEN — do these next
 
-### Data model — hauler / customer / project finally separated
-Root problem: hauler, customer and project were crammed into single text fields,
-producing `"B&B-Independent Waste"` (two haulers), `"Ranger (Medline)"` (hauler +
-project) and `"Medline BTS Medline / BranchPattern (VPA)"`.
+### 1. Scale-weight → ticket linkage bug (quick, 1 policy)
+When a driver completes a ticket, the scale page PATCHes `scale_weights` to stamp
+`ticket_id` + `status='confirmed'` — that's the link that makes a reading show as
+"used" instead of "?" in the Live Scale panel. The lockdown left anon with INSERT
+and SELECT on `scale_weights` but **no UPDATE**, so the link silently fails (the
+PATCH is wrapped in a "non-fatal" try/catch, which hid it). Fix:
+```sql
+CREATE POLICY "anon_link_scale_weights" ON scale_weights
+  FOR UPDATE TO anon
+  USING (captured_at > now() - interval '12 hours')
+  WITH CHECK (captured_at > now() - interval '12 hours');
+```
+After it: complete a test load, confirm the reading links (no "?").
 
-- **Migration 1** — hauler `B&B-Independent Waste` → **`Independent Waste`**
-  (Independent Waste bought B&B on July 1). 68 tickets renamed in the same
-  transaction. Medline renamed; customer (Jaguar) + GC (Hillwood) set. 4 blank
-  customers filled. Added `projects.active`; archived `Test project` (kept its 2
-  tickets rather than orphan them).
-- **Migration 2** — `tickets.hauler_id` (uuid FK) added and backfilled: 1,079/1,079,
-  zero orphans. `hauler_projects` rebuilt on real IDs (it had 2 rows, joined on free
-  text) → **13 verified hauler↔project pairs**, unique-indexed.
-- **The 5 canonical haulers** — `approved_haulers` is the ONLY source of truth:
-  Jaguar Waste Management (967) · Independent Waste (68) ·
-  Ranger Waste Management LLC *(no comma)* (22) · Liberty Demolition (14) ·
-  Mockingbird Waste (8). **Total 1,079.**
-- **Customer ≠ hauler.** Medline: hauler Ranger, customer Jaguar. Moncler: hauler
-  Mockingbird, customer HP EnviroVision. JE Dunn: customer Independent Waste, GC
-  JE Dunn. This is why `hauler_projects` is many-to-many.
+### 2. Photo backup — THE irreversible risk (2.5 GB, 1,302 files)
+Supabase daily backups **exclude Storage objects**. Scale-ticket + debris photos —
+the evidence chain for every LEED submittal — exist in exactly one place. Plan:
+`rclone` from the Pi → Backblaze B2 (~$0.15/mo), nightly, with a JSON manifest
+mapping file → ticket/project/hauler/date so the backup is *restorable*.
+
+### 3. `ticket-photos` bucket is PUBLIC
+All 1,302 files readable by anyone with the URL (scale tickets show hauler, project,
+weights, ticket #). Making it private means switching photo-displaying pages to
+signed URLs — real work. Do the backup first.
+
+### 4. Client passwords are weak (SHA-256 + static salt)
+`encode(digest('divertscan_salt_'||pw,'sha256'),'hex')`. 6 client accounts. Move to
+bcrypt (pgcrypto installed). Safe migration: dual-verify in `client_login` — try
+bcrypt, fall back to SHA-256, re-hash on success. Nobody locked out.
+
+### 5. Pickup / payment authorization form — PARKED
+Waiting on the employee name from Robert. Will be a one-page bilingual
+"Authorization to Receive Payment" on Dalmex letterhead, authorizing a named person
+to collect payment on Dalmex's behalf. Keep any reference numbers short.
+
+### 6. Housekeeping
+- Delete dead pages: `upload.html`, `leed-audit.html`, `reset-client.html`,
+  `print-poster.html`, `dispatcher.html`. Each is a live URL with a copy of the anon key.
+- Also stray dupes in iCloud Files (scale4.html, index (1).html, etc.) — delete so
+  you never upload the wrong one and roll back a day of work.
+- Merge `all-haulers-report.html` + `hauler-report.html`; `hauler-report.html` is
+  NOT yet gated or paginated.
+- No sign-out button anywhere.
+- `projects.waste_hauler` is DEPRECATED (still holds junk like "Ranger (Medline)").
+  Drop the column once nothing reads it.
+- `approved_haulers.default_project_id` — unused, all null. Drop.
+- Pending-driver flag: `ALTER TABLE drivers ADD COLUMN is_approved boolean DEFAULT true;`
+  so a new hire can self-register but you review before it's permanent (catches the
+  next "Alfredo / Morris Bros Waste").
+
+---
+
+## ✅ DONE — July 11–15
+
+### Data model rebuilt on real relationships
+- Hauler `B&B-Independent Waste` → **Independent Waste** (bought B&B July 1); 68
+  tickets renamed in-transaction. Medline renamed, customer Jaguar, GC Hillwood.
+  Blank customers filled. `projects.active` added; Test project archived.
+- `tickets.hauler_id` FK added, backfilled 1,077/1,077. `hauler_projects` rebuilt on
+  real IDs → 13 verified pairs, unique-indexed.
+- 5 canonical haulers, `approved_haulers` the ONLY source of truth: Jaguar (967),
+  Independent Waste (68), Ranger Waste Management LLC *no comma* (22), Liberty (14),
+  Mockingbird (8).
+- **Customer ≠ hauler**: Medline hauler Ranger / customer Jaguar; Moncler hauler
+  Mockingbird / customer HP EnviroVision; JE Dunn customer Independent Waste / GC JE Dunn.
 
 ### Security
-- **Supabase Auth login** on `index.html`, `all-haulers-report.html`,
-  `all-projects-report.html`, `scale-debug.html`. These send the user's **JWT**, not
-  the anon key. User: `robert@dalmexrecycling.com`.
-- **Admin passphrase RETIRED.** `_admin_ok()` now checks `auth.uid() IS NOT NULL`
-  instead of a string. Also found and fixed: **`admin_set_client_password` had NO auth
-  check at all and was granted to anon** — anyone with the public key could have reset
-  any client's portal password. All `admin_*` functions REVOKEd from anon.
-- **Migration 5 (RLS lockdown)** — business tables → `authenticated` only. Killed the
-  `{public}/ALL/USING(true)` policies that let anyone read AND DELETE every ticket.
-  Closed `client_project_access` (anyone could grant themselves access to any client's
-  project).
-- **Driver tokens no longer enumerable.** `drivers` is unreadable by anon; all driver
-  ops go through SECURITY DEFINER RPCs: `scale_drivers_for_hauler`,
-  `scale_get_or_create_driver`, `scale_set_driver_phone`,
-  `scale_cleanup_typing_artifact`, `driver_by_token`, `driver_touch`.
-- **Per-hauler scale links (LIVE).** `approved_haulers.access_token` +
-  `scale_hauler_by_token()` RPC. `scale.html?k=<token>` pins the hauler and shows only
-  that hauler's drivers and projects. "tap to change" is removed in token mode so a
-  Jaguar driver can't switch to Ranger. Links live in the **Haulers tab** with Copy and
-  regenerate (↻) buttons — regenerating kills the old link immediately.
+- Supabase Auth login on index, all-haulers-report, all-projects-report, scale-debug.
+  User `robert@dalmexrecycling.com`. Admin passphrase RETIRED (`_admin_ok()` now checks
+  `auth.uid()`).
+- Fixed: `admin_set_client_password` had NO auth check and was granted to anon — anyone
+  could reset any client password. All `admin_*` REVOKEd from anon.
+- Migration 5 RLS lockdown: business tables → `authenticated`; killed `{public}/ALL/true`
+  (anyone could read AND delete every ticket); closed `client_project_access` self-grant hole.
+- Driver tokens not enumerable — driver ops via SECURITY DEFINER RPCs.
+- Per-hauler scale links live (`approved_haulers.access_token` + `scale_hauler_by_token`).
+  `scale.html?k=<token>` pins the hauler; shows only their drivers + projects; no "tap to
+  change" in token mode. Links in the Haulers tab (Copy + regenerate ↻).
+- **index.html auth gate fixed** so clearing Safari data no longer locks you out
+  ("Supabase not configured") — it now falls back to the published URL/key constants.
 
-### Correctness — the silent 1000-row truncation
-**PostgREST caps EVERY response at 1000 rows regardless of `?limit=`.** Once tickets
-passed 1,000, reports silently dropped rows and computed totals from a partial set.
-The numbers looked plausible, so nobody noticed.
-- `all-haulers-report` showed **1,000 of 1,079 tickets / 3,130 of 3,359 tons**.
-  Independent Waste displayed **64.6 T when the truth was 146.9 T — 44%.**
-- Fixed with `Range`-header pagination in `all-haulers-report.html`,
-  `all-projects-report.html` and `client.html` (all 6 ticket queries). Removed the
-  fictitious `&limit=10000` / `&limit=20000` from `index.html` (4 places).
-- **ANY new query against `tickets` MUST paginate.** Copy `sbAll()` / `apiAll()`.
+### Client portal (July 15)
+- Portal was blanked by the lockdown (anon lost read on `client_project_access` and
+  scoped tickets to 30 days). Fixed WITHOUT reopening tables: new SECURITY DEFINER RPCs
+  `client_projects(uuid)` and `client_tickets(uuid)`; `client.html` patched to use them.
+  Full history restored, tables stay locked. **Logins unchanged** — same credentials.
 
-### Hard-coded hauler lists — deleted
-Hauler names were hard-coded in 4+ files, none matching the DB (`'B&B Waste'`,
-`'Ranger Waste'`, `'Rob Van'` — that last one was Robert's own test *client account*
-leaking into a hauler dropdown; Mockingbird was missing entirely).
-`raul-field-upload.html`, `client.html`, `all-projects-report.html` and `scale.html`
-now all read `approved_haulers` + `hauler_projects`. ✅ live
+### Correctness
+- **1000-row truncation** (PostgREST silently caps at 1000 regardless of ?limit=):
+  fixed with Range-header pagination in all-haulers-report, all-projects-report,
+  client.html; removed fake `&limit=` from index.html (4 places). Independent Waste had
+  been showing 44% of real volume. **ANY new `tickets` query MUST paginate.**
+- **Ticket sort fixed (July 15):** "Newest added" now orders at the DB level, so a
+  just-approved ticket appears on top instead of burying by load date.
+- Removed 2 duplicate tickets (86115, 86383 — Children's Hospital was over-counted
+  5.32 T); added unique index on `ticket_number`.
 
-### Client portal — audited
-- Liberty (James Childs) sees JE Dunn: **legitimate** — Liberty used to own B&B.
-  Revisit whether it should lapse now that Independent Waste owns it, and whether
-  Independent Waste needs its own portal account (68 tickets, no login).
-- Ranger (Derek Trammell) was missing Sherman Atmos — granted. Now has 3.
-- Jaguar's 3 accounts correctly see 7 Jaguar projects + Medline (they're the
-  *customer* on Medline; Ranger hauls it).
-- `Rob Van` (robert@xrayce.com) = Robert's own test account, 14 projects. Expected.
+### Scale page UX (July 15)
+- One "My Loadbook" button (was 11); loadbook + phone moved below the scanning flow.
+- Zone selector only shows on Children's Hospital. Remembers driver's last project.
+  "Recent loads" now scoped per-driver (was showing the whole hauler). Bigger tap targets.
 
-### Raul's upload page — four bugs
-- `photo_queue` anon INSERT restored; 9 orphaned photos backfilled from Storage.
-- Project names were **invisible** — `.project-name` had no `color` set (black on black).
-- Bucket was `photos`; should be `ticket-photos`.
-- `capture="environment"` was forcing the camera and **removing the photo-library
-  option** from iOS. Removed.
+### Tare method / LEED (July 15)
+- **Measured tare is now the default.** After gross, the page prompts "drive back empty";
+  the fleet/personal-average estimate is behind a "Can't return? Use an estimate →" link.
+- New `tickets.tare_method` column: `measured` (drove empty / pi_capture) vs `estimated`
+  (average or typed). Stamped on new tickets going forward.
+- **History deliberately NOT relabeled** — existing tickets keep their weights and were
+  reported as-is; the flag only needs to be accurate from here forward. Do not run a
+  historical UPDATE (protects already-issued monthly LEED reports).
+- LEED research note: the standard requires *documented, measured weight per pickup*;
+  it does NOT explicitly mandate a drive-on-empty tare. So "measured is more defensible"
+  is the correct argument — not "LEED requires it." Don't tell an auditor LEED mandates it.
 
----
+### Raul's upload page
+- `photo_queue` anon INSERT restored; 9 orphaned photos backfilled. Project names were
+  invisible (missing CSS color). Bucket fixed `photos`→`ticket-photos`. Removed
+  `capture="environment"` so the photo library is available, not just the camera.
 
-## 🔴 OPEN — highest value first
-
-### 1. Photos have no backup (2.5 GB, 1,302 files) ⚠️
-Supabase daily backups **exclude Storage objects**. Scale-ticket and debris photos —
-the evidence chain for every LEED submittal — exist in exactly one place.
-Plan: `rclone` from the Pi → Backblaze B2 (~$0.15/mo at this size), nightly, with a
-JSON manifest mapping file → ticket / project / hauler / date, so the backup is
-*restorable* rather than a folder of anonymous JPEGs.
-
-### 2. The `ticket-photos` bucket is PUBLIC 🔴
-All 1,302 files are readable by anyone with the URL — no key, no login. Scale tickets
-show hauler, project, weights, ticket numbers. Making it private means switching every
-page that displays a photo to **signed URLs** — a real change, not a toggle. Do the
-backup first.
-
-### 3. Client passwords are SHA-256 with a static salt
-`encode(digest('divertscan_salt_' || pw, 'sha256'), 'hex')` — fast to brute-force.
-Should be bcrypt (pgcrypto is already installed: `crypt()` + `gen_salt('bf')`).
-**Safe migration:** dual-verify in `client_login` — try bcrypt, fall back to SHA-256,
-silently re-hash to bcrypt on success. Nobody is locked out; passwords upgrade
-themselves as clients log in.
-
-### 4. Finish the truncation audit
-`hauler-report.html` has **never been gated or paginated.** Any other page touching
-`tickets` needs checking. This bug is invisible and produces plausible wrong numbers.
-
-### 5. Housekeeping
-- **Delete dead pages:** `upload.html`, `leed-audit.html`, `reset-client.html`,
-  `print-poster.html`, `dispatcher.html`. Each is a live URL carrying a copy of the
-  anon key.
-- **Merge** `all-haulers-report.html` + `hauler-report.html` into one gated page.
-- **No sign-out button** anywhere.
-- **`projects.waste_hauler` is DEPRECATED** — nothing reads it, still holds junk
-  (`Ranger (Medline)`, comma variants). Drop the column.
-- `approved_haulers.default_project_id` — unused, all null. Drop.
-- `scale_weights.weight_band` is null on every row — check if anything needs it.
-- **Return the scale to PRODUCTION mode** if ULTRA (500 lb) was left on. It
-  auto-expires after 24h.
-
-### 6. Design debt
-- `drivers.hauler` and `tickets.hauler` still link by **text name**, not `hauler_id`.
-  Works because the names are canonical now — but one typo re-orphans a row.
-- `client_project_access` is `authenticated`-only, which is right, but any signed-in
-  user can grant any access. Fine with one admin; a problem the day there are two.
-- `tickets` has **8 photo columns** (`debris_images`, `debris_photo_1/2/3`,
-  `debris_photo_url`, `photo_url`, `scale_photo_url`, `scale_ticket_image`,
-  `scale_ticket_photo`). Same accretion pattern as the hauler names. Find out which
-  are actually live.
+### Documents produced
+- **Certificate of Destruction — NTTA aluminum signage** (bilingual EN/ES, one page,
+  signed by Robert Vandling as Authorized Representative, dated July 16, 2026).
+  Chain: NTTA → Jaguar → Dalmex (ticket #87528) → Mammoth Metal Recycling (2019 Ruder
+  St, Dallas TX 75212). Language corrected so melting/recycling is AUTHORIZED (the point)
+  while reuse/resale/return-to-service AS SIGNAGE is prohibited. Mammoth's denied ticket
+  #208051 removed. Weight left as fill-in.
 
 ---
 
 ## 🔑 STANDING RULES
-- **CO₂e / carbon = INTERNAL-ONLY.** Customer & LEED reports are weight-based only.
-  (Internal reports behind a login may show it.)
-- **Haulers come from `approved_haulers`. NEVER hard-code a hauler name.**
-- **Any query against `tickets` MUST paginate.** PostgREST silently caps at 1,000.
-- **After any RLS change, test every write path end to end.** Reading the code is not
-  enough — see the lesson at the top of this file.
-- Per-project reports stay LEED-clean; only the internal Portfolio view blends
-  LEED + Non-LEED (Hayes = Non-LEED, flagged).
+- CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports are weight-based only.
+  (Internal login-gated reports may show it.)
+- Haulers come from `approved_haulers`. NEVER hard-code a hauler name.
+- Any query against `tickets` MUST paginate (PostgREST caps at 1000).
+- After any RLS change, test every write path end to end.
+- Measured tare is the default for LEED defensibility; estimate is an explicit override.
+- Two logins, don't confuse them: **Supabase** = GitHub SSO as `24kr97gsxq-prog`
+  (NOT dalmex755201, which is empty); **admin app** = robert@dalmexrecycling.com + password.
 
 ---
 
-## 📋 ANON'S COMPLETE ACCESS (as of Jul 13) — KEEP THIS LIST CURRENT
-Anon = the public key published in the site's HTML. It can do **only** this:
+## 📋 ANON'S COMPLETE ACCESS (as of July 15) — KEEP CURRENT
+Anon = the public key in the site HTML. It may do ONLY this:
 
-| Table | Verb | Who needs it |
+| Table / RPC | Verb | Who needs it |
 |---|---|---|
-| `scale_weights` | INSERT | Pi — `scale_capture.py` |
+| `scale_weights` | INSERT | Pi — scale_capture.py |
 | `scale_weights` | SELECT | scale.html — gross/tare display |
-| `leed_audit_log` | INSERT | Pi — `scale_capture.py` (one audit row per reading) |
-| `pi_health` | INSERT / SELECT / DELETE(>30d) | Pi — `pi_health.py` |
+| `scale_weights` | UPDATE (12h) | scale.html — link reading to ticket ← **PENDING, see Open #1** |
+| `leed_audit_log` | INSERT | Pi — scale_capture.py (audit row per reading) |
+| `pi_health` | INSERT / SELECT / DELETE(>30d) | Pi — pi_health.py |
 | `photo_queue` | INSERT | Raul's upload page |
 | `tickets` | INSERT | scale.html — create ticket |
-| `tickets` | SELECT (last 30 days) | scale.html — recent loads |
-| `tickets` | UPDATE (last 12 hours) | scale.html — tare after the dump |
+| `tickets` | SELECT (30 days) | scale.html — recent loads |
+| `tickets` | UPDATE (12h) | scale.html — tare after dump |
 | `approved_haulers` | SELECT | scale.html — hauler picker |
-| `projects` | SELECT (active only) | scale.html — project dropdown |
+| `projects` | SELECT (active) | scale.html — project dropdown |
 | `hauler_projects` | SELECT | scale.html — token scoping |
-| RPCs | EXECUTE | driver ops + hauler token resolution |
+| RPCs | EXECUTE | driver ops, hauler token, `client_projects`, `client_tickets` |
 
-**NOT anon-readable:** the full 1,079-ticket archive, all client data, all
-credentials, and all driver tokens.
-
-**If you add an anon policy, add it to this table.** If a page breaks after a
-lockdown, this table is the first place to look.
+**NOT anon-readable:** full 1,077-ticket archive, all client data, all credentials,
+all driver tokens. If you add an anon policy, add a row here.
