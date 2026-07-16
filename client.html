@@ -435,7 +435,7 @@ return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\'
 '<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
-P.tx=await P.apiAll('tickets?project_id=eq.'+id+'&order=created_at.desc')||[];
+P.tx=(await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[]).filter(function(t){return t.project_id===id;});
 document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');
 P.renderDash();}else{P._up=id;P.showUForm();}},
 
@@ -485,8 +485,7 @@ document.getElementById('dName').textContent=p.name;
 document.getElementById('dMeta').textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
 document.getElementById('dStats').innerHTML='<div class="sc"><div class="sv">'+t.length+'</div><div class="sl">Tickets</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(tot)+'</div><div class="sl">Total T</div></div>'+
-(p.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(dv)+'</div><div class="sl">Diverted</div></div>')+
-(p.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--warning)">'+P.f(co)+'</div><div class="sl">CO₂e</div></div>');
+(p.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(dv)+'</div><div class="sl">Diverted</div></div>');
 document.getElementById('dGauge').innerHTML=p.leed_version==='none'?
 '<div style="padding:10px;border-radius:var(--r);background:var(--bg);border:1px solid var(--border);text-align:center"><div style="font-size:.75rem;font-weight:600;color:var(--text-m)">Non-LEED • Tracking Only</div></div>':
 '<div style="padding:10px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div><div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div><div style="font-size:.6rem;color:var(--text-m)">LEED '+(p.leed_version||'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>';
@@ -997,13 +996,13 @@ if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px
 list=this._sortTix(list);
 try{
 var _nl=P.cp&&P.cp.leed_version==='none';
-var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+(_nl?'':'<th class="r">CO₂e</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
+var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th></tr></thead><tbody>';
 list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
 var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
 h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td style="white-space:nowrap">'+P.fdt(t)+'</td><td class="bld">'+t.ticket_number+'</td>'+
 '<td>'+(t.driver_name||'<span style="color:var(--text-d)">—</span>')+'</td>'+
-'<td class="r m">'+P.f(t.net_tons)+'</td>'+(_nl?'':'<td class="r m bld" style="'+dc+'">'+dp+'%</td>')+(_nl?'':'<td class="r m" style="color:var(--text-m)">'+P.f(t.co2e_avoided)+'</td>')+'<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td><td class="ctr">'+pi+'</td></tr>';});
+'<td class="r m">'+P.f(t.net_tons)+'</td>'+(_nl?'':'<td class="r m bld" style="'+dc+'">'+dp+'%</td>')+'<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td><td class="ctr">'+pi+'</td></tr>';});
 h+='</tbody></table>';el.innerHTML=h;}catch(e){el.innerHTML='<div style="color:var(--danger);font-size:.75rem;padding:10px">Table error: '+e.message+'</div>';}},
 searchTix(q){var filtered=P.tx;var zf=document.getElementById('dZoneFilter');
 if(zf&&zf.value){var zv=zf.value;if(zv==='none')filtered=filtered.filter(function(t){return !t.zone;});else filtered=filtered.filter(function(t){return t.zone===zv;});}
@@ -1063,8 +1062,7 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div class="c"><div class="sg">'+
 '<div class="sc"><div class="sv">'+tix.length+'</div><div class="sl">Tickets</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(tons)+'</div><div class="sl">Total T</div></div>'+
-(P.cp&&P.cp.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(div)+'</div><div class="sl">Diverted</div></div>')+
-(P.cp&&P.cp.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--warning)">'+P.f(co2)+'</div><div class="sl">CO₂e</div></div>')+'</div>'+
+(P.cp&&P.cp.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(div)+'</div><div class="sl">Diverted</div></div>')+'</div>'+
 (P.cp&&P.cp.leed_version==='none'?'':
 '<div style="padding:8px 0;text-align:center"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
 '<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
@@ -1081,7 +1079,7 @@ if(!tix.length){el.innerHTML='<div class="c" style="text-align:center;color:var(
 tix=this._sortTix(tix);
 var _nl2=P.cp&&P.cp.leed_version==='none';
 var h='<div class="c" style="padding:8px"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="t"><thead><tr>';
-h+='<th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Net Tons</th>'+(_nl2?'':'<th class="r">Div%</th>')+(_nl2?'':'<th class="r">CO₂e</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th>';
+h+='<th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Net Tons</th>'+(_nl2?'':'<th class="r">Div%</th>')+'<th class="ctr">Zone</th><th class="ctr">📷</th>';
 h+='</tr></thead><tbody>';
 var sumTons=0,sumDiv=0,sumCo2=0;
 tix.forEach(function(t){
@@ -1096,7 +1094,6 @@ h+='<td class="bld">'+t.ticket_number+'</td>';
 h+='<td>'+(t.driver_name||'<span style="color:var(--text-d)">—</span>')+'</td>';
 h+='<td class="r m">'+P.f(t.net_tons)+'</td>';
 if(!_nl2)h+='<td class="r m bld" style="'+dc+'">'+dp+'%</td>';
-if(!_nl2)h+='<td class="r m" style="color:var(--text-m)">'+P.f(co2)+'</td>';
 h+='<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td>';
 h+='<td class="ctr">'+pi+'</td>';
 h+='</tr>';});
@@ -1106,7 +1103,6 @@ h+='</tbody><tfoot><tr style="border-top:2px solid var(--primary);font-weight:70
 h+='<td colspan="3">TOTALS ('+tix.length+' tickets)</td>';
 h+='<td class="r m">'+P.f(sumTons)+'</td>';
 if(!_nl2)h+='<td class="r m" style="'+trc+'">'+totalRate+'%</td>';
-if(!_nl2)h+='<td class="r m">'+P.f(sumCo2)+'</td>';
 h+='<td></td><td></td></tr></tfoot></table></div></div>';
 el.innerHTML=h;},
 filterMo(q){var filtered=P._mtx;var zf=document.getElementById('moZoneFilter');
@@ -1588,7 +1584,6 @@ var html='<!DOCTYPE html><html><head><meta charset=utf-8><title>'+P.esc(proj.nam
 '<div class="kpi"><div class="v">'+tix.length+'</div><div class="l">Tickets</div></div>'+
 '<div class="kpi"><div class="v">'+totalTons.toFixed(2)+'</div><div class="l">Tons</div></div>'+
 (isNL?'':'<div class="kpi"><div class="v">'+totalDiv.toFixed(2)+'</div><div class="l">Diverted (T)</div></div>')+
-(isNL?'':'<div class="kpi"><div class="v">'+totalCO2.toFixed(2)+'</div><div class="l">CO₂e Avoided</div></div>')+
 '</div>'+
 (isNL?'':'<div class="target '+(onTarget?'on':'off')+'">Diversion '+divPct.toFixed(1)+'% — '+(onTarget?'On Target':((tgt-divPct).toFixed(1)+'% below target'))+'</div>')+
 '<div class="two-col"><div><h2>Materials</h2><table><tr><th>Material</th><th class="r">Tons</th><th class="r">%</th></tr>'+matRows+'</table></div>'+
