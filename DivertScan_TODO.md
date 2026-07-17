@@ -1,11 +1,14 @@
 # DIVERTSCAN — MASTER TO-DO
 
-**Last updated: Wednesday, July 15, 2026 — ~midnight (late-night client.html session).**
+**Last updated: Thursday, July 16, 2026 — evening (Pi/infra + caching session).**
 Update the date whenever you change something. Replaces all prior versions.
 
 **System status:** Live and in daily use. Drivers logging real loads through the scale
 page (Jaguar rolled out; Stephan + Willie G active). Admin app, reports, scale-debug,
 client portal all working. Pi capturing + syncing.
+**⏳ PENDING:** a large client.html build (July 15 late-night + July 16 caching) is in
+outputs, syntax-checked, NOT yet deployed/verified live. Deploy + verify = job #1.
+**👀 WATCH:** Pi temp 54–61°C in a dusty sealed box (safe but warm — see Open #0g).
 
 > **New chat? Start here:** upload this file and say "read this to get up to speed."
 > This file is the complete handoff — a fresh chat knows only what's written here,
@@ -54,6 +57,91 @@ looking right is not proof — a path can be dead. Full anon-access list is at t
 - **0d. Verify remaining July-15-late items on live site:** driver date-range
   chips/pickers click-through, and XLSX `07/01/2026` date format. (Main history fix,
   CO₂e removal, driver-detail history fix, XLSX period stamp all already verified.)
+  PLUS the July 16 caching (snappy driver switching). ALL of it is one un-deployed
+  client.html in outputs — deploy + hard-refresh/private-tab + verify is job #1.
+
+### 0e. CORRECTION: the Live-Scale "?" is NOT the Open #1 linkage bug
+Investigated July 16. The "?" under weights in Live Scale / Pi Scale Captures means
+**"not yet classified — weight_band unassigned,"** NOT "not linked to a ticket."
+Confirmed via the capture modal: yellow banner "Not yet classified. Run the classifier
+SQL in Supabase to assign weight_band." So Open #1's UPDATE policy would NOT clear
+these. Open #1 (the `ticket_id` stamp / scale_weights UPDATE) is still a valid separate
+one-liner, but test it against actual LINKAGE behavior, not the "?".
+
+### 0f. Classifier automation (NEW — the real pipeline inefficiency)
+`weight_band` assignment requires MANUALLY running classifier SQL in Supabase — it does
+not fire automatically on capture. Captures sit "Not yet classified" until someone runs
+it. This is why "?" persists. Investigate auto-running the classifier: Pi-side after
+sync, OR a scheduled Supabase job / trigger on `scale_weights` INSERT. Related: orphan
+triage is manual, one-at-a-time (~70 backlog July 16, mostly NON-truck noise —
+forklift/equipment/test scans, cleared via "NOT A REAL TRUCK?" + Ignore; count ticks
+down as cleared, so it's working, just tedious). Consider bulk-ignore or auto-ignore of
+obvious noise. **Orphan captures are NOT lost real loads — mostly non-load noise. Not an
+emergency.** Spec fresh; do NOT hot-patch the live capture pipeline while tired.
+
+### 0g. Pi thermal — monitor + passive cooling (NEW)
+July 16 Pi Health: **~129–130°F, 24h high 141.6°F** (54–61°C). NOT dangerous (Pi
+throttles at 176°F/80°C — headroom exists) but warm for a light workload → ambient-
+driven. Pi is in an **enclosed case in an EXTREMELY DUSTY scale house** (correct — seal
+keeps grit out), mounted on an aluminum heat shield, wires through grommets.
+- **DO NOT add a fan.** In a dusty sealed box a fan cakes with grit, insulates, fails —
+  makes it hotter. Passive only.
+- **Cooling recommendations (ranked, all passive/sealed/dust-proof):**
+  1. Couple the INTERNAL aluminum heat shield to the OUTSIDE of the case (thermal pad/
+     metal standoff to an external fin or the case wall) so heat leaves the sealed box
+     instead of warming trapped air. Highest leverage — likely why it runs 54–61°C on a
+     light load: heat has nowhere to go.
+  2. Fanless finned aluminum case that IS the heatsink (Flirc-style / heavier finned).
+  3. Clean thermal pad chip(SoC)→metal — heat leaves via the chip, not board edges.
+- Physical check (walk-over, not code): is it in direct sun? is chip→metal contact clean?
+- **NEVER hard-power-cut to "cool it."** No thermal reason to touch the Pi now.
+
+### 0h. Pi Health card upgrade (NEW — index.html build, display-logic only)
+Data already exists (`pi_health` logs temp/disk; card renders them). Add:
+- **Temp thresholds (°F, matches card's existing °F display):** normal <160°F;
+  WARN 160–175°F (71–79°C) "running hot"; CRITICAL >175°F (near 176°F/80°C throttle).
+- **Storage:** warn 80% disk, critical 90% (at 11.7% now — pure insurance).
+- **Forecast overlay:** pull ZIP **75220** (Dalmex, 2828 Nagle St, Dallas) forecast high,
+  show next to Pi temp + the DELTA. A widening Pi-vs-ambient delta over weeks = early
+  cooling-degradation signal (better than a fixed threshold alone).
+- **Sync-stale alert:** "Pi hasn't synced in X hrs" — the REAL connectivity-loss signal.
+  Catches dead SIM / exhausted prepaid / carrier outage / bad signal all at once. This is
+  the single most valuable alert (stale sync = stale LEED reports).
+- Visual dashboard alerts ONLY (no email/text for now).
+- **NEED FROM ROBERT:** paste the Pi Health card render block from index.html (search
+  "PI HEALTH" / the °F render). Plus a weather API for the forecast. Build fresh — new
+  surface (index.html), don't stack on the un-verified client.html deploy.
+
+### 0i. Site connectivity — resilience (NEW — Robert's decisions + one alert I build)
+Site has NO good wired/wifi internet. BOTH legs are cellular: **AT&T prepaid 4G/5G
+(~$35/mo) → Pi modem** (sync), **T-Mobile hotspot → office internet**. Prepaid is a
+workaround for bad building signal, not a choice. Failure nightmare: prepaid lapses → Pi
+goes silent → captures pile up locally → found when reports go stale.
+- **Robert to check/decide (hardware = Robert + local installer, NOT something Claude
+  can do/verify remotely):**
+  1. **Check FIRST:** is fixed internet available at 2828 Nagle St 75220? (T-Mobile Home
+     Internet / Verizon Fixed Wireless / wired broadband). ~$50/mo unlimited beats
+     metered prepaid for a system that can't go dark — may make the rest moot.
+  2. **Dual-SIM failover router** (holds AT&T + T-Mobile, auto-switches) — best fit for
+     something this critical; turns two single-points-of-failure into redundancy. Two
+     carriers rarely fail together. RECOMMENDED if staying cellular.
+  3. **Cellular signal booster + external roof/pole antenna** (weBoost-style) — attacks
+     root cause (weak signal into metal/concrete building); stacks with any option; stops
+     the "weak signal burns prepaid" cycle.
+  4. Consolidate onto one carrier only if one is clearly dominant (loses redundancy).
+- **AT&T prepaid housekeeping (Robert):** turn on **AUTO-REFILL** so it can't lapse.
+  Balance CANNOT be tracked in-app (no AT&T prepaid balance API). Have SIM ICCID
+  photographed but need the **prepaid PHONE NUMBER** to check balance (via *777#, myAT&T
+  Prepaid app, or 800-901-9878). Put ~$200 in a few months ago — verify remaining.
+- **What Claude builds:** the **sync-stale alert** (0h) — covers every connectivity
+  failure mode with one check, more reliable than a dollar counter.
+
+### 0j. Admin-app save resilience (NEW — minor, future)
+July 16: editing ticket 87556 in index.html failed with "Save failed — check
+connection." Was a GENUINE network drop (VPN/wifi) — fixed by switching to phone
+hotspot + reload. NOT a code/RLS bug. But admin save has no offline queue/retry (Pi
+buffers; admin app doesn't) — a failed field-save just errors and you retype. Future:
+"retry / queue this save" behavior. Low priority.
 
 
 ### 1. Scale-weight → ticket linkage bug (quick — 1 policy)
@@ -143,6 +231,29 @@ Dalmex letterhead, authorizing a named person to collect payment on Dalmex's beh
 - `tickets` has 8 photo columns (debris_photo_1/2/3, debris_images, photo_url,
   scale_photo_url, scale_ticket_image, scale_ticket_photo) — find which are live, same
   accretion pattern as the hauler-name mess.
+
+---
+
+## ✅ DONE (BUILT, PENDING LIVE VERIFY) — July 16 (client.html speed)
+
+### Session cache — stop re-fetching the full ticket set 3–5× per session
+`client_tickets` returns the client's ENTIRE history and was being fetched fresh on
+every driver-list load, every driver-detail tap, every monthly report, and both
+all-drivers exports (5 call sites). Each is a full download. Now fetched ONCE via new
+`P.allTix()` memoized helper, cached in memory, reused everywhere. Tapping between
+drivers / opening monthly reports is near-instant after first load.
+- Cache is MEMORY ONLY (never localStorage) — can't persist across reload or bleed
+  between logins. Cleared on logout (`P._allTixCache=null` in logout()) — privacy.
+  Cleared after project edits (both `projects` PATCH calls call `P.clearTixCache()`).
+- Clients are READ-ONLY on tickets (confirmed — no client-side ticket create/edit/
+  delete), so the cache can't go stale mid-session from ticket changes.
+- Node syntax-checked. All 5 fetches → `P.allTix()`; only remaining client_tickets
+  call is inside allTix() itself.
+- **⏳ VERIFY ON DEPLOY:** open Drivers, tap between several drivers (should be snappy
+  after first), open a monthly report, confirm numbers identical to before.
+
+**NOTE — this + the whole July 15 late-night stack are in ONE client.html in outputs,
+NOT yet confirmed live by Robert. Deploy + verify is the #1 open loop. See Open #2.**
 
 ---
 
