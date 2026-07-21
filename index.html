@@ -12205,6 +12205,15 @@ const DS = {
         }).join('');
     },
 
+    // Selected login-log window in days. Defaults to 7 so the view opens exactly
+    // as it did before; admin can widen to 30 or 90 via the toggle. Clients log
+    // in infrequently, so a wider window shows the real pattern of activity.
+    _loginLogDays: 7,
+    setLoginLogDays(n) {
+        this._loginLogDays = n;
+        this.loadLoginLog();
+    },
+
     async loadLoginLog() {
         var el = document.getElementById('loginLogContent');
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
@@ -12212,13 +12221,23 @@ const DS = {
         var pass = await this.getAdminPass();
         if (!pass) { el.innerHTML = this._adminLockedHtml('DS.loadLoginLog()'); return; }
 
-        // Phase 2.7d: Only show last 7 days of login history (keep view focused on recent activity)
-        var logs = await this.supabase('rpc/admin_list_logins', 'POST', { admin_pass: pass, p_days: 7 });
+        var days = this._loginLogDays || 7;
+
+        // Toggle row: 7 / 30 / 90 day windows. Active button highlighted.
+        var toggle = '<div style="display:flex;gap:6px;margin-bottom:8px">' +
+            [7, 30, 90].map(function(d) {
+                var active = d === days;
+                return '<button class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-outline') + '" ' +
+                    'style="flex:1;padding:5px 0;font-size:.68rem" ' +
+                    'onclick="DS.setLoginLogDays(' + d + ')">' + d + ' days</button>';
+            }).join('') + '</div>';
+
+        var logs = await this.supabase('rpc/admin_list_logins', 'POST', { admin_pass: pass, p_days: days });
         if (!logs || !logs.length) {
-            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No logins in the last 7 days.</div>';
+            el.innerHTML = toggle + '<div style="text-align:center;padding:12px;color:var(--text-dim);font-size:.75rem">No logins in the last ' + days + ' days.</div>';
             return;
         }
-        var html = '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' login' + (logs.length===1?'':'s') + ' \u00B7 last 7 days</div>';
+        var html = toggle + '<div style="font-size:.65rem;color:var(--text-dim);margin-bottom:8px">' + logs.length + ' login' + (logs.length===1?'':'s') + ' \u00B7 last ' + days + ' days</div>';
         logs.forEach(function(log) {
             var dt = log.logged_in_at ? new Date(log.logged_in_at) : null;
             var timeStr = dt ? dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
