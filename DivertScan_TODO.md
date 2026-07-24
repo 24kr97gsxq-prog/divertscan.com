@@ -1,6 +1,6 @@
 # DIVERTSCAN — MASTER TO-DO
 
-**Last updated: Thursday, July 16, 2026 — evening (Pi/infra + caching session).**
+**Last updated: Thursday, July 23, 2026 — evening (driver attribution session).**
 Update the date whenever you change something. Replaces all prior versions.
 
 **System status:** Live and in daily use. Drivers logging real loads through the scale
@@ -172,7 +172,7 @@ All non-measured paths should land as `tare_method='estimated'` (verify).
   driver/truck, or labeling it with the source. Not urgent; needs a fuller read of
   scale.html first.
 
-### 0l. Driver group message — drafted, NOT sent (needs one fact confirmed)
+### 0l. Driver group message — SENT July 16 (one fact still unconfirmed)
 Short message for the Jaguar driver group with their scale link
 (`scale.html?k=es5xq42fvqeo` — live hauler token, keep OFF anything public; Haulers tab
 has ↻ to regenerate if it leaks). Covers: save to Home Screen, pull on loaded → tap name
@@ -184,6 +184,56 @@ use an estimate or type it), emphasis that measured is most accurate.
   inference. **Search scale.html for `photo` / `input type="file"` and confirm.** Don't
   tell drivers to photograph tickets if that's actually Raul's job.
 - A Spanish version was offered and not yet written.
+
+### 0m. DRIVER ATTRIBUTION — investigated & largely RESOLVED July 23
+Chased two "Willie G" cards in the client portal. Ended up disproving two of Claude's own
+hypotheses along the way — **read the conclusion, not the first guess.**
+
+**CONCLUSION: the resolver is NOT broken. There is NO active code leak.**
+`_resolveDriverId()` (index.html ~line 1970) + `_findDriverMatch()` + `_scoreDriverMatch()`
+already do fuzzy name→driver_id resolution (exact=100, "Willie G"→"Willie Garcia"=90,
+typo branch handles "Stephen"→"Stephan"≈85, threshold 70). Called from batch_ocr ticket
+creation (~line 8211) and the edit path (~line 8606).
+**Measured performance on batch_ocr: tickets WITH a driver_name → 401/403 resolved (99.5%).**
+
+**The real issue is UPSTREAM, on paper:**
+| name_status | tickets | got_id | null_id |
+|---|---|---|---|
+| has name | 403 | 401 | 2 |
+| **no name** | **426** | **0** | **426** |
+426 scanned tickets have NO driver name at all — the driver line was left blank on the
+paper ticket, or the handwriting was unreadable. Nothing for the resolver to resolve.
+Of 748 total NULL-driver_id tickets across all sources, **696 have no name.**
+**This is an OPERATIONS/paper-process gap, not a code bug. Do NOT "fix the resolver."**
+
+**Hypotheses tested and DISPROVEN (don't re-chase):**
+- ❌ "No resolver exists" — it exists and is well built.
+- ❌ "RLS blocks the drivers cache" — no; 400 Jaguar tickets resolved fine.
+- ❌ "Hauler string mismatch breaks the filter" — no; canonical strings, 400 matched.
+- ❌ "Duplicate driver records" — `drivers` is CLEAN: 13 drivers, 13 distinct names.
+
+**✅ DONE July 23:**
+- Repointed 3 orphan tickets `54e30b9b…` → `c65ad12f…` (only orphan driver_id in the DB;
+  name matched exactly, one real Willie G record, unambiguous).
+- Backfilled **50** recoverable NULLs by exact name match (Willie G 26, Alan 17, James 5,
+  Derrick 2). Previewed first — 4 clean 1:1 matches.
+- **Willie G verified consolidated: 172 tickets / 510.13 T** (143+26+3). Confirm the
+  client portal Drivers tab now shows ONE card, not two.
+
+**🔴 STILL OPEN (small):**
+1. **Non-Jaguar haulers resolve at 0%** — Ranger 0/7, Liberty 0/6, Independent 0/4,
+   Mockingbird 1/3. `drivers` has essentially no non-Jaguar drivers, so the hauler filter
+   (`d.hauler !== hauler`, exact compare, ~line 1955) finds nothing to match, and the
+   auto-create fallback appears to fail silently. Low volume but those haulers will never
+   attribute. Worth a look.
+2. **Auto-create fallback is risky** — on no-match, `_resolveDriverId` POSTs a NEW row to
+   `drivers` from raw OCR text. That's how junk like "Alfredo / Morris Bros Waste" gets in.
+   TODO #9 already plans an `is_approved` pending-driver flag — that's the right fix.
+3. **"Stephen" (1 ticket) vs real "Stephan"** — left alone deliberately. If confirmed same
+   person, alias it (documented) rather than silently rewriting.
+4. **Reducing the 426 blanks is an OPS question**, not code: get drivers to write their
+   name on the paper ticket. Ties to the driver-group message (0l) and to the PDF
+   batch-scan rebuild (#4) — prompt for a driver during human review of unreadable ones.
 
 ### 1. Scale-weight → ticket linkage bug (quick — 1 policy)
 Completing a ticket PATCHes `scale_weights` to stamp `ticket_id`/`status='confirmed'`
