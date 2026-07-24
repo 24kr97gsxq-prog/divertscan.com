@@ -384,6 +384,29 @@ for(var g=0;g<50;g++){
 }
 return out;},
 
+// SECURITY DEFINER RPCs are subject to the SAME 1000-row PostgREST cap as plain
+// table reads. client_tickets returns full history server-side, but an unpaginated
+// POST still gets truncated to the newest 1000 rows — silently, with no error.
+// This is the bug that made the portal show history starting Apr 2026 instead of
+// Sep 2025. rpcAll() is apiAll() for RPC POSTs: same Range paging, same 50-page
+// guard, so report totals are computed from the COMPLETE set.
+async rpcAll(e,b){var PAGE=1000,out=[],from=0;
+for(var g=0;g<50;g++){
+  var o={method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json',
+    'Accept':'application/json','Range-Unit':'items','Range':from+'-'+(from+PAGE-1)},body:JSON.stringify(b||{})};
+  try{
+    var r=await fetch(SB+'/rest/v1/'+e,o);
+    if(!r.ok)break;
+    var t=await r.text();
+    var batch=t?JSON.parse(t):[];
+    if(!Array.isArray(batch)||batch.length===0)break;
+    out=out.concat(batch);
+    if(batch.length<PAGE)break;
+    from+=PAGE;
+  }catch(x){break;}
+}
+return out;},
+
 // Session cache for the full client ticket set. client_tickets is identical for
 // every caller ({p_cid:P.cl.id}) and returns the client's entire history — it was
 // being re-fetched 3–5× per session (driver list, each driver detail, monthly
@@ -391,7 +414,7 @@ return out;},
 // P.clearTixCache(). force=true bypasses the cache (post-edit refresh).
 async allTix(force){
   if(!force&&P._allTixCache)return P._allTixCache;
-  var rows=await P.api('rpc/client_tickets','POST',{p_cid:P.cl.id})||[];
+  var rows=await P.rpcAll('rpc/client_tickets',{p_cid:P.cl.id})||[];
   P._allTixCache=rows;
   return rows;
 },
