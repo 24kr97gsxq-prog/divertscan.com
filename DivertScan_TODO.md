@@ -68,11 +68,19 @@ SQL in Supabase to assign weight_band." So Open #1's UPDATE policy would NOT cle
 these. Open #1 (the `ticket_id` stamp / scale_weights UPDATE) is still a valid separate
 one-liner, but test it against actual LINKAGE behavior, not the "?".
 
-### 0f. Classifier automation (NEW — the real pipeline inefficiency)
-`weight_band` assignment requires MANUALLY running classifier SQL in Supabase — it does
-not fire automatically on capture. Captures sit "Not yet classified" until someone runs
-it. This is why "?" persists. Investigate auto-running the classifier: Pi-side after
-sync, OR a scheduled Supabase job / trigger on `scale_weights` INSERT. Related: orphan
+### 0f. Classifier — why do SOME captures stay unclassified? (NEEDS DIAGNOSIS)
+**Corrected July 16 — an earlier note in this file claimed classification is entirely
+manual. That was an overstatement, do not act on it.** Evidence both ways:
+- Some captures DO get classified: scale.html's tare-estimate code queries
+  `scale_weights?weight_band=eq.tare_candidate` live and gets results, so bands are
+  being assigned in the normal flow.
+- But an individual capture (24,160 lb, Jul 16 8:11 PM) sat with "Not yet classified.
+  Run the classifier SQL in Supabase to assign weight_band" — and the "?" persists in
+  Live Scale for unclassified rows.
+**So: classification works for some rows and not others. Find out WHY before building
+anything.** Is there a trigger/job that only covers certain cases? A weight range that
+falls through? A race with the Pi's sync? Diagnose first, THEN decide whether it needs
+automating. Related: orphan
 triage is manual, one-at-a-time (~70 backlog July 16, mostly NON-truck noise —
 forklift/equipment/test scans, cleared via "NOT A REAL TRUCK?" + Ignore; count ticks
 down as cleared, so it's working, just tedious). Consider bulk-ignore or auto-ignore of
@@ -143,6 +151,39 @@ hotspot + reload. NOT a code/RLS bug. But admin save has no offline queue/retry 
 buffers; admin app doesn't) — a failed field-save just errors and you retype. Future:
 "retry / queue this save" behavior. Low priority.
 
+
+### 0k. Tare estimate options — DOCUMENTED (scale.html) + one concern
+Read from scale.html July 16. When a driver taps the "can't return empty" path, the app
+builds up to FOUR options (which appear varies per driver):
+1. **Fleet Average (hauler)** — `avg_tare` from the `v_fleet_tares` view, per hauler.
+   This is where a standard tare like "DX ~32,540" comes from.
+2. **Your Average (N prior loads)** — that driver's mean `tare_lbs` over their last **50**
+   tickets with non-null tare. Only offered if they have **≥3** prior loads, so new
+   drivers won't see it. Label shows the real count.
+3. **Most Recent Tare Today (time)** — latest `weight_band=tare_candidate` from
+   `scale_weights` captured today.
+4. **✏️ Type Custom Tare** — manual entry; warns if <5,000 lb or >80,000 lb.
+All non-measured paths should land as `tare_method='estimated'` (verify).
+- **⚠️ CONCERN — option 3 is not truck-scoped.** "Most Recent Tare Today" takes the
+  latest tare_candidate regardless of WHICH truck it came from. If two trucks weigh the
+  same day, a driver can pick another truck's tare. The button shows only a timestamp —
+  no truck/driver — so nothing on screen catches it. Of the four options this is the only
+  one that can be silently WRONG rather than merely imprecise. Worth scoping to the
+  driver/truck, or labeling it with the source. Not urgent; needs a fuller read of
+  scale.html first.
+
+### 0l. Driver group message — drafted, NOT sent (needs one fact confirmed)
+Short message for the Jaguar driver group with their scale link
+(`scale.html?k=es5xq42fvqeo` — live hauler token, keep OFF anything public; Haulers tab
+has ↻ to regenerate if it leaks). Covers: save to Home Screen, pull on loaded → tap name
+→ pick project → record loaded → dump → empty weight (drive back over empty = best, else
+use an estimate or type it), emphasis that measured is most accurate.
+- **UNRESOLVED before sending:** does the DRIVER flow in scale.html include a
+  photo-the-paper-ticket step, or do photos come in only via Raul's upload page →
+  `photo_queue`? Claude asserted a photo step, then retracted it as an unverified
+  inference. **Search scale.html for `photo` / `input type="file"` and confirm.** Don't
+  tell drivers to photograph tickets if that's actually Raul's job.
+- A Spanish version was offered and not yet written.
 
 ### 1. Scale-weight → ticket linkage bug (quick — 1 policy)
 Completing a ticket PATCHes `scale_weights` to stamp `ticket_id`/`status='confirmed'`
