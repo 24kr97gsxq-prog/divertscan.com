@@ -1,13 +1,21 @@
 # DIVERTSCAN — MASTER TO-DO
 
-**Last updated: Thursday, July 23, 2026 — evening (driver attribution session).**
+**Last updated: Monday, August 3, 2026 — client-portal count investigation (see #0n).**
 Update the date whenever you change something. Replaces all prior versions.
 
 **System status:** Live and in daily use. Drivers logging real loads through the scale
 page (Jaguar rolled out; Stephan + Willie G active). Admin app, reports, scale-debug,
 client portal all working. Pi capturing + syncing.
-**⏳ PENDING:** a large client.html build (July 15 late-night + July 16 caching) is in
-outputs, syntax-checked, NOT yet deployed/verified live. Deploy + verify = job #1.
+**✅ DEPLOYED (July 23 late-night):** the July 15 + July 16 client.html stack is LIVE
+(deploy #746, commit `5e94903`). The pending-deploy loop is CLOSED.
+**🚨 INCIDENT + ROLLBACK (July 23 late-night):** a follow-up Claude fix (`rpcAll`, commit
+`da62b03`) put `Range` headers on the `client_tickets` RPC POST — which does NOT page RPC
+POSTs — so it looped and duplicated every ticket **exactly 50×** in exports, inflating a
+Children's Hospital LEED XLSX ~50×. Rolled back to the clean 2,189-line client.html and
+re-verified. **Live site is SAFE now** (confirmed Aug 3: live client.html has no `rpcAll`).
+**✅ RESOLVED (Aug 3) — client portal count:** portal and admin both show 686 for
+Children's Hospital; client sees full history. The July "679" was a runtime ghost, not a
+code bug (proven by reading the RPC + comparing counts). See #0n. No code change was needed.
 **👀 WATCH:** Pi temp 54–61°C in a dusty sealed box (safe but warm — see Open #0g).
 
 > **New chat? Start here:** upload this file and say "read this to get up to speed."
@@ -47,6 +55,8 @@ looking right is not proof — a path can be dead. Full anon-access list is at t
   null-`captured_at` historicals getting dropped somewhere in this view's grouping or
   the RPC's reach. Small, not a privacy issue, view is now vastly better than before.
   Run down when convenient; confirms 0a is fully closed.
+  **Aug 3: likely a stale-state artifact, same family as #0n — the RPC/grants are proven
+  complete. Re-measure against live data before spending any time here; may already be moot.**
 - **0c. "(unknown)" / "(Unassigned)" driver attribution.** Children's Hospital had
   305 T under "(unknown)" driver — the single biggest slice, historical backlog from
   before driver-capture rolled out. DO NOT backfill guessed driver names (fabricated
@@ -235,6 +245,72 @@ Of 748 total NULL-driver_id tickets across all sources, **696 have no name.**
    name on the paper ticket. Ties to the driver-group message (0l) and to the PDF
    batch-scan rebuild (#4) — prompt for a driver during human review of unreadable ones.
 
+### 0n. ✅ CLIENT PORTAL COUNT — RESOLVED Aug 3. No bug. Do not reopen without a live number.
+**Confirmed live Aug 3: client portal AND admin app BOTH show 686 tickets for Children's
+Hospital — they match. The client sees full history. There was never a code defect.**
+The July "679" was a runtime ghost (stale in-memory cache / mid-session state), exactly as
+the code review predicted. Kept below for the record and the method lesson.
+**Read this before touching client.html. Two Claude fixes on this exact issue went wrong
+in July (one broke production). The Aug 3 finding is: the code is fine, don't patch it.**
+
+**Origin:** portal reported showing **679** Children's Hospital tickets when the DB had far
+more. Over two sessions this was blamed on (a) the PostgREST 1000-row cap and (b) client-
+side JS dropping rows. **Both were wrong.**
+
+**PROVEN Aug 3 (source-of-truth SQL + reading the actual code — not inference):**
+- `client_tickets` RPC definition is CLEAN: `SELECT t.* FROM tickets WHERE project_id IN
+  (granted projects for p_cid, client is_active) ORDER BY ticket_date DESC`. No join that
+  drops rows, no date/status filter, no LIMIT.
+- RPC returns **867** Children's Hospital tickets for Rob Van (`d670b5bc-c919-48a6-a3c8-
+  fc8f0b17d58e`), and 1,281 total across his granted projects. Per-project counts from the
+  RPC match the `client_project_access` grant query EXACTLY. **Server side loses nothing.**
+- client.html fetch path is clean: `api()` has no cap/limit/Range; `allTix()` caches the
+  full array verbatim; `P.cl.id` is set correctly from the `client_login` RPC.
+- client.html display path is clean: dashboard count is `P.tx.length` where
+  `P.tx = allTix().filter(project_id===id)` (line ~451) — correct filter, correct count.
+- **Conclusion: with current code + current data, Children's Hospital renders 867, not 679.**
+  The 679 was almost certainly a RUNTIME artifact the night it was seen — a stale in-memory
+  cache from the pre-rollback build, or a different client account logged in (`P.cl.id`
+  was never captured that night; the iPad had no JS console).
+
+**⚠️ NOTE on numbers:** earlier notes cite 728 / 773 / 1173 for Children's Hospital or the
+client total. Those were measured against changing data/state on different nights and do
+NOT reconcile — do not treat them as targets. The Aug 3 SQL (867 CH / 1,281 total) is the
+current source of truth. Ticket counts also grow daily as drivers log loads.
+
+**THE ONE STEP LEFT (no deploy, ~2 min):** open the LIVE client portal
+(divertscan.com/client.html) → log in as Rob Van → open Children's Hospital → read the
+Tickets stat.
+- Shows **~867** → confirmed no bug; CLOSE 0n. The July "679" was a ghost.
+- Still shows **679** against this clean code → something outside these files is wrong.
+  Capture `P.cl.id` and `(await P.allTix()).length` from a DESKTOP browser console FIRST
+  (iPad Safari can't). Do NOT patch before you have those two numbers.
+
+**❌❌ NEVER re-add `rpcAll()` / Range headers on an RPC POST.** That is the 50×-duplication
+bug (signature: every row repeated 50×, = the `g<50` loop guard). If RPC paging is ever
+actually needed, use `p_offset`/`p_limit` ARGUMENTS on the function, and VERIFY in a console
+before deploying.
+
+**METHOD LESSON (the real takeaway):** three times this issue got a confident mechanism
+("the cap," "the JS filter," "Range paging") and twice a fix shipped on it — once breaking a
+live LEED report. Every time, one SQL count or one console value would have shown the truth
+first. **Measure before patching. A plausible explanation is not evidence.** Same species as
+the captured_at and RLS-lockdown lessons: silent, plausible-looking, wrong.
+
+### 0o. Bad tare data — 4 tickets to fix (DATA, not code; found in July 23 driver report)
+Wrong in the database; survive any code change. Every other Hayes tare is ~32,000–33,000,
+so the outliers below are clearly bad. Decide per ticket: correct / void / flag.
+| Ticket | Driver | Date | Project | Gross | Tare | Net | Problem |
+|---|---|---|---|---|---|---|---|
+| **83240** | Derrick | May 6 | Hayes | 35,420 | **10,000** | **12.71 T** | tare impossible; ~11 T over |
+| **86479** | Derrick | May 19 | Hayes | 57,740 | **52,000** | 2.87 T | 52k tare is not a truck |
+| **DX-00051** | Stephan | Jul 16 | Hayes | 30,700 | 33,276 | **−1.29 T** | NEGATIVE net |
+| **DX-00026** | Eduardo | Jun 10 | JE Dunn | 24,290 | **10,390** | 6.95 T | same pattern as 83240 |
+Ties to Open #3 — a tare sanity check (tare <20,000 or >45,000, or net <0) would flag all
+four at entry. Also (0p): the driver-report PDF footer claims the whole SHA-256 hash chain
+is verified, but only Pi-captured DX- rows carry hashes; scanned 8xxxx paper tickets don't.
+Soften that footer to cover only the hashed rows before it goes to any auditor.
+
 ### 1. Scale-weight → ticket linkage bug (quick — 1 policy)
 Completing a ticket PATCHes `scale_weights` to stamp `ticket_id`/`status='confirmed'`
 — the link that clears the "?" in the Live Scale panel. Lockdown left anon with
@@ -249,9 +325,9 @@ CREATE POLICY "anon_link_scale_weights" ON scale_weights
 Then complete a test load and confirm no "?".
 
 ### 2. VERIFY DEPLOYED (from July 15 session — may already be live)
-- **client.html** — ✅ VERIFIED LIVE July 15 late-night. RPC fix confirmed (pulls
-  full history), and further fixed this session (see DONE: captured_at truncation,
-  CO₂e removal, driver date filter). This line is now closed.
+- **client.html** — ✅ LIVE (2,189-line clean build; deploy #746 / `5e94903`). July 15
+  RPC/captured_at/CO₂e/driver-filter fixes all live. The July 23 `rpcAll` follow-up was
+  rolled back — see #0n. Live file confirmed free of `rpcAll` on Aug 3. Line closed.
 - **scale.html** (tare_method stamping, streamlined UX, driver-scoped recent loads).
 - **index.html** (ticket sort fix, hauler links, passphrase removed, auth-gate keys
   baked in so clearing Safari data can't lock you out).
@@ -480,7 +556,12 @@ this was XLSX-only.
 ## 🔑 STANDING RULES
 - CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports weight-based only.
 - Haulers come from `approved_haulers`. Never hard-code a hauler name.
-- Any `tickets` query MUST paginate (PostgREST caps at 1000).
+- Any `tickets` query MUST paginate (PostgREST caps at 1000) — **but paginate table GETs
+  with Range headers. Range does NOT page RPC POSTs (that caused the 50× duplication, #0n);
+  for RPC paging use `p_offset`/`p_limit` args on the function.**
+- **Measure before patching.** Prove the mechanism with a SQL count or a live console value
+  BEFORE writing a fix. Confident-but-wrong theories shipped twice and once broke a live
+  LEED report (#0n). A plausible explanation is not evidence.
 - After any RLS change, test every write path end to end.
 - Measured tare is the LEED default; estimate is an explicit override.
 - Two logins: **Supabase** = GitHub SSO as `24kr97gsxq-prog` (NOT dalmex755201, empty);
