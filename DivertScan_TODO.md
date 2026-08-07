@@ -1,16 +1,18 @@
 # DIVERTSCAN — MASTER TO-DO (priority-ordered)
 
-**Last updated: Wednesday, August 5, 2026.** Replaces the July 7 version.
+**Last updated: Thursday, August 6, 2026.** Replaces the Aug 5 version.
 Update the date whenever you change something.
+
+**This file is DALMEX PRODUCTION only.** Metropolitan Recycling (second site)
+has its own list: `METROPOLITAN_TODO.md`.
 
 **System status:** DalMex fully operational — Pi captures + syncs, client portal
 login working, admin client management + login log via passphrase-gated RPCs,
 Pi health monitoring live (temp/throttle/disk every 5 min → Scale tab widget).
 
-**NEW Aug 5:** Metropolitan Recycling (Mark) is a live prospect — second site,
-Avery Weigh-Tronix ZM305 GTN, hardwired Ethernet at the readout. Exploratory,
-possibly paid, and they are looking to hire Robert. Decision made: build it as
-a SEPARATE INSTANCE, not multi-tenant. See the Metropolitan section below.
+**Aug 6 — SITE VISIT DONE.** Demo shown to Mark, Greg and Haniya (receptionist).
+All three positive; Haniya especially, and she is the one who would use it daily.
+Indicator inspected, parts list sent. See the Metropolitan section below.
 
 **Two systems, two ways to edit:**
 - **Pi / `scale_capture.py`** — `/home/pi/scale_capture.py`, run by
@@ -56,65 +58,14 @@ a SEPARATE INSTANCE, not multi-tenant. See the Metropolitan section below.
 - Admin passphrase: never in code, repo, chat, or these instructions.
   Reset anytime in SQL Editor: `select admin_set_passphrase('new one');`
 
-## 🏗️ METROPOLITAN RECYCLING — SECOND SITE (new Aug 5)
+## 🏗️ METROPOLITAN — SEPARATE FILE
 
-**Architecture decision: separate instance, NOT multi-tenant.** Own repo, own
-Supabase project, own capture node. DalMex production is never touched. RLS
-work, shared-database blast radius, and two months of scoping all avoided.
-Revisit multi-tenancy only at 4–5 sites Robert actually controls.
+Metropolitan Recycling (second site) now has its own list:
+**`METROPOLITAN_TODO.md`**. Nothing on that list touches DalMex production.
 
-**Site facts so far:** Avery Weigh-Tronix ZM305 GTN (IN/OUT + ID + FLEET keys
-= truck in/out variant, up to 1,000 stored vehicle IDs). Hardwired Ethernet at
-the readout, off a COMBINED modem/router one room over — so a plain switch is
-enough, no router needed. Client will provide the capture machine and the parts.
-Currently Non-LEED but may take LEED work later — so LEED stays a PROJECT-level
-flag. Do NOT add a site-level LEED switch.
-
-**Docs / where things live:**
-- Master template: `docs/Node_Hardening_Spec_v1.md` in the DivertScan repo,
-  synced to project knowledge. Stays generic — no site IPs in the master.
-- Filled-in copy per site: `docs/SITE_RECORD_metropolitan.md` in THEIR repo.
-- `capture_node.py` — site-agnostic v3 capture script. TCP or serial via
-  `SOURCE_MODE`, all per-site values in one CONFIG block at the top, plus
-  `--sniff` (raw indicator dump) and `--test` (synthetic weights) modes.
-
-**Ordered next steps:**
-- [ ] **Get ownership of DivertScan in writing** with DalMex while the
-      relationship is good. Costs nothing now; it is the one thing that could
-      complicate a second deployment later.
-- [ ] **`--sniff` on site, first visit** — capture the ZM305's real output
-      string. The parser was written against the AWT 1310 format. Same
-      manufacturer, probably similar, but "probably" is not good enough for a
-      weight record. Paste the raw lines into section 3 of the site record.
-- [ ] Confirm the client-provided machine passes the acceptance test in the
-      spec (nobody uses it daily, supported OS, wired, admin rights). If it is
-      a receptionist's working PC, put a mini PC in instead.
-- [ ] New Supabase project (same account — a new ACCOUNT is not needed; free
-      tier allows 2 active projects per org). Schema mirrored, tables empty.
-- [ ] Fork the repo, swap the config block, strip DalMex branding.
-- [ ] Seed their haulers into `approved_haulers` (never hard-coded), plus
-      materials and projects.
-- [ ] Deploy to Cloudflare Pages — GitHub Pages allows only one custom domain
-      per repo. Branded URL (`scale.metropolitanrecycling.com`) needs their DNS.
-      Interim: a path on Robert's domain, no DNS required.
-- [ ] Move the Supabase org to Pro ($25/mo + $10 per extra project) BEFORE it
-      is a paid production system — free tier has no backups, which is not
-      acceptable for a legal-for-trade weight record.
-- [ ] Scale service company signs off on the printer + comms config, and
-      confirms whether any calibration seal is affected. In writing.
-- [ ] Scope and payment terms in writing before this becomes production.
-
-**After-hours driver access:** already built — `drivers` table + `driver_token`
-+ `driver.html?t=` loadbook + `welcome.html` onboarding (the Jaguar flow).
-Ports as-is. Policy question for Mark, not a code question: is after-hours open
-to everyone, or only known haulers with stored tares? Nobody eyeballs the load
-when the office is empty.
-
-**Pricing:** hold until Mark says whether this is a hire or a sale. If they hire
-Robert, DivertScan is salary leverage, not a line item. If not, it is a product
-sale. Hard costs are ~$35/mo Supabase for both sites + hosting (free) + install
-time — so nearly all of the number is value, not cost. Anchor on labor: trucks
-per day × minutes someone currently spends walking outside.
+One shared item lives on THIS list, because the work happens in the DalMex
+codebase: the config/branding consolidation below. Doing it makes the
+Metropolitan fork clean instead of a divergent copy.
 
 **Prep work in the DalMex codebase (do this first, it makes the fork clean):**
 - [ ] Facility name, address, phone, contact, and email are hard-coded as
@@ -126,6 +77,7 @@ per day × minutes someone currently spends walking outside.
       "LEED MRp2/MRc5" subtitle, `deviceLabel` ("Dalmex Scale 01") and the
       header in `scale.html`, `manifest.json`, and the app icon.
 
+## 🔒 SECURITY FOLLOW-UPS
 
 - [ ] **Back up `scale_capture.py` + `scale_capture.service` to the GitHub repo
       — STILL NOT DONE. TOP of the list.** Only copy is the Pi's SD card (has
@@ -165,6 +117,20 @@ per day × minutes someone currently spends walking outside.
       a count-only RPC (no passphrase needed for a bare count?) or show "—".
 
 ## 🟡 MEDIUM (an evening each)
+
+- [ ] **Curtis — paper scale ticket entry (new Aug 6).** Curtis is willing to
+      take over entering the third-party paper scale tickets that Robert
+      currently scans in himself. He is ALREADY reading these tickets and
+      keying them into a spreadsheet manually, so this costs him nothing extra.
+      Key insight: **do not build a spreadsheet upload — replace the
+      spreadsheet.** If he keys straight into DivertScan he does the work once;
+      if we build an import, he does it twice.
+      - [ ] Ask Curtis what columns are in his spreadsheet FIRST. That defines
+            the form, and will probably surface fields not currently captured.
+      - [ ] These are hand-keyed third-party weights, NOT Pi-captured. They must
+            be flagged so they are distinguishable from sealed captures —
+            tare source Estimated, or a separate entry-source field.
+      - [ ] Curtis needs a login scoped to entry only, not full admin.
 - [ ] **Priority: PDF batch ticket import** — one Adobe Scan PDF → pdf.js page
       split → existing OCR pipeline. Solves out-of-town "upload 50 tickets."
 - [ ] **Cellular auto-recovery script** (Pi) — checks usb0 IP + default route,
