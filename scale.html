@@ -8,6 +8,18 @@
     <meta name="theme-color" content="#0a0f14">
     <title>Dalmex Scale</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+    // Runs before paint so the tablet never flashes the wrong theme.
+    // First launch guesses from the clock (6am-7pm = day); after that the
+    // driver's own choice always wins and is remembered on the device.
+    (function(){
+        try {
+            var t = localStorage.getItem('ds_theme');
+            if (!t) { var h = new Date().getHours(); t = (h >= 6 && h < 19) ? 'day' : 'night'; }
+            if (t === 'day') document.documentElement.setAttribute('data-theme','day');
+        } catch (e) {}
+    })();
+    </script>
     <style>
         :root {
             --bg:#0a0f14;--card:#0d1a24;--border:#2a4058;
@@ -19,6 +31,44 @@
             --mono:'JetBrains Mono',monospace;
             --sans:'DM Sans',system-ui,sans-serif;
         }
+
+        /* ─────────────────────────────────────────────
+           DAY MODE — built for direct Texas sun on a tablet.
+           Not an inversion of the night palette: every accent is
+           re-picked dark enough to hold contrast on white. The bright
+           cyan (#00c9a7) and green (#22c55e) that glow beautifully at
+           night are close to invisible outdoors, so day mode swaps in
+           deep teal and forest green. Text is pure black on pure white
+           for the maximum ratio a screen can produce.
+           Header and status bar stay dark in both modes — a dark bar
+           with white type is already sun-readable, and keeping them
+           fixed means fewer moving parts on the live capture page.
+           ───────────────────────────────────────────── */
+        [data-theme="day"] {
+            --bg:#ffffff;--card:#ffffff;--border:#5b6b7f;
+            --text:#000000;--muted:#1e293b;--dim:#334155;
+            --green:#046c3b;--green-glow:rgba(4,108,59,.10);
+            --amber:#9a5b00;--amber-glow:rgba(154,91,0,.10);
+            --red:#b3261e;--cyan:#026b5c;--cyan-glow:rgba(2,107,92,.07);
+            --blue:#1544c4;
+        }
+        /* Cards need a visible edge and a little lift once the page is white. */
+        [data-theme="day"] .weight-card{border-width:2px;box-shadow:0 1px 3px rgba(0,0,0,.10)}
+        [data-theme="day"] .weight-card::before{opacity:.9}
+        [data-theme="day"] .proj-select{border-width:2px}
+        [data-theme="day"] .zone-btn{border-width:2px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+        [data-theme="day"] .net-card{background:linear-gradient(135deg,rgba(2,107,92,.07),rgba(4,108,59,.05));box-shadow:0 1px 4px rgba(0,0,0,.10)}
+        [data-theme="day"] .confirm-btn.ready{background:var(--green);color:#ffffff}
+        [data-theme="day"] .confirm-btn.disabled{background:rgba(154,91,0,.10);border-color:rgba(154,91,0,.55)}
+        [data-theme="day"] .confirm-btn.disabled.no-progress{background:#dfe5ec;color:#334155}
+        [data-theme="day"] .ds-toast{background:rgba(255,255,255,.97);color:#000;box-shadow:0 8px 24px rgba(0,0,0,.22)}
+        [data-theme="day"] .wc-phase-pill{background:rgba(0,0,0,.05)}
+        /* Inline rgba(255,255,255,...) fills vanish on white; darken them. */
+        [data-theme="day"] [style*="rgba(255,255,255"]{background:rgba(0,0,0,.05)!important}
+
+        /* Theme toggle in the header */
+        .theme-btn{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.30);color:#fff;font-family:var(--sans);font-size:1rem;line-height:1;padding:9px 11px;border-radius:9px;cursor:pointer;flex-shrink:0}
+        .theme-btn:active{transform:scale(.94)}
         *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;overflow:hidden}
         body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
@@ -191,6 +241,7 @@
         <span class="dot off" id="statusDot"></span>
         <span id="statusText">Connecting...</span>
         <span class="hb-counter" id="hbCounter" title="Time since last successful Supabase poll. Updates in real-time so you can see the page is alive.">—</span>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Switch between day and night display">☀️</button>
     </div>
 </header>
 
@@ -631,6 +682,26 @@ function onProjectChange() {
     }
     saveActiveSelections();
     checkReady();
+}
+
+// ─────────────────────────────────────────────
+// DAY / NIGHT DISPLAY
+// ─────────────────────────────────────────────
+function applyThemeIcon() {
+    var btn = document.getElementById('themeBtn');
+    if (!btn) return;
+    var isDay = document.documentElement.getAttribute('data-theme') === 'day';
+    // Show what the button will switch TO, so the action is obvious.
+    btn.textContent = isDay ? '\u{1F319}' : '\u2600\uFE0F';
+    btn.title = isDay ? 'Switch to night display' : 'Switch to day display';
+}
+
+function toggleTheme() {
+    var isDay = document.documentElement.getAttribute('data-theme') === 'day';
+    if (isDay) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme','day');
+    try { localStorage.setItem('ds_theme', isDay ? 'night' : 'day'); } catch (e) {}
+    applyThemeIcon();
 }
 
 function showZoneSelector() {
@@ -2710,6 +2781,8 @@ function startHeartbeatCounter() {
 document.addEventListener('DOMContentLoaded', () => { setTimeout(startHeartbeatCounter, 500); });
 
 document.addEventListener('DOMContentLoaded', init);
+// Point the toggle at whatever the pre-paint script decided.
+document.addEventListener('DOMContentLoaded', applyThemeIcon);
 </script>
 </body>
 </html>
