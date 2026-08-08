@@ -233,7 +233,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <input type="date" class="fi" id="expTo" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
 <select class="fi" id="expHauler" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto"><option value="">All haulers</option></select>
 <select class="fi" id="expZone" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
-<option value="">All zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
+<option value="">All zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
 </select>
 <span id="expCount" style="margin-left:auto;font-size:.65rem;color:var(--text-m);font-weight:700"></span>
 </div>
@@ -241,7 +241,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <div style="display:flex;gap:6px;margin-bottom:8px">
 <input type="text" class="fi" id="dSearch" placeholder="Search ticket #..." oninput="P.searchTix(this.value)" style="padding:8px 10px;font-size:.8rem;flex:1">
 <select class="fi" id="dZoneFilter" onchange="P.searchTix(document.getElementById('dSearch').value)" style="padding:8px;font-size:.75rem;width:auto;flex:0 0 auto">
-<option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
+<option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
 </select>
 <select class="fi" id="dSort" onchange="P.setSortPref(this.value)" style="padding:8px;font-size:.7rem;width:auto;flex:0 0 auto">
 <option value="added_desc">↓ Newest added</option><option value="added_asc">↑ Oldest added</option><option value="date_desc">↓ Date: newest</option><option value="date_asc">↑ Date: oldest</option>
@@ -1151,7 +1151,7 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div style="font-size:.6rem;color:var(--text-m)">LEED '+(P.cp?P.cp.leed_version||'v4':'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'✅ On Track':'⚠️ '+(tgt-rate)+'% below')+'</div></div>')+
 (mh?'<div class="ct" style="margin-top:6px">📊 Materials</div>'+mh:'')+P.renderZoneSummary(tix)+'</div>'+
 '<div class="c" style="padding:8px"><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="text" class="fi" id="moSearch" placeholder="🔍 Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px;flex:1;min-width:120px">'+
-'<select class="fi" id="moZoneFilter" onchange="P.filterMo(document.getElementById(\'moSearch\').value)" style="padding:7px;font-size:.75rem;width:auto;flex:0 0 auto"><option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option></select>'+
+'<select class="fi" id="moZoneFilter" onchange="P.filterMo(document.getElementById(\'moSearch\').value)" style="padding:7px;font-size:.75rem;width:auto;flex:0 0 auto"><option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option></select>'+
 '<select class="fi" id="moSort" onchange="P.setSortPref(this.value)" style="padding:7px;font-size:.7rem;width:auto;flex:0 0 auto"><option value="added_desc"'+(P._getSortPref()==='added_desc'?' selected':'')+'>↓ Newest added</option><option value="added_asc"'+(P._getSortPref()==='added_asc'?' selected':'')+'>↑ Oldest added</option><option value="date_desc"'+(P._getSortPref()==='date_desc'?' selected':'')+'>↓ Date: newest</option><option value="date_asc"'+(P._getSortPref()==='date_asc'?' selected':'')+'>↑ Date: oldest</option></select>'+
 '</div></div>'+
 '<div id="moList"></div></div>';
@@ -1348,13 +1348,18 @@ var btn=document.getElementById('uBtn');btn.style.opacity='.5';btn.style.pointer
 var proj=P.pj.find(function(p){return p.id===P._up;});var tNum=document.getElementById('uTkt').value.trim()||null;
 var notes=document.getElementById('uNotes').value.trim()||null;
 var hauler=document.getElementById('uHauler').value||P.cl.name||'Client';
+// One submission = one batch. index.html groups the admin review queue by batch_id
+// and only falls back to a submitter+project+5-minute window when it's missing —
+// that fallback merged separate client submissions into a single batch. Stamping
+// batch_id here keeps each submission (and each scale ticket) its own group.
+var batchId='batch_'+Date.now()+'_'+Math.random().toString(36).substring(2,8);
 var ok=0;
 for(var i=0;i<all.length;i++){btn.textContent='📤 '+(i+1)+'/'+all.length+'...';
 try{var blob=await P.compress(all[i].file,all[i].type==='scale_ticket'?1200:800);
 var path='queue/'+P._up+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
 var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
 if(!up.ok)continue;var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:all[i].type==='scale_ticket'?null:tNum,notes:notes,status:'pending'});ok++;}catch(x){console.error(x);}}
+await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending',batch_id:batchId});ok++;}catch(x){console.error(x);}}
 P.toast(ok+' photo'+(ok>1?'s':'')+' submitted — pending admin review');P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uBtn').classList.add('hidden');document.getElementById('uOk').classList.remove('hidden');P.loadBadge();},
 resetUp(){document.getElementById('uOk').classList.add('hidden');document.getElementById('uBtn').classList.remove('hidden');
 P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uHauler').selectedIndex=0;var srch=document.getElementById('uProjSearch');if(srch)srch.value='';P.updBtn();},
