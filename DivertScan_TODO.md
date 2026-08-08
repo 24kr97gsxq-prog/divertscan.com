@@ -1,141 +1,197 @@
 # DIVERTSCAN — MASTER TO-DO (priority-ordered)
 
-**Last updated: Thursday, August 6, 2026.** Replaces the Aug 5 version.
-Update the date whenever you change something.
+**Last updated: Saturday, August 8, 2026 (evening).** Replaces the July 9 version
+and the earlier August 8 draft. Update the date whenever you change something.
 
-**This file is DALMEX PRODUCTION only.** Metropolitan Recycling (second site)
-has its own list: `METROPOLITAN_TODO.md`.
+**System status:** Fully operational. Pi captures + syncs. Photo upload pipeline
+RESTORED today after 12 days silently broken (root cause below). Client portal
+zone picker live. `project_zones` live, Children's Hospital seeded A–F. Scale
+page has day/night display and a soft zone prompt.
 
-**System status:** DalMex fully operational — Pi captures + syncs, client portal
-login working, admin client management + login log via passphrase-gated RPCs,
-Pi health monitoring live (temp/throttle/disk every 5 min → Scale tab widget).
-
-**Aug 6 — SITE VISIT DONE.** Demo shown to Mark, Greg and Haniya (receptionist).
-All three positive; Haniya especially, and she is the one who would use it daily.
-Indicator inspected, parts list sent. See the Metropolitan section below.
-
-**Two systems, two ways to edit:**
+**Files, and how each gets edited:**
 - **Pi / `scale_capture.py`** — `/home/pi/scale_capture.py`, run by
   `scale_capture.service`. Edit via Termius (SSH). LESSON LEARNED July 7: never
   paste long files into the terminal from iPad (drops chunks) — put the file in
-  the GitHub repo and `curl` the raw URL down to the Pi, or use Termius SFTP.
-  Multi-line configs: use `sudo tee << 'EOF'` heredocs, not nano paste.
-- **`index.html`** (~12.1k lines) — Claude applies edits to an uploaded copy and
-  returns the full file (verified: unique anchors, additive diff, node --check);
-  Robert uploads it renamed to `index.html` via Add file → Upload files →
-  new branch + PR → merge → verify. ALWAYS back up first. One change at a time.
+  the repo and `curl` the raw URL down to the Pi, or use Termius SFTP.
+  Multi-line configs: `sudo tee << 'EOF'` heredocs, not nano paste.
+- **`index.html`** (~12.8k lines) — Claude patches an uploaded copy and returns
+  the full file (unique anchors, additive diff, node --check). Robert uploads it
+  renamed → new branch + PR → merge → verify. Back up first. One change at a time.
+- **`client.html` (~2.3k) / `upload.html` (~460) / `scale.html` (~2.8k)** — same
+  workflow, and all SEPARATE from index.html. A client.html PR never requires
+  touching index.html.
+- **ALWAYS download fresh from main before sending a copy for patching.** The
+  project-knowledge sync lags what is deployed. LESSON LEARNED Aug 8: rounds were
+  wasted because two different files were both named `client.html` and the wrong
+  one got merged. Ask Claude for a marker string to grep for before merging.
 
 ---
 
-## ✅ DONE — verified July 6–7 session
-- **Portal deploy VERIFIED** — pages-build-deployment green (698), client login
-  works, session restore works. The July 4–5 deploy saga is closed.
-- **Pi Health monitoring (was: "admin-panel temperature display") — SHIPPED
-  end-to-end:**
-  - `pi_health` table + scoped RLS (anon insert/read; delete only >30-day rows)
-  - `/home/pi/pi_health.py` (standalone — never touches scale_capture.py or the
-    serial port) + `pi-health.service` / `pi-health.timer`, every 5 min
-  - Repo copy at `2_pi_health.py` (placeholder creds only)
-  - Scale-tab widget: ● ONLINE/OFFLINE heartbeat (15-min staleness), temp with
-    color bands (green <155°F / amber <172 / red above), 24h high/low +
-    sparkline, throttle + under-voltage alarms, disk/mem/uptime/cellular
-- **Admin unlock (client mgmt + login log) — SHIPPED.** `admin_unlock_setup.sql`
-  created passphrase-gated SECURITY DEFINER RPCs (`admin_check_pass`,
-  `admin_list_clients`, `admin_upsert_client`, `admin_delete_client`,
-  `admin_list_logins`; passphrase set via dashboard-only
-  `admin_set_passphrase`). index.html patched to use them. Credential tables
-  stay RLS-locked; passphrase asked once per session, memory-only. Verified
-  working in production.
-- **Client password minimum raised 4 → 8** (enforced in app AND database).
-  Was a standing TODO item — closed as part of admin unlock.
-- **`reset-client.html` is now obsolete** — superseded by in-app management.
-  Delete from repo when convenient (it still nags for the anon/service key).
+## ✅ ROOT CAUSE FOUND AND FIXED — Aug 8
+**Every photo upload had been failing silently since July 27.**
+`photo_queue` had RLS enabled with an INSERT policy for `anon` but **no SELECT
+policy**. Both uploaders send `Prefer: return=representation` on POST, which asks
+Postgres to read the row back after writing it. The read was denied and the
+insert was rolled back with it. Storage succeeded, so the photo landed in the
+`ticket-photos` bucket with no database row pointing at it — and the page
+reported success either way.
 
-## 🔑 STANDING RULES (unchanged)
-- CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports are weight-based only.
-- Per-project reports LEED-clean; only internal Portfolio view blends
+Fix applied:
+```sql
+create policy anon_select_photo_queue on photo_queue
+  for select to anon using (true);
+```
+This explains, all at once: empty client History tab, client badge showing 0,
+admin "5 pending" over an empty Photo Review Queue, and nothing in the Audit tab.
+
+**VERIFIED WORKING:** two portal uploads → queue → OCR → attached to tickets
+87323 and 87318 (both 2026-07-29, previously photo-less).
+
+- [ ] **Ask Raul whether he uploaded any tickets between July 27 and Aug 8.**
+      If he did, those images are still in the `ticket-photos` bucket with no
+      `photo_queue` row. Recoverable — the storage path encodes project id and
+      timestamp — but only while they are still there. TIME-SENSITIVE.
+- [ ] **Test `upload.html` from a phone** to confirm the field side is alive
+      again. Same table, same policy, so it should be.
+- [ ] **Replace the open SELECT policy with a scoped RPC.** `using (true)` means
+      anyone holding the anon key (public, in five places) can read the whole
+      queue. It restores how the app was built, but the right fix is
+      `client_photo_queue(p_cid)`, same pattern as `client_tickets` /
+      `client_zones`. Pairs with the Supabase Auth item below.
+
+## ✅ ALSO SHIPPED — Aug 8
+- **`project_zones` table + `client_zones` / `client_set_zone` RPCs.** Single
+  source of truth for which zones exist per project — same pattern as
+  `approved_haulers`, replacing hard-coded A/B/D/E/F lists. Children's Hospital
+  (`5b97f99a-176c-40e1-bfa8-c75e649feaf9`, LEED v4) seeded A–F. Audit columns
+  `tickets.zone_set_by / zone_set_at / zone_set_source`. `client_set_zone`
+  touches ONLY zone + audit columns and rejects any value not already active on
+  that project, so the Zone Breakdown grouping cannot splinter into
+  "C" / "c" / "Zone C". Adding a zone later needs no deploy — one INSERT.
+- **Client zone picker in the portal.** Clients may change zone on any of their
+  tickets, any time (decision made Aug 8); traceability via the audit columns is
+  what makes that safe. Card hides itself on projects with no zones (e.g. Hayes).
+  LESSON LEARNED: a ticket can be opened from the dashboard table OR the Month
+  Detail list, and the save must refresh both or it looks like it did not save.
+- **`scale.html` zone capture.** Zone C added. Soft gate: on zoned projects the
+  confirm button waits for the driver to tap a zone OR "Not sure / skip" —
+  always satisfiable in one tap, guarded three ways, fails open so it can never
+  strand a truck. Root cause of the 328 blank zones was simply that the field was
+  optional and got scrolled past; the insert was always correct.
+- **`scale.html` day/night display.** ☀️/🌙 toggle in the header, remembered per
+  device, first launch guesses from the clock (6am–7pm = day), applied before
+  first paint. Day mode re-picks every accent dark enough to hold contrast on
+  white — the night cyan/green are invisible in sun. Header and status bar stay
+  dark in both. NEEDS OUTDOOR TESTING on the actual tablet.
+- **Client upload screen rebuilt** for one-handed phone use: project dropdown →
+  scale ticket → debris → submit. Ticket # field REMOVED (OCR reads it, and the
+  review queue groups by `batch_id` and approves a batch as a unit, so debris
+  photos are tied to their scale ticket without anyone typing). Hauler and notes
+  collapsed behind a toggle. Camera is a tall thumb target; submit sticks to the
+  bottom. Capped at 520px so iPad/PC read as a column, edge-to-edge under 520px.
+- **`batch_id` on client uploads.** Previously only `upload.html` set it, so the
+  admin queue fell back to grouping by submitter+project+5-minute window and
+  merged separate client submissions into one batch.
+
+## 🔴 DECISIONS NEEDED (both block Curtis)
+- [ ] **`photo_queue.submitted_by` stores the HAULER, not the uploader.**
+      `client.html` sets it from the `uHauler` dropdown, so today's test rows read
+      "Rob Van" and a photo from a Children's Hospital super would read "Jaguar
+      Waste Management." Curtis will read this column all day and it cannot tell
+      him whether a photo came from a client, a driver, or Robert. Needs a
+      decision on where the hauler goes instead; changes admin queue display.
+      DO THIS BEFORE match.html.
+- [ ] **Should haulers be able to change zones?** Four accounts have Children's
+      Hospital access: robert@xrayce.com, ross@jaguarwastemanagement.com, and two
+      @skywardtransportation.com. Two are haulers, not the GC. With the picker
+      live they can relabel zones on that project. Traceable, but likely not
+      intended. Small addition to `client_set_zone` if not.
+
+## 🚀 QUEUED DEPLOYS — patched, not yet merged
+- [ ] **`upload.html`** — `tNum` was read from the field, shown in the success
+      message, then hard-coded as `ticket_number:null` on insert. Now saved.
+      (NOTE: the equivalent line in `client.html` was NOT a bug — the label reads
+      "debris only — scale tickets read by AI" and the null was intentional.
+      That change was reverted.)
+- [ ] **`index.html`** — OCR prompt still says zone is `A/B/D/E/F`. Until fixed, a
+      handwritten C returns null or gets squeezed into a wrong letter, which then
+      appears in the LEED Zone Breakdown looking legitimate. Two unique strings,
+      both `A/B/D/E/F` → `A/B/C/D/E/F`: the "- Zone: single letter…" line and the
+      `"zone":"<A|B|D|E|F or null>"` line. VERIFY by scanning a ticket marked C.
+
+## 🔑 STANDING RULES
+- CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports weight-based only.
+- Per-project reports LEED-clean; only the internal Portfolio view blends
   LEED + Non-LEED (Hayes = Non-LEED, flagged).
-- Admin passphrase: never in code, repo, chat, or these instructions.
-  Reset anytime in SQL Editor: `select admin_set_passphrase('new one');`
-
-## 🏗️ METROPOLITAN — SEPARATE FILE
-
-Metropolitan Recycling (second site) now has its own list:
-**`METROPOLITAN_TODO.md`**. Nothing on that list touches DalMex production.
-
-One shared item lives on THIS list, because the work happens in the DalMex
-codebase: the config/branding consolidation below. Doing it makes the
-Metropolitan fork clean instead of a divergent copy.
-
-**Prep work in the DalMex codebase (do this first, it makes the fork clean):**
-- [ ] Facility name, address, phone, contact, and email are hard-coded as
-      literal strings in FOUR export functions instead of reading the single
-      `DS.FACILITY` object: `exportAllXLSX`, the LEED compliance text export,
-      `shareTicketSummary`, and the `client.html` footer. Point them all at
-      `DS.FACILITY`. This is the difference between a template and a fork.
-- [ ] Also loose and needing a per-site home: `<title>`, header `<h1>`, the
-      "LEED MRp2/MRc5" subtitle, `deviceLabel` ("Dalmex Scale 01") and the
-      header in `scale.html`, `manifest.json`, and the app icon.
+- Haulers live in `approved_haulers`; zones live in `project_zones`.
+  Never hard-code either.
+- Admin passphrase never in code, repo, or chat. Reset in SQL Editor:
+  `select admin_set_passphrase('new one');`
 
 ## 🔒 SECURITY FOLLOW-UPS
-
-- [ ] **Back up `scale_capture.py` + `scale_capture.service` to the GitHub repo
-      — STILL NOT DONE. TOP of the list.** Only copy is the Pi's SD card (has
-      died before). Now easy with the July 7 lesson: Termius SFTP the two files
-      from the Pi to iPad Files → GitHub Add file → Upload files → branch/PR.
-      (Check first that no keys are inside; scale_capture.py has the anon key
-      hard-coded — that key is already public in the repo, so committing it
-      changes nothing, but note it for the rotation below.)
-- [ ] **Rotate the Supabase anon key.** Now hard-coded in FOUR places (Pi
-      scale_capture.py, Pi pi_health.py, index.html, scale.html) and it
-      appeared in chat again July 7. Credential tables are locked so risk is
-      contained, but rotate at a calm moment: new key → update all four in one
-      coordinated pass (Pi buffers locally; worst case short sync delay).
-      **Aug 5 note:** `2_pi_health.py`'s own install notes say to keep a
-      PLACEHOLDER in the repo — the real key got committed instead. That one
-      drifted. Do this before Metropolitan goes up, so the second site starts
-      with the placeholder habit intact.
-- [ ] **Rotate dispatcher tokens** (leaked in a July 4 screenshot). Generate
-      new, redistribute links.
-- [ ] **Review UNRESTRICTED tables/views**: `project_material_t...`,
+- [ ] **Back up `scale_capture.py` + `scale_capture.service` to the repo —
+      STILL NOT DONE. TOP of the list.** Only copy is the Pi's SD card, which has
+      died before. Termius SFTP → iPad Files → GitHub upload.
+- [ ] **Rotate the Supabase anon key.** Hard-coded in five places (Pi
+      scale_capture.py, Pi pi_health.py, index.html, scale.html,
+      client.html/upload.html). One coordinated pass at a calm moment.
+- [ ] **Rotate dispatcher tokens** (leaked in a July 4 screenshot).
+- [ ] **Review remaining UNRESTRICTED tables/views**: `project_material_t...`,
       `project_summary`, `v_admin_review`, `v_all_drivers`, `v_dispatcher_ro...`,
-      `v_driver_logbook`, `v_fleet_tares`, `v_hauler_drivers`. Decide per-view
-      whether public read is needed; lock the rest.
-- [ ] **Long-term: Supabase Auth for the admin app.** The passphrase-RPC unlock
-      covers daily needs; full Auth is still the right end state. Plan properly.
+      `v_driver_logbook`, `v_fleet_tares`, `v_hauler_drivers`. NOTE: locking down
+      `photo_queue` in this effort is what broke uploads for 12 days. When
+      restricting a table, check every page that READS it, not just writes.
+- [ ] **Supabase Auth for the admin app AND the portal.** Priority raised twice
+      today: `client_set_zone` authorizes on `p_cid` alone (a client UUID out of
+      localStorage, effectively a bearer token) for a WRITE, and the photo_queue
+      SELECT policy is wide open. Auth is the proper fix for both.
 
 ## 🟢 EASY / QUICK WINS
 - [ ] **Mark averaged-tare DX loads as "Estimated"** — one careful SQL UPDATE
       (preview with SELECT first). Tickets with the standard ~32,540 tare.
-- [ ] **Rename `2_pi_health.py` → `pi_health.py` in the repo** so repo matches
-      the Pi (update the curl URL habit accordingly).
-- [ ] **Delete `reset-client.html` from the repo** (obsolete, see DONE).
+- [ ] **Commit `project_zones_setup.sql` to the repo** alongside
+      `admin_unlock_setup.sql`, as a record of what has been run.
+- [ ] **Rename `2_pi_health.py` → `pi_health.py`.**
+- [ ] **Delete `reset-client.html`** (obsolete — superseded by in-app management).
 - [ ] **Remove the stale `divertscan-capture.service`** from repo / project
-      knowledge (wrong name + path; real one is `scale_capture.service`).
-- [ ] **Ops Pulse "Client Logins" tile + notif badge show 0** — they still read
-      the locked `client_logins` table directly. Cosmetic. Either point them at
-      a count-only RPC (no passphrase needed for a bare count?) or show "—".
+      knowledge (wrong name + path; the real one is `scale_capture.service`).
+- [ ] **Remove dead `filterUploadProjects()`** from client.html — orphaned when
+      the upload project list became a dropdown.
+- [ ] **Admin "5 pending" badge vs. empty queue** — recheck now that the policy is
+      fixed. May have resolved itself; if not, the badge and the queue are
+      reading `photo_queue` differently.
 
 ## 🟡 MEDIUM (an evening each)
-
-- [ ] **Curtis — paper scale ticket entry (new Aug 6).** Curtis is willing to
-      take over entering the third-party paper scale tickets that Robert
-      currently scans in himself. He is ALREADY reading these tickets and
-      keying them into a spreadsheet manually, so this costs him nothing extra.
-      Key insight: **do not build a spreadsheet upload — replace the
-      spreadsheet.** If he keys straight into DivertScan he does the work once;
-      if we build an import, he does it twice.
-      - [ ] Ask Curtis what columns are in his spreadsheet FIRST. That defines
-            the form, and will probably surface fields not currently captured.
-      - [ ] These are hand-keyed third-party weights, NOT Pi-captured. They must
-            be flagged so they are distinguishable from sealed captures —
-            tare source Estimated, or a separate entry-source field.
-      - [ ] Curtis needs a login scoped to entry only, not full admin.
-- [ ] **Priority: PDF batch ticket import** — one Adobe Scan PDF → pdf.js page
-      split → existing OCR pipeline. Solves out-of-town "upload 50 tickets."
-- [ ] **Cellular auto-recovery script** (Pi) — checks usb0 IP + default route,
-      recovers modem. (Pi Health widget now shows which interface is active —
-      useful signal for this.)
+- [ ] **Curtis match access — build `match.html`.** Decision made Aug 8: a
+      separate limited page, NOT a login to the full admin app. Curtis needs one
+      workflow (pending batches → match to scale ticket → confirm); index.html
+      also holds client credentials, the purge-queue button, Samsara settings and
+      portfolio carbon. Cost is porting `loadPhotoQueue` + the confirm path out of
+      index.html (batch grouping starts ~line 9855). Fallback: a scoped view
+      inside index.html. BLOCKED on the `submitted_by` decision above.
+- [ ] **Quick ticket search in the client portal** — top-bar search across all of
+      a client's projects. `client_tickets` already scopes to their projects and
+      `allTix()` caches the set, so it is a client-side filter, no new RPC.
+      CAREFUL: tapping a result must switch to that project first, because the
+      ticket detail reads `P.cp.leed_version` — opening a Hayes ticket while
+      Children's Hospital is selected would render Non-LEED data with LEED
+      framing. Do NOT "just fall back to the full cache."
+- [ ] **Replace the remaining hard-coded zone dropdowns with `project_zones`.**
+      Three filters in client.html, the button row in scale.html, and
+      `projectUsesZones()` in scale.html is a regex on the project name
+      (`/children/i`). scale.html uses the anon key directly, so this needs a read
+      policy or an RPC for `project_zones`.
+- [ ] **Backfill the 328 blank zones?** No way to recover them from data — nobody
+      recorded which zone those loads came from. Options: assign by hand via the
+      portal picker or admin, or leave them "Unassigned" in the Zone Breakdown.
+      Worth deciding before Children's Hospital's next LEED submission — that is a
+      conversation with them, not a code change.
+- [ ] **PDF batch ticket import** — one Adobe Scan PDF → pdf.js page split →
+      existing OCR pipeline. Solves out-of-town "upload 50 tickets." Overlaps the
+      Curtis work; consider building alongside match.html.
+- [ ] **Day/night display for the portal and uploader** if crews use them
+      outdoors. Only scale.html has it.
+- [ ] **Cellular auto-recovery script** (Pi) — checks usb0 IP + default route.
 - [ ] **Tailscale auto-recovery script** (Pi).
 
 ## 🔵 CARBON DASHBOARD (internal-only, not urgent)
@@ -146,23 +202,30 @@ Metropolitan fork clean instead of a divergent copy.
 ## 🔴 HARDER / HIGH-STAKES
 - [ ] Restart-safe debounce (Pi) — persist lock across restarts (#17/#18 case).
 - [ ] Clean duplicate/mistagged historical rows (old 5500 ×4, restart pair).
-      Fresh-head task.
+- [ ] Investigate the July 13 bulk insert — eleven `photo_queue` rows sharing an
+      identical timestamp to the microsecond (`16:23:40.980265`). Not a person
+      taking photos. Probably a backfill; worth knowing what did it.
 - [ ] Move Pi serial off USB to 2nd GPIO UART (4G HAT uses primary). Hardware.
 
 ## ⚙️ ONGOING HABITS
 - [ ] Never hard-power-cut the Pi: `sudo shutdown -h now`, green LED, unplug.
-- [ ] Watch the Pi Health widget on hot afternoons (green <155°F is normal;
-      amber = keep an eye; red/🔥 = check airflow now). Blow dust quarterly.
-- [ ] index.html: backup → branch + PR → one change → deploy → verify → next.
+- [ ] Watch Pi Health on hot afternoons (green <155°F, amber = watch,
+      red/🔥 = check airflow). Blow dust quarterly.
+- [ ] Backup → branch + PR → one change → deploy → VERIFY → next.
 - [ ] Long file to the Pi? Repo + curl, never paste.
+- [ ] **When a page "does nothing," check whether the failure is even reportable.**
+      Three separate silent-failure paths cost most of Aug 8: a disabled button
+      that swallowed taps, a promise that never settled, and an insert whose
+      result was never inspected. Also: Robert is on iPad — the browser console is
+      not reachable, so errors must surface on screen.
 
 ## ⛔ DEFERRED / BLOCKED
 - [ ] On-demand Wi-Fi printer — BLOCKED (printer side has no internet).
 - [ ] Field diagnostic kit (7" monitor, USB keyboard, micro-HDMI, power bank).
-- [ ] Restrict hauler visibility for logged-in clients.
-- ~~Multi-site rollout — Node Hardening Spec~~ → NO LONGER DEFERRED. Spec v1
-  drafted Aug 5; Metropolitan is the first site using it. See the Metropolitan
-  section above.
+- [ ] Multi-site rollout — Node Hardening Spec for repeatable builds.
+- [ ] Restrict hauler visibility for logged-in clients. NOTE: overlaps the
+      hauler/zone decision above — two hauler accounts already have Children's
+      Hospital portal access.
 
 ---
 *Batch-ticket data rules (Hayes composition, aliases, buyer defaults, date
