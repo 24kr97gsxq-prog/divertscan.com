@@ -1168,8 +1168,19 @@ var dtl=document.getElementById('tkDtl');if(dtl)dtl.remove();
 // filter is active. Errors are logged, not swallowed: silently eating a render
 // failure here is what made a working save look broken.
 try{
-  if(typeof P.searchTix==='function')P.searchTix();
-  else if(P.tx)P.renderTbl(P.tx);
+  // A ticket can be opened from either of two lists, and closing the detail
+  // returns you to whichever one you came from. Refreshing only the dashboard
+  // table left the Month Detail list showing the old zone behind it, which is
+  // exactly what a stale save looks like. Refresh both; each is a no-op when
+  // its list is not on screen.
+  if(document.getElementById('moDtl')){
+    var moQ=document.getElementById('moSearch');
+    P.filterMo(moQ?moQ.value:'');
+  }
+  if(typeof P.searchTix==='function'){
+    var dQ=document.getElementById('dSearch');
+    P.searchTix(dQ?dQ.value:'');
+  } else if(P.tx) P.renderTbl(P.tx);
   if(P.cp)P.renderDash();
 }catch(e){console.error('Zone save: view refresh failed',e);
   P.toast('Zone saved — refresh to see it update');}
