@@ -1408,13 +1408,28 @@ el.innerHTML=arr.map(function(p,i){return '<div style="position:relative;flex-sh
 rmP(type,i){P._u[type].splice(i,1);P.renderG(type);P.updBtn();},
 updBtn(){var n=P._u.s.length+P._u.d.length;var b=document.getElementById('uBtn');
 if(n>0&&P._up){b.style.opacity='1';b.style.pointerEvents='auto';b.textContent='📤 Submit '+n+' Photo'+(n>1?'s':'');}
-else{b.style.opacity='.5';b.style.pointerEvents='none';b.textContent='📤 Submit Photos';}},
-async compress(file,max){return new Promise(function(r){var img=new Image();img.onload=function(){var w=img.width,h=img.height;
+// Still tappable when not ready — submit() says what is missing. A dead button
+// that absorbs the tap is indistinguishable from a broken one.
+else{b.style.opacity='.55';b.style.pointerEvents='auto';b.textContent='📤 Submit Photos';}},
+async compress(file,max){return new Promise(function(r){
+// Always settles. If the browser cannot decode the image (some HEIC captures)
+// or takes too long, fall back to sending the original file rather than
+// hanging on an await that never resolves.
+var done=false;function finish(v){if(done)return;done=true;r(v);}
+var to=setTimeout(function(){console.warn('compress timed out, sending original');finish(file);},15000);
+var img=new Image();
+img.onerror=function(){clearTimeout(to);console.warn('compress could not decode, sending original');finish(file);};
+img.onload=function(){clearTimeout(to);try{
+var w=img.width,h=img.height;
 if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
 var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-c.toBlob(function(b){r(b);},'image/jpeg',0.85);};img.src=URL.createObjectURL(file);});},
+c.toBlob(function(b){finish(b||file);},'image/jpeg',0.85);
+}catch(e){console.warn('compress failed, sending original',e);finish(file);}};
+img.src=URL.createObjectURL(file);});},
 async submit(){var all=[];P._u.s.forEach(function(p){all.push({file:p.file,type:'scale_ticket'});});
-P._u.d.forEach(function(p){all.push({file:p.file,type:'debris'});});if(!all.length||!P._up)return;
+P._u.d.forEach(function(p){all.push({file:p.file,type:'debris'});});
+if(!P._up){P.toast('Pick a project first');return;}
+if(!all.length){P.toast('Add at least one photo first');return;}
 var btn=document.getElementById('uBtn');btn.style.opacity='.5';btn.style.pointerEvents='none';
 var proj=P.pj.find(function(p){return p.id===P._up;});var tNum=document.getElementById('uTkt').value.trim()||null;
 var notes=document.getElementById('uNotes').value.trim()||null;
@@ -1424,14 +1439,23 @@ var hauler=document.getElementById('uHauler').value||P.cl.name||'Client';
 // that fallback merged separate client submissions into a single batch. Stamping
 // batch_id here keeps each submission (and each scale ticket) its own group.
 var batchId='batch_'+Date.now()+'_'+Math.random().toString(36).substring(2,8);
-var ok=0;
+var ok=0,failMsg='';
 for(var i=0;i<all.length;i++){btn.textContent='📤 '+(i+1)+'/'+all.length+'...';
 try{var blob=await P.compress(all[i].file,all[i].type==='scale_ticket'?1200:800);
 var path='queue/'+P._up+'/'+all[i].type+'_'+Date.now()+'_'+i+'.jpg';
 var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
-if(!up.ok)continue;var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending',batch_id:batchId});ok++;}catch(x){console.error(x);}}
-P.toast(ok+' photo'+(ok>1?'s':'')+' submitted — pending admin review');P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uBtn').classList.add('hidden');document.getElementById('uOk').classList.remove('hidden');P.loadBadge();},
+if(!up.ok){var et='';try{et=await up.text();}catch(e){}
+console.error('Storage upload failed',up.status,et);
+if(!failMsg)failMsg='Upload failed ('+up.status+')';continue;}
+var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
+await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:tNum,notes:notes,status:'pending',batch_id:batchId});ok++;}catch(x){console.error(x);if(!failMsg)failMsg=x.message||'Upload error';}}
+// Nothing got through: keep the photos on screen so the person can retry
+// without re-taking them, and say why instead of claiming success.
+if(!ok){btn.style.opacity='1';btn.style.pointerEvents='auto';P.updBtn();
+P.toast(failMsg||'Nothing uploaded — please try again');return;}
+if(ok<all.length)P.toast(ok+' of '+all.length+' uploaded — '+(failMsg||'some photos failed'));
+else P.toast(ok+' photo'+(ok>1?'s':'')+' submitted — pending admin review');
+P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uBtn').classList.add('hidden');document.getElementById('uOk').classList.remove('hidden');P.loadBadge();},
 resetUp(){document.getElementById('uOk').classList.add('hidden');document.getElementById('uBtn').classList.remove('hidden');
 P._u={s:[],d:[]};P.renderG('s');P.renderG('d');document.getElementById('uTkt').value='';document.getElementById('uNotes').value='';document.getElementById('uHauler').selectedIndex=0;var srch=document.getElementById('uProjSearch');if(srch)srch.value='';P.updBtn();},
 
