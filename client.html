@@ -1111,10 +1111,58 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 '<div class="sc"><div class="sv">'+P.f(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
 '<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
 (P.cp&&P.cp.leed_version==="none"?"":'<div class="sc"><div class="sv" style="color:'+dc+'">'+dp+'%</div><div class="sl">Diverted</div></div>')+'</div></div>'+
+'<div class="c" id="zoneCard" style="display:none"><div class="ct">📍 Zone</div>'+
+'<div style="display:flex;gap:6px;align-items:center">'+
+'<select class="fi" id="zoneSel" style="flex:1;padding:10px"><option>Loading...</option></select>'+
+'<div class="b bp" id="zoneSaveBtn" onclick="P.saveZone(\''+t.id+'\')" style="width:auto;padding:10px 18px;flex:0 0 auto">Save</div></div>'+
+'<div id="zoneMsg" style="font-size:.6rem;color:var(--text-m);margin-top:6px"></div></div>'+
 (mats?'<div class="c"><div class="ct">📊 Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
 (t.audit_id?'<div class="c" style="background:rgba(212,175,55,0.06);border-color:rgba(212,175,55,0.3)"><div class="ct" style="color:#d4af37">🔐 GBCI Audit Verification Hash</div><div style="font-family:var(--mono);font-size:.6rem;color:#d4af37;word-break:break-all;line-height:1.5">'+t.audit_id+'</div><div style="font-size:.6rem;color:var(--text-d);margin-top:6px;font-style:italic">SHA-256 hash generated at capture time. Verifies this ticket has not been altered.</div></div>':'')+
 '<div class="b bo" onclick="document.getElementById(\'tkDtl\').remove()" style="margin-top:8px">✕ Close Ticket</div></div>';
-document.body.appendChild(el);},
+document.body.appendChild(el);P.loadZones(t);},
+
+// ZONE PICKER (Aug 8) — reads project_zones via the client_zones RPC and writes
+// through client_set_zone. The RPC only accepts a zone already defined and
+// active on that project, so the Zone Breakdown grouping can never splinter
+// into "C" / "c" / "Zone C". Card stays hidden on projects with no zones.
+_zones:{},
+async loadZones(t){
+var sel=document.getElementById('zoneSel'),card=document.getElementById('zoneCard');
+if(!sel||!card||!t.project_id)return;
+var list=P._zones[t.project_id];
+if(!list){list=await P.api('rpc/client_zones','POST',{p_cid:P.cl.id,p_project_id:t.project_id})||[];P._zones[t.project_id]=list;}
+if(!list.length)return;
+sel.innerHTML='<option value="">-- No zone --</option>'+list.map(function(z){
+return '<option value="'+P.esc(z.zone)+'"'+(t.zone===z.zone?' selected':'')+'>'+P.esc(z.label||('Zone '+z.zone))+'</option>';}).join('');
+var msg=document.getElementById('zoneMsg');
+if(msg&&t.zone_set_at)msg.textContent='Last changed '+P.ago(t.zone_set_at)+(t.zone_set_source==='client'?' from the portal':'');
+card.style.display='';},
+
+async saveZone(id){
+var sel=document.getElementById('zoneSel'),btn=document.getElementById('zoneSaveBtn'),msg=document.getElementById('zoneMsg');
+if(!sel||!btn)return;
+var val=sel.value;
+btn.style.opacity='.5';btn.style.pointerEvents='none';btn.textContent='Saving...';
+// Not routed through P.api(): that returns null on any non-2xx, which would
+// hide the RPC's own message ("Zone not defined for this project" etc).
+var rows=null,errText='';
+try{
+var r=await fetch(SB+'/rest/v1/rpc/client_set_zone',{method:'POST',
+headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+body:JSON.stringify({p_cid:P.cl.id,p_ticket_id:id,p_zone:val})});
+var body=await r.text();
+if(r.ok){rows=body?JSON.parse(body):[];}
+else{try{errText=JSON.parse(body).message||'';}catch(x){errText='';}}
+}catch(x){errText=x.message||'';}
+btn.style.opacity='1';btn.style.pointerEvents='auto';btn.textContent='Save';
+if(!rows){P.toast(errText||'Could not save zone');return;}
+var newZone=val||null;
+[P.tx,P._allTixCache].forEach(function(arr){if(!arr)return;
+var row=arr.find(function(x){return x.id===id;});if(row)row.zone=newZone;});
+if(msg)msg.textContent='Saved just now';
+P.toast(newZone?('Zone set to '+newZone):'Zone cleared');
+try{if(P.cp)P.renderDash();}catch(e){}},
+
 shareTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
 var txt='Ticket #'+t.ticket_number+'\nDate: '+P.fdt(t)+'\nProject: '+(P.cp?P.cp.name:'')+(t.driver_name?'\nDriver: '+t.driver_name:'')+'\nGross: '+P.f(t.gross_lbs)+' lbs\nTare: '+P.f(t.tare_lbs)+' lbs\nNet: '+P.f(t.net_tons)+' tons\nDiversion: '+(t.diversion_pct||0)+'%'+(t.audit_id?'\nAudit Hash: '+t.audit_id:'')+(t.scale_ticket_image?'\nPhoto: '+t.scale_ticket_image:'');
 if(navigator.share)navigator.share({title:'Ticket #'+t.ticket_number,text:txt}).catch(function(){});
