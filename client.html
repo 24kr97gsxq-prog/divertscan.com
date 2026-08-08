@@ -282,8 +282,10 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <!-- ═══ UPLOAD ═══ -->
 <div id="vUpload" class="hidden">
 <div class="c"><div class="ct">Upload Photos</div>
-<input type="text" class="fi" id="uProjSearch" placeholder="Search projects..." oninput="P.filterUploadProjects(this.value)" style="margin-bottom:8px;padding:8px 10px;font-size:.8rem">
-<div id="uProjList"></div></div>
+<div class="fg" style="margin-bottom:0"><label class="fl">Project</label>
+<select class="fi" id="uProjSel" onchange="P.pickUProj(this.value)" style="font-size:.9rem">
+<option value="">Select a project...</option>
+</select></div></div>
 <div id="uForm" class="hidden">
 <div id="uBanner" class="c" style="text-align:center;padding:10px;font-weight:700;background:var(--primary-glow);border-color:var(--primary);font-size:.85rem"></div>
 <div class="c">
@@ -434,7 +436,7 @@ if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');
 if(P.cp){document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');}
 else if(P.pj.length===1){P.pickPj('dash',P.pj[0].id);}
 else{document.getElementById('projBar').classList.remove('hidden');document.getElementById('dashContent').classList.add('hidden');P.renderPL('projList','dash');}}
-if(v==='upload'){document.getElementById('vUpload').classList.remove('hidden');P.renderPL('uProjList','upload');}
+if(v==='upload'){document.getElementById('vUpload').classList.remove('hidden');P.fillUProjSel();}
 if(v==='drivers'){document.getElementById('vDrivers').classList.remove('hidden');P.loadAllClientDrivers();}
 if(v==='history'){document.getElementById('vHistory').classList.remove('hidden');P.loadHist();}},
 
@@ -1377,9 +1379,26 @@ zonePdfHtml+
 w.document.close();},
 
 // UPLOAD
+// Upload used to open on a scrollable list of project cards, with the camera
+// buttons pushed below the fold. One dropdown keeps the whole job on screen:
+// choose a project, shoot, submit.
+fillUProjSel(){var sel=document.getElementById('uProjSel');if(!sel)return;
+var cur=P._up||'';
+sel.innerHTML='<option value="">Select a project...</option>'+
+(P.pj||[]).map(function(p){return '<option value="'+P.esc(p.id)+'"'+(p.id===cur?' selected':'')+'>'+P.esc(p.name)+'</option>';}).join('');
+// One project? Pick it for them — there is nothing to choose.
+if((P.pj||[]).length===1&&!P._up){sel.value=P.pj[0].id;P.pickUProj(P.pj[0].id);}},
+
+pickUProj(id){
+if(!id){P._up=null;document.getElementById('uForm').classList.add('hidden');return;}
+P._up=id;
+document.getElementById('uOk').classList.add('hidden');
+document.getElementById('uBtn').classList.remove('hidden');
+P.showUForm();},
+
 showUForm(){var proj=P.pj.find(function(p){return p.id===P._up;});if(!proj)return;
 document.getElementById('uForm').classList.remove('hidden');document.getElementById('uBanner').textContent=proj.name;
-P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();P.renderPL('uProjList','upload');
+P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();
 // Hauler dropdown reads approved_haulers (single source of truth).
 // Was a hard-coded list containing 'B&B Waste', 'Ranger Waste' and 'Rob Van' —
 // none of which exist in the database — and omitting Mockingbird Waste entirely.
@@ -1448,7 +1467,19 @@ if(!up.ok){var et='';try{et=await up.text();}catch(e){}
 console.error('Storage upload failed',up.status,et);
 if(!failMsg)failMsg='Upload failed ('+up.status+')';continue;}
 var url=SB+'/storage/v1/object/public/ticket-photos/'+path;
-await P.api('photo_queue','POST',{project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:all[i].type==='scale_ticket'?null:tNum,notes:notes,status:'pending',batch_id:batchId});ok++;}catch(x){console.error(x);if(!failMsg)failMsg=x.message||'Upload error';}}
+// Raw fetch, not P.api(): P.api returns null on any failure and the old code
+// incremented ok++ regardless, so a rejected insert still reported success.
+// The storage upload can succeed while THIS call is refused (RLS), which is
+// how photos ended up in the bucket with no row in photo_queue.
+var ins=await fetch(SB+'/rest/v1/photo_queue',{method:'POST',
+headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=representation'},
+body:JSON.stringify({project_id:P._up,access_code:proj?(proj.access_code||'portal'):'portal',submitted_by:hauler,photo_type:all[i].type,photo_url:url,ticket_number:all[i].type==='scale_ticket'?null:tNum,notes:notes,status:'pending',batch_id:batchId})});
+if(!ins.ok){var it='';try{it=await ins.text();}catch(e){}
+console.error('photo_queue insert failed',ins.status,it);
+var im='';try{im=(JSON.parse(it).message||'');}catch(e){}
+if(!failMsg)failMsg='Save failed ('+ins.status+')'+(im?': '+im.substring(0,90):'');
+continue;}
+ok++;}catch(x){console.error(x);if(!failMsg)failMsg=x.message||'Upload error';}}
 // Nothing got through: keep the photos on screen so the person can retry
 // without re-taking them, and say why instead of claiming success.
 if(!ok){btn.style.opacity='1';btn.style.pointerEvents='auto';P.updBtn();
