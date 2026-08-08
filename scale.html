@@ -332,10 +332,12 @@
         <div class="zone-buttons">
             <button class="zone-btn" onclick="selectZone('A')">A</button>
             <button class="zone-btn" onclick="selectZone('B')">B</button>
+            <button class="zone-btn" onclick="selectZone('C')">C</button>
             <button class="zone-btn" onclick="selectZone('D')">D</button>
             <button class="zone-btn" onclick="selectZone('E')">E</button>
             <button class="zone-btn" onclick="selectZone('F')">F</button>
         </div>
+        <button class="zone-btn" id="zoneSkipBtn" onclick="skipZone()" style="width:100%;margin-top:8px;font-family:var(--font);font-size:.75rem;font-weight:600;padding:10px 0;color:var(--dim)">Not sure / skip</button>
     </div>
 
     <!-- Confirmation Summary -->
@@ -458,6 +460,9 @@ let nextTicketNum = null;
 let pollTimer    = null;
 let selectedHauler = null;
 let selectedZone = null;
+// Has the driver actually answered the zone question (picked one, or tapped
+// skip)? Distinct from selectedZone, because "no zone" is a valid answer.
+let zoneAnswered = false;
 let isWalkinMode = false;
 
 // Phase 2.7d: Refresh-safe persistence keys.
@@ -514,6 +519,7 @@ function restoreActiveSelections(context) {
             const savedZone = localStorage.getItem(LS_KEY_ZONE);
             if (savedZone) {
                 selectedZone = savedZone;
+                zoneAnswered = true;
                 document.querySelectorAll('.zone-btn').forEach(btn => {
                     btn.classList.toggle('selected', btn.textContent.trim() === selectedZone);
                 });
@@ -574,11 +580,31 @@ const LIVE_OFF_THRESHOLD = 5000;    // lb — below this is treated as empty-sca
 function selectZone(zone) {
     if (selectedZone === zone) {
         selectedZone = null;
+        zoneAnswered = false;      // untapping puts the question back
     } else {
         selectedZone = zone;
+        zoneAnswered = true;
     }
     document.querySelectorAll('.zone-btn').forEach(function(btn) {
+        if (btn.id === 'zoneSkipBtn') return;
         btn.classList.toggle('selected', btn.textContent.trim() === selectedZone);
+    });
+    var sk = document.getElementById('zoneSkipBtn');
+    if (sk) sk.classList.remove('selected');
+    saveActiveSelections();
+    checkReady();
+}
+
+// The escape hatch. A driver who does not know the zone is always one tap from
+// carrying on — the ticket just saves with no zone, exactly as it did before.
+// The point of the soft gate is that skipping becomes a decision instead of an
+// oversight; 328 blank tickets is what an easily-scrolled-past optional field
+// produces. Never blocks the truck.
+function skipZone() {
+    selectedZone = null;
+    zoneAnswered = true;
+    document.querySelectorAll('.zone-btn').forEach(function(btn) {
+        btn.classList.toggle('selected', btn.id === 'zoneSkipBtn');
     });
     saveActiveSelections();
     checkReady();
@@ -614,6 +640,7 @@ function showZoneSelector() {
 function hideZoneSelector() {
     document.getElementById('zoneSelector').classList.remove('show');
     selectedZone = null;
+    zoneAnswered = false;
     document.querySelectorAll('.zone-btn').forEach(function(btn) {
         btn.classList.remove('selected');
     });
@@ -862,6 +889,7 @@ function changeHauler() {
     selectedHauler = null;
     selectedZone = null;
     isWalkinMode = false;
+    zoneAnswered = false;
     selectedDriverName = '';
     selectedDriverToken = '';
     selectedDriverId = '';
@@ -1199,6 +1227,7 @@ function activateWalkin() {
     isWalkinMode = true;
     selectedHauler = null;
     selectedZone = null;
+    zoneAnswered = false;
     selectedDriverName = '';
     localStorage.removeItem('ds_driver_hauler');
 
@@ -2106,6 +2135,16 @@ function checkReady() {
     } else {
         const projectId = document.getElementById('projectSelect').value;
         ready = grossReading && haveTare && projectId && selectedHauler && selectedDriverName;
+        // Soft zone gate. Guarded three ways so it can NEVER strand a truck:
+        // only on projects that use zones, only when the panel is genuinely
+        // visible on screen, and always satisfiable by one tap of "Not sure".
+        // If the panel fails to render for any reason, zoneGateActive is false
+        // and this behaves exactly like the old code.
+        try {
+            var zoneEl2 = document.getElementById('zoneSelector');
+            var zoneGateActive = projectUsesZones(projectId) && zoneEl2 && zoneEl2.classList.contains('show');
+            if (zoneGateActive && !zoneAnswered) ready = false;
+        } catch (e) { /* never block on an error here */ }
     }
 
     updateTareEstimateBox();
@@ -2157,7 +2196,8 @@ function checkReady() {
             else if (!selectedDriverName) btn.textContent = 'SELECT YOUR NAME';
             else if (!grossReading) btn.textContent = 'WAITING FOR GROSS WEIGHT...';
             else if (!haveTare) btn.textContent = 'WAITING FOR TARE — OR PICK ESTIMATE BELOW';
-            else btn.textContent = 'SELECT A PROJECT';
+            else if (!document.getElementById('projectSelect').value) btn.textContent = 'SELECT A PROJECT';
+            else btn.textContent = '👆 TAP A ZONE ABOVE';
         }
     }
 }
@@ -2365,6 +2405,7 @@ function resetPage() {
     grossReading = null;
     tareReading = null;
     selectedZone = null;
+    zoneAnswered = false;
     manualTareValue = null;
     manualTareSource = null;
     manualTareLabel = '';
