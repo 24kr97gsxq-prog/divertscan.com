@@ -408,6 +408,18 @@ document.addEventListener('keydown', function(e){
                     </div>
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Zone</label>
+                    <select class="form-input" id="manualZone">
+                        <option value="">— No zone —</option>
+                        <option value="A">Zone A</option>
+                        <option value="B">Zone B</option>
+                        <option value="C">Zone C</option>
+                        <option value="D">Zone D</option>
+                        <option value="E">Zone E</option>
+                        <option value="F">Zone F</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label class="form-label">Service Date</label>
                     <input type="date" class="form-input" id="manualDate">
                 </div>
@@ -6486,6 +6498,7 @@ const DS = {
             gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
             hauler: document.getElementById('manualHauler').value || 'Jaguar Waste Management',
             container_size: parseInt(document.getElementById('manualContainer').value) || 30,
+            zone: (document.getElementById('manualZone') || {}).value || null,
             notes: document.getElementById('manualNotes').value.trim() || null,
             scan_type: this.state.ocrBase64 ? 'ocr' : 'manual',
             service_date: rawDate,
@@ -6609,6 +6622,7 @@ const DS = {
         });
         document.getElementById('manualHauler').value = 'Jaguar Waste Management';
         document.getElementById('manualContainer').value = '30';
+        if (document.getElementById('manualZone')) document.getElementById('manualZone').value = '';
         document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
         this.state.debrisPhotos = [];
         this.state.debrisBase64 = [];
@@ -6954,7 +6968,7 @@ const DS = {
             '- Hauler: stamped or written (typically "Jaguar Waste Management", "B&B", "Liberty", or "Ranger")\n' +
             '- Driver: handwritten name, often just first name + last initial (e.g. "Willie G", "Alan", "Reggie")\n' +
             '- Project/Job: handwritten site name (e.g. "Childrens Hospital", "Hayes", "Ross Building", may say "Hospital" or "CH")\n' +
-            '- Zone: single letter A/B/D/E/F if present, often near project name\n' +
+            '- Zone: single letter A/B/C/D/E/F if present, often near project name\n' +
             '- Container: number, usually 20, 30, or 40 (cubic yards)\n\n' +
             'Return ONLY valid JSON with this exact structure:\n' +
             '{\n' +
@@ -6966,7 +6980,7 @@ const DS = {
             '  "hauler":"<string or null>",\n' +
             '  "driver":"<string or null>",\n' +
             '  "project":"<string or null>",\n' +
-            '  "zone":"<A|B|D|E|F or null>",\n' +
+            '  "zone":"<A|B|C|D|E|F or null>",\n' +
             '  "container":<number or null>,\n' +
             '  "confidence":<0-100>,\n' +
             '  "field_confidence":{"ticket_number":<0-100>,"gross_lbs":<0-100>,"tare_lbs":<0-100>,"driver":<0-100>,"project":<0-100>}\n' +
@@ -7039,7 +7053,20 @@ const DS = {
         var notesParts = [];
         if (ocr.driver)  notesParts.push('Driver: '  + ocr.driver);
         if (ocr.project) notesParts.push('Project: ' + ocr.project);
-        if (ocr.zone)    notesParts.push('Zone: '    + ocr.zone);
+        // Was: stashed in notes because the form had no zone field. It has one now,
+        // so the OCR'd zone goes to the actual column and only falls back to a note
+        // if it reads something outside the project's zone list.
+        var zoneSel = document.getElementById('manualZone');
+        if (ocr.zone && zoneSel) {
+            var zv = String(ocr.zone).trim().toUpperCase();
+            var matched = false;
+            for (var zi = 0; zi < zoneSel.options.length; zi++) {
+                if (zoneSel.options[zi].value === zv) { zoneSel.value = zv; matched = true; break; }
+            }
+            if (!matched) notesParts.push('Zone (unrecognised): ' + ocr.zone);
+        } else if (ocr.zone) {
+            notesParts.push('Zone: ' + ocr.zone);
+        }
         if (notesParts.length > 0) {
             var existing = notesEl.value.trim();
             notesEl.value = (existing ? existing + '\n' : '') + '[OCR] ' + notesParts.join(' | ');
@@ -8007,7 +8034,7 @@ const DS = {
                     '- Hauler: stamped or written (typically "Jaguar Waste Management", "B&B", "Liberty", or "Ranger")\n' +
                     '- Driver: handwritten name, often just first name + last initial (e.g. "Willie G", "Alan", "Reggie")\n' +
                     '- Project/Job: handwritten site name (e.g. "Childrens Hospital", "Hayes", "Ross Building", may say "Hospital" or "CH")\n' +
-                    '- Zone: single letter A/B/D/E/F if present, often near project name\n' +
+                    '- Zone: single letter A/B/C/D/E/F if present, often near project name\n' +
                     '- Container: number, usually 20, 30, or 40 (cubic yards)\n\n' +
                     'Return ONLY valid JSON with this exact structure:\n' +
                     '{\n' +
@@ -8019,7 +8046,7 @@ const DS = {
                     '  "hauler":"<string or null>",\n' +
                     '  "driver":"<string or null>",\n' +
                     '  "project":"<string or null>",\n' +
-                    '  "zone":"<A|B|D|E|F or null>",\n' +
+                    '  "zone":"<A|B|C|D|E|F or null>",\n' +
                     '  "container":<number or null>,\n' +
                     '  "confidence":<0-100>\n' +
                     '}\n\n' +
@@ -10857,11 +10884,40 @@ const DS = {
                 }) : null;
 
                 if (existingTicket) {
-                    // Update existing ticket with photo
-                    await this.supabase('tickets?id=eq.' + existingTicket.id, 'PATCH', { scale_ticket_image: q.photo_url });
-                    existingTicket.scale_ticket_image = q.photo_url;
+                    // Update existing ticket with photo.
+                    // Aug 8: previously patched ONLY the image and discarded everything
+                    // else the OCR read. Tickets captured by the Pi have no zone on them,
+                    // so a zone written on the paper ticket was lost at exactly the moment
+                    // the photo of it arrived. Now fills BLANK fields from the OCR — never
+                    // overwrites a value already on the ticket, since the ticket is the
+                    // record and the photo is the evidence.
+                    var upd = {};
+                    var zoneMsg = '';
+                    // Same rule as the zone below: fill what is empty, never
+                    // overwrite what is already there. Re-uploading a ticket used
+                    // to silently replace the photo, leaving the original
+                    // unreferenced in the bucket — a clear shot could be lost to a
+                    // blurry re-take with nobody told. Keeping the first costs
+                    // nothing: the ticket detail already has a remove-photo button
+                    // if you ever want to swap one in deliberately.
+                    var hadPhoto = !!existingTicket.scale_ticket_image;
+                    if (!hadPhoto) upd.scale_ticket_image = q.photo_url;
+                    if (!existingTicket.zone && ocr.zone) {
+                        var oz = String(ocr.zone).trim().toUpperCase();
+                        if (/^[A-F]$/.test(oz)) {
+                            upd.zone = oz;
+                            existingTicket.zone = oz;
+                            zoneMsg = ' · Zone ' + oz;
+                        }
+                    }
+                    if (Object.keys(upd).length) {
+                        await this.supabase('tickets?id=eq.' + existingTicket.id, 'PATCH', upd);
+                    }
+                    if (!hadPhoto) existingTicket.scale_ticket_image = q.photo_url;
                     await this.supabase('photo_queue?id=eq.' + q.id, 'PATCH', { assigned_ticket_id: existingTicket.id });
-                    this.showToast('OCR ✓ Ticket #' + ocr.ticket_number + ' — photo attached');
+                    this.showToast(hadPhoto
+                        ? 'Ticket #' + ocr.ticket_number + ' already has a photo — kept the original' + zoneMsg
+                        : 'OCR ✓ Ticket #' + ocr.ticket_number + ' — photo attached' + zoneMsg);
                     this.addAuditEntry('QUEUE_OCR', 'Scale ticket OCR: #' + ocr.ticket_number + ' (updated existing) — confidence: ' + (ocr.confidence || 0) + '%');
                 } else {
                     // Create new ticket from OCR data
