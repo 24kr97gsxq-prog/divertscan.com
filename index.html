@@ -10035,7 +10035,10 @@ const DS = {
         if (!data) { el.innerHTML = '<div style="color:var(--danger);">Failed to load queue</div>'; return; }
 
         this._photoQueue = data;
-        var pending = data.filter(function(q) { return q.status === 'pending'; });
+        // 'staged' = a hauler reviewed it on verify.html and sent it over. It is
+        // awaiting the same admin action as 'pending', so it belongs in the same
+        // queue — just already filled in.
+        var pending = data.filter(function(q) { return q.status === 'pending' || q.status === 'staged'; });
         var badge = document.getElementById('queueBadge');
         var navBadge = document.getElementById('auditNavBadge');
         if (pending.length > 0) {
@@ -10092,9 +10095,13 @@ const DS = {
             var tktNum = '';
             batch.items.forEach(function(q){if(q.ticket_number)tktNum=q.ticket_number;});
 
-            html += '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;background:var(--bg-card)">' +
+            var isStaged = batch.items.some(function(q){ return q.status === 'staged'; });
+            var stagedTag = isStaged
+                ? '<span style="background:var(--primary);color:#080f14;font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px">✅ HAULER REVIEWED</span>'
+                : '';
+            html += '<div style="border:1px solid ' + (isStaged ? 'var(--primary)' : 'var(--border)') + ';border-radius:var(--radius);padding:12px;margin-bottom:8px;background:var(--bg-card)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
-                '<div><div style="font-size:.8rem;font-weight:700">' + DS.esc(projName) + '</div>' +
+                '<div><div style="font-size:.8rem;font-weight:700">' + DS.esc(projName) + stagedTag + '</div>' +
                 '<div style="font-size:.65rem;color:var(--text-muted)">' + (q0.submitted_by||'Unknown') + ' • ' + timeAgo + (tktNum?' • Ticket #'+tktNum:'') + '</div></div>' +
                 '<div style="font-size:.65rem;font-weight:600;color:var(--warning)">⏳ ' + batch.items.length + ' photo' + (batch.items.length>1?'s':'') + '</div></div>';
 
@@ -10248,6 +10255,28 @@ const DS = {
             var cell = document.getElementById('photoCell_' + idx);
             var label = document.getElementById('photoLabel_' + idx);
 
+            // Aug 11: the hauler already reviewed this one on verify.html — a
+            // human with the paper in hand corrected the driver, date and zone.
+            // Re-running OCR would overwrite that with the raw AI read, which is
+            // exactly the work we asked them to do. Use theirs, skip the call.
+            if (q.staged_data) {
+                var sd = q.staged_data;
+                if (typeof sd === 'string') { try { sd = JSON.parse(sd); } catch(e) { sd = {}; } }
+                scaleTickets.push({ q: q, idx: idx, staged: true, ocr: {
+                    ticket_number: sd.ticket_number || '',
+                    printed_date:  sd.ticket_date   || '',
+                    gross_lbs:     sd.gross_lbs     || 0,
+                    tare_lbs:      sd.tare_lbs      || 0,
+                    driver:        sd.driver_name   || '',
+                    zone:          sd.zone          || '',
+                    job_name:      null,
+                    _staged:       sd
+                }});
+                if (cell)  cell.style.borderColor = 'var(--primary)';
+                if (label) label.textContent = '✅ REVIEWED #' + (sd.ticket_number || '?');
+                continue;
+            }
+
             if (label) label.textContent = '🔍 Reading...';
 
             try {
@@ -10311,6 +10340,23 @@ const DS = {
             scaleTickets.forEach(function(item, i) {
                 var ocr = item.ocr;
                 var today = new Date().toISOString().split('T')[0];
+                // Provenance banner for hauler-reviewed rows: who checked it and
+                // exactly which fields they corrected, so approving is informed
+                // rather than blind.
+                var stagedBanner = '';
+                if (item.staged) {
+                    var sd2 = ocr._staged || {};
+                    var chg = Array.isArray(sd2.changes) ? sd2.changes : [];
+                    var chgTxt = chg.length
+                        ? chg.map(function(c){ return DS.esc(c.field.replace(/_/g,' ')) + ': ' +
+                            (c.from == null || c.from === '' ? '(blank)' : DS.esc(String(c.from))) + ' → ' +
+                            (c.to   == null || c.to   === '' ? '(blank)' : DS.esc(String(c.to))); }).join('<br>')
+                        : 'No changes — AI read matched the paper';
+                    stagedBanner =
+                        '<div style="background:rgba(0,201,167,.10);border:1px solid var(--primary);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.65rem">' +
+                        '<div style="font-weight:800;color:var(--primary);margin-bottom:3px">✅ Reviewed by ' + DS.esc(sd2.reviewed_by || 'hauler') + '</div>' +
+                        '<div style="color:var(--text-muted);line-height:1.5">' + chgTxt + '</div></div>';
+                }
                 // Read month/year from batch override selectors — ALWAYS force 2026
                 var batchMonthEl = document.getElementById('batchMonth');
                 var useMonth = batchMonthEl ? parseInt(batchMonthEl.value) : new Date().getMonth();
@@ -10372,7 +10418,8 @@ const DS = {
                 // Store matched project for confirmAllTickets
                 item.matchedProjectId = matchedProjId;
 
-                html += '<div id="ticketRow_'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
+                html += '<div id="ticketRow_'+i+'" style="border:1px solid ' + (item.staged ? 'var(--primary)' : 'var(--border)') + ';border-radius:8px;padding:10px;margin-bottom:8px;background:var(--bg-input)">' +
+                    stagedBanner +
                     '<div style="display:flex;gap:8px;margin-bottom:8px">' +
                     '<img src="'+item.q.photo_url+'" onclick="window.open(\''+item.q.photo_url+'\')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer">' +
                     '<div style="flex:1">' +
