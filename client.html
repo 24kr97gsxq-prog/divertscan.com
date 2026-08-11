@@ -337,7 +337,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 </div>
 <button class="u-more" onclick="P.toggleUDetails()" id="uMoreBtn">Add hauler or notes ▾</button>
 <div class="c hidden" id="uDetails">
-<div class="fg"><label class="fl">Hauler</label>
+<div class="fg" id="uHaulerGrp"><label class="fl">Hauler</label>
 <select class="fi" id="uHauler" style="font-size:.85rem">
 <option value="">Select hauler...</option>
 </select></div>
@@ -1425,7 +1425,8 @@ if((P.pj||[]).length===1&&!P._up){sel.value=P.pj[0].id;P.pickUProj(P.pj[0].id);}
 
 toggleUDetails(){var d=document.getElementById('uDetails'),b=document.getElementById('uMoreBtn');
 var open=!d.classList.contains('hidden');
-d.classList.toggle('hidden',open);b.textContent=open?'Add hauler or notes \u25BE':'Hide hauler and notes \u25B4';},
+d.classList.toggle('hidden',open);
+b.textContent=open?(P._uLblClosed||'Add hauler or notes \u25BE'):(P._uLblOpen||'Hide hauler and notes \u25B4');},
 
 pickUProj(id){
 if(!id){P._up=null;document.getElementById('uForm').classList.add('hidden');return;}
@@ -1440,6 +1441,16 @@ P._u={s:[],d:[]};P.renderG('s');P.renderG('d');P.updBtn();
 // Hauler dropdown reads approved_haulers (single source of truth).
 // Was a hard-coded list containing 'B&B Waste', 'Ranger Waste' and 'Rob Van' —
 // none of which exist in the database — and omitting Mockingbird Waste entirely.
+// If the project already names its hauler (projects.waste_hauler), stop
+// asking: show it on the toggle, hide the dropdown, and let it flow through.
+// Projects without one keep the full "Add hauler or notes" behaviour.
+var hasDef=!!proj.waste_hauler;
+P._uLblClosed=hasDef?('\uD83D\uDE9B '+proj.waste_hauler+' \u2022 Add notes \u25BE'):'Add hauler or notes \u25BE';
+P._uLblOpen=hasDef?'Hide notes \u25B4':'Hide hauler and notes \u25B4';
+var mb=document.getElementById('uMoreBtn');
+if(mb){var isOpen=!document.getElementById('uDetails').classList.contains('hidden');mb.textContent=isOpen?P._uLblOpen:P._uLblClosed;}
+var hg=document.getElementById('uHaulerGrp');
+if(hg)hg.style.display=hasDef?'none':'';
 var sel=document.getElementById('uHauler');
 sel.innerHTML='<option value="">Loading haulers...</option>';
 P.api('approved_haulers?select=name&order=name.asc').then(function(rows){
@@ -1456,7 +1467,15 @@ el.innerHTML=filtered.map(function(p){return '<div class="pp" onclick="P.pickPj(
 '<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
 '<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');
 if(!filtered.length)el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-d);font-size:.75rem">No projects matching "'+P.esc(q)+'"</div>';},
+// Max 10 per section per submission: keeps the AI review pass ~1 min, matches
+// the admin review grid, and bounds how much one failed cellular upload costs.
+// A 60-ticket stack is six clean batches, each confirmed before the next.
+_uMax:10,
 addP(type,input){var files=Array.from(input.files);var arr=P._u[type];
+var room=P._uMax-arr.length;
+if(files.length>room){
+P.toast(room<=0?('Max '+P._uMax+' per submission — submit these first, then add more'):('Max '+P._uMax+' — added the first '+room));
+files=files.slice(0,Math.max(0,room));}
 files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.renderG(type);P.updBtn();};r.readAsDataURL(f);});input.value='';},
 renderG(type){var arr=P._u[type],el=document.getElementById(type==='s'?'sGrid':'dGrid'),b=document.getElementById(type==='s'?'sBadge':'dBadge');
 if(b){b.textContent=arr.length;arr.length>0?b.classList.remove('hidden'):b.classList.add('hidden');}
@@ -1493,7 +1512,12 @@ var proj=P.pj.find(function(p){return p.id===P._up;});
 // the debris photos to that same submission, so nobody needs to type it.
 var tNum=null;
 var notes=document.getElementById('uNotes').value.trim()||null;
-var hauler=document.getElementById('uHauler').value||P.cl.name||'Client';
+// Fallback order matters: the dropdown is hidden when the project names its
+// hauler, and preselect is an exact string match — a variant spelling (e.g.
+// "Ranger Waste Management, LLC" with a comma) leaves the hidden select empty.
+// Without proj.waste_hauler here, the CLIENT'S NAME would silently become the
+// hauler on every such submission.
+var hauler=document.getElementById('uHauler').value||(proj&&proj.waste_hauler)||P.cl.name||'Client';
 // One submission = one batch. index.html groups the admin review queue by batch_id
 // and only falls back to a submitter+project+5-minute window when it's missing —
 // that fallback merged separate client submissions into a single batch. Stamping
