@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ticket Review — DivertScan</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--line:#d7dbe0;--line2:#eceef1;
+--text:#111418;--muted:#4b5563;--dim:#6b7280;
+--blue:#2563eb;--green:#15803d;--amber:#b45309;--amber-bg:#fef3c7;--red:#b91c1c;
+--font:'DM Sans',system-ui,sans-serif;--mono:'Space Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;padding-bottom:120px}
+.hdr{background:#0f2b3c;color:#fff;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20}
+.hdr b{font-size:.95rem}
+.hdr .who{font-size:.65rem;color:rgba(255,255,255,.7)}
+.tabs{display:flex;gap:6px;margin-left:auto}
+.tab{background:rgba(255,255,255,.12);border:none;color:#fff;font-family:var(--font);font-size:.72rem;font-weight:700;padding:8px 12px;border-radius:8px;cursor:pointer}
+.tab.on{background:var(--blue)}
+.wrap{max-width:900px;margin:0 auto;padding:14px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+.ct{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+label.fl{display:block;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+.fi{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-family:var(--font);font-size:.9rem;color:var(--text);background:#fff;-webkit-appearance:none}
+select.fi{-webkit-appearance:menulist;appearance:menulist}
+.fi:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.fi.need{border-color:var(--amber);background:var(--amber-bg)}
+.fi.edited{border-color:var(--green);background:#f0fdf4}
+.b{display:block;width:100%;text-align:center;padding:16px;border:none;border-radius:11px;font-family:var(--font);font-size:.95rem;font-weight:700;cursor:pointer;position:relative;overflow:hidden}
+.b:active{opacity:.85}
+.bp{background:var(--blue);color:#fff}.bg{background:var(--green);color:#fff}
+.bo{background:transparent;border:1px solid var(--line);color:var(--muted);font-size:.8rem;padding:11px}
+.b input{position:absolute;inset:0;opacity:0;font-size:200px;cursor:pointer}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.th{position:relative;width:72px;height:72px}
+.th img{width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.th .x{position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}
+.row{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;background:#fff}
+.row.flag{border-color:var(--amber);background:#fffdf5}
+.rowhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:.7rem;font-weight:700;color:var(--muted)}
+.split{display:flex;gap:12px}
+.split .ph{width:150px;flex-shrink:0}
+.split .ph img{width:100%;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block}
+.split .fs{flex:1;min-width:0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fg{margin-bottom:8px}
+.net{font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--green);padding:6px 0}
+.warn{font-size:.66rem;color:var(--amber);font-weight:700;margin-top:3px}
+.chg{font-size:.62rem;color:var(--green);font-weight:600;margin-top:3px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--bg) 72%,transparent);z-index:15}
+.bar .inner{max-width:900px;margin:0 auto}
+.toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:#111418;color:#fff;padding:12px 20px;border-radius:10px;font-size:.82rem;font-weight:600;z-index:100;display:none;max-width:92vw;text-align:center}
+.toast.on{display:block}
+.hide{display:none!important}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:200;display:flex;flex-direction:column}
+.lightbox .lb-hd{padding:12px 14px;color:#fff;display:flex;justify-content:space-between;align-items:center;font-size:.8rem;font-weight:700}
+.lightbox .lb-bd{flex:1;overflow:auto}
+.lightbox img{width:100%;display:block}
+.lightbox img.z{width:250%;max-width:none}
+.hist{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2)}
+.hist img{width:46px;height:46px;object-fit:cover;border-radius:7px;border:1px solid var(--line)}
+.pill{font-size:.62rem;font-weight:700;padding:3px 9px;border-radius:20px}
+@media(max-width:640px){.split{flex-direction:column}.split .ph{width:100%}.split .ph img{max-height:220px;object-fit:contain;background:#f0f0f0}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div><b>Ticket Review</b><div class="who" id="who">…</div></div>
+  <div class="tabs">
+    <button class="tab on" id="tabNew" onclick="V.go('new')">Review</button>
+    <button class="tab" id="tabHist" onclick="V.go('hist')">Sent</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div id="gate" class="c hide">
+    <div class="ct">Link not recognised</div>
+    <div style="font-size:.85rem;color:var(--muted);line-height:1.5">This review link is invalid or has been turned off. Contact Dalmex Recycling for a new one.</div>
+  </div>
+
+  <!-- ═══ REVIEW ═══ -->
+  <div id="vNew" class="hide">
+
+    <div class="c" id="cardSetup">
+      <div class="ct">1 · Project</div>
+      <select class="fi" id="proj" onchange="V.pickProj(this.value)">
+        <option value="">Select a project…</option>
+      </select>
+    </div>
+
+    <div class="c hide" id="cardAdd">
+      <div class="ct">2 · Scale Tickets <span id="cnt" style="color:var(--blue)"></span></div>
+      <div class="b bp" style="padding:24px">📷 Take Photo<input type="file" accept="image/*" capture="environment" onchange="V.add(this)"></div>
+      <div class="b bo" style="margin-top:8px">📁 Choose or scan from files<input type="file" accept="image/*" multiple onchange="V.add(this)"></div>
+      <div class="thumbs" id="thumbs"></div>
+      <div style="font-size:.66rem;color:var(--dim);margin-top:10px">Up to 10 at a time. Scanned copies read best — feed the darker carbon copy.</div>
+    </div>
+
+    <div class="c hide" id="cardRead">
+      <div class="b bg" id="readBtn" onclick="V.read()">🔍 Read Tickets</div>
+      <div style="font-size:.66rem;color:var(--dim);margin-top:8px;text-align:center">Reads each ticket, then you check the driver and date before it goes to Dalmex.</div>
+    </div>
+
+    <div id="rows"></div>
+  </div>
+
+  <!-- ═══ SENT ═══ -->
+  <div id="vHist" class="hide">
+    <div class="c">
+      <div class="ct">Recent submissions</div>
+      <div id="histList" style="font-size:.85rem;color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="bar hide" id="bar"><div class="inner">
+  <div class="b bg" id="sendBtn" onclick="V.send()">Send to Dalmex</div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DIVERTSCAN — HAULER TICKET REVIEW  (verify.html?k=<hauler token>)
+// ------------------------------------------------------------
+// Curtis (Jaguar) reviews every ticket already — it is how he pays drivers.
+// This page moves that review upstream: he uploads/scans a stack, OCR reads
+// each ticket, he corrects what is wrong, and submits.
+//
+// NOTHING here creates a ticket. Every submission is STAGED on the photo_queue
+// row via hauler_stage_row(), which has no write path to the tickets table.
+// Dalmex reviews the staged work and creates the tickets.
+//
+// Every change he makes to what OCR read is recorded field-by-field in
+// staged_data.changes, so the admin side shows exactly what was edited.
+// ============================================================
+
+// Published Supabase endpoint + anon key — NOT secret. They ship in the HTML of
+// index.html, scale.html, client.html and upload.html. RLS and the SECURITY
+// DEFINER functions protect the data, not the obscurity of this key.
+// >>> Copy both values from the top of scale.html and paste them here. <<<
+const SB = 'PASTE_SUPABASE_URL_HERE';
+const SK = 'PASTE_SUPABASE_ANON_KEY_HERE';
+
+const V = {
+  tok:null, hauler:null, projects:[], projId:null,
+  photos:[],      // {file, prev}
+  rows:[],        // {queueId, url, ocr, cur}
+  MAX:10,
+
+  // ── plumbing ──────────────────────────────────────────────
+  async rpc(fn, args){
+    try{
+      const r = await fetch(SB+'/rest/v1/rpc/'+fn,{method:'POST',
+        headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+        body:JSON.stringify(args||{})});
+      if(!r.ok){console.error('rpc '+fn, r.status, await r.text());return null;}
+      const t = await r.text(); return t?JSON.parse(t):null;
+    }catch(e){console.error('rpc '+fn, e);return null;}
+  },
+  toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');
+    clearTimeout(V._tt);V._tt=setTimeout(()=>t.classList.remove('on'),3600);},
+  esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;},
+
+  // ── boot ──────────────────────────────────────────────────
+  async init(){
+    const p = new URLSearchParams(location.search);
+    let k = p.get('k');
+    if(k){ try{localStorage.setItem('ds_hauler_token',k);}catch(e){} }
+    else { try{k = localStorage.getItem('ds_hauler_token');}catch(e){} }
+    if(!k){ document.getElementById('gate').classList.remove('hide'); return; }
+    V.tok = k;
+
+    const who = await V.rpc('hauler_by_token',{p_token:k});
+    if(!who || !who.length){
+      try{localStorage.removeItem('ds_hauler_token');}catch(e){}
+      document.getElementById('gate').classList.remove('hide'); return;
+    }
+    V.hauler = who[0].hauler_name;
+    document.getElementById('who').textContent = V.hauler;
+
+    V.projects = await V.rpc('hauler_projects',{p_token:k}) || [];
+    document.getElementById('proj').innerHTML =
+      '<option value="">Select a project…</option>' +
+      V.projects.map(p=>'<option value="'+p.id+'">'+V.esc(p.name)+'</option>').join('');
+
+    document.getElementById('vNew').classList.remove('hide');
+    // One project? Nothing to choose.
+    if(V.projects.length===1){ document.getElementById('proj').value=V.projects[0].id; V.pickProj(V.projects[0].id); }
+  },
+
+  go(v){
+    document.getElementById('vNew').classList.toggle('hide', v!=='new');
+    document.getElementById('vHist').classList.toggle('hide', v!=='hist');
+    document.getElementById('tabNew').classList.toggle('on', v==='new');
+    document.getElementById('tabHist').classList.toggle('on', v==='hist');
+    document.getElementById('bar').classList.toggle('hide', v!=='new' || V.rows.length===0);
+    if(v==='hist') V.loadHist();
+  },
+
+  pickProj(id){
+    V.projId = id||null;
+    document.getElementById('cardAdd').classList.toggle('hide', !id);
+    V.paintThumbs();
+  },
+
+  // ── photos ────────────────────────────────────────────────
+  add(input){
+    let files = Array.from(input.files);
+    const room = V.MAX - V.photos.length;
+    if(files.length > room){
+      V.toast(room<=0 ? ('Max '+V.MAX+' at a time — send these first')
+                      : ('Max '+V.MAX+' — added the first '+room));
+      files = files.slice(0, Math.max(0,room));
+    }
+    files.forEach(f=>{
+      const r = new FileReader();
+      r.onload = e=>{ V.photos.push({file:f, prev:e.target.result}); V.paintThumbs(); };
+      r.readAsDataURL(f);
+    });
+    input.value='';
+  },
+  delPhoto(i){ V.photos.splice(i,1); V.paintThumbs(); },
+  paintThumbs(){
+    const el=document.getElementById('thumbs');
+    el.innerHTML = V.photos.map((p,i)=>
+      '<div class="th"><img src="'+p.prev+'"><button class="x" onclick="V.delPhoto('+i+')">✕</button></div>').join('');
+    document.getElementById('cnt').textContent = V.photos.length ? V.photos.length : '';
+    document.getElementById('cardRead').classList.toggle('hide', V.photos.length===0);
+  },
+
+  // Downscale before upload/OCR. 1600px keeps handwriting legible — the zone
+  // letter and driver name are the whole point and they die at 800px.
+  shrink(file){
+    return new Promise(res=>{
+      let done=false; const fin=v=>{if(!done){done=true;res(v);}};
+      const to=setTimeout(()=>fin(file),15000);
+      const img=new Image();
+      img.onerror=()=>{clearTimeout(to);fin(file);};
+      img.onload=()=>{clearTimeout(to);try{
+        let w=img.width,h=img.height,m=1600;
+        if(w>m||h>m){ if(w>h){h=Math.round(h*m/w);w=m;} else {w=Math.round(w*m/h);h=m;} }
+        const c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        c.toBlob(b=>fin(b||file),'image/jpeg',0.9);
+      }catch(e){fin(file);}};
+      img.src=URL.createObjectURL(file);
+    });
+  },
+  b64(blob){ return new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(blob);}); },
+
+  // ── read ──────────────────────────────────────────────────
+  async read(){
+    if(!V.projId){ V.toast('Pick a project first'); return; }
+    if(!V.photos.length){ V.toast('Add at least one ticket'); return; }
+    const btn=document.getElementById('readBtn');
+    btn.style.pointerEvents='none'; btn.style.opacity='.6';
+    V.rows=[];
+    const batchId='batch_'+Date.now()+'_'+Math.random().toString(36).substring(2,8);
+
+    for(let i=0;i<V.photos.length;i++){
+      btn.textContent='🔍 Reading '+(i+1)+' of '+V.photos.length+'…';
+      const blob = await V.shrink(V.photos[i].file);
+
+      // 1. store the image
+      const path = V.projId+'/hauler_'+Date.now()+'_'+i+'.jpg';
+      let url=null;
+      try{
+        const up = await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',
+          headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},
+          body:blob});
+        if(up.ok) url = SB+'/storage/v1/object/public/ticket-photos/'+path;
+        else console.error('storage', up.status, await up.text());
+      }catch(e){console.error(e);}
+      if(!url){ V.toast('Photo '+(i+1)+' failed to upload — check signal'); continue; }
+
+      // 2. queue row
+      let queueId=null;
+      try{
+        const ins = await fetch(SB+'/rest/v1/photo_queue',{method:'POST',
+          headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=representation'},
+          body:JSON.stringify({project_id:V.projId, access_code:'hauler', submitted_by:V.hauler,
+            photo_type:'scale_ticket', photo_url:url, status:'pending', batch_id:batchId})});
+        if(ins.ok){ const j=await ins.json(); queueId = j && j[0] && j[0].id; }
+        else console.error('queue insert', ins.status, await ins.text());
+      }catch(e){console.error(e);}
+      if(!queueId){ V.toast('Ticket '+(i+1)+' could not be saved — try again'); continue; }
+
+      // 3. OCR
+      const ocr = await V.ocr(await V.b64(blob));
+      V.rows.push({queueId, url, ocr, cur:Object.assign({}, ocr), sent:false});
+    }
+
+    btn.style.pointerEvents='auto'; btn.style.opacity='1'; btn.textContent='🔍 Read Tickets';
+    V.photos=[]; V.paintThumbs();
+    document.getElementById('cardAdd').classList.add('hide');
+    document.getElementById('cardSetup').classList.add('hide');
+    V.paintRows();
+    document.getElementById('bar').classList.remove('hide');
+  },
+
+  async ocr(dataUrl){
+    const prompt =
+      'You are reading a HANDWRITTEN paper scale ticket from DALMEX RECYCLING INC (Dallas TX). '+
+      'It is a carbon copy, so writing may be faint.\n\n'+
+      '- ticket_number: the RED PREPRINTED 5-digit number\n'+
+      '- date: the handwritten date. Read the MONTH and DAY carefully — a 1 and a 7, or 6 and 8, are easy to confuse. Return YYYY-MM-DD.\n'+
+      '- gross_lbs / tare_lbs: the weight rows, usually 20000-46000\n'+
+      '- driver: the handwritten driver name, often first name + last initial (e.g. "Willie G", "Alan", "Derrick")\n'+
+      '- zone: single letter A/B/C/D/E/F if written, often near the project name\n\n'+
+      'Return ONLY valid JSON:\n'+
+      '{"ticket_number":"<string or null>","date":"<YYYY-MM-DD or null>","gross_lbs":<number or 0>,'+
+      '"tare_lbs":<number or 0>,"driver":"<string or null>","zone":"<A|B|C|D|E|F or null>","confidence":<0-100>}\n\n'+
+      'If a field is unreadable use null or 0. DO NOT GUESS.';
+    try{
+      const r = await fetch(SB+'/functions/v1/smart-action',{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+SK},
+        body:JSON.stringify({request_body:{model:'gpt-4o',
+          messages:[{role:'user',content:[{type:'text',text:prompt},
+            {type:'image_url',image_url:{url:dataUrl,detail:'high'}}]}],
+          max_tokens:400, temperature:0.1}})});
+      if(!r.ok){ console.error('ocr', r.status, await r.text()); return {}; }
+      const d = await r.json();
+      let t = (d.choices && d.choices[0] && d.choices[0].message.content) || '{}';
+      t = t.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      const m = t.match(/\{[\s\S]*\}/); if(m) t = m[0];
+      const o = JSON.parse(t);
+      return {ticket_number:o.ticket_number?String(o.ticket_number).trim():'',
+              ticket_date:o.date||'', gross_lbs:o.gross_lbs||0, tare_lbs:o.tare_lbs||0,
+              driver_name:o.driver?String(o.driver).trim():'', zone:o.zone?String(o.zone).trim().toUpperCase():'',
+              project_id:V.projId, confidence:o.confidence||0};
+    }catch(e){ console.error('ocr', e); return {ticket_number:'',ticket_date:'',gross_lbs:0,tare_lbs:0,driver_name:'',zone:'',project_id:V.projId}; }
+  },
+
+  // ── review rows ───────────────────────────────────────────
+  paintRows(){
+    const el = document.getElementById('rows');
+    if(!V.rows.length){ el.innerHTML=''; return; }
+    const today = new Date().toISOString().slice(0,10);
+    el.innerHTML = '<div class="c"><div class="ct">3 · Check each ticket</div>'+
+      '<div style="font-size:.75rem;color:var(--muted);line-height:1.5">Anything highlighted amber could not be read — the driver name and date matter most. Green means you changed it; Dalmex sees every change.</div></div>' +
+      V.rows.map((r,i)=>V.rowHtml(r,i,today)).join('');
+    V.rows.forEach((r,i)=>V.calc(i));
+  },
+
+  rowHtml(r,i,today){
+    const c=r.cur, projOpts = V.projects.map(p=>
+      '<option value="'+p.id+'"'+(p.id===c.project_id?' selected':'')+'>'+V.esc(p.name)+'</option>').join('');
+    const zOpts = ['','A','B','C','D','E','F'].map(z=>
+      '<option value="'+z+'"'+((c.zone||'')===z?' selected':'')+'>'+(z?'Zone '+z:'— none —')+'</option>').join('');
+    const needDrv = !c.driver_name, needNum = !c.ticket_number, needDate = !c.ticket_date;
+    return '<div class="row'+((needDrv||needDate||needNum)?' flag':'')+'" id="row'+i+'">'+
+      '<div class="rowhd"><span>Ticket '+(i+1)+' of '+V.rows.length+'</span>'+
+        '<span id="st'+i+'"></span></div>'+
+      '<div class="split">'+
+        '<div class="ph"><img src="'+r.url+'" onclick="V.zoom('+i+')"></div>'+
+        '<div class="fs">'+
+          '<div class="g2">'+
+            '<div class="fg"><label class="fl">Ticket #</label>'+
+              '<input class="fi'+(needNum?' need':'')+'" id="f'+i+'_ticket_number" inputmode="numeric" value="'+V.esc(c.ticket_number)+'" oninput="V.edit('+i+',\'ticket_number\')"></div>'+
+            '<div class="fg"><label class="fl">Date</label>'+
+              '<input type="date" class="fi'+(needDate?' need':'')+'" id="f'+i+'_ticket_date" max="'+today+'" value="'+V.esc(c.ticket_date)+'" oninput="V.edit('+i+',\'ticket_date\')">'+
+              '<div class="warn hide" id="dw'+i+'"></div></div>'+
+          '</div>'+
+          '<div class="fg"><label class="fl">Driver</label>'+
+            '<input class="fi'+(needDrv?' need':'')+'" id="f'+i+'_driver_name" value="'+V.esc(c.driver_name)+'" placeholder="Required — who hauled this load" oninput="V.edit('+i+',\'driver_name\')">'+
+            (needDrv?'<div class="warn">Not readable on the ticket — needed to pay this load</div>':'')+'</div>'+
+          '<div class="g2">'+
+            '<div class="fg"><label class="fl">Gross (lbs)</label>'+
+              '<input type="number" class="fi" id="f'+i+'_gross_lbs" value="'+(c.gross_lbs||'')+'" oninput="V.edit('+i+',\'gross_lbs\')"></div>'+
+            '<div class="fg"><label class="fl">Tare (lbs)</label>'+
+              '<input type="number" class="fi" id="f'+i+'_tare_lbs" value="'+(c.tare_lbs||'')+'" oninput="V.edit('+i+',\'tare_lbs\')"></div>'+
+          '</div>'+
+          '<div class="net" id="net'+i+'"></div>'+
+          '<div class="g2">'+
+            '<div class="fg"><label class="fl">Zone</label>'+
+              '<select class="fi" id="f'+i+'_zone" onchange="V.edit('+i+',\'zone\')">'+zOpts+'</select></div>'+
+            '<div class="fg"><label class="fl">Project</label>'+
+              '<select class="fi" id="f'+i+'_project_id" onchange="V.edit('+i+',\'project_id\')">'+projOpts+'</select></div>'+
+          '</div>'+
+          '<div class="chg hide" id="cl'+i+'"></div>'+
+        '</div>'+
+      '</div></div>';
+  },
+
+  edit(i,field){
+    const el = document.getElementById('f'+i+'_'+field);
+    if(!el) return;
+    let v = el.value;
+    if(field==='gross_lbs'||field==='tare_lbs') v = parseInt(v)||0;
+    if(field==='zone') v = (v||'').toUpperCase();
+    V.rows[i].cur[field] = v;
+    const orig = V.rows[i].ocr[field];
+    const changed = String(v||'') !== String(orig||'');
+    el.classList.toggle('edited', changed && !!v);
+    if(v) el.classList.remove('need');
+    V.calc(i);
+  },
+
+  calc(i){
+    const r=V.rows[i], c=r.cur;
+    const net = (parseInt(c.gross_lbs)||0) - (parseInt(c.tare_lbs)||0);
+    const nEl=document.getElementById('net'+i);
+    if(nEl) nEl.textContent = net>0 ? ('Net  '+net.toLocaleString()+' lbs   ·   '+(net/2000).toFixed(2)+' tons')
+                                    : 'Net — check the weights';
+    // Date sanity, mirroring the database gate so nothing surprises him on send
+    const dw=document.getElementById('dw'+i);
+    if(dw){
+      let msg='';
+      if(c.ticket_date){
+        const d=new Date(c.ticket_date+'T12:00:00'), now=new Date();
+        const days=Math.round((now-d)/86400000);
+        if(days<0) msg='That date is in the future — check the month';
+        else if(days>120) msg='Over 120 days old — check the month';
+        else if(days>45) msg='That is '+days+' days ago — is the month right?';
+      }
+      dw.textContent=msg; dw.classList.toggle('hide', !msg);
+    }
+    // Running change list — the documentation Robert sees
+    const diffs=V.diffs(i), cl=document.getElementById('cl'+i);
+    if(cl){
+      cl.textContent = diffs.length ? ('You changed: '+diffs.map(d=>d.field.replace(/_/g,' ')).join(', ')) : '';
+      cl.classList.toggle('hide', !diffs.length);
+    }
+  },
+
+  diffs(i){
+    const r=V.rows[i], out=[];
+    ['ticket_number','ticket_date','gross_lbs','tare_lbs','driver_name','zone','project_id'].forEach(f=>{
+      const a=r.ocr[f], b=r.cur[f];
+      if(String(a==null?'':a) !== String(b==null?'':b)){
+        out.push({field:f, from:(a==null||a==='')?null:a, to:(b==null||b==='')?null:b});
+      }
+    });
+    return out;
+  },
+
+  zoom(i){
+    const r=V.rows[i];
+    const el=document.createElement('div'); el.className='lightbox'; el.id='lb';
+    el.onclick=e=>{ if(e.target===el) el.remove(); };
+    el.innerHTML='<div class="lb-hd"><span>Ticket '+(i+1)+(r.cur.ticket_number?' · #'+V.esc(r.cur.ticket_number):'')+'</span>'+
+      '<button class="tab" onclick="document.getElementById(\'lb\').remove()">✕</button></div>'+
+      '<div class="lb-bd"><img src="'+r.url+'" onclick="this.classList.toggle(\'z\')"></div>';
+    document.body.appendChild(el);
+  },
+
+  // ── send ──────────────────────────────────────────────────
+  async send(){
+    if(!V.rows.length){ V.toast('Nothing to send'); return; }
+    // Local pre-check so he fixes problems here, not after a round trip
+    for(let i=0;i<V.rows.length;i++){
+      if(V.rows[i].sent) continue;
+      const c=V.rows[i].cur;
+      if(!c.driver_name){ V.toast('Ticket '+(i+1)+': driver name required'); V.jump(i); return; }
+      if(!c.ticket_number){ V.toast('Ticket '+(i+1)+': ticket number required'); V.jump(i); return; }
+      if(!c.ticket_date){ V.toast('Ticket '+(i+1)+': date required'); V.jump(i); return; }
+    }
+    const btn=document.getElementById('sendBtn');
+    btn.style.pointerEvents='none'; btn.style.opacity='.6';
+    let ok=0, fail=0;
+    for(let i=0;i<V.rows.length;i++){
+      const r=V.rows[i]; if(r.sent){ ok++; continue; }
+      btn.textContent='Sending '+(i+1)+' of '+V.rows.length+'…';
+      const net=(parseInt(r.cur.gross_lbs)||0)-(parseInt(r.cur.tare_lbs)||0);
+      const payload = Object.assign({}, r.cur, {
+        net_lbs: net,
+        net_tons: +(net/2000).toFixed(4),
+        // Documentation: what the AI read, what he changed, who and when.
+        ocr_original: r.ocr,
+        changes: V.diffs(i),
+        reviewed_by: V.hauler,
+        reviewed_at: new Date().toISOString()
+      });
+      const res = await V.rpc('hauler_stage_row',{p_token:V.tok, p_queue_id:r.queueId, p_data:payload});
+      if(res && res.ok){ r.sent=true; ok++; const s=document.getElementById('st'+i); if(s){s.textContent='✅ Sent';s.style.color='var(--green)';} }
+      else { fail++; const s=document.getElementById('st'+i);
+             if(s){ s.textContent='⚠️ '+((res&&res.error)||'Failed'); s.style.color='var(--amber)'; }
+             V.toast('Ticket '+(i+1)+': '+((res&&res.error)||'could not send')); }
+    }
+    btn.style.pointerEvents='auto'; btn.style.opacity='1';
+    btn.textContent = fail? 'Send remaining' : 'Send to Dalmex';
+    if(!fail){
+      V.toast('✅ '+ok+' ticket'+(ok>1?'s':'')+' sent to Dalmex for approval');
+      setTimeout(()=>{ V.rows=[]; document.getElementById('rows').innerHTML='';
+        document.getElementById('bar').classList.add('hide');
+        document.getElementById('cardSetup').classList.remove('hide');
+        document.getElementById('cardAdd').classList.remove('hide'); }, 1400);
+    }
+  },
+
+  jump(i){ const el=document.getElementById('row'+i); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },
+
+  // ── sent list ─────────────────────────────────────────────
+  async loadHist(){
+    const el=document.getElementById('histList');
+    el.textContent='Loading…';
+    const rows = await V.rpc('hauler_recent',{p_token:V.tok});
+    if(!rows){ el.textContent='Could not load.'; return; }
+    if(!rows.length){ el.textContent='Nothing sent in the last 30 days.'; return; }
+    const pm={}; V.projects.forEach(p=>pm[p.id]=p.name);
+    el.innerHTML = rows.map(q=>{
+      const sd=q.staged_data||{};
+      const num = q.ticket_number || sd.ticket_number || '—';
+      let color='var(--dim)', bg='#f1f2f4', label='Uploaded';
+      if(q.status==='staged'){ color='var(--amber)'; bg='var(--amber-bg)'; label='With Dalmex'; }
+      if(q.status==='approved'){ color='var(--green)'; bg='#dcfce7'; label='✓ Accepted'; }
+      if(q.status==='rejected'){ color='var(--red)'; bg='#fee2e2'; label='Rejected'; }
+      return '<div class="hist"><img src="'+q.photo_url+'">'+
+        '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.82rem">#'+V.esc(num)+'</div>'+
+        '<div style="font-size:.65rem;color:var(--dim)">'+V.esc(pm[q.project_id]||'')+
+        (sd.driver_name?' · '+V.esc(sd.driver_name):'')+
+        (sd.ticket_date?' · '+V.esc(sd.ticket_date):'')+'</div></div>'+
+        '<span class="pill" style="color:'+color+';background:'+bg+'">'+label+'</span></div>';
+    }).join('');
+  }
+};
+
+V.init();
+</script>
+</body>
+</html>
