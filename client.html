@@ -149,6 +149,25 @@ padding:12px 0;cursor:pointer;width:100%;text-align:center}
 .tkv-bd img.zoom{width:250%;max-width:none}
 .tkv-ft{padding:10px 14px calc(10px + env(safe-area-inset-bottom));text-align:center;color:rgba(255,255,255,.55);font-size:.6rem;flex-shrink:0}
 
+/* Quick ticket lookup — searches EVERY project the client can see, not just the
+   one currently open. Blue accent matches the review page. */
+.qs-wrap{max-width:900px;margin:0 auto 12px;position:relative}
+.qs{width:100%;padding:14px 16px 14px 42px;border:1.5px solid var(--border);border-radius:11px;
+font-family:var(--font);font-size:.95rem;color:var(--text);background:var(--card);-webkit-appearance:none}
+.qs:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.qs-ico{position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:.9rem;opacity:.5;pointer-events:none}
+.qs-x{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;
+color:var(--text-d);font-size:1rem;padding:6px 8px;cursor:pointer}
+.qs-res{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--card);border:1.5px solid #2563eb;
+border-radius:11px;box-shadow:0 12px 32px rgba(0,0,0,.16);max-height:60vh;overflow-y:auto;z-index:40}
+.qs-hit{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.qs-hit:last-child{border-bottom:none}
+.qs-hit:active{background:rgba(37,99,235,.07)}
+.qs-num{font-weight:800;font-size:.9rem;color:#2563eb;min-width:64px}
+.qs-meta{flex:1;min-width:0;font-size:.65rem;color:var(--text-m);line-height:1.4}
+.qs-tons{font-size:.78rem;font-weight:700;white-space:nowrap}
+.qs-none{padding:16px;text-align:center;font-size:.8rem;color:var(--text-m)}
+
 /* Fast-upload layout on wide screens: the 520px phone column left an iPad
    mostly empty and pushed submit below the fold. Side-by-side photo cards,
    full-width sticky submit, one screen, no scrolling. */
@@ -228,6 +247,12 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 
 <!-- ═══ REPORTS ═══ -->
 <div id="vDash" class="hidden">
+<div class="qs-wrap">
+<span class="qs-ico">🔍</span>
+<input class="qs" id="qs" placeholder="Search any ticket # — all your projects" inputmode="search" autocomplete="off" oninput="P.qsearch(this.value)">
+<button class="qs-x hidden" id="qsX" onclick="P.qclear()">✕</button>
+<div class="qs-res hidden" id="qsRes"></div>
+</div>
 <div class="c" id="projBar"><div class="ct">Select Project</div><div id="projList"></div></div>
 <div id="dashContent" class="hidden">
 <div class="c">
@@ -487,6 +512,49 @@ async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id==
 P.tx=(await P.allTix()).filter(function(t){return t.project_id===id;});
 document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');
 P.renderDash();}else{P._up=id;P.showUForm();}},
+
+// QUICK TICKET LOOKUP. Searches the whole allTix cache — client_tickets already
+// scopes that to this client's projects, so there is no way to reach another
+// customer's data. Matches ticket #, driver, hauler or date.
+async qsearch(q){
+var res=document.getElementById('qsRes'),x=document.getElementById('qsX');
+q=(q||'').trim().toLowerCase();
+x.classList.toggle('hidden', !q);
+if(q.length<2){res.classList.add('hidden');return;}
+var all=await P.allTix()||[];
+var pm={};P.pj.forEach(function(p){pm[p.id]=p.name;});
+var hits=all.filter(function(t){
+return (t.ticket_number||'').toLowerCase().indexOf(q)>=0
+    || (t.driver_name||'').toLowerCase().indexOf(q)>=0
+    || (t.hauler||'').toLowerCase().indexOf(q)>=0
+    || (t.ticket_date||'').indexOf(q)>=0;
+}).sort(function(a,b){return (b.ticket_date||'').localeCompare(a.ticket_date||'');}).slice(0,25);
+P._qhits=hits;
+if(!hits.length){res.innerHTML='<div class="qs-none">No ticket matching \u201C'+P.esc(q)+'\u201D</div>';res.classList.remove('hidden');return;}
+res.innerHTML=hits.map(function(t,i){
+return '<div class="qs-hit" onclick="P.qopen('+i+')">'+
+'<div class="qs-num">#'+P.esc(t.ticket_number||'?')+'</div>'+
+'<div class="qs-meta">'+P.esc(pm[t.project_id]||'')+
+(t.ticket_date?' \u00B7 '+P.fd(t.ticket_date):'')+
+(t.driver_name?' \u00B7 '+P.esc(t.driver_name):'')+
+(t.zone?' \u00B7 Zone '+P.esc(t.zone):'')+'</div>'+
+'<div class="qs-tons">'+(+(t.net_tons)||0).toFixed(2)+' T</div></div>';}).join('');
+res.classList.remove('hidden');},
+
+// Switching project FIRST is not optional: the ticket detail reads
+// P.cp.leed_version to decide whether to show diversion figures. Opening a
+// Non-LEED ticket while a LEED project is loaded would render it with LEED
+// framing — wrong data under a compliance heading.
+async qopen(i){
+var t=P._qhits&&P._qhits[i];if(!t)return;
+P.qclear();
+if(!P.cp||P.cp.id!==t.project_id){await P.pickPj('dash',t.project_id);}
+setTimeout(function(){P.showTk(t.id);},60);},
+
+qclear(){
+var el=document.getElementById('qs');if(el)el.value='';
+document.getElementById('qsRes').classList.add('hidden');
+document.getElementById('qsX').classList.add('hidden');},
 
 backToProj(){document.getElementById('dashContent').classList.add('hidden');document.getElementById('projBar').classList.remove('hidden');P.cp=null;P.renderPL('projList','dash');},
 
