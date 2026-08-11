@@ -10260,9 +10260,11 @@ const DS = {
                     '- gross_lbs: the GROSS weight in pounds (larger number)\n' +
                     '- tare_lbs: the TARE weight in pounds (smaller number, weight of empty truck)\n' +
                     '- net_lbs: NET weight (gross minus tare)\n' +
-                    '- job_name: the job site name, project name, customer name, or delivery location printed on the ticket. Look for fields labeled "Job", "Project", "Customer", "Deliver To", "Job Site", or "Location". Return the text exactly as printed, or null if not found.\n\n' +
+                    '- job_name: the job site name, project name, customer name, or delivery location printed on the ticket. Look for fields labeled "Job", "Project", "Customer", "Deliver To", "Job Site", or "Location". Return the text exactly as printed, or null if not found.\n' +
+                    '- zone: single letter A/B/C/D/E/F if present, often handwritten near the project name\n' +
+                    '- driver: the driver name if printed or handwritten on the ticket, or null\n\n' +
                     'Return ONLY valid JSON:\n' +
-                    '{"type":"scale_ticket","ticket_number":"XXXXX or null","printed_date":"MM/DD/YY as printed or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"job_name":"string or null","confidence":0-100}';
+                    '{"type":"scale_ticket","ticket_number":"XXXXX or null","printed_date":"MM/DD/YY as printed or null","gross_lbs":0,"tare_lbs":0,"net_lbs":0,"job_name":"string or null","zone":"<A|B|C|D|E|F or null>","driver":"name or null","confidence":0-100}';
 
                 var data = await this.callOpenAI({
                     model: 'gpt-4o',
@@ -10387,6 +10389,12 @@ const DS = {
                     '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
                     '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
                     '</div>' +
+                    '<div style="display:flex;gap:4px;margin-top:4px">' +
+                    '<select id="mt_zone_'+i+'" class="form-input" style="width:86px;font-size:.75rem">' +
+                    ['','A','B','C','D','E','F'].map(function(z){return '<option value="'+z+'"'+((ocr.zone||'')===z?' selected':'')+'>'+(z?'Zone '+z:'— Zone —')+'</option>';}).join('') +
+                    '</select>' +
+                    '<input type="text" id="mt_drv_'+i+'" class="form-input" value="'+(ocr.driver||'')+'" placeholder="Driver" style="flex:1;font-size:.75rem">' +
+                    '</div>' +
                     '</div></div></div>';
             });
 
@@ -10453,6 +10461,13 @@ const DS = {
 
         this.showLoading('Saving ' + scaleTickets.length + ' ticket' + (scaleTickets.length>1?'s':'') + '...');
 
+        // Aug 8: submitted_by is the uploader's hauler pick (or their name, or a
+        // sentinel like __other) — resolve to the canonical hauler before it can
+        // touch any ticket. This is how "__other" and "Rob Van" got written into
+        // tickets.hauler by earlier batches.
+        var batchHauler = null;
+        try { batchHauler = await this._resolveHauler(q0.submitted_by); } catch(e) {}
+
         var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
         // Also fetch ALL tickets to catch cross-project dupes by ticket number
         var allTicketNums = {};
@@ -10480,7 +10495,7 @@ const DS = {
                 net_lbs: netLbs,
                 net_tons: netTons,
                 scale_ticket_image: item.q.photo_url,
-                hauler: q0.submitted_by || null,
+                hauler: batchHauler,
                 scan_type: 'batch_queue',
                 debris_images: []
             };
@@ -10510,6 +10525,10 @@ const DS = {
             });
             ticketData.co2e_avoided = +co2e.toFixed(4);
 
+            // Zone + driver from the review row (prefilled by OCR, editable)
+            var rowZone = ((document.getElementById('mt_zone_'+i)||{}).value||'').trim().toUpperCase();
+            var rowDriver = ((document.getElementById('mt_drv_'+i)||{}).value||'').trim();
+
             // Normalize ticket number for comparison
             var normalizedNum = String(tktNum).trim();
             var existing = allTicketNums[normalizedNum];
@@ -10522,6 +10541,15 @@ const DS = {
                 var rowProjEl = document.getElementById('mt_proj_' + i);
                 var rowProjId = rowProjEl ? rowProjEl.value : q0.project_id;
                 ticketData.project_id = rowProjId;
+                // Fill-blanks-only on an EXISTING ticket: the ticket is the record,
+                // the photo is evidence. Zone/driver/hauler land only where empty;
+                // a photo can never relabel a load that was already labelled.
+                if (rowZone && !existing.zone) ticketData.zone = rowZone;
+                if (rowDriver && !existing.driver_name) {
+                    ticketData.driver_name = rowDriver;
+                    try { var xdId = await this._resolveDriverId(rowDriver, existing.hauler || batchHauler); if (xdId) ticketData.driver_id = xdId; } catch(e) {}
+                }
+                if (existing.hauler) delete ticketData.hauler;
                 // Update existing ticket with new photo/data
                 await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
                 ticketId = existing.id;
@@ -10531,6 +10559,11 @@ const DS = {
                 var rowProjEl2 = document.getElementById('mt_proj_' + i);
                 ticketData.project_id = rowProjEl2 ? rowProjEl2.value : q0.project_id;
                 ticketData.ticket_number = tktNum;
+                if (rowZone) ticketData.zone = rowZone;
+                if (rowDriver) {
+                    ticketData.driver_name = rowDriver;
+                    try { var ndId = await this._resolveDriverId(rowDriver, batchHauler); if (ndId) ticketData.driver_id = ndId; } catch(e) {}
+                }
                 var result = await this.supabase('tickets', 'POST', ticketData);
                 if (result && result.length) {
                     ticketId = result[0].id;
