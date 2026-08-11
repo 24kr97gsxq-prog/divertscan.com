@@ -10465,8 +10465,16 @@ const DS = {
         // sentinel like __other) — resolve to the canonical hauler before it can
         // touch any ticket. This is how "__other" and "Rob Van" got written into
         // tickets.hauler by earlier batches.
+        // Project first: every project declares its hauler (projects.waste_hauler),
+        // and that beats whatever the upload form carried — submitted_by has held
+        // client names ("Rob Van") and sentinels. Resolve either way so variant
+        // spellings on the project record still canonicalize.
         var batchHauler = null;
-        try { batchHauler = await this._resolveHauler(q0.submitted_by); } catch(e) {}
+        try {
+            var bhProj = (this.state.projects || []).find(function(p){ return p.id === q0.project_id; });
+            var bhRaw = (bhProj && bhProj.waste_hauler) || q0.submitted_by;
+            batchHauler = await this._resolveHauler(bhRaw);
+        } catch(e) {}
 
         var projectTickets = await this.supabase('tickets?project_id=eq.' + q0.project_id + '&order=ticket_date.desc') || [];
         // Also fetch ALL tickets to catch cross-project dupes by ticket number
@@ -10497,6 +10505,10 @@ const DS = {
                 scale_ticket_image: item.q.photo_url,
                 hauler: batchHauler,
                 scan_type: 'batch_queue',
+                // Percentages below come from _getDefaultMaterials — estimates until
+                // a human confirms them in the Mix Review queue. Applies to updates
+                // too, honestly: this path re-defaults the percentages either way.
+                mix_source: 'estimated',
                 debris_images: []
             };
 
