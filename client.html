@@ -137,6 +137,18 @@ padding:12px 0;cursor:pointer;width:100%;text-align:center}
 .u-sticky{position:sticky;bottom:0;padding:10px 0 14px;background:linear-gradient(to top,var(--bg) 72%,transparent);z-index:5}
 @media(max-width:520px){.c{padding:14px}.u-wrap{max-width:none}}
 
+/* Exploded ticket view: full-screen, in-app, tap to zoom. window.open kicked
+   the user out of the app into a bare Safari tab — this keeps them in it. */
+.tkv{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:300;display:flex;flex-direction:column}
+.tkv-hd{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;color:#fff;flex-shrink:0}
+.tkv-cap{font-size:.75rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkv-sub{font-size:.6rem;color:rgba(255,255,255,.65);font-weight:400}
+.tkv-x{background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1rem;line-height:1;padding:10px 14px;border-radius:10px;flex-shrink:0;margin-left:10px}
+.tkv-bd{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+.tkv-bd img{width:100%;display:block;transition:width .15s}
+.tkv-bd img.zoom{width:250%;max-width:none}
+.tkv-ft{padding:10px 14px calc(10px + env(safe-area-inset-bottom));text-align:center;color:rgba(255,255,255,.55);font-size:.6rem;flex-shrink:0}
+
 /* ═══ HISTORY ITEMS ═══ */
 .si{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:center}
 .st{width:40px;height:40px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
@@ -1516,18 +1528,40 @@ if(!items||!items.length){el.innerHTML='<div style="text-align:center;padding:10
 var aIds=items.filter(function(q){return q.assigned_ticket_id;}).map(function(q){return q.assigned_ticket_id;});
 var tm={};if(aIds.length){var tks=await P.apiAll('tickets?id=in.('+aIds.join(',')+')&select=id,ticket_number');if(tks)tks.forEach(function(t){tm[t.id]=t.ticket_number;});}
 var pm={};P.pj.forEach(function(p){pm[p.id]=p.name;});
-el.innerHTML=items.map(function(q){var an=q.assigned_ticket_id?tm[q.assigned_ticket_id]:null;var sc,sl;
+// Kept for the exploded view: viewHist(i) reads from these instead of taking
+// strings through onclick, so apostrophes in project names ("Children's
+// Hospital") can never break the markup.
+P._hist=items;P._histTm=tm;P._histPm=pm;
+el.innerHTML=items.map(function(q,qi){var an=q.assigned_ticket_id?tm[q.assigned_ticket_id]:null;var sc,sl;
 if(q.status==='pending'){sc='var(--warning)';sl='⏳ Pending';}else if(q.status==='approved'&&an){sc='var(--success)';sl='✅ #'+an;}
 else if(q.status==='approved'){sc='var(--success)';sl='✅ Done';}else{sc='var(--text-d)';sl='❌ Rejected';}
 var dt=q.created_at?P.fd(q.created_at.substring(0,10)):'';
-return '<div class="si"><div class="st" onclick="window.open(\''+q.photo_url+'\')"><img src="'+q.photo_url+'"></div>'+
-'<div style="flex:1;min-width:0"><div style="font-size:.7rem;font-weight:700">'+(q.photo_type==='scale_ticket'?'📄 Scale':'📸 Debris')+
+return '<div class="si"><div class="st" onclick="P.viewHist('+qi+')"><img src="'+q.photo_url+'"></div>'+
+'<div style="flex:1;min-width:0" onclick="P.viewHist('+qi+')"><div style="font-size:.7rem;font-weight:700">'+(q.photo_type==='scale_ticket'?'📄 Scale':'📸 Debris')+
 (q.ticket_number&&!an?' #'+q.ticket_number:'')+'</div>'+
 '<div style="font-size:.55rem;color:var(--text-m)">'+(pm[q.project_id]||'')+' • '+dt+' • '+P.ago(q.created_at)+'</div></div>'+
 '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">'+
-'<div style="font-size:.6rem;font-weight:700;color:'+sc+'">'+sl+'</div>'+
+'<div style="font-size:.6rem;font-weight:700;color:'+sc+';cursor:pointer" onclick="P.viewHist('+qi+')">'+sl+'</div>'+
 (q.status==='pending'?'<div onclick="P.delHist(\''+q.id+'\')" style="font-size:.55rem;color:var(--danger);cursor:pointer">🗑️ Delete</div>':'')+
 '</div></div>';}).join('');},
+
+// EXPLODED TICKET VIEW — tap the number, thumbnail, or row: full-screen photo,
+// tap the image to toggle 2.5x zoom (scroll to pan), ✕ or backdrop to close.
+viewHist(i){
+var q=P._hist&&P._hist[i];if(!q)return;
+var an=q.assigned_ticket_id?(P._histTm||{})[q.assigned_ticket_id]:null;
+var num=an||q.ticket_number||null;
+var cap=(q.photo_type==='scale_ticket'?'\uD83D\uDCC4 ':'\uD83D\uDCF8 ')+(num?'#'+num:(q.photo_type==='scale_ticket'?'Scale Ticket':'Debris Photo'));
+var sub=((P._histPm||{})[q.project_id]||'')+' \u2022 '+(q.created_at?P.fd(q.created_at.substring(0,10)):'')+
+(q.status==='approved'?' \u2022 \u2705 Processed':(q.status==='pending'?' \u2022 \u23F3 Pending':''));
+var el=document.createElement('div');el.className='tkv';el.id='tkViewer';
+el.onclick=function(e){if(e.target===el)el.remove();};
+el.innerHTML='<div class="tkv-hd"><div style="min-width:0"><div class="tkv-cap">'+P.esc(cap)+'</div>'+
+'<div class="tkv-sub">'+P.esc(sub)+'</div></div>'+
+'<button class="tkv-x" onclick="document.getElementById(\'tkViewer\').remove()">\u2715</button></div>'+
+'<div class="tkv-bd"><img src="'+q.photo_url+'" onclick="this.classList.toggle(\'zoom\')"></div>'+
+'<div class="tkv-ft">Tap the ticket to zoom \u2022 scroll to pan</div>';
+document.body.appendChild(el);},
 
 async delHist(id){if(!confirm('Delete this submission?'))return;
 await P.api('photo_queue?id=eq.'+id,'DELETE');P.toast('Deleted');P.loadHist();P.loadBadge();},
