@@ -1093,6 +1093,13 @@ document.addEventListener('keydown', function(e){
             <label class="form-label">Assign Projects</label>
             <div id="clientProjectCheckboxes" style="max-height:200px; overflow-y:auto;"></div>
         </div>
+        <div class="form-group">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg-input)">
+                <input type="checkbox" id="newClientCanVerify" style="width:20px;height:20px;margin-top:1px;flex-shrink:0">
+                <span><span style="font-weight:700;font-size:.85rem">✅ Can verify tickets</span>
+                <span style="display:block;font-size:.68rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Adds a Review tab to their portal — they upload scale tickets, the AI reads them, and they correct the driver, date and zone before the batch reaches you. Tick this for whoever sends the report to the sustainability manager.</span></span>
+            </label>
+        </div>
         <button class="btn btn-success mt-8" onclick="DS.createClient()">Create Client</button>
         <button class="btn btn-outline mt-8" onclick="DS.closeModal('newClientModal')">Cancel</button>
     </div>
@@ -1127,6 +1134,13 @@ document.addEventListener('keydown', function(e){
         <div class="form-group">
             <label class="form-label">Assigned Projects</label>
             <div id="editClientProjects" style="max-height:120px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
+        </div>
+        <div class="form-group">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg-input)">
+                <input type="checkbox" id="editClientCanVerify" style="width:20px;height:20px;margin-top:1px;flex-shrink:0">
+                <span><span style="font-weight:700;font-size:.85rem">✅ Can verify tickets</span>
+                <span style="display:block;font-size:.68rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Adds a Review tab to their portal for correcting tickets before they reach you.</span></span>
+            </label>
         </div>
         <button class="btn btn-success mt-8" onclick="DS.saveClientEdit()">💾 Save Changes</button>
         <div class="btn-row mt-8">
@@ -12538,6 +12552,7 @@ const DS = {
                 '<div class="ticket-info" onclick="DS.showEditClient(\'' + c.id + '\')">'+
                     '<div class="ticket-title">' + DS.esc(c.name) + '</div>' +
                     '<div class="ticket-meta">' + (c.company || '') + (c.email ? ' \u2022 ' + c.email : '') + '</div>' +
+                    (c.can_verify ? '<div class="ticket-meta" style="color:var(--success);font-weight:700;">✅ Can verify tickets</div>' : '') +
                     '<div class="ticket-meta" style="color:var(--primary);">' + projNames.length + ' project' + (projNames.length !== 1 ? 's' : '') +
                     (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : '') +
                     (c.last_login ? ' \u2022 Last: ' + DS.fmtDate(c.last_login.split('T')[0]) : '') + '</div>' +
@@ -12602,6 +12617,7 @@ const DS = {
         document.getElementById('newClientEmail').value = '';
         document.getElementById('newClientPassword').value = '';
         document.getElementById('newClientCompany').value = '';
+        var ncv = document.getElementById('newClientCanVerify'); if (ncv) ncv.checked = false;
         var html = '';
         // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
         var WALKIN_PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
@@ -12634,7 +12650,8 @@ const DS = {
         this.showLoading('Creating client...');
         var result = await this.supabase('rpc/admin_upsert_client', 'POST', {
             admin_pass: pass, p_id: null, p_name: name, p_email: email,
-            p_company: company || null, p_password: password, p_project_ids: projIds
+            p_company: company || null, p_password: password, p_project_ids: projIds,
+            p_can_verify: !!(document.getElementById('newClientCanVerify') || {}).checked
         });
         this.hideLoading();
         if (!result) { this.showToast('Failed - email may already exist'); return; }
@@ -12656,6 +12673,7 @@ const DS = {
         document.getElementById('editClientEmail').value = c.email || '';
         document.getElementById('editClientCompany').value = c.company || '';
         document.getElementById('editClientPassword').value = '';
+        var ecv = document.getElementById('editClientCanVerify'); if (ecv) ecv.checked = !!c.can_verify;
         var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
         var html = '';
         // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
@@ -12689,7 +12707,8 @@ const DS = {
         this.showLoading('Saving...');
         var result = await this.supabase('rpc/admin_upsert_client', 'POST', {
             admin_pass: pass, p_id: id, p_name: name, p_email: email,
-            p_company: company || null, p_password: password || null, p_project_ids: projIds
+            p_company: company || null, p_password: password || null, p_project_ids: projIds,
+            p_can_verify: !!(document.getElementById('editClientCanVerify') || {}).checked
         });
         this.hideLoading();
         if (!result) { this.showToast('Save failed'); return; }
