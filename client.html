@@ -220,6 +220,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 <div class="topnav-brand">Dalmex Recycling</div>
 <button class="topnav-link active" onclick="P.go('dash')" data-v="dash">📊 Reports</button>
 <button class="topnav-link" onclick="P.go('upload')" data-v="upload">📷 Upload<span class="topnav-badge hidden" id="navBadge">0</span></button>
+<button class="topnav-link hidden" onclick="P.go('verify')" data-v="verify" id="navVerify">✅ Review</button>
 <button class="topnav-link" onclick="P.go('drivers')" data-v="drivers">🧑‍🚛 Drivers</button>
 <button class="topnav-link" onclick="P.go('history')" data-v="history">📋 History</button>
 <div class="topnav-right">
@@ -378,6 +379,28 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
 </div>
 
 <!-- ═══ HISTORY ═══ -->
+<div id="vVerify" class="hidden">
+<div class="u-wrap">
+<div class="c" id="vfSetup">
+<div class="ct">1 · Project</div>
+<select class="fi" id="vfProj" onchange="P.vfPick(this.value)"><option value="">Select a project…</option></select>
+</div>
+<div class="c hidden" id="vfAdd">
+<div class="ct">2 · Scale Tickets <span id="vfCnt" style="color:var(--primary)"></span></div>
+<div class="ub ub-hero" style="background:var(--primary);color:#fff">📷 Take Photo<input type="file" accept="image/*" capture="environment" onchange="P.vfAdd(this)"></div>
+<div class="ub ub-alt">Choose or scan from files<input type="file" accept="image/*" multiple onchange="P.vfAdd(this)"></div>
+<div class="pr" id="vfThumbs"></div>
+<div style="font-size:.66rem;color:var(--text-d);margin-top:10px">Up to 10 at a time. Scanned copies read best — use the darker carbon copy.</div>
+</div>
+<div class="c hidden" id="vfReadCard">
+<div class="b bs" id="vfReadBtn" onclick="P.vfRead()">🔍 Read Tickets</div>
+<div style="font-size:.66rem;color:var(--text-d);margin-top:8px;text-align:center">Reads each ticket, then you check the driver and date before sending to Dalmex.</div>
+</div>
+<div id="vfRows"></div>
+<div class="u-sticky hidden" id="vfBar"><div class="b bs" id="vfSendBtn" onclick="P.vfSend()">Send to Dalmex</div></div>
+</div>
+</div>
+
 <div id="vHistory" class="hidden">
 <div class="c"><div class="ct">Submission History</div>
 <div id="hList"><div style="text-align:center;padding:16px;color:var(--text-d)">Loading...</div></div>
@@ -482,20 +505,27 @@ async loadPj(){
 P.pj=await P.api('rpc/client_projects','POST',{p_cid:P.cl.id})||[];},
 
 showApp(){document.getElementById('vLogin').classList.add('hidden');document.getElementById('nav').style.display='flex';
+// Review tab is per-account, not per-company: whoever sends the report to the
+// sustainability manager is who verifies the data under it. Fails closed — any
+// error and the tab simply stays hidden.
+P.api('rpc/client_can_verify','POST',{p_cid:P.cl.id}).then(function(r){
+if(r&&r.length&&r[0].can_verify){P._canVerify=true;document.getElementById('navVerify').classList.remove('hidden');}
+}).catch(function(){});
 try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
 P.go('dash');P.loadBadge();},
 
 logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];P._allTixCache=null;try{localStorage.removeItem('ds_cid');}catch(x){}
-document.getElementById('nav').style.display='none';['vDash','vUpload','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
+document.getElementById('nav').style.display='none';['vDash','vUpload','vVerify','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
 document.getElementById('vLogin').classList.remove('hidden');document.getElementById('lPw').value='';},
 
-go(v){['vDash','vUpload','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
+go(v){['vDash','vUpload','vVerify','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
 document.querySelectorAll('.topnav-link').forEach(function(b){b.classList.toggle('active',b.dataset.v===v);});
 if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');
 if(P.cp){document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');}
 else if(P.pj.length===1){P.pickPj('dash',P.pj[0].id);}
 else{document.getElementById('projBar').classList.remove('hidden');document.getElementById('dashContent').classList.add('hidden');P.renderPL('projList','dash');}}
 if(v==='upload'){document.getElementById('vUpload').classList.remove('hidden');P.fillUProjSel();}
+if(v==='verify'){document.getElementById('vVerify').classList.remove('hidden');P.vfInit();}
 if(v==='drivers'){document.getElementById('vDrivers').classList.remove('hidden');P.loadAllClientDrivers();}
 if(v==='history'){document.getElementById('vHistory').classList.remove('hidden');P.loadHist();}},
 
@@ -555,6 +585,219 @@ qclear(){
 var el=document.getElementById('qs');if(el)el.value='';
 document.getElementById('qsRes').classList.add('hidden');
 document.getElementById('qsX').classList.add('hidden');},
+
+// ════════════════════════════════════════════════════════════
+// TICKET REVIEW (Review tab) — upload, OCR, correct, send.
+// Nothing here creates a ticket. Every submission is STAGED on the queue row
+// via client_stage_row(), which has no write path to the tickets table. Dalmex
+// reviews the staged work and creates the tickets.
+// Every change made to what the AI read is recorded field-by-field, so the
+// admin side shows exactly what was corrected and by whom.
+// ════════════════════════════════════════════════════════════
+_vf:{photos:[],rows:[],proj:null,MAX:10},
+
+vfInit(){
+var sel=document.getElementById('vfProj');
+sel.innerHTML='<option value="">Select a project\u2026</option>'+
+P.pj.map(function(p){return '<option value="'+P.esc(p.id)+'">'+P.esc(p.name)+'</option>';}).join('');
+if(P.pj.length===1){sel.value=P.pj[0].id;P.vfPick(P.pj[0].id);}},
+
+vfPick(id){P._vf.proj=id||null;
+document.getElementById('vfAdd').classList.toggle('hidden',!id);
+P.vfThumbs();},
+
+vfAdd(input){
+var files=Array.from(input.files),arr=P._vf.photos,room=P._vf.MAX-arr.length;
+if(files.length>room){P.toast(room<=0?('Max '+P._vf.MAX+' at a time \u2014 send these first'):('Max '+P._vf.MAX+' \u2014 added the first '+room));files=files.slice(0,Math.max(0,room));}
+files.forEach(function(f){var r=new FileReader();r.onload=function(e){arr.push({file:f,prev:e.target.result});P.vfThumbs();};r.readAsDataURL(f);});
+input.value='';},
+
+vfDel(i){P._vf.photos.splice(i,1);P.vfThumbs();},
+
+vfThumbs(){
+var el=document.getElementById('vfThumbs');
+el.innerHTML=P._vf.photos.map(function(p,i){return '<div style="position:relative;flex-shrink:0"><img src="'+p.prev+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"><button onclick="P.vfDel('+i+')" style="position:absolute;top:-5px;right:-5px;width:19px;height:19px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;border:none;cursor:pointer">\u2715</button></div>';}).join('');
+document.getElementById('vfCnt').textContent=P._vf.photos.length||'';
+document.getElementById('vfReadCard').classList.toggle('hidden',P._vf.photos.length===0);},
+
+async vfRead(){
+if(!P._vf.proj){P.toast('Pick a project first');return;}
+if(!P._vf.photos.length){P.toast('Add at least one ticket');return;}
+var btn=document.getElementById('vfReadBtn');
+btn.style.pointerEvents='none';btn.style.opacity='.6';
+P._vf.rows=[];
+var batchId='batch_'+Date.now()+'_'+Math.random().toString(36).substring(2,8);
+for(var i=0;i<P._vf.photos.length;i++){
+btn.textContent='🔍 Reading '+(i+1)+' of '+P._vf.photos.length+'\u2026';
+var blob=await P.compress(P._vf.photos[i].file,1600);
+var path=P._vf.proj+'/review_'+Date.now()+'_'+i+'.jpg',url=null;
+try{var up=await fetch(SB+'/storage/v1/object/ticket-photos/'+path,{method:'POST',
+headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+if(up.ok)url=SB+'/storage/v1/object/public/ticket-photos/'+path;else console.error('storage',up.status,await up.text());
+}catch(e){console.error(e);}
+if(!url){P.toast('Photo '+(i+1)+' failed to upload \u2014 check signal');continue;}
+var proj=P.pj.find(function(x){return x.id===P._vf.proj;});
+var qid=null;
+try{var ins=await fetch(SB+'/rest/v1/photo_queue',{method:'POST',
+headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=representation'},
+body:JSON.stringify({project_id:P._vf.proj,access_code:(proj&&proj.access_code)||'review',
+submitted_by:(proj&&proj.waste_hauler)||P.cl.name,photo_type:'scale_ticket',photo_url:url,status:'pending',batch_id:batchId})});
+if(ins.ok){var j=await ins.json();qid=j&&j[0]&&j[0].id;}else console.error('queue',ins.status,await ins.text());
+}catch(e){console.error(e);}
+if(!qid){P.toast('Ticket '+(i+1)+' could not be saved');continue;}
+var ocr=await P.vfOcr(await P.toB64(blob));
+P._vf.rows.push({qid:qid,url:url,ocr:ocr,cur:Object.assign({},ocr),sent:false});
+}
+btn.style.pointerEvents='auto';btn.style.opacity='1';btn.textContent='🔍 Read Tickets';
+P._vf.photos=[];P.vfThumbs();
+document.getElementById('vfAdd').classList.add('hidden');
+document.getElementById('vfSetup').classList.add('hidden');
+P.vfRows();
+document.getElementById('vfBar').classList.remove('hidden');},
+
+toB64(blob){return new Promise(function(res){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.readAsDataURL(blob);});},
+
+async vfOcr(dataUrl){
+var prompt='You are reading a HANDWRITTEN paper scale ticket from DALMEX RECYCLING INC (Dallas TX). '+
+'It is a carbon copy, so writing may be faint.\n\n'+
+'- ticket_number: the RED PREPRINTED 5-digit number\n'+
+'- date: the handwritten date. Read the MONTH and DAY carefully \u2014 1 and 7, or 6 and 8, are easy to confuse. Return YYYY-MM-DD.\n'+
+'- gross_lbs / tare_lbs: the weight rows, usually 20000-46000\n'+
+'- driver: the handwritten driver name, often first name + last initial\n'+
+'- zone: single letter A/B/C/D/E/F if written, often near the project name\n\n'+
+'Return ONLY valid JSON:\n'+
+'{"ticket_number":"<string or null>","date":"<YYYY-MM-DD or null>","gross_lbs":<number or 0>,"tare_lbs":<number or 0>,"driver":"<string or null>","zone":"<A|B|C|D|E|F or null>","confidence":<0-100>}\n\n'+
+'If a field is unreadable use null or 0. DO NOT GUESS.';
+try{
+var r=await fetch(SB+'/functions/v1/smart-action',{method:'POST',
+headers:{'Content-Type':'application/json','Authorization':'Bearer '+SK},
+body:JSON.stringify({request_body:{model:'gpt-4o',messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:dataUrl,detail:'high'}}]}],max_tokens:400,temperature:0.1}})});
+if(!r.ok){console.error('ocr',r.status,await r.text());return P.vfBlank();}
+var d=await r.json();
+var t=(d.choices&&d.choices[0]&&d.choices[0].message.content)||'{}';
+t=t.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+var m=t.match(/\{[\s\S]*\}/);if(m)t=m[0];
+var o=JSON.parse(t);
+return {ticket_number:o.ticket_number?String(o.ticket_number).trim():'',ticket_date:o.date||'',
+gross_lbs:o.gross_lbs||0,tare_lbs:o.tare_lbs||0,driver_name:o.driver?String(o.driver).trim():'',
+zone:o.zone?String(o.zone).trim().toUpperCase():'',project_id:P._vf.proj};
+}catch(e){console.error('ocr',e);return P.vfBlank();}},
+
+vfBlank(){return {ticket_number:'',ticket_date:'',gross_lbs:0,tare_lbs:0,driver_name:'',zone:'',project_id:P._vf.proj};},
+
+vfRows(){
+var el=document.getElementById('vfRows');
+if(!P._vf.rows.length){el.innerHTML='';return;}
+var today=new Date().toISOString().slice(0,10);
+el.innerHTML='<div class="c"><div class="ct">3 \u00B7 Check each ticket</div>'+
+'<div style="font-size:.75rem;color:var(--text-m);line-height:1.5">Amber means it could not be read \u2014 the driver name and date matter most. Green means you changed it; Dalmex sees every change.</div></div>'+
+P._vf.rows.map(function(r,i){return P.vfRowHtml(r,i,today);}).join('');
+P._vf.rows.forEach(function(r,i){P.vfCalc(i);});},
+
+vfRowHtml(r,i,today){
+var c=r.cur;
+var projOpts=P.pj.map(function(p){return '<option value="'+P.esc(p.id)+'"'+(p.id===c.project_id?' selected':'')+'>'+P.esc(p.name)+'</option>';}).join('');
+var zOpts=['','A','B','C','D','E','F'].map(function(z){return '<option value="'+z+'"'+((c.zone||'')===z?' selected':'')+'>'+(z?'Zone '+z:'\u2014 none \u2014')+'</option>';}).join('');
+var nd=!c.driver_name,nn=!c.ticket_number,ndt=!c.ticket_date;
+var amber='border-color:var(--warning);background:rgba(245,158,11,.08)';
+return '<div class="c" id="vfRow'+i+'" style="'+((nd||ndt||nn)?'border-color:var(--warning);':'')+'">'+
+'<div style="display:flex;justify-content:space-between;font-size:.7rem;font-weight:700;color:var(--text-m);margin-bottom:8px">'+
+'<span>Ticket '+(i+1)+' of '+P._vf.rows.length+'</span><span id="vfSt'+i+'"></span></div>'+
+'<div style="display:flex;gap:12px;flex-wrap:wrap">'+
+'<div style="width:150px;flex-shrink:0"><img src="'+r.url+'" onclick="P.vfZoom('+i+')" style="width:100%;border-radius:8px;border:1px solid var(--border);cursor:pointer;display:block"></div>'+
+'<div style="flex:1;min-width:220px">'+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+'<div class="fg"><label class="fl">Ticket #</label><input class="fi" id="vf'+i+'_ticket_number" inputmode="numeric" value="'+P.esc(c.ticket_number)+'" style="'+(nn?amber:'')+'" oninput="P.vfEdit('+i+',\'ticket_number\')"></div>'+
+'<div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="vf'+i+'_ticket_date" max="'+today+'" value="'+P.esc(c.ticket_date)+'" style="'+(ndt?amber:'')+'" oninput="P.vfEdit('+i+',\'ticket_date\')"><div style="font-size:.62rem;color:var(--warning);font-weight:700;margin-top:3px" id="vfDw'+i+'"></div></div>'+
+'</div>'+
+'<div class="fg"><label class="fl">Driver</label><input class="fi" id="vf'+i+'_driver_name" value="'+P.esc(c.driver_name)+'" placeholder="Required \u2014 who hauled this load" style="'+(nd?amber:'')+'" oninput="P.vfEdit('+i+',\'driver_name\')">'+
+(nd?'<div style="font-size:.62rem;color:var(--warning);font-weight:700;margin-top:3px">Not readable \u2014 needed to pay this load</div>':'')+'</div>'+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+'<div class="fg"><label class="fl">Gross (lbs)</label><input type="number" class="fi" id="vf'+i+'_gross_lbs" value="'+(c.gross_lbs||'')+'" oninput="P.vfEdit('+i+',\'gross_lbs\')"></div>'+
+'<div class="fg"><label class="fl">Tare (lbs)</label><input type="number" class="fi" id="vf'+i+'_tare_lbs" value="'+(c.tare_lbs||'')+'" oninput="P.vfEdit('+i+',\'tare_lbs\')"></div>'+
+'</div>'+
+'<div style="font-size:.8rem;font-weight:700;color:var(--success);padding:4px 0" id="vfNet'+i+'"></div>'+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+'<div class="fg"><label class="fl">Zone</label><select class="fi" id="vf'+i+'_zone" onchange="P.vfEdit('+i+',\'zone\')">'+zOpts+'</select></div>'+
+'<div class="fg"><label class="fl">Project</label><select class="fi" id="vf'+i+'_project_id" onchange="P.vfEdit('+i+',\'project_id\')">'+projOpts+'</select></div>'+
+'</div>'+
+'<div style="font-size:.62rem;color:var(--success);font-weight:600" id="vfCl'+i+'"></div>'+
+'</div></div></div>';},
+
+vfEdit(i,f){
+var el=document.getElementById('vf'+i+'_'+f);if(!el)return;
+var v=el.value;
+if(f==='gross_lbs'||f==='tare_lbs')v=parseInt(v)||0;
+if(f==='zone')v=(v||'').toUpperCase();
+P._vf.rows[i].cur[f]=v;
+var changed=String(v||'')!==String(P._vf.rows[i].ocr[f]||'');
+el.style.borderColor=changed&&v?'var(--success)':'';
+el.style.background=changed&&v?'rgba(34,197,94,.06)':'';
+P.vfCalc(i);},
+
+vfCalc(i){
+var c=P._vf.rows[i].cur;
+var net=(parseInt(c.gross_lbs)||0)-(parseInt(c.tare_lbs)||0);
+var n=document.getElementById('vfNet'+i);
+if(n)n.textContent=net>0?('Net  '+net.toLocaleString()+' lbs  \u00B7  '+(net/2000).toFixed(2)+' tons'):'Net \u2014 check the weights';
+var dw=document.getElementById('vfDw'+i);
+if(dw){var msg='';
+if(c.ticket_date){var d=new Date(c.ticket_date+'T12:00:00'),days=Math.round((new Date()-d)/86400000);
+if(days<0)msg='That date is in the future \u2014 check the month';
+else if(days>120)msg='Over 120 days old \u2014 check the month';
+else if(days>45)msg='That is '+days+' days ago \u2014 is the month right?';}
+dw.textContent=msg;}
+var diffs=P.vfDiffs(i),cl=document.getElementById('vfCl'+i);
+if(cl)cl.textContent=diffs.length?('You changed: '+diffs.map(function(d){return d.field.replace(/_/g,' ');}).join(', ')):'';},
+
+vfDiffs(i){
+var r=P._vf.rows[i],out=[];
+['ticket_number','ticket_date','gross_lbs','tare_lbs','driver_name','zone','project_id'].forEach(function(f){
+var a=r.ocr[f],b=r.cur[f];
+if(String(a==null?'':a)!==String(b==null?'':b))out.push({field:f,from:(a==null||a==='')?null:a,to:(b==null||b==='')?null:b});});
+return out;},
+
+vfZoom(i){
+var r=P._vf.rows[i];
+var el=document.createElement('div');el.className='tkv';el.id='vfLb';
+el.onclick=function(e){if(e.target===el)el.remove();};
+el.innerHTML='<div class="tkv-hd"><div class="tkv-cap">Ticket '+(i+1)+(r.cur.ticket_number?' \u00B7 #'+P.esc(r.cur.ticket_number):'')+'</div>'+
+'<button class="tkv-x" onclick="document.getElementById(\'vfLb\').remove()">\u2715</button></div>'+
+'<div class="tkv-bd"><img src="'+r.url+'" onclick="this.classList.toggle(\'zoom\')"></div>'+
+'<div class="tkv-ft">Tap the ticket to zoom \u00B7 scroll to pan</div>';
+document.body.appendChild(el);},
+
+async vfSend(){
+if(!P._vf.rows.length){P.toast('Nothing to send');return;}
+for(var i=0;i<P._vf.rows.length;i++){
+if(P._vf.rows[i].sent)continue;
+var c=P._vf.rows[i].cur;
+if(!c.driver_name){P.toast('Ticket '+(i+1)+': driver name required');P.vfJump(i);return;}
+if(!c.ticket_number){P.toast('Ticket '+(i+1)+': ticket number required');P.vfJump(i);return;}
+if(!c.ticket_date){P.toast('Ticket '+(i+1)+': date required');P.vfJump(i);return;}}
+var btn=document.getElementById('vfSendBtn');
+btn.style.pointerEvents='none';btn.style.opacity='.6';
+var ok=0,fail=0;
+for(var i=0;i<P._vf.rows.length;i++){
+var r=P._vf.rows[i];if(r.sent){ok++;continue;}
+btn.textContent='Sending '+(i+1)+' of '+P._vf.rows.length+'\u2026';
+var net=(parseInt(r.cur.gross_lbs)||0)-(parseInt(r.cur.tare_lbs)||0);
+var payload=Object.assign({},r.cur,{net_lbs:net,net_tons:+(net/2000).toFixed(4),
+ocr_original:r.ocr,changes:P.vfDiffs(i),reviewed_by:P.cl.name,reviewed_at:new Date().toISOString()});
+var res=await P.api('rpc/client_stage_row','POST',{p_cid:P.cl.id,p_queue_id:r.qid,p_data:payload});
+if(res&&res.ok){r.sent=true;ok++;var st=document.getElementById('vfSt'+i);if(st){st.textContent='\u2705 Sent';st.style.color='var(--success)';}}
+else{fail++;var st2=document.getElementById('vfSt'+i);
+if(st2){st2.textContent='\u26A0\uFE0F '+((res&&res.error)||'Failed');st2.style.color='var(--warning)';}
+P.toast('Ticket '+(i+1)+': '+((res&&res.error)||'could not send'));}}
+btn.style.pointerEvents='auto';btn.style.opacity='1';
+btn.textContent=fail?'Send remaining':'Send to Dalmex';
+if(!fail){P.toast('\u2705 '+ok+' ticket'+(ok>1?'s':'')+' sent to Dalmex for approval');
+setTimeout(function(){P._vf.rows=[];document.getElementById('vfRows').innerHTML='';
+document.getElementById('vfBar').classList.add('hidden');
+document.getElementById('vfSetup').classList.remove('hidden');
+document.getElementById('vfAdd').classList.remove('hidden');},1400);}},
+
+vfJump(i){var el=document.getElementById('vfRow'+i);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},
 
 backToProj(){document.getElementById('dashContent').classList.add('hidden');document.getElementById('projBar').classList.remove('hidden');P.cp=null;P.renderPL('projList','dash');},
 
