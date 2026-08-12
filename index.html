@@ -10146,10 +10146,16 @@ const DS = {
 
             // Ticket number input + action buttons
             var batchIds = batch.items.map(function(q){return q.id;}).join(',');
-            html += '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Ticket # (for processing)</label>' +
+            var scaleCount = batch.items.filter(function(q){return q.photo_type==='scale_ticket';}).length;
+            var multi = scaleCount > 1;
+            // One shared Ticket # makes no sense across several tickets — each row
+            // in the review modal carries its own. Hiding it here removes the
+            // wrong-shaped control that was the obvious thing to tap.
+            html += '<div class="form-group' + (multi ? ' hidden' : '') + '" style="margin-bottom:8px"><label class="form-label">Ticket # (for processing)</label>' +
                 '<input type="text" class="form-input" id="batchTkt_'+bIdx+'" value="'+DS.esc(tktNum||'')+'" placeholder="Enter scale ticket number" inputmode="numeric" style="padding:8px 10px;font-size:.85rem"></div>' +
                 '<div class="btn-row" style="gap:6px">' +
-                '<button class="btn btn-sm btn-success" style="flex:1;padding:8px" onclick="DS.approveBatch('+bIdx+')">✅ Process & Approve</button>' +
+                '<button class="btn btn-sm btn-success" style="flex:1;padding:8px" onclick="DS.approveBatch('+bIdx+')">' +
+                (multi ? ('\uD83D\uDCCB Review ' + scaleCount + ' Tickets') : '✅ Process & Approve') + '</button>' +
                 '<button class="btn btn-sm" style="flex:1;padding:8px;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="DS.rejectBatch('+bIdx+')">❌ Reject All</button>' +
                 '</div></div>';
         });
@@ -10159,8 +10165,14 @@ const DS = {
         if (processed.length) {
             html += '<div style="font-size:.6rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px">Recently Processed</div>';
             processed.forEach(function(q) {
-                var sc = q.status==='approved'?'var(--success)':'var(--text-dim)';
-                var sl = q.status==='approved'?'✅ Processed':'❌ Rejected';
+                var sc = q.status==='approved' ? 'var(--success)'
+                       : q.status==='staged'   ? 'var(--primary)'
+                       : q.status==='pending'  ? 'var(--warning)'
+                       : 'var(--text-dim)';
+                var sl = q.status==='approved' ? '✅ Processed'
+                       : q.status==='staged'   ? '\u2705 Reviewed \u2014 awaiting approval'
+                       : q.status==='pending'  ? '\u23F3 Pending'
+                       : '❌ Rejected';
                 var typeIcon = q.photo_type==='scale_ticket'?'📄':'📸';
                 html += '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;font-size:.7rem">' +
                     '<img src="'+q.photo_url+'" onclick="window.open(\''+q.photo_url+'\')" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;flex-shrink:0">' +
@@ -10517,6 +10529,7 @@ const DS = {
 
         var q0 = batch.items[0];
         var created = 0, updated = 0, failed = 0;
+        var skippedIds = [];
         var allDebrisUrls = debrisPhotos.map(function(d){ return d.q.photo_url; });
         var createdTicketIds = []; // Track all ticket IDs for debris distribution
 
@@ -10544,8 +10557,20 @@ const DS = {
 
         for (var i = 0; i < scaleTickets.length; i++) {
             var item = scaleTickets[i];
-            var tktNum = ((document.getElementById('mt_num_'+i)||{}).value||'').trim();
-            if (!tktNum) { failed++; continue; }
+            // Aug 11: this read ONLY from the DOM input. If a row failed to render
+            // (or the modal was reopened), getElementById returned nothing, tktNum
+            // was blank, and the row was skipped silently — left pending forever,
+            // re-offered on every Process & Approve, never explaining itself.
+            // Fall back to the reviewed/OCR'd number the row was built from.
+            var numEl = document.getElementById('mt_num_'+i);
+            var tktNum = numEl ? String(numEl.value||'').trim()
+                               : String((item.ocr && item.ocr.ticket_number) || '').trim();
+            if (!tktNum) {
+                failed++;
+                console.warn('Skipped queue row with no ticket number', item.q && item.q.id);
+                skippedIds.push(item.q && item.q.id);
+                continue;
+            }
 
             var gross = parseInt((document.getElementById('mt_gross_'+i)||{}).value) || 0;
             var tare = parseInt((document.getElementById('mt_tare_'+i)||{}).value) || 0;
@@ -10775,7 +10800,7 @@ const DS = {
         var parts = [];
         if (created > 0) parts.push(created + ' new ticket' + (created>1?'s':'') + ' created');
         if (updated > 0) parts.push(updated + ' updated');
-        if (failed > 0) parts.push(failed + ' skipped (no ticket #)');
+        if (failed > 0) parts.push(failed + ' skipped (no ticket # — still in the queue, open the batch again)');
         if (debrisPhotos.length > 0 && createdTicketIds.length > 0) parts.push(debrisPhotos.length + ' debris distributed across ' + createdTicketIds.length + ' ticket' + (createdTicketIds.length>1?'s':''));
         else if (debrisPhotos.length > 0) parts.push(debrisPhotos.length + ' debris attached');
 
