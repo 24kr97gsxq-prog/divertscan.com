@@ -4008,7 +4008,8 @@ const DS = {
         if (next === 'dark') html.classList.add('th-dark');
         if (next === 'green') html.classList.add('th-green');
         html.dataset.theme = next;
-        try { localStorage.setItem('ds_admin_theme', next); } catch(e) {}
+        try { localStorage.setItem('ds_admin_theme', next);
+              localStorage.setItem('ds_admin_theme_ts', String(Date.now())); } catch(e) {}
         var labels = {default: 'Light', dark: 'Dark', green: 'Forest'};
         this.toast(labels[next] + ' theme');
     },
@@ -4016,6 +4017,13 @@ const DS = {
     loadTheme() {
         try {
             var t = localStorage.getItem('ds_admin_theme');
+            // Auto day/night unless a manual pick is <12h old (same rule as the
+            // scale tablet and the client portal). Day = light, night = dark.
+            var ts = parseInt(localStorage.getItem('ds_admin_theme_ts') || '0');
+            if (!t || (Date.now() - ts) > 12*3600*1000) {
+                var h = new Date().getHours();
+                t = (h >= 6 && h < 19) ? 'default' : 'dark';
+            }
             if (!t) return;
             document.documentElement.classList.remove('th-dark', 'th-green');
             if (t === 'dark') document.documentElement.classList.add('th-dark');
@@ -4052,6 +4060,7 @@ const DS = {
 
         // Setup navigation
         this.setupNav();
+        this.restoreTab();
 
         // Restore sort preference dropdown (Phase 2.7c)
         try {
@@ -4324,6 +4333,16 @@ const DS = {
     // ============================================================
     // NAVIGATION
     // ============================================================
+    restoreTab() {
+        // Return to whichever tab was open before the last reload.
+        try {
+            var tab = localStorage.getItem('ds_admin_tab');
+            if (!tab || !document.getElementById(tab)) return;
+            var btn = document.querySelector('.nav-btn[data-tab="' + tab + '"]');
+            if (btn) btn.click();   // reuses the real handler, so tab data loads too
+        } catch(e) {}
+    },
+
     setupNav() {
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -4333,6 +4352,9 @@ const DS = {
                 document.getElementById(tab).classList.add('active');
                 btn.classList.add('active');
                 document.getElementById('contentArea').scrollTop = 0;
+                // Remember where the operator is, so a reload comes back here
+                // instead of dumping them on the first tab.
+                try { localStorage.setItem('ds_admin_tab', tab); } catch(e) {}
 
                 // Refresh tab data
                 if (tab === 'ticketsTab') {
@@ -10459,9 +10481,10 @@ const DS = {
                     '<input type="date" id="mt_date_'+i+'" class="form-input" value="'+useDate+'" style="margin-bottom:2px;font-size:.8rem">' +
                     dayHint +
                     '<div style="display:flex;gap:4px">' +
-                    '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
-                    '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
+                    '<input type="number" id="mt_gross_'+i+'" class="form-input" value="'+(ocr.gross_lbs||'')+'" placeholder="Gross lbs" style="flex:1;font-size:.75rem" oninput="DS._mtNet('+i+')">' +
+                    '<input type="number" id="mt_tare_'+i+'" class="form-input" value="'+(ocr.tare_lbs||'')+'" placeholder="Tare lbs" style="flex:1;font-size:.75rem" oninput="DS._mtNet('+i+')">' +
                     '</div>' +
+                    '<div id="mtNet_'+i+'" style="font-size:.8rem;font-weight:700;color:var(--success);padding:2px 0 4px"></div>' +
                     '<div style="display:flex;gap:4px;margin-top:4px">' +
                     '<select id="mt_zone_'+i+'" class="form-input" style="width:86px;font-size:.75rem">' +
                     ['','A','B','C','D','E','F'].map(function(z){return '<option value="'+z+'"'+((ocr.zone||'')===z?' selected':'')+'>'+(z?'Zone '+z:'— Zone —')+'</option>';}).join('') +
@@ -10501,6 +10524,8 @@ const DS = {
         // Show confirm button
         var confirmBtn = document.getElementById('confirmAllBtn');
         if (confirmBtn) confirmBtn.classList.remove('hidden');
+        // Paint the green net line on every row now the inputs exist
+        try { scaleTickets.forEach(function(_, i){ DS._mtNet(i); }); } catch(e) {}
 
         } catch(buildErr) { console.error('Process error:', buildErr); alert('ERROR building ticket rows: ' + buildErr.message); var cb2 = document.getElementById('confirmAllBtn'); if(cb2) cb2.classList.remove('hidden'); }
             if (btn) { btn.disabled = false; btn.textContent = 'Re-run AI Classification'; }
@@ -10521,7 +10546,24 @@ const DS = {
         this.showToast('Skipped ticket row ' + (idx+1));
     },
 
+    _mtNet(i) {
+        var g = parseInt((document.getElementById('mt_gross_'+i)||{}).value) || 0;
+        var t = parseInt((document.getElementById('mt_tare_'+i)||{}).value) || 0;
+        var el = document.getElementById('mtNet_'+i);
+        if (!el) return;
+        var net = g - t;
+        el.textContent = net > 0
+            ? ('Net  ' + net.toLocaleString() + ' lbs  \u00B7  ' + (net/2000).toFixed(2) + ' tons')
+            : (g || t ? 'Net \u2014 check the weights' : '');
+    },
+
     async _confirmAllTickets(bIdx) {
+        // Wrapped Aug 11: ~200 lines of awaits with no error handling. Any throw
+        // (the debris-AI loop especially) died silently, leaving the modal frozen
+        // and the operator reloading the page — invisible on iPad, no console.
+        // Errors now surface as a toast; the finally guarantees the modal closes
+        // and the queue reloads no matter where it failed.
+        try {
         var batch = this._activeBatch;
         var scaleTickets = this._classifiedScale || [];
         var debrisPhotos = this._classifiedDebris || [];
@@ -10792,11 +10834,6 @@ const DS = {
             this.showToast('📸 ' + debrisPhotos.length + ' debris photos attached to #' + newest.ticket_number);
         }
 
-        this.hideLoading();
-
-        var modal = document.getElementById('batchReviewModal');
-        if (modal) modal.remove();
-
         var parts = [];
         if (created > 0) parts.push(created + ' new ticket' + (created>1?'s':'') + ' created');
         if (updated > 0) parts.push(updated + ' updated');
@@ -10812,7 +10849,16 @@ const DS = {
         if (this.state.currentProject) {
             await this.loadTickets(this.state.currentProject.id);
         }
-        this.loadPhotoQueue();
+
+        } catch (err) {
+            console.error('Create All Tickets failed:', err);
+            this.showToast('⚠️ Stopped partway: ' + (err.message || 'unknown error') + ' — tickets created before the error are saved');
+        } finally {
+            this.hideLoading();
+            var modal = document.getElementById('batchReviewModal');
+            if (modal) modal.remove();
+            this.loadPhotoQueue();
+        }
     },
 
     shareTicketSummary(tktNum, gross, tare, netTons, divPct, projName) {

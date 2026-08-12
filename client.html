@@ -674,7 +674,10 @@ submitted_by:(proj&&proj.waste_hauler)||P.cl.name,photo_type:'scale_ticket',phot
 if(ins.ok){var j=await ins.json();qid=j&&j[0]&&j[0].id;}else console.error('queue',ins.status,await ins.text());
 }catch(e){console.error(e);}
 if(!qid){P.toast('Ticket '+(i+1)+' could not be saved');continue;}
-var ocr=await P.vfOcr(await P.toB64(blob));
+// OCR from the storage URL instead of re-sending the whole image as base64 —
+// the photo was just uploaded, and shipping it twice over cellular/VPN was
+// most of the per-ticket wait. Same approach the admin queue uses.
+var ocr=await P.vfOcr(url);
 P._vf.rows.push({qid:qid,url:url,ocr:ocr,cur:Object.assign({},ocr),sent:false});
 }
 btn.style.pointerEvents='auto';btn.style.opacity='1';btn.textContent='🔍 Read Tickets';
@@ -690,7 +693,8 @@ async vfOcr(dataUrl){
 var prompt='You are reading a HANDWRITTEN paper scale ticket from DALMEX RECYCLING INC (Dallas TX). '+
 'It is a carbon copy, so writing may be faint.\n\n'+
 '- ticket_number: the RED PREPRINTED 5-digit number\n'+
-'- date: the handwritten date. Read the MONTH and DAY carefully \u2014 1 and 7, or 6 and 8, are easy to confuse. Return YYYY-MM-DD.\n'+
+'- date: the handwritten date. Read the MONTH and DAY carefully \u2014 1 and 7, or 6 and 8, are easy to confuse. '+
+'Drivers usually write only month and day; the year is almost never on the ticket. These are RECENT tickets: assume year '+(new Date().getFullYear())+' unless a different year is clearly written. Return YYYY-MM-DD.\n'+
 '- gross_lbs / tare_lbs: the weight rows, usually 20000-46000\n'+
 '- driver: the handwritten driver name, often first name + last initial\n'+
 '- zone: single letter A/B/C/D/E/F if written, often near the project name\n\n'+
@@ -707,7 +711,17 @@ var t=(d.choices&&d.choices[0]&&d.choices[0].message.content)||'{}';
 t=t.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
 var m=t.match(/\{[\s\S]*\}/);if(m)t=m[0];
 var o=JSON.parse(t);
-return {ticket_number:o.ticket_number?String(o.ticket_number).trim():'',ticket_date:o.date||'',
+// The model still sometimes invents 2021/2023 for a year-less "7-24". The
+// paper never disagrees about month/day \u2014 only the year is a guess \u2014 so
+// keep month/day and pin the year to now (or last year across a Dec/Jan
+// boundary, so a January review of a December ticket stays honest).
+var fixedDate=o.date||'';
+var dm=/^(\d{4})-(\d{2})-(\d{2})$/.exec(fixedDate);
+if(dm){var nowY=new Date().getFullYear();
+if(+dm[1]!==nowY&&+dm[1]!==nowY-1){
+var tryNow=nowY+'-'+dm[2]+'-'+dm[3];
+fixedDate=(new Date(tryNow+'T12:00:00')>new Date(Date.now()+2*86400000))?((nowY-1)+'-'+dm[2]+'-'+dm[3]):tryNow;}}
+return {ticket_number:o.ticket_number?String(o.ticket_number).trim():'',ticket_date:fixedDate,
 gross_lbs:o.gross_lbs||0,tare_lbs:o.tare_lbs||0,driver_name:o.driver?String(o.driver).trim():'',
 zone:o.zone?String(o.zone).trim().toUpperCase():'',project_id:P._vf.proj};
 }catch(e){console.error('ocr',e);return P.vfBlank();}},
@@ -2621,9 +2635,13 @@ P.toast('Downloaded!');
 cycleTheme(){var html=document.documentElement;var cur=html.dataset.theme||'default';
 var themes=['default','dark','green'];var next=themes[(themes.indexOf(cur)+1)%themes.length];
 html.classList.remove('th-dark','th-green');if(next==='dark')html.classList.add('th-dark');if(next==='green')html.classList.add('th-green');
-html.dataset.theme=next;try{localStorage.setItem('ds_theme',next);}catch(x){}
+html.dataset.theme=next;try{localStorage.setItem('ds_theme',next);localStorage.setItem('ds_theme_ts',String(Date.now()));}catch(x){}
 P.toast('Theme: '+{default:'Light',dark:'Dark',green:'Forest'}[next]);},
-loadTheme(){try{var t=localStorage.getItem('ds_theme');if(!t)return;document.documentElement.classList.remove('th-dark','th-green');
+loadTheme(){try{var t=localStorage.getItem('ds_theme');
+// Auto day/night unless a manual pick is <12h old. Day = light, night = dark.
+var ts=parseInt(localStorage.getItem('ds_theme_ts')||'0');
+if(!t||(Date.now()-ts)>12*3600*1000){var h=new Date().getHours();t=(h>=6&&h<19)?'default':'dark';}
+if(!t)return;document.documentElement.classList.remove('th-dark','th-green');
 if(t==='dark')document.documentElement.classList.add('th-dark');if(t==='green')document.documentElement.classList.add('th-green');
 document.documentElement.dataset.theme=t;}catch(x){}},
 

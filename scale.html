@@ -14,8 +14,14 @@
     // driver's own choice always wins and is remembered on the device.
     (function(){
         try {
+            // Manual choice wins for 12 hours, then the clock takes over again.
+            // A stored choice that never expired is why the tablet sat unreadable
+            // in daylight: dark was picked once and obeyed forever.
             var t = localStorage.getItem('ds_theme');
-            if (!t) { var h = new Date().getHours(); t = (h >= 6 && h < 19) ? 'day' : 'night'; }
+            var ts = parseInt(localStorage.getItem('ds_theme_ts') || '0');
+            if (!t || (Date.now() - ts) > 12*3600*1000) {
+                var h = new Date().getHours(); t = (h >= 6 && h < 19) ? 'day' : 'night';
+            }
             if (t === 'day') document.documentElement.setAttribute('data-theme','day');
         } catch (e) {}
     })();
@@ -700,7 +706,8 @@ function toggleTheme() {
     var isDay = document.documentElement.getAttribute('data-theme') === 'day';
     if (isDay) document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme','day');
-    try { localStorage.setItem('ds_theme', isDay ? 'night' : 'day'); } catch (e) {}
+    try { localStorage.setItem('ds_theme', isDay ? 'night' : 'day');
+          localStorage.setItem('ds_theme_ts', String(Date.now())); } catch (e) {}
     applyThemeIcon();
 }
 
@@ -2783,6 +2790,21 @@ document.addEventListener('DOMContentLoaded', () => { setTimeout(startHeartbeatC
 document.addEventListener('DOMContentLoaded', init);
 // Point the toggle at whatever the pre-paint script decided.
 document.addEventListener('DOMContentLoaded', applyThemeIcon);
+// The scale tablet stays open all day. Re-check every 10 minutes so the display
+// follows the sun on its own once any manual override has expired.
+setInterval(function(){
+    try {
+        var t = localStorage.getItem('ds_theme');
+        var ts = parseInt(localStorage.getItem('ds_theme_ts') || '0');
+        if (t && (Date.now() - ts) <= 12*3600*1000) return;   // manual choice still fresh
+        var h = new Date().getHours();
+        var want = (h >= 6 && h < 19) ? 'day' : 'night';
+        var isDay = document.documentElement.getAttribute('data-theme') === 'day';
+        if (want === 'day' && !isDay) document.documentElement.setAttribute('data-theme','day');
+        if (want === 'night' && isDay) document.documentElement.removeAttribute('data-theme');
+        applyThemeIcon();
+    } catch (e) {}
+}, 10*60*1000);
 </script>
 </body>
 </html>
