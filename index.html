@@ -48,6 +48,16 @@
     @keyframes pd{0%,100%{opacity:1}50%{opacity:.3}}
     .content-area{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:12px;padding-bottom:calc(var(--nav-height)+120px);max-width:100vw}
     .tab-content{display:none}.tab-content.active{display:block}
+    /* On/off switch for the verify flag — a bare checkbox read ambiguously */
+    .vsw{position:relative;display:inline-block;width:52px;height:30px;flex-shrink:0}
+    .vsw input{opacity:0;width:0;height:0}
+    .vsw .sl{position:absolute;inset:0;background:#4b5563;border-radius:30px;transition:.2s;cursor:pointer}
+    .vsw .sl:before{content:"";position:absolute;height:24px;width:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+    .vsw input:checked + .sl{background:var(--success)}
+    .vsw input:checked + .sl:before{transform:translateX(22px)}
+    .vsw .st{position:absolute;top:50%;transform:translateY(-50%);font-size:.5rem;font-weight:800;color:#fff;pointer-events:none}
+    .vsw .st.on{left:7px;display:none}.vsw .st.off{right:5px}
+    .vsw input:checked ~ .st.on{display:block}.vsw input:checked ~ .st.off{display:none}
     .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;position:relative;overflow:hidden}
     .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),transparent);opacity:.6}
     .card-title{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
@@ -1095,7 +1105,7 @@ document.addEventListener('keydown', function(e){
         </div>
         <div class="form-group">
             <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg-input)">
-                <input type="checkbox" id="newClientCanVerify" style="width:20px;height:20px;margin-top:1px;flex-shrink:0">
+                <span class="vsw"><input type="checkbox" id="newClientCanVerify"><span class="sl"></span><span class="st on">ON</span><span class="st off">OFF</span></span>
                 <span><span style="font-weight:700;font-size:.85rem">Can verify tickets</span>
                 <span style="display:block;font-size:.68rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Adds a Review tab to their portal — they upload scale tickets, the AI reads them, and they correct the driver, date and zone before the batch reaches you. Tick this for whoever sends the report to the sustainability manager.</span></span>
             </label>
@@ -1137,7 +1147,7 @@ document.addEventListener('keydown', function(e){
         </div>
         <div class="form-group">
             <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg-input)">
-                <input type="checkbox" id="editClientCanVerify" style="width:20px;height:20px;margin-top:1px;flex-shrink:0">
+                <span class="vsw"><input type="checkbox" id="editClientCanVerify"><span class="sl"></span><span class="st on">ON</span><span class="st off">OFF</span></span>
                 <span><span style="font-weight:700;font-size:.85rem">Can verify tickets</span>
                 <span style="display:block;font-size:.68rem;color:var(--text-muted);margin-top:2px;line-height:1.4">Adds a Review tab to their portal for correcting tickets before they reach you.</span></span>
             </label>
@@ -12745,6 +12755,12 @@ const DS = {
         document.getElementById('editClientCompany').value = c.company || '';
         document.getElementById('editClientPassword').value = '';
         var ecv = document.getElementById('editClientCanVerify'); if (ecv) ecv.checked = !!c.can_verify;
+        // The list payload may not include can_verify; fetch the authoritative
+        // value so the switch reflects reality and a routine save can't wipe it.
+        this.supabase('rpc/client_can_verify', 'POST', { p_cid: id }).then(function(r){
+            var el = document.getElementById('editClientCanVerify');
+            if (el && r && r.length) el.checked = !!r[0].can_verify;
+        }).catch(function(){});
         var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
         var html = '';
         // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
