@@ -1823,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.22.0',
+    VERSION: '7.23.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12444,6 +12444,63 @@ const DS = {
         this.viewReconciliation(id);
     },
 
+    // CSV of the whole comparison — one row per ticket, tagged by category,
+    // so it opens in Excel and can be sent straight to the hauler.
+    reconCsv(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) return;
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var proj = ((this.state.projects||[]).find(function(p){ return p.id === r.project_id; })||{}).name || 'project';
+        function q(v) {
+            if (v == null) return '';
+            var s = String(v);
+            return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+        }
+        var out = [['status','ticket','their_date','our_date','their_tons','our_tons',
+                    'their_zone','our_zone','note'].join(',')];
+        (rows.differences||[]).forEach(function(x){
+            var what = [x.tonsOff?'tons':'', x.dateOff?'date':'', x.zoneOff?'zone':''].filter(Boolean).join('+');
+            out.push([q('DIFFERS'),q(x.ticket),q(x.theirDate),q(x.ourDate),q(x.theirTons),q(x.ourTons),
+                      q(x.theirZone),q(x.ourZone),q(what)].join(','));
+        });
+        (rows.missing||[]).forEach(function(x){
+            var foreign = DS._isForeignTicket(x.ticket);
+            out.push([q(foreign ? 'NOT_OUR_NUMBERING' : 'NOT_IN_DALMEX'),q(x.ticket),q(x.date),'',
+                      q(x.tons),'',q(x.zone),'',
+                      q(foreign ? 'six digits or longer — likely another facility' : '')].join(','));
+        });
+        (rows.notOnList||[]).forEach(function(x){
+            var like = DS._dxLooksLike(x);
+            out.push([q('NOT_ON_THEIR_LIST'),q(x.ticket),'',q(x.date),'',q(x.tons),'',q(x.zone),
+                      q(like ? 'looks like #' + like.num : '')].join(','));
+        });
+        (rows.duplicateLines||[]).forEach(function(x){
+            out.push([q('LISTED_TWICE'),q(x.ticket),q(x.date),'',q(x.tons),'','','',
+                      q('appears more than once on their list')].join(','));
+        });
+        (rows.unreadable||[]).forEach(function(x){
+            out.push([q('UNREADABLE'),'','','','','','','',q(x)].join(','));
+        });
+        var name = 'reconciliation_' + proj.replace(/[^A-Za-z0-9]+/g,'_') + '_' +
+                   (r.period_from || 'start') + '_to_' + (r.period_to || 'today') + '.csv';
+        this._downloadText(name, out.join('\n'), 'text/csv');
+    },
+
+    _downloadText(filename, text, mime) {
+        try {
+            var blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click();
+            setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 400);
+            this.showToast('Downloaded ' + filename);
+        } catch (e) {
+            this.showToast('Could not download — try Copy report instead');
+        }
+    },
+
     // A plain-text summary that can be pasted into a reply to the hauler.
     reconReport(id) {
         var r = (this._recons || []).find(function(x){ return x.id === id; });
@@ -12854,6 +12911,7 @@ const DS = {
             '<div class="btn-row mt-8">' +
               '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
               '<button class="btn btn-outline" onclick="DS.reconReport(\'' + r.id + '\')" style="flex:1">Copy report</button>' +
+              '<button class="btn btn-outline" onclick="DS.reconCsv(\'' + r.id + '\')" style="flex:1">Download CSV</button>' +
               '<button class="btn btn-outline" onclick="DS.closeModal(\'reconModal\')" style="flex:1">Close</button>' +
             '</div>';
 

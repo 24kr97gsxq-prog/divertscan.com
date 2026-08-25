@@ -523,7 +523,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.6.0', BUILD:'2026-08-25',
+VERSION:'2.7.0', BUILD:'2026-08-25',
 
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
@@ -2867,6 +2867,62 @@ esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 // ════════════════════════════════════════════════════════════
 _rc:{parsed:null,result:null},
 
+rcDownload(name,text,mime){
+try{var b=new Blob([text],{type:(mime||'text/plain')+';charset=utf-8;'});
+var u=URL.createObjectURL(b);var a=document.createElement('a');
+a.href=u;a.download=name;document.body.appendChild(a);a.click();
+setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},400);
+P.toast('Downloaded '+name);}catch(e){P.toast('Could not download on this device');}},
+
+rcIsForeign(n){return String(n||'').replace(/^DX-/i,'').replace(/\D/g,'').length>=6;},
+
+// CSV of the whole comparison — one row per ticket, tagged by category.
+rcCsv(){
+var r=P._rc.result;if(!r){P.toast('Run the check first');return;}
+var proj=(P.pj.find(function(p){return p.id===r.projId;})||{}).name||'project';
+function q(v){if(v==null)return '';var s=String(v);
+return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+var out=[['status','ticket','their_date','our_date','their_tons','our_tons','their_zone','our_zone','note'].join(',')];
+r.diffs.forEach(function(x){
+var w=[x.tonsOff?'tons':'',x.dateOff?'date':'',x.zoneOff?'zone':''].filter(Boolean).join('+');
+out.push([q('DIFFERS'),q(x.ticket),q(x.theirDate),q(x.ourDate),q(x.theirTons),q(x.ourTons),q(x.theirZone),q(x.ourZone),q(w)].join(','));});
+r.missing.forEach(function(x){var f=P.rcIsForeign(x.ticket);
+out.push([q(f?'NOT_OUR_NUMBERING':'NOT_IN_DALMEX'),q(x.ticket),q(x.date),'',q(x.tons),'',q(x.zone),'',
+q(f?'six digits or longer — likely another facility':'')].join(','));});
+r.extra.forEach(function(x){
+out.push([q('NOT_ON_THEIR_LIST'),q(x.ticket),'',q(x.date),'',q(x.tons),'',q(x.zone),''].join(','));});
+r.dupes.forEach(function(x){
+out.push([q('LISTED_TWICE'),q(x.ticket),q(x.date),'',q(x.tons),'','','',q('appears more than once on the list')].join(','));});
+(r.skipped||[]).forEach(function(x){out.push([q('UNREADABLE'),'','','','','','','',q(x)].join(','));});
+P.rcDownload('reconciliation_'+proj.replace(/[^A-Za-z0-9]+/g,'_')+'_'+(r.from||'start')+'_to_'+(r.to||'today')+'.csv',
+out.join('\n'),'text/csv');},
+
+// Plain-text summary, for pasting into a reply.
+rcText(){
+var r=P._rc.result;if(!r){P.toast('Run the check first');return;}
+var s=r.summary,proj=(P.pj.find(function(p){return p.id===r.projId;})||{}).name||'';
+var L=['RECONCILIATION — '+proj,(r.from||'start')+' to '+(r.to||'today'),'',
+s.listed+' on the list · '+s.matched+' match · '+s.differences+' differ · '+
+s.notInDalmex+' not in Dalmex · '+s.notOnList+' not on the list',''];
+if(r.diffs.length){L.push('DIFFERENT — theirs vs Dalmex');
+r.diffs.forEach(function(x){var b=[];
+if(x.tonsOff)b.push('tons '+x.theirTons+' vs '+x.ourTons);
+if(x.dateOff)b.push('date '+x.theirDate+' vs '+x.ourDate);
+if(x.zoneOff)b.push('zone '+(x.theirZone||'—')+' vs '+(x.ourZone||'—'));
+L.push('  #'+x.ticket+'  '+b.join(' · '));});L.push('');}
+var mo=r.missing.filter(function(x){return !P.rcIsForeign(x.ticket);});
+var mf=r.missing.filter(function(x){return P.rcIsForeign(x.ticket);});
+if(mo.length){L.push('ON THE LIST, NOT IN DALMEX');
+mo.forEach(function(x){L.push('  #'+x.ticket+'  '+(x.date||'')+'  '+x.tons+' T');});L.push('');}
+if(mf.length){L.push('NOT DALMEX TICKET NUMBERS (six digits or longer)');
+mf.forEach(function(x){L.push('  #'+x.ticket+'  '+(x.date||'')+'  '+x.tons+' T');});L.push('');}
+if(r.extra.length){L.push('IN DALMEX, NOT ON THE LIST');
+r.extra.forEach(function(x){L.push('  #'+x.ticket+'  '+(x.date||'')+'  '+x.tons+' T'+(x.zone?'  zone '+x.zone:''));});L.push('');}
+if(r.dupes.length){L.push('LISTED TWICE');
+r.dupes.forEach(function(x){L.push('  #'+x.ticket+'  '+(x.date||'')+'  '+x.tons+' T');});L.push('');}
+L.push('Recent loads may not be entered yet. Dalmex weights come off the scale ticket.');
+P.rcDownload('reconciliation_'+proj.replace(/[^A-Za-z0-9]+/g,'_')+'.txt',L.join('\n'),'text/plain');},
+
 rcOpenTicket(num){
   var key=String(num||'').trim().toUpperCase();
   var all=(P.tx||[]);
@@ -3090,6 +3146,12 @@ rcRender(){
     '<div style="font-family:var(--mono);font-size:.65rem;line-height:1.8;color:var(--text-m)">'+
     r.skipped.slice(0,20).map(function(x){return P.esc(x);}).join('<br>')+'</div>');
 
+  h+='<div class="c" style="margin-top:12px"><div class="ct">Take it with you</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<div class="b" style="flex:1;min-width:150px;background:var(--inset);color:var(--text)" onclick="P.rcCsv()">Download CSV</div>'+
+      '<div class="b" style="flex:1;min-width:150px;background:var(--inset);color:var(--text)" onclick="P.rcText()">Download summary</div>'+
+    '</div>'+
+    '<div style="font-size:.66rem;color:var(--text-d);margin-top:8px">The CSV opens in Excel. The summary is plain text for pasting into an email.</div></div>';
   h+='<div class="u-sticky"><div class="b bs" id="rcSendBtn" onclick="P.rcSend()">Send this to Dalmex to review</div></div>';
   document.getElementById('rcOut').innerHTML=h;
 },
