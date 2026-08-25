@@ -1823,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.16.0',
+    VERSION: '7.18.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12380,6 +12380,20 @@ const DS = {
     // our tickets, sent over for review. Read + annotate only; nothing
     // here changes a ticket.
     // ============================================================
+    // The stored report holds ticket NUMBERS, not ids. Look it up in the
+    // loaded list first; fall back to the database so a ticket from another
+    // project still opens.
+    async openTicketByNumber(num) {
+        var key = String(num || '').trim().toUpperCase();
+        var hit = (this.state.tickets || []).find(function(t) {
+            return String(t.ticket_number || '').trim().toUpperCase() === key;
+        });
+        if (hit) { this.closeModal('reconModal'); this.showTicketDetail(hit.id); return; }
+        var rows = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(num) + '&select=id&limit=1');
+        if (rows && rows.length) { this.closeModal('reconModal'); this.showTicketDetail(rows[0].id); return; }
+        this.showToast('#' + num + ' is not in DivertScan');
+    },
+
     async loadReconciliations() {
         var el = document.getElementById('reconList');
         if (!el) return;
@@ -12401,7 +12415,9 @@ const DS = {
         el.innerHTML = rows.map(function(r) {
             var s = r.summary || {};
             var isOpen = r.status === 'submitted';
-            var period = (r.period_from || '?') + ' → ' + (r.period_to || '?');
+            var period = (r.period_from || r.period_to)
+                ? (r.period_from || 'start') + ' → ' + (r.period_to || 'today')
+                : 'no period set — compared against every ticket on the project';
             return '<div style="border:1px solid ' + (isOpen ? 'var(--warning)' : 'var(--border)') +
                 ';border-radius:var(--radius);padding:10px;margin-bottom:8px;background:var(--bg-card)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
@@ -12433,45 +12449,92 @@ const DS = {
         if (!r) { this.showToast('Not found — refresh the list'); return; }
         var rows = r.rows || {};
         if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
-        function tbl(title, arr, cols, cells) {
-            if (!arr || !arr.length) return '';
-            return '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:12px 0 4px">' +
-                title + ' (' + arr.length + ')</div>' +
-                '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.65rem">' +
-                '<thead><tr style="border-bottom:1px solid var(--border)">' +
-                cols.map(function(c){ return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim)">' + c + '</th>'; }).join('') +
-                '</tr></thead><tbody>' +
-                arr.slice(0,200).map(function(x){ return '<tr style="border-bottom:1px solid var(--border)">' + cells(x) + '</tr>'; }).join('') +
-                '</tbody></table></div>';
+
+        // Theirs on the left, ours on the right, so a difference reads across
+        // one row. Ticket numbers open the scale ticket.
+        function cell(v, off, left) {
+            return '<td style="padding:5px 6px' + (left ? ';border-left:1px solid var(--border)' : '') +
+                (off ? ';color:var(--warning);font-weight:700' : '') + '">' +
+                (v == null || v === '' ? '—' : DS.esc(String(v))) + '</td>';
         }
-        function td(v){ return '<td style="padding:4px 6px">' + DS.esc(v == null ? '—' : String(v)) + '</td>'; }
+        function numCell(n) {
+            return '<td style="padding:5px 6px"><span style="color:var(--primary);font-weight:600;text-decoration:underline">' +
+                DS.esc(n) + '</span></td>';
+        }
+        function sbs(title, note, arr, render) {
+            if (!arr || !arr.length) return '';
+            var capped = arr.slice(0, 50);
+            return '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">' +
+                title + ' (' + arr.length + ')</div>' +
+                (note ? '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:5px">' + note + '</div>' : '') +
+                '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.65rem">' +
+                '<thead><tr><th></th>' +
+                  '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)">Their list</th>' +
+                  '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Ours</th></tr>' +
+                '<tr style="border-bottom:1px solid var(--border)">' +
+                  ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].map(function(c,i){
+                    return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim);font-weight:600' +
+                      (i===4?';border-left:1px solid var(--border)':'') + '">' + c + '</th>'; }).join('') +
+                '</tr></thead><tbody>' + capped.map(render).join('') + '</tbody></table></div>' +
+                (arr.length > 50 ? '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);padding:4px 6px">showing the first 50 of ' + arr.length + '</div>' : '');
+        }
+        function row(inner, num) {
+            return '<tr onclick="DS.openTicketByNumber(\'' + DS.esc(String(num)) + '\')" ' +
+                'style="border-bottom:1px solid var(--border);cursor:pointer">' + inner + '</tr>';
+        }
 
         var body =
             '<div style="font-family:var(--mono);font-size:.62rem;color:var(--text-dim);margin-bottom:8px">' +
-                DS.esc(r.submitted_by || 'client') + ' · ' + (r.period_from || '?') + ' → ' + (r.period_to || '?') + '</div>' +
-            tbl('On their list, not in ours', rows.missing, ['Ticket','Their date','Their tons','Zone'],
-                function(x){ return td(x.ticket) + td(x.date) + td(x.tons) + td(x.zone); }) +
-            tbl('Different on our side', rows.differences, ['Ticket','Theirs','Ours','Field'],
-                function(x){
-                    var what = [x.tonsOff?'tons':'', x.dateOff?'date':'', x.zoneOff?'zone':''].filter(Boolean).join(', ');
-                    return td(x.ticket) + td(x.theirTons + ' T / ' + (x.theirDate||'—')) +
-                           td(x.ourTons + ' T / ' + (x.ourDate||'—')) + td(what); }) +
-            tbl('In ours, not on their list', rows.notOnList, ['Ticket','Date','Tons','Zone'],
-                function(x){ return td(x.ticket) + td(x.date) + td(x.tons) + td(x.zone); }) +
-            tbl('Listed twice by them', rows.duplicateLines, ['Ticket','Date','Tons'],
-                function(x){ return td(x.ticket) + td(x.date) + td(x.tons); }) +
+                DS.esc(r.submitted_by || 'client') + ' · ' +
+                ((r.period_from || r.period_to)
+                    ? (r.period_from || 'start') + ' → ' + (r.period_to || 'today')
+                    : 'no period set') + '</div>' +
+            ((!r.period_from && !r.period_to)
+                ? '<div style="border-left:3px solid var(--warning);background:var(--warning-light);padding:8px 10px;font-size:.68rem;line-height:1.55;margin-bottom:8px">' +
+                  'No date range was set on this check, so <strong>every ticket on the project</strong> was compared — ' +
+                  'which is why "in ours, not on their list" is large. Ask them to run it again; the portal now takes ' +
+                  'the period from the dates on their list automatically.</div>'
+                : '') +
+            '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:4px">Tap a ticket number to open the scale ticket.</div>' +
+
+            sbs('Different on our side', 'Differences highlighted. Ours come off the scale ticket.',
+                rows.differences, function(x) {
+                    return row(numCell(x.ticket) +
+                        cell(x.theirDate, x.dateOff) + cell(x.theirTons + ' T', x.tonsOff) + cell(x.theirZone, x.zoneOff) +
+                        cell(x.ourDate, x.dateOff, true) + cell(x.ourTons + ' T', x.tonsOff) + cell(x.ourZone, x.zoneOff),
+                        x.ticket); }) +
+
+            sbs('On their list, not in ours', 'No ticket with these numbers for this period.',
+                rows.missing, function(x) {
+                    return row(numCell(x.ticket) + cell(x.date) + cell(x.tons + ' T') + cell(x.zone) +
+                        cell('—', false, true) + cell('—') + cell('—'), x.ticket); }) +
+
+            sbs('In ours, not on their list', 'Loads we have that they have not billed.',
+                rows.notOnList, function(x) {
+                    return row(numCell(x.ticket) + cell('—') + cell('—') + cell('—') +
+                        cell(x.date, false, true) + cell(x.tons + ' T') + cell(x.zone), x.ticket); }) +
+
+            ((rows.duplicateLines && rows.duplicateLines.length)
+                ? '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">Listed twice by them (' + rows.duplicateLines.length + ')</div>' +
+                  '<div style="font-family:var(--mono);font-size:.65rem;line-height:1.8;color:var(--text-muted)">' +
+                  rows.duplicateLines.map(function(x){ return '#' + DS.esc(x.ticket) + ' · ' + (x.date||'—') + ' · ' + x.tons + ' T'; }).join('<br>') + '</div>'
+                : '') +
+
             ((rows.unreadable && rows.unreadable.length)
-                ? '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:12px 0 4px">Lines we could not read (' + rows.unreadable.length + ')</div>' +
+                ? '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">Lines the parser could not read (' + rows.unreadable.length + ')</div>' +
                   '<div style="font-family:var(--mono);font-size:.62rem;color:var(--text-muted);line-height:1.7">' +
                   rows.unreadable.slice(0,30).map(function(x){ return DS.esc(x); }).join('<br>') + '</div>'
                 : '') +
+
             '<div style="margin-top:14px"><label style="font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Note back to the client</label>' +
             '<textarea class="form-input" id="reconNote" rows="3" style="margin-top:4px;font-size:.78rem">' + DS.esc(r.admin_notes || '') + '</textarea></div>' +
             '<div class="btn-row mt-8">' +
               '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
               '<button class="btn btn-outline" onclick="DS.closeModal(\'reconModal\')" style="flex:1">Close</button>' +
             '</div>';
-        document.getElementById('reconModalTitle').textContent = 'Reconciliation — ' + ((this.state.projects||[]).find(function(p){return p.id===r.project_id;})||{}).name;
+
+        var pn = ((this.state.projects||[]).find(function(p){ return p.id === r.project_id; })||{}).name || 'Reconciliation';
+        document.getElementById('reconModalTitle').textContent = 'Reconciliation — ' + pn;
         document.getElementById('reconModalBody').innerHTML = body;
         this.openModal('reconModal');
     },

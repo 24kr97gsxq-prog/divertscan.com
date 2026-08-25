@@ -455,7 +455,7 @@ animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
       <input type="date" class="fi" id="rcTo" onchange="P.rcReset()">
     </div></div>
 </div>
-<div style="font-size:.66rem;color:var(--text-d)">Leave the dates blank to check everything on the list.</div>
+<div style="font-size:.66rem;color:var(--text-d)">Leave these blank and we'll use the first and last date on the list.</div>
 </div>
 
 <div class="c">
@@ -523,7 +523,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.4.0', BUILD:'2026-08-25',
+VERSION:'2.6.0', BUILD:'2026-08-25',
 
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
@@ -2867,6 +2867,16 @@ esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;},
 // ════════════════════════════════════════════════════════════
 _rc:{parsed:null,result:null},
 
+rcOpenTicket(num){
+  var key=String(num||'').trim().toUpperCase();
+  var all=(P.tx||[]);
+  var hit=null;
+  for(var i=0;i<all.length;i++){
+    if(String(all[i].ticket_number||'').trim().toUpperCase()===key){hit=all[i];break;}}
+  if(!hit){P.toast('#'+num+' is not in Dalmex yet \u2014 nothing to open');return;}
+  P.showTk(hit.id);
+},
+
 rcInit(){
   var sel=document.getElementById('rcProj');
   if(sel&&!sel.options.length){
@@ -2954,6 +2964,16 @@ async rcRun(){
   var parsed=P.rcParse(txt,new Date().getFullYear());
   P._rc.parsed=parsed;
 
+  // If no range was given, take it from the list itself. Without this the
+  // check compares their list against EVERY ticket on the project, and every
+  // load from another month comes back as "not on the list" — a big number
+  // that means nothing.
+  var derived=false;
+  if(!from&&!to){
+    var ds=parsed.rows.map(function(r){return r.date;}).filter(Boolean).sort();
+    if(ds.length){from=ds[0];to=ds[ds.length-1];derived=true;}
+  }
+
   // our side
   var all=await P.allTix();
   var ours=all.filter(function(t){
@@ -2985,7 +3005,7 @@ async rcRun(){
     return !theirNums[String(t.ticket_number||'').trim().toUpperCase()];});
 
   var dupes=parsed.rows.filter(function(r){return r.duplicate;});
-  P._rc.result={projId:projId,from:from,to:to,
+  P._rc.result={projId:projId,from:from,to:to,derivedPeriod:derived,
     summary:{listed:parsed.rows.length,matched:matched.length,differences:diffs.length,
              notInDalmex:missing.length,notOnList:extra.length,
              duplicateLines:dupes.length,unreadableLines:parsed.skipped.length},
@@ -3000,14 +3020,32 @@ async rcRun(){
 rcRender(){
   var r=P._rc.result,s=r.summary,h='';
   function card(t,b){return '<div class="c"><div class="ct">'+t+'</div>'+b+'</div>';}
-  function tbl(rows,cols){
-    return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.7rem;font-family:var(--mono)">'+
-      '<thead><tr style="border-bottom:1px solid var(--border)">'+cols.map(function(c){
-        return '<th style="text-align:left;padding:5px 6px;color:var(--text-d);font-weight:600">'+c+'</th>';}).join('')+
-      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+
+  // Every table is theirs-on-the-left, ours-on-the-right, so a difference
+  // reads across one row instead of being hunted between two lists.
+  function sbs(title,note,arr,render){
+    if(!arr||!arr.length)return '';
+    return card(title,
+      (note?'<div style="font-size:.68rem;color:var(--text-d);margin-bottom:8px">'+note+'</div>':'')+
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.68rem;font-family:var(--mono)">'+
+      '<thead>'+
+        '<tr><th></th>'+
+          '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);border-bottom:1px solid var(--border)">Their list</th>'+
+          '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Dalmex</th></tr>'+
+        '<tr style="border-bottom:1px solid var(--border)">'+
+          ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].map(function(c,i){
+            return '<th style="text-align:left;padding:4px 6px;color:var(--text-d);font-weight:600'+(i===4?';border-left:1px solid var(--border)':'')+'">'+c+'</th>';}).join('')+
+        '</tr></thead><tbody>'+arr.map(render).join('')+'</tbody></table></div>');
   }
-  // headline
+  function cell(v,off,left){return '<td style="padding:5px 6px'+(left?';border-left:1px solid var(--border)':'')+
+    (off?';color:var(--warning);font-weight:700':'')+'">'+(v==null||v===''?'\u2014':P.esc(String(v)))+'</td>';}
+  function numCell(n){return '<td style="padding:5px 6px"><span style="color:var(--primary);font-weight:600;text-decoration:underline">'+P.esc(n)+'</span></td>';}
+  function row(inner,num){return '<tr onclick="P.rcOpenTicket(\''+P.esc(num)+'\')" style="border-bottom:1px solid var(--border);cursor:pointer">'+inner+'</tr>';}
+
+  var per=(r.from||r.to)?(r.from||'the start')+' \u2192 '+(r.to||'today'):'everything on this project';
   h+='<div class="c"><div class="ct">What we found</div>'+
+    '<div style="font-family:var(--mono);font-size:.62rem;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">'+
+    'Compared '+per+(r.derivedPeriod?' \u00b7 taken from the dates on your list':'')+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px">'+
     [['Listed',s.listed,''],['Match',s.matched,'var(--success)'],
      ['Differences',s.differences,s.differences?'var(--warning)':''],
@@ -3018,42 +3056,39 @@ rcRender(){
         '<div style="font-family:var(--mono);font-size:.52rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);margin-top:3px">'+x[0]+'</div></div>';
     }).join('')+'</div>'+
     '<div style="margin-top:10px;padding:9px 11px;border-left:3px solid var(--warning);background:var(--warning-bg);font-size:.7rem;line-height:1.6">'+
-    '<strong>Before you act on this.</strong> Recent loads may not be entered yet \u2014 a ticket showing as ' +
-    '\u201cnot in Dalmex\u201d can simply be one we have not keyed in. Weights on our side come off the scale ticket. ' +
-    'Send this over and we will check it against the paper and come back to you.</div></div>';
+    '<strong>Before you act on this.</strong> Recent loads may not be entered yet \u2014 a ticket showing as '+
+    '\u201cnot in Dalmex\u201d can simply be one we have not keyed in. Weights on our side come off the scale ticket. '+
+    'Send this over and we will check it against the paper and come back to you.</div>'+
+    '<div style="margin-top:8px;font-size:.66rem;color:var(--text-d)">Tap any ticket number to open the scale ticket.</div></div>';
+
+  h+=sbs('Different on our side ('+s.differences+')',
+    'Differences are highlighted. Ours come straight off the scale ticket \u2014 tap to see it.',
+    r.diffs,function(x){
+      return row(numCell(x.ticket)+
+        cell(x.theirDate,x.dateOff)+cell(x.theirTons.toFixed(2)+' T',x.tonsOff)+cell(x.theirZone,x.zoneOff)+
+        cell(x.ourDate,x.dateOff,true)+cell(x.ourTons.toFixed(2)+' T',x.tonsOff)+cell(x.ourZone,x.zoneOff),x.ticket);});
+
+  h+=sbs('On their list, not in Dalmex ('+s.notInDalmex+')',
+    'We have no ticket with these numbers for this period.',
+    r.missing,function(x){
+      return row(numCell(x.ticket)+cell(x.date)+cell(x.tons.toFixed(2)+' T')+cell(x.zone)+
+        cell('\u2014',false,true)+cell('\u2014')+cell('\u2014'),x.ticket);});
+
+  h+=sbs('In Dalmex, not on their list ('+s.notOnList+')',
+    'Loads we have that the list does not show.',
+    r.extra.slice(0,100),function(x){
+      return row(numCell(x.ticket)+cell('\u2014')+cell('\u2014')+cell('\u2014')+
+        cell(x.date,false,true)+cell(x.tons.toFixed(2)+' T')+cell(x.zone),x.ticket);});
+
+  if(s.duplicateLines)h+=card('Listed twice ('+s.duplicateLines+')',
+    '<div style="font-size:.68rem;color:var(--text-d);margin-bottom:6px">The same ticket number appears more than once on the list.</div>'+
+    '<div style="font-family:var(--mono);font-size:.68rem;line-height:1.9">'+
+    r.dupes.map(function(x){return '#'+P.esc(x.ticket)+' \u00b7 '+(x.date||'\u2014')+' \u00b7 '+x.tons.toFixed(2)+' T';}).join('<br>')+'</div>');
 
   if(s.unreadableLines)h+=card('Lines we could not read ('+s.unreadableLines+')',
     '<div style="font-size:.68rem;color:var(--text-d);margin-bottom:6px">These were skipped. If they are loads, add the ticket number and tonnage and run it again.</div>'+
     '<div style="font-family:var(--mono);font-size:.65rem;line-height:1.8;color:var(--text-m)">'+
     r.skipped.slice(0,20).map(function(x){return P.esc(x);}).join('<br>')+'</div>');
-
-  if(s.duplicateLines)h+=card('Listed twice ('+s.duplicateLines+')',
-    '<div style="font-size:.68rem;color:var(--text-d);margin-bottom:6px">The same ticket number appears more than once on the list.</div>'+
-    tbl(r.dupes.map(function(x){return '<tr><td style="padding:5px 6px;font-weight:600">'+P.esc(x.ticket)+'</td>'+
-      '<td style="padding:5px 6px">'+(x.date||'\u2014')+'</td><td style="padding:5px 6px">'+x.tons.toFixed(2)+' T</td></tr>';}).join(''),
-      ['Ticket','Date','Tons']));
-
-  if(s.notInDalmex)h+=card('On the list, not in Dalmex ('+s.notInDalmex+')',
-    tbl(r.missing.map(function(x){return '<tr><td style="padding:5px 6px;font-weight:600">'+P.esc(x.ticket)+'</td>'+
-      '<td style="padding:5px 6px">'+(x.date||'\u2014')+'</td><td style="padding:5px 6px">'+x.tons.toFixed(2)+' T</td>'+
-      '<td style="padding:5px 6px">'+P.esc(x.zone||'\u2014')+'</td></tr>';}).join(''),
-      ['Ticket','Their date','Their tons','Zone']));
-
-  if(s.differences)h+=card('Different on our side ('+s.differences+')',
-    tbl(r.diffs.map(function(x){
-      function cell(a,b,off){return '<td style="padding:5px 6px'+(off?';color:var(--warning);font-weight:700':'')+'">'+a+(off?' \u2192 '+b:'')+'</td>';}
-      return '<tr><td style="padding:5px 6px;font-weight:600">'+P.esc(x.ticket)+'</td>'+
-        cell(x.theirTons.toFixed(2)+' T',x.ourTons.toFixed(2)+' T',x.tonsOff)+
-        cell(x.theirDate||'\u2014',x.ourDate||'\u2014',x.dateOff)+
-        cell(x.theirZone||'\u2014',x.ourZone||'\u2014',x.zoneOff)+'</tr>';}).join(''),
-      ['Ticket','Tons (theirs \u2192 ours)','Date','Zone']));
-
-  if(s.notOnList)h+=card('In Dalmex, not on the list ('+s.notOnList+')',
-    '<div style="font-size:.68rem;color:var(--text-d);margin-bottom:6px">Loads we have that the list does not show.</div>'+
-    tbl(r.extra.slice(0,100).map(function(x){return '<tr><td style="padding:5px 6px;font-weight:600">'+P.esc(x.ticket)+'</td>'+
-      '<td style="padding:5px 6px">'+(x.date||'\u2014')+'</td><td style="padding:5px 6px">'+x.tons.toFixed(2)+' T</td>'+
-      '<td style="padding:5px 6px">'+P.esc(x.zone||'\u2014')+'</td></tr>';}).join(''),
-      ['Ticket','Date','Tons','Zone']));
 
   h+='<div class="u-sticky"><div class="b bs" id="rcSendBtn" onclick="P.rcSend()">Send this to Dalmex to review</div></div>';
   document.getElementById('rcOut').innerHTML=h;
