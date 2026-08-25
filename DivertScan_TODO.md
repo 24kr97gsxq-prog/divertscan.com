@@ -1,15 +1,12 @@
 # DIVERTSCAN — MASTER TO-DO (priority-ordered)
 
-**Last updated: Wednesday, August 19, 2026 (late).** Replaces the July 7 version.
+**Last updated: Monday, August 24, 2026.** Replaces the July 7 version.
 Update the date whenever you change something.
 
-**System status:** Fully operational. Pi capturing continuously since April 10
-(912 `weight_capture` events in `leed_audit_log`, latest 7:48 PM Aug 19). Client
-portal login working. Admin client management + login log via passphrase-gated
-RPCs. Pi health monitoring live.
-
-**⚠️ OPEN ISSUE — per-project XLSX exports can blend ALL projects.** Found
-Aug 19. Data is sound; the REPORTS were wrong. See the top section below.
+**System status:** Fully operational. Pi captures + syncs (58/58). Client portal
+login verified working on the deployed RPC code. Admin client management + login
+log RESTORED in-app via passphrase-gated RPCs. Pi health monitoring live
+(temp/throttle/disk every 5 min → admin Scale tab widget).
 
 **Two systems, two ways to edit:**
 - **Pi / `scale_capture.py`** — `/home/pi/scale_capture.py`, run by
@@ -21,130 +18,12 @@ Aug 19. Data is sound; the REPORTS were wrong. See the top section below.
   returns the full file (verified: unique anchors, additive diff, node --check);
   Robert uploads it renamed to `index.html` via Add file → Upload files →
   new branch + PR → merge → verify. ALWAYS back up first. One change at a time.
+- **Supabase SQL Editor** — LESSON Aug 24: no temp tables, no BEGIN/COMMIT;
+  each statement must stand alone. Make writes a single data-modifying CTE
+  with a guard, use RETURNING to see what changed. Run one statement at a time
+  (highlight → Run); the editor only shows the last statement's output.
 
 ---
-
-## 🚨 TOP PRIORITY — EXPORT SCOPING BUG (found Aug 19)
-
-**What happens:** a per-project XLSX can contain EVERY project's tickets while
-the header names one project. Root cause in `index.html`:
-
-```js
-if (this._showingAllProjects) {
-    var fresh = await this.supabase('tickets?order=created_at.desc&limit=200');
-    if (fresh) this.state.tickets = fresh;      // ← ALL projects, unfiltered
-}
-...
-var proj = this.state.currentProject;           // header from here
-var allTickets = this.state.tickets;            // data from there — never reconciled
-```
-
-The `if (!proj)` guard does NOT protect: `currentProject` stays set in All
-Projects view, so the check passes. Note the `limit=200` — All Projects view is
-also silently truncated (June hospital alone is 217 tickets).
-
-- [ ] **Fix the scoping.** Add a helper and route every per-project export
-      through it. Portfolio export keeps reading `state.tickets` (blending is
-      its job).
-      ```js
-      _projectTickets() {
-          var proj = this.state.currentProject;
-          if (!proj) return [];
-          return (this.state.tickets || []).filter(function(t) {
-              return t.project_id === proj.id;
-          });
-      },
-      ```
-      In `exportAllXLSX`, swap `this.state.tickets` → `this._projectTickets()`.
-      Still need the ~20 lines where the MONTHLY XLSX export builds its
-      `tickets` var (function ends `showToast('Downloaded '+monthName+...)`).
-- [ ] **Test `client.html` — NOT YET DONE.** Every client has 2+ projects
-      (Ross Mulford: 10, incl. Children's Hospital AND Hayes; Rob Van: 16).
-      If the portal shares this bug, clients can generate blended files
-      unaided. Test: log in as Rob Van → Children's Hospital → July.
-      191 tickets = clean. 253 = same bug.
-      Mitigation if it blends: temporarily trim `client_project_access`.
-- [ ] **Log exports to `leed_audit_log`.** `addAuditEntry` writes to
-      localStorage only — ZERO export rows in the DB. No server-side record of
-      what was issued, when, or containing what. That's a LEED chain-of-custody
-      gap and it's why Aug 19 took hours instead of one query.
-- [ ] **Cover-sheet fields (cosmetic, same PR):** Hauler line renders `—` even
-      though `projects.waste_hauler` is set — export isn't reading that column
-      (likely looking for `hauler`). And `general_contractor` is null, so
-      "GC / Client" falls back to `client` and names the hauler as the GC.
-
-### Verified true numbers (check any export against these)
-| Project / month | Real | If blended |
-|---|---|---|
-| CH 2026-07 | **191 tix, 569.57 T, 76.157%** | 253 tix, 732.53 T, 75.084% |
-| CH 2026-06 | **217 tix, 808.85 T, 75.42%** | 293 tix, 988.08 T, 76.73% |
-| CH Jul 1–15 | **64 tix, 204.91 T, 76.08%** | 88 tix, 284.00 T, 75.30% |
-| CH Jul 16–31 | **127 tix, 364.66 T, 76.20%** | 165 tix, 447.91 T, 74.74% |
-| CH Aug 1–15 | **114 tix, 393.61 T, 75.07%** | 189 tix, 568.43 T, 77.80% |
-
-Ticket count is the fastest tell. Ross bills 1st–15th and 16th–EOM, so check
-those periods, not just calendar months.
-
-## 🔴 LEED — CUMULATIVE RATE IS 72.14%, NOT 75%+
-
-- [ ] **Confirm whether the Children's Hospital submittal is scored monthly or
-      project-to-date.** MRc credits are normally scored on TOTAL project waste.
-      Project-to-date: **975 tickets, 3,318.92 T, 2,394.20 diverted = 72.14%**
-      — about **95 diverted tons short of 75%**.
-      Monthly: Jan 65.6 / Feb 66.4 / Mar 65.3 / Apr 67.8 / May 70.3 / Jun 75.4 /
-      Jul 76.2 / Aug 74.9. Target was only cleared in June and July.
-      Recent monthly reports showing 75–76% do NOT reflect where the credit
-      stands. Raise this with whoever owns the submittal BEFORE filing.
-- [ ] **Watch Aug 1–15: 75.07%**, clearing by ~0.3 tons. Period still open.
-
-## ✅ DONE — Aug 19 session (July 2026 Children's Hospital reconciliation)
-- **July closed and verified: 191 tickets, 569.57 T, 433.77 diverted, 76.157%.**
-  Export regenerated and matches the DB exactly.
-- **Ross's "19 missing tickets" was wrong** — 17 were already in DivertScan with
-  matching dates and weights (largest gap 0.01 T = rounding). His three zone
-  "corrections" (85816→C, 85818→A, 85819→A) were already applied. He was working
-  from a stale copy.
-- **Added 85813 (1.60 T, 7/27) and 87726 (1.14 T, 7/25)** — genuinely missing,
-  and not found in the paper stack by two independent searches (Robert +
-  Michelle). Entered with `tare_method='estimated'`, `mix_source=
-  'estimated_project_mix'`, `scan_type='manual_reconciliation'`, basis in notes.
-  Tares derived from same-day neighbours (85814 → 32,700; 87723/87724 → 32,762);
-  gross calculated, not weighed. Mix = July project average rescaled to 77%
-  (40 wood / 17 OCC / 17 metal / 3 concrete / 23 landfill).
-- **Removed duplicates DX-00077 / DX-00078** — same-load twins of paper tickets
-  87723 / 87724 (identical gross+tare+net, same driver Derrick, 7/25). Cause
-  confirmed: driver used the scale app AND dropped a written ticket. One driver,
-  one day, 2 of 48 DX rows — not a habit.
-  **A FK on `scale_weights.ticket_id` blocks deleting any Pi-backed ticket.**
-  Resolved by repointing the hashed Pi readings onto 87723/87724 (they had none)
-  and setting `tickets.source_weight_id`, then deleting the DX rows. Nothing lost.
-- **Snapshot `tickets_backup_20260819_july_fix` (191 rows) — DO NOT DROP** until
-  the LEED report is accepted. A SQL change never appears in the app Audit tab,
-  so this table is the audit record.
-- **`projects.waste_hauler` set** to Jaguar Waste Management (export still
-  ignores it — see above).
-
-### Notes worth keeping from this session
-- **DX- prefix = driver check-in via the scale app** (`scan_type='pi_scale'`,
-  backed by a hashed `scale_weights` row). Paper tickets are `batch_ocr` — an
-  OCR read of a photo, `human_verified=false`, no scale_weights row. **The Pi
-  row is the stronger evidence**, not the paper.
-- **46 of 48 July DX rows have no paper counterpart (~85 T).** Ross reconciles
-  off paper and structurally cannot match them. Explain before he asks.
-- **Ticket times on hauler lists come from the handwritten "Remarks" line.**
-  87723's paper says 11:56 AM; the Pi timestamped the same weighing at 3:18 PM.
-  Fine for tonnage, unreliable for load times. Pi is the source of truth.
-- **No tare is ever measured by the Pi** — every `scale_weights` row on 7/25 is
-  `weight_type='gross'`, zero tares. All tares come from stored per-truck
-  values. Bigger than the "~32,540" framing in Easy Wins below.
-- **Remove Duplicate Tickets tool matches on ticket NUMBER only** — it cannot
-  catch same-load twins under different numbers, and it will hit the
-  `scale_weights` FK on any Pi-backed row.
-- **Unresolved (do not auto-delete):** 87539/87627 (7/14, both 2.05 T) and
-  87276/87704 (7/24, both 1.90 T) — identical gross AND tare, both paper. Both
-  use tare 33,000, the most common value, so likely coincidence. Photos settle it.
-- **87725** appears in no record. DX-00079 (7/25, same truck/tare, no paper
-  twin) is a candidate. Ask Ross whether it exists.
 
 ## ✅ DONE — verified July 6–7 session
 - **Portal deploy VERIFIED** — pages-build-deployment green (698), client login
@@ -169,6 +48,122 @@ those periods, not just calendar months.
   Was a standing TODO item — closed as part of admin unlock.
 - **`reset-client.html` is now obsolete** — superseded by in-app management.
   Delete from repo when convenient (it still nags for the anon/service key).
+
+## 🔴 DATA CLEANUP — Children's Hospital Aug 1–15 (Jaguar billing reconciliation)
+Ross (Jaguar) sent 118 tickets / 408.95 T for 8/1–8/15. Files:
+`reconcile_jaguar_aug1-15.py`, `ross_list.csv`, `DX_duplicate_review.csv`,
+`hospital_aug_cleanup_v3.sql`, `unzoned_where.sql`.
+
+**What the DX numbers are (learned Aug 24):** `DX-xxxxx` = the driver used the
+scale app at the scale (Pi-assigned number, `scale_weights` row attached).
+The 5-digit numbers = Curtis's handwritten paper ticket for the SAME load,
+scanned in later (has the photo). Two records per truck by design. Ross bills
+off the paper number, so the paper number must always survive; merge = move
+`scale_weights.ticket_id` to the paper ticket, then delete the DX row.
+
+### ✅ DONE Aug 24 (verified on fresh export — zoned totals match model exactly)
+- 10 DX→paper merges inside Children's Hospital (DX-00094/97/100/101/102/103/
+  110/111/118/119), scale_weights re-pointed, no orphans.
+- 21 ticket_dates corrected (85841/85844/87595/87596/85842/85846→8/7,
+  85854/85855/85856→8/8, 85863/85864→8/10, 85878→8/11,
+  85877/81/83/85/86/87/92→8/12, 85873/85874→8/3). 87349 checked, stays 8/4.
+  LESSON: 85873/85874 were wrong in the DB (batch OCR read handwritten "8/3"
+  as 8/13) and I wrongly backed the DB from ticket-number sequence. Curtis's
+  book is NOT sequential by day. The paper ticket photo is the only authority
+  on dates — never infer a date from the ticket number.
+- #87444 gross corrected 39,840→37,080 (was a copy of #87445; paper reads
+  37,080 / 32,600 / 2.2 T).
+- #87344 confirmed correct at 3.42 T from paper — Ross's 6.58 is his error.
+- #87715 tare fixed.
+- 12 zones set per Ross / paper (85873/85801/85826→A, 85883/85884→B,
+  85892/85930/85931→E, 85886→F, 85855 "Z"→A, 85921 blank→A, 87357 B→D).
+
+### ⏳ STILL OPEN — ours
+- [ ] **#85857 (8/8 D) weights all zero** — waiting on Dewey. Ross has 5.94 T.
+- [ ] **Hayes merge** — `hayes_dx_merge.sql` (DX-00086/88/89 → 87342/87343/87341).
+- [x] **22 DX→paper merges total in the hospital project** (13 exact + 2
+      driver/time-confirmed + 5 on 8/7 + DX-00094 F + DX-00097). Scale
+      captures re-pointed on every one.
+- [x] **DX-00104 → 85878 and DX-00106 → 87444 merged** (Aug 24 late; driver +
+      capture time + gross confirmed each). `dx_merge_round2.sql`.
+- [x] **8/7 batch resolved without Curtis:** DX-00092/93/95/96/98 were Alan's
+      five paper tickets (85838/85839/85842/85843/85846) — six-for-six with
+      #85841, each DX 100–200 lbs heavier than the settled paper reading.
+      Merged. Ross's 9 loads on 8/7 is correct.
+- [ ] **Two merges waiting on photos:** DX-00090 → 85825 (Willie G, 8/6,
+      3:23 vs 3:30pm, but DX gross 46,660 vs paper 41,010 — read the photo,
+      fix 85825's weight first if OCR misread it). DX-00091 → 85826 (Alan,
+      8/6, gross 40 lbs apart; Ross's 4:15pm vs capture 8:01pm — check
+      Remarks on the photo). Statement is at the bottom of
+      `dx_merge_aug7_alan.sql`.
+- [ ] **Confirmed unticketed (real loads, no paper, Ross doesn't have them):**
+      DX-00105 (Derrick 8/11 7:09pm 2.65 T), DX-00107 (8:44pm 3.25 T),
+      DX-00108 (9:27pm 4.43 T) — tons shown at Derrick's real tare 32,640.
+      DX-00107 may be Ross's #4280387 (8:21pm 3.70 T) — ask Ross what the
+      7-digit numbers are.
+- [ ] **DX-00115** (Derrick 8/15 1:06pm, 0.87 T) — near-empty box, probably a
+      mis-capture. Ask Derrick; otherwise leave off the report.
+- [ ] **Set Derrick's three unticketed DX tickets to Tare Source = Estimated**
+      and zone them (he was on hospital loads that evening; 87444 was E).
+- [x] **Export scope — RESOLVED:** the ~73 extra tickets in the hospital export
+      were Hayes (confirmed DX-00086/88/89 are Hayes). Export was taken in
+      "All Projects" view. Fix = index.html item #1 below.
+- [ ] After the weight fixes: one more export → re-run script → final
+      side-by-side to Ross.
+
+### 📤 TO SEND ROSS (once weights fixed)
+- Not in DivertScan: #87334 (8/1 10:00am 2.24 T A), #87360 (8/4 7:30pm 2.95 T D).
+- Six 7-digit tickets (~32 T) aren't DalMex numbers; #4279809 = his own #87599.
+- Typos: #855979→#85979; #85797 listed twice. (85873/85874 ARE 8/3 — he was right.)
+- #87349 is 8/4 (paper), not 8/5.
+- 14.92 T Zone F (#85841) is real — gross 61,960 / tare 32,120, photo on file.
+- Loads he hasn't listed: 8 paper tickets, 22.12 T (#87347, #85811, #85970,
+  #87449, #87454, #85900, #85959, #87469) + Derrick's 3 unticketed 8/11
+  loads, 10.3 T (DX-00105/107/108). Ask whether the 7-digit numbers are
+  Jaguar's own numbering for loads without a Dalmex ticket.
+- DEWEY FIRST (Robert's call Aug 24): agree numbers with Dewey before
+  replying to Ross. Email drafted; no attachment.
+
+## 🛠 index.html / scale.html — NEXT CHANGES (one PR each, deploy → verify → next)
+0. [ ] **scale.html — ticket_date is UTC (FOUND Aug 24).** `let today = new
+      Date().toISOString().split('T')[0]` → replace with
+      `new Date().toLocaleDateString('en-CA', {timeZone:'America/Chicago'})`.
+      Every capture after 7pm Central has been getting tomorrow's date since
+      April (27 tickets across Test/Hayes/Hospital). Data corrected via
+      `fix_dx_utc_dates.sql`; the code fix stops it recurring. Smallest,
+      most urgent change on the list — do this one first.
+1. [ ] **Block month exports when "All Projects" view is active.** `exportMonthPDF/
+      XLSX/CSV/QBO` read `_monthGroups` built from `state.tickets`; after
+      `loadAllProjectTickets()` that list is every project but the file is still
+      named after `currentProject`. Fix: if `this._showingAllProjects` is true,
+      toast "Select a single project to export" and return. Also filter
+      `renderReports()` to `currentProject.id` as belt-and-braces. This is a
+      customer-facing report risk (Non-LEED steel loads on a LEED hospital report).
+2. [ ] **Duplicate-load warning on manual / scanned ticket entry.** Before
+      saving a new ticket, query this project's tickets for the same hauler with
+      gross within ±300 lbs and ticket_date within ±1 day. If found, show
+      "Looks like #DX-xxxxx (same truck, 8/7, 44,240 lbs) — attach this paper
+      ticket to it instead?" with a merge button that does what the Aug 24 SQL
+      did (paper number wins, scale_weights re-pointed, DX row removed).
+      This is the fix for the whole DX/paper double-ticket pattern.
+3. [ ] (after 1 & 2) **Paper ticket # field in the scale app** at capture time —
+      driver keys Curtis's ticket number, so the DX record already knows its
+      paper partner and #2 becomes an exact match instead of a weight guess.
+4. [ ] **Batch OCR already exists** (`scan_type = batch_ocr` / `batch_queue`)
+      AND it already has a review screen (`mt_num_/mt_date_/mt_gross_` rows
+      with a day-of-week hint). The errors got through anyway, so the fix is
+      making bad dates hard to accept, not adding a screen: (a) flag the date
+      field red when OCR's date differs from the photo's EXIF date or when
+      the day-of-week hint doesn't match what's written; require a tap to
+      accept a flagged date. Score so far from tonight's spot-checks: batch tickets
+      85873/85874 date wrong, 85842/85846/85856 date wrong, 87357 zone wrong
+      — 6 errors in 7 batch tickets examined. Weights were right every time;
+      it's dates and zones that need eyes. (b) after confirm, run the #2 duplicate
+      match so the paper ticket attaches to its DX capture automatically.
+5. [ ] **Per-truck measured tare** for scale-app captures. DX tickets use
+      `driver_avg` (Derrick: 26 prior loads, blended across Hayes + hospital),
+      so every DX net is an estimate until merged. Store a measured empty
+      weight per truck; flag Tare Source = Estimated until one exists.
 
 ## 🔑 STANDING RULES (unchanged)
 - CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports are weight-based only.
@@ -200,13 +195,8 @@ those periods, not just calendar months.
       covers daily needs; full Auth is still the right end state. Plan properly.
 
 ## 🟢 EASY / QUICK WINS
-- [ ] **Mark reused-tare DX loads as "Estimated"** — one careful SQL UPDATE
-      (preview with SELECT first). NOTE: the old "~32,540 standard tare"
-      framing was wrong. Only 3 DX rows carry exactly 32,540. The real pattern
-      is tares REUSED across a run — 12 tare values covering 36 of 48 July DX
-      rows, so ~24 rows carry a tare weighed on an earlier load, sometimes the
-      previous day. Those 24 are the Estimated candidates. Set `tare_method`,
-      not `tare_source` (the latter is null throughout — dead column).
+- [ ] **Mark averaged-tare DX loads as "Estimated"** — one careful SQL UPDATE
+      (preview with SELECT first). Tickets with the standard ~32,540 tare.
 - [ ] **Rename `2_pi_health.py` → `pi_health.py` in the repo** so repo matches
       the Pi (update the curl URL habit accordingly).
 - [ ] **Delete `reset-client.html` from the repo** (obsolete, see DONE).
