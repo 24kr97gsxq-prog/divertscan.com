@@ -621,6 +621,13 @@ document.addEventListener('keydown', function(e){
                         <option value="added_asc">↑ Oldest added</option>
                         <option value="date_desc">↓ Date: newest</option>
                         <option value="date_asc">↑ Date: oldest</option>
+                        <option value="tons_desc">↓ Heaviest load</option>
+                        <option value="tons_asc">↑ Lightest load</option>
+                        <option value="div_desc">↓ Best diversion %</option>
+                        <option value="div_asc">↑ Worst diversion %</option>
+                        <option value="num_desc">↓ Ticket # high–low</option>
+                        <option value="num_asc">↑ Ticket # low–high</option>
+                        <option value="driver_asc">Driver A–Z</option>
                     </select>
                 </div>
                 <div id="ticketList"></div>
@@ -1795,7 +1802,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.12.0',
+    VERSION: '7.14.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -2458,8 +2465,19 @@ const DS = {
             const badge = document.getElementById('driversNavBadge');
             const issuesCount = dupes + (orphanTotal > 0 ? 1 : 0);
             if (badge) {
-                if (issuesCount > 0) { badge.textContent = dupes; badge.style.display = 'block'; }
-                else badge.style.display = 'none';
+                // It used to print `dupes` whenever issuesCount > 0, so with
+                // orphans but no duplicate drivers it showed a literal "0".
+                if (dupes > 0) {
+                    badge.textContent = dupes;
+                    badge.title = dupes + ' duplicate driver' + (dupes > 1 ? 's' : '');
+                    badge.style.display = 'block';
+                } else if (orphanTotal > 0) {
+                    badge.textContent = '!';
+                    badge.title = orphanTotal + ' ticket' + (orphanTotal > 1 ? 's' : '') + ' with no driver linked';
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
             }
 
             this.renderDriversTab();
@@ -7912,6 +7930,13 @@ const DS = {
                         <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
                         <option value="date_desc"${this._getSortPref()==='date_desc'?' selected':''}>↓ Date: newest</option>
                         <option value="date_asc"${this._getSortPref()==='date_asc'?' selected':''}>↑ Date: oldest</option>
+                        <option value="tons_desc"${this._getSortPref()==='tons_desc'?' selected':''}>↓ Heaviest load</option>
+                        <option value="tons_asc"${this._getSortPref()==='tons_asc'?' selected':''}>↑ Lightest load</option>
+                        <option value="div_desc"${this._getSortPref()==='div_desc'?' selected':''}>↓ Best diversion %</option>
+                        <option value="div_asc"${this._getSortPref()==='div_asc'?' selected':''}>↑ Worst diversion %</option>
+                        <option value="num_desc"${this._getSortPref()==='num_desc'?' selected':''}>↓ Ticket # high–low</option>
+                        <option value="num_asc"${this._getSortPref()==='num_asc'?' selected':''}>↑ Ticket # low–high</option>
+                        <option value="driver_asc"${this._getSortPref()==='driver_asc'?' selected':''}>Driver A–Z</option>
                     </select>
                 </div>
                 ${leedInfo.isNonLeed ? '<div style="text-align:center;padding:8px 0;margin-bottom:8px;background:var(--bg-input);border-radius:var(--radius);"><div style="font-size:0.7rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>' : `<div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
@@ -13361,18 +13386,38 @@ const DS = {
         if (!Array.isArray(tickets) || tickets.length === 0) return tickets || [];
         const pref = this._getSortPref();
         const arr = tickets.slice();
+        // Numeric sorts compare as numbers; the rest compare as text.
+        // Missing values always sort to the end, whichever direction is chosen,
+        // so a ticket with no weight never masquerades as the lightest load.
+        const NUMERIC = { tons_desc:'net_tons', tons_asc:'net_tons',
+                          div_desc:'diversion_pct', div_asc:'diversion_pct' };
         arr.sort(function(a, b) {
-            let av, bv;
+            var numField = NUMERIC[pref];
+            if (numField) {
+                var an = parseFloat(a[numField]), bn = parseFloat(b[numField]);
+                var aBad = !isFinite(an), bBad = !isFinite(bn);
+                if (aBad && bBad) return 0;
+                if (aBad) return 1;
+                if (bBad) return -1;
+                if (an === bn) return 0;
+                return pref.endsWith('_desc') ? (bn - an) : (an - bn);
+            }
+            var av, bv;
             if (pref === 'added_desc' || pref === 'added_asc') {
                 av = a.created_at || ''; bv = b.created_at || '';
+            } else if (pref === 'num_desc' || pref === 'num_asc') {
+                av = String(a.ticket_number || ''); bv = String(b.ticket_number || '');
+            } else if (pref === 'driver_asc' || pref === 'driver_desc') {
+                av = String(a.driver_name || ''); bv = String(b.driver_name || '');
             } else {
                 av = a.ticket_date || ''; bv = b.ticket_date || '';
             }
-            // Nulls sort to end always
             if (!av && !bv) return 0;
             if (!av) return 1;
             if (!bv) return -1;
-            const cmp = av.localeCompare(bv);
+            var cmp = (pref === 'num_desc' || pref === 'num_asc')
+                ? av.localeCompare(bv, undefined, { numeric: true })   // 85974 after 859
+                : av.localeCompare(bv);
             return pref.endsWith('_desc') ? -cmp : cmp;
         });
         return arr;
@@ -13386,6 +13431,13 @@ const DS = {
             '<option value="added_asc"' + sel('added_asc') + '>Oldest added</option>' +
             '<option value="date_desc"' + sel('date_desc') + '>Date: newest</option>' +
             '<option value="date_asc"' + sel('date_asc') + '>Date: oldest</option>' +
+            '<option value="tons_desc"' + sel('tons_desc') + '>Heaviest load</option>' +
+            '<option value="tons_asc"' + sel('tons_asc') + '>Lightest load</option>' +
+            '<option value="div_desc"' + sel('div_desc') + '>Best diversion %</option>' +
+            '<option value="div_asc"' + sel('div_asc') + '>Worst diversion %</option>' +
+            '<option value="num_desc"' + sel('num_desc') + '>Ticket # high\u2013low</option>' +
+            '<option value="num_asc"' + sel('num_asc') + '>Ticket # low\u2013high</option>' +
+            '<option value="driver_asc"' + sel('driver_asc') + '>Driver A\u2013Z</option>' +
             '</select>';
     },
 
