@@ -617,6 +617,7 @@ document.addEventListener('keydown', function(e){
                         <option value="none">No Zone</option>
                     </select>
                     <select class="form-input" id="ticketSort" onchange="DS.setSortPref(this.value)" style="padding:8px;font-size:.75rem;flex:0 0 auto;width:auto;">
+                        <option value="gaps_desc">⚠ Needs attention first</option>
                         <option value="added_desc">↓ Newest added</option>
                         <option value="added_asc">↑ Oldest added</option>
                         <option value="date_desc">↓ Date: newest</option>
@@ -1112,6 +1113,18 @@ document.addEventListener('keydown', function(e){
                 </div>
             </div>
 
+            <!-- 6b. Client reconciliations -->
+            <div class="card">
+                <div class="card-title">Client Reconciliations
+                    <span id="reconBadge" style="margin-left:8px;background:var(--warning);color:var(--bg-deep);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
+                </div>
+                <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px">
+                    Hauler lists a client checked against our tickets. Their numbers, our numbers, and what did not line up.
+                </div>
+                <div id="reconList" style="margin-bottom:8px"></div>
+                <button class="btn btn-sm btn-outline" onclick="DS.loadReconciliations()" style="width:100%">Refresh</button>
+            </div>
+
             <!-- 7. Remove Duplicate Tickets -->
             <div class="card">
                 <div class="card-title">Remove Duplicate Tickets</div>
@@ -1421,6 +1434,14 @@ document.addEventListener('keydown', function(e){
 </div>
 
 <!-- Ticket Detail Modal -->
+<div class="modal-overlay" id="reconModal">
+    <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title" id="reconModalTitle">Reconciliation</div>
+        <div id="reconModalBody" style="max-height:64vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="globalSearchModal">
     <div class="modal">
         <div class="modal-handle"></div>
@@ -1802,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.14.0',
+    VERSION: '7.16.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -4583,6 +4604,7 @@ const DS = {
                 if (tab === 'auditTab') {
                     this.updateFieldLink();
                     this.populateAuditProjectSelect();
+                    this.loadReconciliations();
                     Promise.all([
                         this.loadPendingReview(),
                         this.loadPhotoQueue(),
@@ -7926,6 +7948,7 @@ const DS = {
                            placeholder="Find ticket #, driver or zone"
                            oninput="DS.findInMonth('${key}', this.value)">
                     <select class="form-input month-sort" onchange="DS.setSortPref(this.value)" title="Sort tickets">
+                        <option value="gaps_desc"${this._getSortPref()==='gaps_desc'?' selected':''}>⚠ Needs attention first</option>
                         <option value="added_desc"${this._getSortPref()==='added_desc'?' selected':''}>↓ Newest added</option>
                         <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
                         <option value="date_desc"${this._getSortPref()==='date_desc'?' selected':''}>↓ Date: newest</option>
@@ -12352,6 +12375,124 @@ const DS = {
     // ============================================================
     _dupeIds: [],
 
+    // ============================================================
+    // CLIENT RECONCILIATIONS — hauler lists a client checked against
+    // our tickets, sent over for review. Read + annotate only; nothing
+    // here changes a ticket.
+    // ============================================================
+    async loadReconciliations() {
+        var el = document.getElementById('reconList');
+        if (!el) return;
+        el.innerHTML = '<div style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim);padding:8px">Loading…</div>';
+        var rows = await this.supabase('client_reconciliations?select=*&order=created_at.desc&limit=25');
+        if (!rows) { el.innerHTML = '<div style="color:var(--danger);font-size:.7rem;padding:8px">Could not load — check the RLS policy on client_reconciliations.</div>'; return; }
+        this._recons = rows;
+        var open = rows.filter(function(r){ return r.status === 'submitted'; }).length;
+        var badge = document.getElementById('reconBadge');
+        if (badge) {
+            if (open > 0) { badge.textContent = open; badge.style.display = 'inline'; }
+            else badge.style.display = 'none';
+        }
+        if (!rows.length) { el.innerHTML = '<div style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim);padding:8px">Nothing submitted yet.</div>'; return; }
+
+        var projName = {};
+        (this.state.projects || []).forEach(function(p){ projName[p.id] = p.name; });
+
+        el.innerHTML = rows.map(function(r) {
+            var s = r.summary || {};
+            var isOpen = r.status === 'submitted';
+            var period = (r.period_from || '?') + ' → ' + (r.period_to || '?');
+            return '<div style="border:1px solid ' + (isOpen ? 'var(--warning)' : 'var(--border)') +
+                ';border-radius:var(--radius);padding:10px;margin-bottom:8px;background:var(--bg-card)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
+                  '<div><div style="font-weight:700;font-size:.78rem">' + DS.esc(projName[r.project_id] || 'Unknown project') + '</div>' +
+                  '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim)">' +
+                    DS.esc(r.submitted_by || 'client') + ' · ' + (r.created_at || '').substring(0,10) + ' · ' + period + '</div></div>' +
+                  '<span style="font-family:var(--mono);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:10px;' +
+                    (isOpen ? 'background:var(--warning);color:var(--bg-deep)' : 'border:1px solid var(--border);color:var(--text-dim)') + '">' +
+                    DS.esc(r.status || '') + '</span>' +
+                '</div>' +
+                '<div style="display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:.65rem;margin-top:8px">' +
+                  '<span>' + (s.listed || 0) + ' listed</span>' +
+                  '<span style="color:var(--success)">' + (s.matched || 0) + ' matched</span>' +
+                  '<span style="color:' + (s.differences ? 'var(--warning)' : 'var(--text-dim)') + '">' + (s.differences || 0) + ' differ</span>' +
+                  '<span style="color:' + (s.notInDalmex ? 'var(--warning)' : 'var(--text-dim)') + '">' + (s.notInDalmex || 0) + ' not in ours</span>' +
+                  '<span style="color:' + (s.notOnList ? 'var(--primary)' : 'var(--text-dim)') + '">' + (s.notOnList || 0) + ' not on theirs</span>' +
+                '</div>' +
+                '<div class="btn-row mt-8">' +
+                  '<button class="btn btn-sm btn-outline" onclick="DS.viewReconciliation(\'' + r.id + '\')" style="flex:1">Open</button>' +
+                  (isOpen ? '<button class="btn btn-sm btn-success" onclick="DS.markReconciliationReviewed(\'' + r.id + '\')" style="flex:1">Mark reviewed</button>' : '') +
+                '</div>' +
+                (r.admin_notes ? '<div style="font-size:.65rem;color:var(--text-muted);margin-top:6px"><strong>Your note:</strong> ' + DS.esc(r.admin_notes) + '</div>' : '') +
+                '</div>';
+        }).join('');
+    },
+
+    viewReconciliation(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) { this.showToast('Not found — refresh the list'); return; }
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        function tbl(title, arr, cols, cells) {
+            if (!arr || !arr.length) return '';
+            return '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:12px 0 4px">' +
+                title + ' (' + arr.length + ')</div>' +
+                '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.65rem">' +
+                '<thead><tr style="border-bottom:1px solid var(--border)">' +
+                cols.map(function(c){ return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim)">' + c + '</th>'; }).join('') +
+                '</tr></thead><tbody>' +
+                arr.slice(0,200).map(function(x){ return '<tr style="border-bottom:1px solid var(--border)">' + cells(x) + '</tr>'; }).join('') +
+                '</tbody></table></div>';
+        }
+        function td(v){ return '<td style="padding:4px 6px">' + DS.esc(v == null ? '—' : String(v)) + '</td>'; }
+
+        var body =
+            '<div style="font-family:var(--mono);font-size:.62rem;color:var(--text-dim);margin-bottom:8px">' +
+                DS.esc(r.submitted_by || 'client') + ' · ' + (r.period_from || '?') + ' → ' + (r.period_to || '?') + '</div>' +
+            tbl('On their list, not in ours', rows.missing, ['Ticket','Their date','Their tons','Zone'],
+                function(x){ return td(x.ticket) + td(x.date) + td(x.tons) + td(x.zone); }) +
+            tbl('Different on our side', rows.differences, ['Ticket','Theirs','Ours','Field'],
+                function(x){
+                    var what = [x.tonsOff?'tons':'', x.dateOff?'date':'', x.zoneOff?'zone':''].filter(Boolean).join(', ');
+                    return td(x.ticket) + td(x.theirTons + ' T / ' + (x.theirDate||'—')) +
+                           td(x.ourTons + ' T / ' + (x.ourDate||'—')) + td(what); }) +
+            tbl('In ours, not on their list', rows.notOnList, ['Ticket','Date','Tons','Zone'],
+                function(x){ return td(x.ticket) + td(x.date) + td(x.tons) + td(x.zone); }) +
+            tbl('Listed twice by them', rows.duplicateLines, ['Ticket','Date','Tons'],
+                function(x){ return td(x.ticket) + td(x.date) + td(x.tons); }) +
+            ((rows.unreadable && rows.unreadable.length)
+                ? '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:12px 0 4px">Lines we could not read (' + rows.unreadable.length + ')</div>' +
+                  '<div style="font-family:var(--mono);font-size:.62rem;color:var(--text-muted);line-height:1.7">' +
+                  rows.unreadable.slice(0,30).map(function(x){ return DS.esc(x); }).join('<br>') + '</div>'
+                : '') +
+            '<div style="margin-top:14px"><label style="font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Note back to the client</label>' +
+            '<textarea class="form-input" id="reconNote" rows="3" style="margin-top:4px;font-size:.78rem">' + DS.esc(r.admin_notes || '') + '</textarea></div>' +
+            '<div class="btn-row mt-8">' +
+              '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
+              '<button class="btn btn-outline" onclick="DS.closeModal(\'reconModal\')" style="flex:1">Close</button>' +
+            '</div>';
+        document.getElementById('reconModalTitle').textContent = 'Reconciliation — ' + ((this.state.projects||[]).find(function(p){return p.id===r.project_id;})||{}).name;
+        document.getElementById('reconModalBody').innerHTML = body;
+        this.openModal('reconModal');
+    },
+
+    async saveReconciliationNote(id) {
+        var note = (document.getElementById('reconNote') || {}).value || '';
+        var res = await this.supabase('client_reconciliations?id=eq.' + id, 'PATCH', { admin_notes: note });
+        if (res === null) { this.showToast('Could not save the note'); return; }
+        this.showToast('Note saved — the client will see it');
+        this.closeModal('reconModal');
+        this.loadReconciliations();
+    },
+
+    async markReconciliationReviewed(id) {
+        var res = await this.supabase('client_reconciliations?id=eq.' + id, 'PATCH',
+            { status: 'reviewed', reviewed_at: new Date().toISOString() });
+        if (res === null) { this.showToast('Could not update'); return; }
+        this.showToast('Marked reviewed');
+        this.loadReconciliations();
+    },
+
     async findDuplicates() {
         var el = document.getElementById('dedupResults');
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Scanning for duplicates...</div>';
@@ -13391,6 +13532,30 @@ const DS = {
         // so a ticket with no weight never masquerades as the lightest load.
         const NUMERIC = { tons_desc:'net_tons', tons_asc:'net_tons',
                           div_desc:'diversion_pct', div_asc:'diversion_pct' };
+
+        // "Needs attention" — the work queue. Score each ticket by what's
+        // missing; the worst float to the top. Weight matters most because a
+        // ticket with no weight is worth nothing on a report or an invoice.
+        var self = this;
+        function gapScore(t) {
+            var s = 0;
+            if (!(parseFloat(t.net_tons) > 0)) s += 8;          // no weight at all
+            if (!t.zone) s += 4;                                 // can't land in a zone report
+            if (!t.driver_name) s += 2;                          // nobody to ask about it
+            if (!t.scale_ticket_image) s += 2;                   // no evidence behind it
+            var hasMat = Object.keys(self.MATERIALS || {}).some(function(k){ return (t[k+'_pct']||0) > 0; });
+            if (!hasMat) s += 1;                                 // no material breakdown
+            return s;
+        }
+        if (pref === 'gaps_desc') {
+            arr.sort(function(a, b) {
+                var d = gapScore(b) - gapScore(a);
+                if (d !== 0) return d;
+                return String(b.ticket_date||'').localeCompare(String(a.ticket_date||''));
+            });
+            return arr;
+        }
+
         arr.sort(function(a, b) {
             var numField = NUMERIC[pref];
             if (numField) {
@@ -13427,6 +13592,7 @@ const DS = {
         const cur = this._getSortPref();
         const sel = function(v) { return v === cur ? ' selected' : ''; };
         return '<select onchange="DS.setSortPref(this.value)" style="padding:6px 8px;font-size:.7rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;cursor:pointer;' + (extraStyle || '') + '">' +
+            '<option value="gaps_desc"' + sel('gaps_desc') + '>Needs attention first</option>' +
             '<option value="added_desc"' + sel('added_desc') + '>Newest added</option>' +
             '<option value="added_asc"' + sel('added_asc') + '>Oldest added</option>' +
             '<option value="date_desc"' + sel('date_desc') + '>Date: newest</option>' +
