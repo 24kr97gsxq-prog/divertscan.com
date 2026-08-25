@@ -788,8 +788,8 @@ return '<div class="c" id="vfRow'+i+'" style="'+((nd||ndt||nn)?'border-color:var
 '<div class="fg"><label class="fl">Ticket #</label><input class="fi" id="vf'+i+'_ticket_number" inputmode="numeric" value="'+P.esc(c.ticket_number)+'" style="'+(nn?amber:'')+'" oninput="P.vfEdit('+i+',\'ticket_number\')"></div>'+
 '<div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="vf'+i+'_ticket_date" max="'+today+'" value="'+P.esc(c.ticket_date)+'" style="'+(ndt?amber:'')+'" oninput="P.vfEdit('+i+',\'ticket_date\')"><div style="font-size:.62rem;color:var(--warning);font-weight:700;margin-top:3px" id="vfDw'+i+'"></div></div>'+
 '</div>'+
-'<div class="fg"><label class="fl">Driver</label><input class="fi" id="vf'+i+'_driver_name" value="'+P.esc(c.driver_name)+'" placeholder="Required \u2014 who hauled this load" style="'+(nd?amber:'')+'" oninput="P.vfEdit('+i+',\'driver_name\')">'+
-(nd?'<div style="font-size:.62rem;color:var(--warning);font-weight:700;margin-top:3px">Not readable \u2014 needed to pay this load</div>':'')+'</div>'+
+'<div class="fg"><label class="fl">Driver</label><input class="fi" id="vf'+i+'_driver_name" value="'+P.esc(c.driver_name)+'" placeholder="Who hauled this load \u2014 optional" style="'+(nd?amber:'')+'" oninput="P.vfEdit('+i+',\'driver_name\')">'+
+(nd?'<div style="font-size:.62rem;color:var(--warning);font-weight:700;margin-top:3px">Driver not readable \u2014 send it anyway, we\'ll flag it</div>':'')+'</div>'+
 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
 '<div class="fg"><label class="fl">Gross (lbs)</label><input type="number" class="fi" id="vf'+i+'_gross_lbs" value="'+(c.gross_lbs||'')+'" oninput="P.vfEdit('+i+',\'gross_lbs\')"></div>'+
 '<div class="fg"><label class="fl">Tare (lbs)</label><input type="number" class="fi" id="vf'+i+'_tare_lbs" value="'+(c.tare_lbs||'')+'" oninput="P.vfEdit('+i+',\'tare_lbs\')"></div>'+
@@ -850,7 +850,7 @@ if(!P._vf.rows.length){P.toast('Nothing to send');return;}
 for(var i=0;i<P._vf.rows.length;i++){
 if(P._vf.rows[i].sent)continue;
 var c=P._vf.rows[i].cur;
-if(!c.driver_name){P.toast('Ticket '+(i+1)+': driver name required');P.vfJump(i);return;}
+
 if(!c.ticket_number){P.toast('Ticket '+(i+1)+': ticket number required');P.vfJump(i);return;}
 if(!c.ticket_date){P.toast('Ticket '+(i+1)+': date required');P.vfJump(i);return;}}
 var btn=document.getElementById('vfSendBtn');
@@ -860,8 +860,13 @@ for(var i=0;i<P._vf.rows.length;i++){
 var r=P._vf.rows[i];if(r.sent){ok++;continue;}
 btn.textContent='Sending '+(i+1)+' of '+P._vf.rows.length+'\u2026';
 var net=(parseInt(r.cur.gross_lbs)||0)-(parseInt(r.cur.tare_lbs)||0);
+// Driver name is optional — a missing one must not hold up the load.
+// Flag it so the admin side can chase it instead of blocking the driver.
+var _flags=[];
+if(!r.cur.driver_name||!String(r.cur.driver_name).trim())_flags.push('driver_missing');
 var payload=Object.assign({},r.cur,{net_lbs:net,net_tons:+(net/2000).toFixed(4),
-ocr_original:r.ocr,changes:P.vfDiffs(i),reviewed_by:P.cl.name,reviewed_at:new Date().toISOString()});
+ocr_original:r.ocr,changes:P.vfDiffs(i),reviewed_by:P.cl.name,reviewed_at:new Date().toISOString(),
+review_flags:_flags.length?_flags:null});
 var res=await P.api('rpc/client_stage_row','POST',{p_cid:P.cl.id,p_queue_id:r.qid,p_data:payload});
 if(res&&res.ok){r.sent=true;ok++;var st=document.getElementById('vfSt'+i);if(st){st.textContent='\u2705 Sent';st.style.color='var(--success)';}}
 else{fail++;var st2=document.getElementById('vfSt'+i);
