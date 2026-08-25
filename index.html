@@ -1823,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.20.0',
+    VERSION: '7.22.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12388,6 +12388,132 @@ const DS = {
     // off the scale ticket and a hauler's list is a transcription of it, not
     // the source. (Aug 24: nine of our zones were wrong and their list was
     // right, which is what this is for.)
+    // ---- selection on the differences table -------------------------------
+    _reconSel: {},
+
+    reconToggleRow(num, on) { this._reconSel[num] = !!on; this._reconSelCount(); },
+
+    reconSelectAll(id, on) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) return;
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var self = this;
+        this._reconSel = {};
+        (rows.differences || []).forEach(function(x){ if (on) self._reconSel[x.ticket] = true; });
+        document.querySelectorAll('.recon-chk').forEach(function(c){ c.checked = !!on; });
+        this._reconSelCount();
+    },
+
+    _reconSelCount() {
+        var n = Object.keys(this._reconSel || {}).filter(function(k){ return DS._reconSel[k]; }).length;
+        var el = document.getElementById('reconSelCount');
+        if (el) el.textContent = n ? (n + ' selected') : 'none selected';
+        var bar = document.getElementById('reconSelBar');
+        if (bar) bar.style.opacity = n ? '1' : '.45';
+        return n;
+    },
+
+    // Apply one field to every selected row. Tonnage is excluded on purpose —
+    // it is the number the reports rest on and each one deserves the photo.
+    async applySelectedRecon(id, field) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) return;
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var self = this;
+        var list = (rows.differences || []).filter(function(x){
+            if (!self._reconSel[x.ticket]) return false;
+            if (field === 'zone')        return x.zoneOff && x.theirZone;
+            if (field === 'ticket_date') return x.dateOff && x.theirDate;
+            return false;
+        });
+        if (!list.length) { this.showToast('Nothing selected differs on that field'); return; }
+        var word = field === 'zone' ? 'zone' : 'date';
+        if (!confirm('Set the ' + word + ' on ' + list.length + ' ticket' + (list.length>1?'s':'') +
+                     ' to match their list?')) return;
+        var ok = 0, bad = [];
+        for (var i = 0; i < list.length; i++) {
+            var val = field === 'zone' ? list[i].theirZone : list[i].theirDate;
+            var before = ok;
+            await this.applyReconValue(list[i].ticket, field, val, null);
+            ok++;
+        }
+        this.showToast(ok + ' ' + word + (ok>1?'s':'') + ' updated');
+        this._reconSel = {};
+        this.viewReconciliation(id);
+    },
+
+    // A plain-text summary that can be pasted into a reply to the hauler.
+    reconReport(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) return;
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var s = r.summary || {};
+        var proj = ((this.state.projects||[]).find(function(p){ return p.id === r.project_id; })||{}).name || '';
+        var L = [];
+        L.push('RECONCILIATION — ' + proj);
+        L.push((r.period_from || 'start') + ' to ' + (r.period_to || 'today'));
+        L.push('');
+        L.push(s.listed + ' on their list · ' + s.matched + ' match · ' + s.differences +
+               ' differ · ' + s.notInDalmex + ' not in ours · ' + s.notOnList + ' not on theirs');
+        L.push('');
+        if ((rows.differences||[]).length) {
+            L.push('DIFFERENT — theirs vs ours');
+            rows.differences.forEach(function(x){
+                var bits = [];
+                if (x.tonsOff) bits.push('tons ' + x.theirTons + ' vs ' + x.ourTons);
+                if (x.dateOff) bits.push('date ' + x.theirDate + ' vs ' + x.ourDate);
+                if (x.zoneOff) bits.push('zone ' + (x.theirZone||'—') + ' vs ' + (x.ourZone||'—'));
+                L.push('  #' + x.ticket + '  ' + bits.join(' · '));
+            });
+            L.push('');
+        }
+        var miss = (rows.missing||[]);
+        var ours = miss.filter(function(x){ return !DS._isForeignTicket(x.ticket); });
+        var foreign = miss.filter(function(x){ return DS._isForeignTicket(x.ticket); });
+        if (ours.length) {
+            L.push('ON THEIR LIST, NOT IN OURS');
+            ours.forEach(function(x){ L.push('  #' + x.ticket + '  ' + (x.date||'') + '  ' + x.tons + ' T'); });
+            L.push('');
+        }
+        if (foreign.length) {
+            L.push('NOT OUR TICKET NUMBERS (six digits or longer — likely another facility)');
+            foreign.forEach(function(x){ L.push('  #' + x.ticket + '  ' + (x.date||'') + '  ' + x.tons + ' T'); });
+            L.push('');
+        }
+        if ((rows.notOnList||[]).length) {
+            L.push('IN OURS, NOT ON THEIR LIST');
+            rows.notOnList.forEach(function(x){
+                var like = DS._dxLooksLike(x);
+                L.push('  #' + x.ticket + '  ' + (x.date||'') + '  ' + x.tons + ' T' +
+                       (x.zone ? '  zone ' + x.zone : '') +
+                       (like ? '   (looks like #' + like.num + ')' : ''));
+            });
+            L.push('');
+        }
+        if ((rows.duplicateLines||[]).length) {
+            L.push('LISTED TWICE BY THEM');
+            rows.duplicateLines.forEach(function(x){ L.push('  #' + x.ticket + '  ' + (x.date||'') + '  ' + x.tons + ' T'); });
+            L.push('');
+        }
+        var txt = L.join('\n');
+        var ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+        document.body.appendChild(ta); ta.select();
+        var done = false;
+        try { done = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        if (navigator.clipboard && !done) {
+            navigator.clipboard.writeText(txt).then(function(){ DS.showToast('Report copied'); },
+                                                    function(){ DS.showToast('Could not copy'); });
+        } else {
+            this.showToast(done ? 'Report copied — paste it into your reply' : 'Could not copy');
+        }
+    },
+
     // Dalmex ticket numbers are five digits. Seven-digit numbers on a hauler's
     // list are somebody else's — a landfill or transfer station receipt — and
     // will never match. They are noise in a reconciliation, so they can be
@@ -12454,6 +12580,30 @@ const DS = {
             if (!isFinite(tn)) { this.showToast('That tonnage is not a number'); return; }
             patch.net_tons = tn;
             patch.net_lbs  = Math.round(tn * 2000);
+            // Material tonnages are derived from net_tons and the percentages.
+            // Changing net without them leaves the split adding up to the OLD
+            // weight and diverted_tons stale — which silently moves the
+            // diversion rate on a customer report. Recalculate all of it.
+            var src = t;
+            if (!src) {
+                var full = await this.supabase('tickets?id=eq.' + id + '&limit=1');
+                src = (full && full[0]) || null;
+            }
+            if (src) {
+                var GWP = { wood:.310, occ:.940, metal:1.850, plastic:3.100, concrete:.130, block:.240 };
+                var keys = ['wood','occ','metal','plastic','concrete','block','landfill'];
+                var co2 = 0;
+                keys.forEach(function(k) {
+                    var pct = parseFloat(src[k + '_pct']) || 0;
+                    var tons = +((tn * pct / 100).toFixed(4));
+                    patch[k + '_tons'] = tons;
+                    if (k !== 'landfill' && GWP[k]) co2 += tons * GWP[k];
+                });
+                var divPct = 100 - (parseFloat(src.landfill_pct) || 0);
+                patch.diversion_pct = divPct;
+                patch.diverted_tons = +((tn * divPct / 100).toFixed(4));
+                patch.co2e_avoided  = +(co2.toFixed(4));
+            }
         } else {
             patch[field] = value || null;
         }
@@ -12463,7 +12613,8 @@ const DS = {
         var label = field === 'zone' ? 'zone' : (field === 'net_tons' ? 'tonnage' : 'date');
         this.addAuditEntry('TICKET_EDIT',
             '#' + num + ' ' + label + ' set to ' + value + ' from a client reconciliation');
-        if (t) { if (field === 'net_tons') { t.net_tons = patch.net_tons; t.net_lbs = patch.net_lbs; } else t[field] = value; }
+        if (t) { if (field === 'net_tons') { Object.keys(patch).forEach(function(k){ t[k] = patch[k]; }); }
+                 else t[field] = value; }
         if (btnEl) {
             btnEl.textContent = 'applied';
             btnEl.style.pointerEvents = 'none';
@@ -12585,26 +12736,39 @@ const DS = {
             return '<td style="padding:5px 6px"><span style="color:var(--primary);font-weight:600;text-decoration:underline">' +
                 DS.esc(n) + '</span></td>';
         }
-        function sbs(title, note, arr, render) {
+        function sbs(title, note, arr, render, pick) {
             if (!arr || !arr.length) return '';
             var capped = arr.slice(0, 50);
             return '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">' +
                 title + ' (' + arr.length + ')</div>' +
                 (note ? '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:5px">' + note + '</div>' : '') +
+                (pick ? '<div id="reconSelBar" style="opacity:.45;display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 0 8px">' +
+                    '<button class="btn btn-sm btn-outline" onclick="DS.reconSelectAll(\'' + r.id + '\',true)">Select all</button>' +
+                    '<button class="btn btn-sm btn-outline" onclick="DS.reconSelectAll(\'' + r.id + '\',false)">Clear</button>' +
+                    '<span id="reconSelCount" style="font-family:var(--mono);font-size:.62rem;color:var(--text-dim)">none selected</span>' +
+                    '<span style="flex:1"></span>' +
+                    '<button class="btn btn-sm btn-primary" onclick="DS.applySelectedRecon(\'' + r.id + '\',\'zone\')">Use their zone</button>' +
+                    '<button class="btn btn-sm btn-primary" onclick="DS.applySelectedRecon(\'' + r.id + '\',\'ticket_date\')">Use their date</button>' +
+                  '</div>' : '') +
                 '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.65rem">' +
-                '<thead><tr><th></th>' +
+                '<thead><tr>' + (pick ? '<th></th>' : '') + '<th></th>' +
                   '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)">Their list</th>' +
                   '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Ours</th></tr>' +
-                '<tr style="border-bottom:1px solid var(--border)">' +
+                '<tr style="border-bottom:1px solid var(--border)">' + (pick ? '<th></th>' : '') +
                   ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].map(function(c,i){
                     return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim);font-weight:600' +
                       (i===4?';border-left:1px solid var(--border)':'') + '">' + c + '</th>'; }).join('') +
                 '</tr></thead><tbody>' + capped.map(render).join('') + '</tbody></table></div>' +
                 (arr.length > 50 ? '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);padding:4px 6px">showing the first 50 of ' + arr.length + '</div>' : '');
         }
-        function row(inner, num) {
+        function row(inner, num, pick) {
+            var chk = pick
+                ? '<td style="padding:4px 6px" onclick="event.stopPropagation()">' +
+                  '<input type="checkbox" class="recon-chk" onchange="DS.reconToggleRow(\'' +
+                  DS.esc(String(num)) + '\',this.checked)" style="width:16px;height:16px"></td>'
+                : '';
             return '<tr onclick="DS.openTicketByNumber(\'' + DS.esc(String(num)) + '\')" ' +
-                'style="border-bottom:1px solid var(--border);cursor:pointer">' + inner + '</tr>';
+                'style="border-bottom:1px solid var(--border);cursor:pointer">' + chk + inner + '</tr>';
         }
 
         var body =
@@ -12636,7 +12800,7 @@ const DS = {
                         ourCell(x.ourDate, x.theirDate, x.dateOff, true, x.ticket, 'ticket_date') +
                         ourCell(x.ourTons + ' T', x.theirTons, x.tonsOff, false, x.ticket, 'net_tons') +
                         ourCell(x.ourZone, x.theirZone, x.zoneOff, false, x.ticket, 'zone'),
-                        x.ticket); }) +
+                        x.ticket, true); }, true) +
 
             (function(){
                 var all = rows.missing || [];
@@ -12689,6 +12853,7 @@ const DS = {
             '<textarea class="form-input" id="reconNote" rows="3" style="margin-top:4px;font-size:.78rem">' + DS.esc(r.admin_notes || '') + '</textarea></div>' +
             '<div class="btn-row mt-8">' +
               '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
+              '<button class="btn btn-outline" onclick="DS.reconReport(\'' + r.id + '\')" style="flex:1">Copy report</button>' +
               '<button class="btn btn-outline" onclick="DS.closeModal(\'reconModal\')" style="flex:1">Close</button>' +
             '</div>';
 
