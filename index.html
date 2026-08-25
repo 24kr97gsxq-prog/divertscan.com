@@ -212,6 +212,62 @@
         .gs-tons{font-family:var(--mono);font-weight:600;font-size:.8rem;white-space:nowrap;flex:0 0 auto}
         .build-stamp{font-family:var(--mono);font-size:.52rem;letter-spacing:.1em;
             color:var(--text-dim);margin-top:2px}
+        /* ============================================================
+           THEMES.  Three modes, cycled by the Theme button:
+             auto  — follows the device's day/night setting
+             light — daylight palette (its own accents, not inverted:
+                     amber #FFB627 on white is 1.75:1, unusable as text)
+             dark  — the default green-black
+           Everything below is verified >= 4.5:1 on its own card colour.
+           ============================================================ */
+
+        /* ---- LIGHT ---- */
+        html.th-light{
+            --bg-deep:#EDF0EC;--bg-card:#F7F9F6;--bg-card-hover:#FFFFFF;--bg-input:#E4E9E2;
+            --border:#C9D3C8;--border-strong:#AEBCAE;--border-focus:#8A5A00;
+            --text:#141A16;--text-muted:#4A5952;--text-dim:#657268;
+            --jag:#8A5A00;--dal:#1E7A47;
+            --primary:#8A5A00;--primary-dark:#6E4800;
+            --primary-glow:rgba(138,90,0,.06);--primary-light:rgba(138,90,0,.10);
+            --success:#1E7A47;--success-glow:rgba(30,122,71,.06);--success-light:rgba(30,122,71,.10);
+            --warning:#7A5C2E;--warning-glow:rgba(122,92,46,.06);--warning-light:rgba(122,92,46,.10);
+            --danger:#B3341A;--danger-glow:rgba(179,52,26,.06);--danger-light:rgba(179,52,26,.10);
+            --info:#4A5952;--info-glow:rgba(74,89,82,.06);
+            --carbon-green:#1E7A47;--leed-gold:#8A5A00;
+        }
+        /* light-mode contrast on --bg-card #F7F9F6:
+           text 16.7 · muted 7.0 · dim 4.8 · amber 5.6 · green 5.1
+           kraft 5.8 · alert 5.8 — every role clears 4.5 */
+
+        /* Filled buttons need dark text on dark themes and light text here. */
+        html.th-light .btn-primary,
+        html.th-light .btn-success,
+        html.th-light .btn-warning{color:#FFFFFF}
+        html.th-light .exports .btn.key,
+        html.th-light .month-controls .btn.key{color:#FFFFFF}
+
+        /* ---- AUTO: follow the device ---- */
+        @media (prefers-color-scheme: light){
+            html.th-auto{
+                --bg-deep:#EDF0EC;--bg-card:#F7F9F6;--bg-card-hover:#FFFFFF;--bg-input:#E4E9E2;
+                --border:#C9D3C8;--border-strong:#AEBCAE;--border-focus:#8A5A00;
+                --text:#141A16;--text-muted:#4A5952;--text-dim:#657268;
+                --jag:#8A5A00;--dal:#1E7A47;
+                --primary:#8A5A00;--primary-dark:#6E4800;
+                --primary-glow:rgba(138,90,0,.06);--primary-light:rgba(138,90,0,.10);
+                --success:#1E7A47;--success-glow:rgba(30,122,71,.06);--success-light:rgba(30,122,71,.10);
+                --warning:#7A5C2E;--warning-glow:rgba(122,92,46,.06);--warning-light:rgba(122,92,46,.10);
+                --danger:#B3341A;--danger-glow:rgba(179,52,26,.06);--danger-light:rgba(179,52,26,.10);
+                --info:#4A5952;--info-glow:rgba(74,89,82,.06);
+                --carbon-green:#1E7A47;--leed-gold:#8A5A00;
+            }
+            html.th-auto .btn-primary,
+            html.th-auto .btn-success,
+            html.th-auto .btn-warning,
+            html.th-auto .month-controls .btn.key{color:#FFFFFF}
+        }
+        /* html.th-dark and html.th-auto in a dark device both fall through
+           to the :root values, which are already the dark palette. */
         /* ─────────────────────────────────────────────────────────────── */
 </style>
 ```
@@ -1269,7 +1325,7 @@ document.addEventListener('keydown', function(e){
             Audit
             <span id="auditNavBadge" style="display:none;position:absolute;top:2px;right:calc(50% - 16px);background:var(--danger);color:#fff;font-size:0.55rem;font-weight:700;padding:1px 5px;border-radius:6px;min-width:16px;text-align:center">0</span>
         </button>
-        <button class="nav-btn" onclick="DS.cycleTheme()" style="flex:0;padding:12px 10px">Theme</button>
+        <button class="nav-btn" id="themeBtn" onclick="DS.cycleTheme()" style="flex:0;padding:12px 10px" title="Auto / Light / Dark">Auto</button>
     </nav>
 </div>
 
@@ -1739,7 +1795,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.8.0',
+    VERSION: '7.9.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -4111,35 +4167,51 @@ const DS = {
     // ============================================================
     // INITIALIZATION
     // ============================================================
+    THEMES: ['auto', 'light', 'dark'],
+
+    applyTheme(name) {
+        var el = document.documentElement;
+        el.classList.remove('th-auto', 'th-light', 'th-dark');
+        el.classList.add('th-' + name);
+        el.dataset.theme = name;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+            var darkNow = name === 'dark' ||
+                (name === 'auto' && window.matchMedia &&
+                 window.matchMedia('(prefers-color-scheme: dark)').matches);
+            meta.setAttribute('content', darkNow ? '#0B1210' : '#EDF0EC');
+        }
+        var btn = document.getElementById('themeBtn');
+        if (btn) btn.textContent = {auto:'Auto', light:'Light', dark:'Dark'}[name];
+    },
+
     cycleTheme() {
-        var html = document.documentElement;
-        var cur = html.dataset.theme || 'default';
-        var themes = ['default', 'dark', 'green'];
-        var next = themes[(themes.indexOf(cur) + 1) % themes.length];
-        html.classList.remove('th-dark', 'th-green');
-        if (next === 'dark') html.classList.add('th-dark');
-        if (next === 'green') html.classList.add('th-green');
-        html.dataset.theme = next;
-        try { localStorage.setItem('ds_admin_theme', next);
-              localStorage.setItem('ds_admin_theme_ts', String(Date.now())); } catch(e) {}
-        var labels = {default: 'Light', dark: 'Dark', green: 'Forest'};
-        this.showToast(labels[next] + ' theme');
+        var cur = document.documentElement.dataset.theme || 'auto';
+        var idx = this.THEMES.indexOf(cur);
+        var next = this.THEMES[(idx + 1) % this.THEMES.length];
+        this.applyTheme(next);
+        try { localStorage.setItem('ds_admin_theme', next); } catch(e) {}
+        var labels = {auto:'Auto — follows your device', light:'Light theme', dark:'Dark theme'};
+        this.showToast(labels[next]);
     },
 
     loadTheme() {
         try {
             var t = localStorage.getItem('ds_admin_theme');
-            // Auto day/night unless a manual pick is <12h old (same rule as the
-            // scale tablet and the client portal). Day = light, night = dark.
-            // NOTE: .th-dark / .th-green have no CSS behind them — the base
-            // :root IS the theme. Auto day/night is disabled until a real
-            // light palette exists (needs its own contrast pass).
-            if (!t) t = 'default';
-            if (!t) return;
-            document.documentElement.classList.remove('th-dark', 'th-green');
-            if (t === 'dark') document.documentElement.classList.add('th-dark');
-            if (t === 'green') document.documentElement.classList.add('th-green');
-            document.documentElement.dataset.theme = t;
+            // Older builds stored 'default' / 'green' — map onto the new set.
+            if (!t || this.THEMES.indexOf(t) === -1) t = 'auto';
+            this.applyTheme(t);
+            // In auto, re-apply when the device flips day/night so the page
+            // and the browser chrome keep up without a reload.
+            if (window.matchMedia) {
+                var mq = window.matchMedia('(prefers-color-scheme: dark)');
+                var self = this;
+                var onFlip = function() {
+                    if ((document.documentElement.dataset.theme || '') === 'auto') self.applyTheme('auto');
+                };
+                if (mq.addEventListener) mq.addEventListener('change', onFlip);
+                else if (mq.addListener) mq.addListener(onFlip);
+            }
         } catch(e) {}
     },
 
