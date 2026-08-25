@@ -179,6 +179,33 @@
         @media (max-width:520px){
             .month-controls .month-sort{margin-left:0;width:100%;margin-top:6px}
         }
+        /* Month header is a control: click or Enter toggles the ticket table. */
+        .month-head{cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none}
+        .month-head:hover{color:var(--text)}
+        .month-head:focus-visible{outline:2px solid var(--border-focus);outline-offset:3px;border-radius:var(--radius)}
+        .mh-caret{font-family:var(--mono);color:var(--primary);font-size:.7rem;width:.8em;display:inline-block}
+        .mh-count{font-family:var(--mono);font-size:.55rem;color:var(--text-dim);letter-spacing:.06em;
+            text-transform:none;font-weight:400}
+        .month-controls .month-find{flex:2 1 190px;min-width:150px;padding:6px 9px;
+            font-size:.7rem;font-family:var(--mono)}
+        .mt-empty{padding:18px 8px;text-align:center;font-family:var(--mono);font-size:.7rem;color:var(--text-dim)}
+        /* Global find — always in the header, searches every project. */
+        .gsearch-pill{cursor:pointer;background:var(--primary-light);border:1px solid var(--primary);
+            color:var(--primary);gap:5px}
+        .gsearch-pill:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+        .gs-hit{display:flex;align-items:center;gap:10px;padding:10px 8px;cursor:pointer;
+            border-bottom:1px solid var(--border)}
+        .gs-hit:hover,.gs-hit:focus{background:var(--bg-card-hover)}
+        .gs-num{font-family:var(--mono);font-weight:600;font-size:.85rem;color:var(--primary);
+            min-width:62px;flex:0 0 auto}
+        .gs-body{flex:1;min-width:0}
+        .gs-proj{font-size:.76rem;color:var(--text);margin-bottom:2px}
+        .gs-proj.gs-other{color:var(--warning)}
+        .gs-flag{font-family:var(--mono);font-size:.52rem;letter-spacing:.06em;text-transform:uppercase;
+            border:1px solid var(--warning);border-radius:3px;padding:0 4px;vertical-align:1px}
+        .gs-meta{font-family:var(--mono);font-size:.6rem;color:var(--text-dim);
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .gs-tons{font-family:var(--mono);font-weight:600;font-size:.8rem;white-space:nowrap;flex:0 0 auto}
         /* ─────────────────────────────────────────────────────────────── */
 </style>
 ```
@@ -282,6 +309,17 @@ async function agLogin(){
 document.addEventListener('keydown', function(e){
   var g=document.getElementById('authGate');
   if(e.key==='Enter' && g && g.style.display!=='none') agLogin();
+  if(g && g.style.display!=='none') return;          // not while signed out
+  // Ctrl/Cmd+K opens global ticket search from anywhere
+  if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){
+    e.preventDefault();
+    if(window.DS && DS.openGlobalSearch) DS.openGlobalSearch();
+  }
+  // Escape closes it
+  if(e.key==='Escape'){
+    var m=document.getElementById('globalSearchModal');
+    if(m && m.classList.contains('show') && window.DS) DS.closeModal('globalSearchModal');
+  }
 });
 </script>
     <div class="app-shell">
@@ -297,6 +335,12 @@ document.addEventListener('keydown', function(e){
                 <span class="leed-badge" id="leedBadge">LEED v4</span>
             </div>
             <div class="status-row">
+                <span class="status-pill gsearch-pill" onclick="DS.openGlobalSearch()" role="button" tabindex="0"
+                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();DS.openGlobalSearch();}"
+                      title="Search every ticket in every project (Ctrl+K)">
+                    <span style="font-family:var(--mono);font-weight:700">⌕</span>
+                    <span style="font-weight:700;letter-spacing:.04em">Find</span>
+                </span>
                 <span class="status-pill online" id="connectionStatus">
                     <span class="status-dot"></span>
                     <span>Online</span>
@@ -1307,6 +1351,24 @@ document.addEventListener('keydown', function(e){
 </div>
 
 <!-- Ticket Detail Modal -->
+<div class="modal-overlay" id="globalSearchModal">
+    <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Find a ticket</div>
+        <div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">
+            Searches every project — including tickets filed under the wrong one
+        </div>
+        <input type="search" class="form-input" id="globalSearchInput" autocomplete="off"
+               placeholder="Ticket number, driver, or hauler"
+               oninput="DS.runGlobalSearch(this.value)"
+               style="font-family:var(--mono);font-size:.9rem;padding:11px 12px;">
+        <div id="globalSearchResults" style="margin-top:10px;max-height:56vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+        <div class="btn-row mt-12">
+            <button class="btn btn-outline" onclick="DS.closeModal('globalSearchModal')" style="width:100%">Close</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="ticketDetailModal">
     <div class="modal">
         <div class="modal-handle"></div>
@@ -7711,8 +7773,11 @@ const DS = {
 
             html += `
             <div class="card">
-                <div class="card-title">
+                <div class="card-title month-head" onclick="DS.toggleMonth('${key}')" role="button" tabindex="0"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();DS.toggleMonth('${key}');}">
+                    <span class="mh-caret" id="mhc-${key}">▸</span>
                     ${monthName} ${year}
+                    <span class="mh-count">${data.ticketCount} tickets</span>
                     ${leedInfo.isNonLeed ? '' : `<span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>`}
                 </div>
                 <div class="month-controls">
@@ -7721,6 +7786,9 @@ const DS = {
                     <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')">XLSX</button>
                     <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')">CSV</button>
                     <button class="btn btn-sm btn-success" onclick="DS.exportMonthQBO('${key}')">QBO</button>
+                    <input class="form-input month-find" id="mtf-${key}" type="search" inputmode="search"
+                           placeholder="Find ticket #, driver or zone"
+                           oninput="DS.findInMonth('${key}', this.value)">
                     <select class="form-input month-sort" onchange="DS.setSortPref(this.value)" title="Sort tickets">
                         <option value="added_desc"${this._getSortPref()==='added_desc'?' selected':''}>↓ Newest added</option>
                         <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
@@ -7757,7 +7825,10 @@ const DS = {
                 ${this.renderMaterialBars(data.matTotals, data.totalTons)}
                 ${this.renderZoneSummary(months[key])}
                 <div class="divider"></div>
-                ${this.renderMonthTicketTable(months[key])}
+                <div class="mt-wrap" id="mtw-${key}" hidden>
+                    ${this.renderMonthTicketTable(months[key])}
+                    <div class="mt-empty" id="mte-${key}" hidden>No ticket matches that search.</div>
+                </div>
                 <div class="divider"></div>
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
                     <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
@@ -7772,6 +7843,112 @@ const DS = {
     // ============================================================
     // INLINE MONTH TICKET TABLE
     // ============================================================
+    // ============================================================
+    // MONTH CARD — collapse / expand + in-month find
+    // The ticket table starts collapsed: a 165-ticket month used to
+    // push everything below it off the screen.
+    // ============================================================
+    // ============================================================
+    // GLOBAL TICKET SEARCH — every ticket, every project.
+    // Built for the mislabelled case: if a ticket was filed under the
+    // wrong project, searching inside a project will never find it.
+    // Always queries the database, never the in-memory project list.
+    // ============================================================
+    openGlobalSearch() {
+        this.openModal('globalSearchModal');
+        var inp = document.getElementById('globalSearchInput');
+        var res = document.getElementById('globalSearchResults');
+        if (res) res.innerHTML = '<div style="text-align:center;padding:20px 8px;font-family:var(--mono);font-size:.68rem;color:var(--text-dim);">Type at least 2 characters</div>';
+        if (inp) { inp.value = ''; setTimeout(function(){ inp.focus(); }, 120); }
+    },
+
+    runGlobalSearch(term) {
+        var q = (term || '').trim();
+        var res = document.getElementById('globalSearchResults');
+        if (!res) return;
+        clearTimeout(this._gsTimer);
+        if (q.length < 2) {
+            res.innerHTML = '<div style="text-align:center;padding:20px 8px;font-family:var(--mono);font-size:.68rem;color:var(--text-dim);">Type at least 2 characters</div>';
+            return;
+        }
+        res.innerHTML = '<div style="text-align:center;padding:20px 8px;font-family:var(--mono);font-size:.68rem;color:var(--text-dim);">Searching all projects…</div>';
+        var self = this;
+        this._gsTimer = setTimeout(function(){ self._gsQuery(q); }, 260);
+    },
+
+    async _gsQuery(q) {
+        var res = document.getElementById('globalSearchResults');
+        if (!res) return;
+        var enc = encodeURIComponent(q);
+        var rows = null;
+        try {
+            rows = await this.supabase(
+                'tickets?or=(ticket_number.ilike.*' + enc + '*,driver_name.ilike.*' + enc +
+                '*,hauler.ilike.*' + enc + '*)&order=ticket_date.desc&limit=60');
+        } catch (e) { rows = null; }
+        // the input may have moved on while this was in flight
+        var live = (document.getElementById('globalSearchInput') || {}).value || '';
+        if (live.trim() !== q) return;
+
+        if (!rows) {
+            res.innerHTML = '<div style="text-align:center;padding:20px 8px;font-family:var(--mono);font-size:.68rem;color:var(--danger);">Search failed — check the connection and try again.</div>';
+            return;
+        }
+        if (rows.length === 0) {
+            res.innerHTML = '<div style="text-align:center;padding:20px 8px;font-family:var(--mono);font-size:.68rem;color:var(--text-dim);">Nothing matches "' + this.esc(q) + '" in any project.</div>';
+            return;
+        }
+        var curId = this.state.currentProject ? this.state.currentProject.id : null;
+        var head = '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;padding:2px 2px 8px;">' +
+                   rows.length + (rows.length === 60 ? '+' : '') + ' result' + (rows.length === 1 ? '' : 's') + ' across all projects</div>';
+        res.innerHTML = head + rows.map(function(t) {
+            var proj = DS.state.projects.find(function(p){ return p.id === t.project_id; });
+            var projName = proj ? DS.esc(proj.name) : 'No project';
+            var elsewhere = curId && t.project_id !== curId;
+            return '<div class="gs-hit" onclick="DS.closeModal(\'globalSearchModal\');DS.showTicketDetail(\'' + t.id + '\')">' +
+                '<div class="gs-num">' + DS.esc(t.ticket_number || '—') + '</div>' +
+                '<div class="gs-body">' +
+                    '<div class="gs-proj' + (elsewhere ? ' gs-other' : '') + '">' + projName +
+                        (elsewhere ? ' <span class="gs-flag">other project</span>' : '') + '</div>' +
+                    '<div class="gs-meta">' + DS.fmtDateTime(t) +
+                        (t.zone ? ' · Zone ' + DS.esc(t.zone) : '') +
+                        (t.driver_name ? ' · ' + DS.esc(t.driver_name) : '') +
+                        (t.hauler ? ' · ' + DS.esc(t.hauler) : '') + '</div>' +
+                '</div>' +
+                '<div class="gs-tons">' + DS.fmt(t.net_tons) + ' T</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    toggleMonth(key, force) {
+        var wrap = document.getElementById('mtw-' + key);
+        var caret = document.getElementById('mhc-' + key);
+        if (!wrap) return;
+        var open = (typeof force === 'boolean') ? force : wrap.hasAttribute('hidden');
+        if (open) { wrap.removeAttribute('hidden'); } else { wrap.setAttribute('hidden',''); }
+        if (caret) caret.textContent = open ? '▾' : '▸';
+        return open;
+    },
+
+    findInMonth(key, term) {
+        var wrap = document.getElementById('mtw-' + key);
+        if (!wrap) return;
+        var q = (term || '').trim().toLowerCase();
+        var rows = wrap.querySelectorAll('tr.mt-row');
+        var shown = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var hit = !q || (rows[i].getAttribute('data-find') || '').indexOf(q) !== -1;
+            rows[i].style.display = hit ? '' : 'none';
+            if (hit) shown++;
+        }
+        // typing opens the month; clearing leaves it as the user had it
+        if (q) this.toggleMonth(key, true);
+        var empty = document.getElementById('mte-' + key);
+        if (empty) { if (q && shown === 0) empty.removeAttribute('hidden'); else empty.setAttribute('hidden',''); }
+        var tbl = wrap.querySelector('table');
+        if (tbl) tbl.style.display = (q && shown === 0) ? 'none' : '';
+    },
+
     renderMonthTicketTable(tickets) {
         if (!tickets || tickets.length === 0) return '';
         var _isNL = this.state.currentProject && this.state.currentProject.leed_version === 'none';
@@ -7802,7 +7979,8 @@ const DS = {
             var hasPhotos = t.scale_ticket_image || (Array.isArray(t.debris_images) && t.debris_images.length > 0);
             var divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
 
-            tbl += '<tr style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
+            var _hay = ((t.ticket_number||'') + ' ' + (t.driver_name||'') + ' ' + (t.zone||'')).toLowerCase();
+            tbl += '<tr class="mt-row" data-find="' + _hay.replace(/"/g,'') + '" style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                 '<td style="padding:8px 6px; color:var(--text-muted);white-space:nowrap;">' + this.fmtDateTime(t) + '</td>' +
                 '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
                 '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
