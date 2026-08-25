@@ -1795,7 +1795,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.9.0',
+    VERSION: '7.10.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -10458,9 +10458,21 @@ const DS = {
             var stagedTag = isStaged
                 ? '<span style="background:var(--primary);color:var(--bg-deep);font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px">HAULER REVIEWED</span>'
                 : '';
+            // Surface unresolved flags on the queue card, so a batch that needs
+            // attention is obvious before anyone opens it.
+            var batchFlags = 0;
+            batch.items.forEach(function(q){
+                var sd = q.staged_data;
+                if (typeof sd === 'string') { try { sd = JSON.parse(sd); } catch(e) { sd = null; } }
+                if (sd && Array.isArray(sd.review_flags)) batchFlags += sd.review_flags.length;
+            });
+            var flagTag = batchFlags
+                ? '<span style="background:var(--warning);color:var(--bg-deep);font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px">' +
+                  batchFlags + ' NEEDS INFO</span>'
+                : '';
             html += '<div style="border:1px solid ' + (isStaged ? 'var(--primary)' : 'var(--border)') + ';border-radius:var(--radius);padding:12px;margin-bottom:8px;background:var(--bg-card)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
-                '<div><div style="font-size:.8rem;font-weight:700">' + DS.esc(projName) + stagedTag + '</div>' +
+                '<div><div style="font-size:.8rem;font-weight:700">' + DS.esc(projName) + stagedTag + flagTag + '</div>' +
                 '<div style="font-size:.65rem;color:var(--text-muted)">' + (q0.submitted_by||'Unknown') + ' • ' + timeAgo + (tktNum?' • Ticket #'+tktNum:'') + '</div></div>' +
                 '<div style="font-size:.65rem;font-weight:600;color:var(--warning)">⏳ ' + batch.items.length + ' photo' + (batch.items.length>1?'s':'') + '</div></div>';
 
@@ -10641,7 +10653,8 @@ const DS = {
                     driver:        sd.driver_name   || '',
                     zone:          sd.zone          || '',
                     job_name:      null,
-                    _staged:       sd
+                    _staged:       sd,
+                    _flags:        Array.isArray(sd.review_flags) ? sd.review_flags : []
                 }});
                 if (cell)  cell.style.borderColor = 'var(--primary)';
                 if (label) label.textContent = 'REVIEWED #' + (sd.ticket_number || '?');
@@ -10723,10 +10736,30 @@ const DS = {
                             (c.from == null || c.from === '' ? '(blank)' : DS.esc(String(c.from))) + ' → ' +
                             (c.to   == null || c.to   === '' ? '(blank)' : DS.esc(String(c.to))); }).join('<br>')
                         : 'No changes — AI read matched the paper';
+                    // Flags the hauler could not resolve. Driver name is optional
+                    // on their side — the load must not be held up for it — so it
+                    // arrives marked and gets chased here instead.
+                    var FLAG_TEXT = {
+                        driver_missing: 'No driver name on this load \u2014 find out who hauled it',
+                        date_unclear:   'Date was not readable on the ticket',
+                        weight_unclear: 'Weights were not readable on the ticket'
+                    };
+                    var flags = Array.isArray(ocr._flags) ? ocr._flags : [];
+                    var flagTxt = flags.length
+                        ? '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">' +
+                          '<div style="font-weight:800;color:var(--warning);margin-bottom:2px">Needs your attention</div>' +
+                          flags.map(function(f){
+                              return '<div style="color:var(--warning)">' +
+                                     DS.esc(FLAG_TEXT[f] || String(f).replace(/_/g,' ')) + '</div>'; }).join('') +
+                          '</div>'
+                        : '';
                     stagedBanner =
-                        '<div style="background:rgba(0,201,167,.10);border:1px solid var(--primary);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.65rem">' +
+                        '<div style="background:var(--primary-light);border:1px solid ' +
+                        (flags.length ? 'var(--warning)' : 'var(--primary)') +
+                        ';border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;font-size:.65rem">' +
                         '<div style="font-weight:800;color:var(--primary);margin-bottom:3px">Reviewed by ' + DS.esc(sd2.reviewed_by || 'hauler') + '</div>' +
-                        '<div style="color:var(--text-muted);line-height:1.5">' + chgTxt + '</div></div>';
+                        '<div style="color:var(--text-muted);line-height:1.5">' + chgTxt + '</div>' +
+                        flagTxt + '</div>';
                 }
                 // Read month/year from batch override selectors — ALWAYS force 2026
                 var batchMonthEl = document.getElementById('batchMonth');
