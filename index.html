@@ -1824,7 +1824,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.31.0',
+    VERSION: '7.32.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12459,6 +12459,155 @@ const DS = {
         this.viewReconciliation(id);
     },
 
+    // A printable document rather than a text file. Fetches the project's
+    // tickets first so the gross/tare evidence is always available, then
+    // opens a print window — Safari's share sheet saves it as PDF.
+    async haulerReportPDF(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) { this.showToast('Not found — refresh the list'); return; }
+        this.showLoading('Building the report…');
+        try {
+            var got = await this.supabase(
+                'tickets?project_id=eq.' + r.project_id +
+                '&select=ticket_number,ticket_date,gross_lbs,tare_lbs,net_tons,zone,driver_name&limit=3000');
+            this._reconTickets = got || [];
+        } catch (e) { this._reconTickets = []; }
+        this.hideLoading();
+
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var projRow = (this.state.projects||[]).find(function(p){ return p.id === r.project_id; }) || {};
+        var proj = projRow.name || '';
+        var self = this;
+        var hauler = (projRow.waste_hauler || '').trim() || 'the hauler';
+        var isDX = function(n){ return /^DX-/i.test(String(n||'')); };
+        var pool = this._reconTickets;
+        function tk(num) {
+            var k = String(num||'').trim().toUpperCase();
+            return pool.find(function(t){ return String(t.ticket_number||'').trim().toUpperCase() === k; });
+        }
+        function esc(s){ return DS.esc(s == null ? '' : String(s)); }
+        function n2(v){ var x = parseFloat(v); return isFinite(x) ? x.toFixed(2) : '—'; }
+
+        var unbilled  = (rows.notOnList || []).filter(function(x){ return !isDX(x.ticket); });
+        var theirsOnly= (rows.missing || []).filter(function(x){ return !self._isForeignTicket(x.ticket); });
+        var foreign   = (rows.missing || []).filter(function(x){ return  self._isForeignTicket(x.ticket); });
+        var diffs     = (rows.differences || []).filter(function(x){ return x.tonsOff; });
+        var sum = function(a, f){ return a.reduce(function(s,x){ return s + (parseFloat(f(x))||0); }, 0); };
+
+        function table(head, body, foot) {
+            return '<table><thead><tr>' + head.map(function(c,i){
+                return '<th' + (i>0 ? ' class="r"' : '') + '>' + c + '</th>'; }).join('') +
+                '</tr></thead><tbody>' + body + '</tbody>' +
+                (foot ? '<tfoot><tr>' + foot + '</tr></tfoot>' : '') + '</table>';
+        }
+
+        var s = 0;
+        var H = '';
+
+        if (unbilled.length) {
+            H += '<h2>' + (++s) + '. On the Dalmex scale, not on the ' + esc(hauler) + ' list</h2>' +
+                table(['Ticket','Date','Zone','Tons'],
+                    unbilled.map(function(x){
+                        return '<tr><td><b>' + esc(x.ticket) + '</b></td><td class="r">' + esc(x.date) +
+                               '</td><td class="r">' + esc(x.zone||'—') + '</td><td class="r">' + n2(x.tons) + '</td></tr>'; }).join(''),
+                    '<td>' + unbilled.length + ' tickets</td><td></td><td></td><td class="r"><b>' +
+                    sum(unbilled,function(x){return x.tons;}).toFixed(2) + ' T</b></td>') +
+                '<p class="ask">Could ' + esc(hauler) + ' confirm whether these were billed under different numbers?</p>';
+        }
+        if (theirsOnly.length) {
+            H += '<h2>' + (++s) + '. On the ' + esc(hauler) + ' list, not in Dalmex records</h2>' +
+                table(['Ticket','Date','Zone','Tons'],
+                    theirsOnly.map(function(x){
+                        return '<tr><td><b>' + esc(x.ticket) + '</b></td><td class="r">' + esc(x.date) +
+                               '</td><td class="r">' + esc(x.zone||'—') + '</td><td class="r">' + n2(x.tons) + '</td></tr>'; }).join(''),
+                    '<td>' + theirsOnly.length + ' tickets</td><td></td><td></td><td class="r"><b>' +
+                    sum(theirsOnly,function(x){return x.tons;}).toFixed(2) + ' T</b></td>') +
+                '<p class="ask">Could you send Dalmex a copy of these tickets?</p>';
+        }
+        if (foreign.length) {
+            H += '<h2>' + (++s) + '. Numbers that are not Dalmex tickets</h2>' +
+                '<p class="note">Dalmex ticket numbers are five digits. These are six or more, so we believe they came from another facility.</p>' +
+                table(['Ticket','Date','Tons'],
+                    foreign.map(function(x){
+                        return '<tr><td><b>' + esc(x.ticket) + '</b></td><td class="r">' + esc(x.date) +
+                               '</td><td class="r">' + n2(x.tons) + '</td></tr>'; }).join(''),
+                    '<td>' + foreign.length + ' entries</td><td></td><td class="r"><b>' +
+                    sum(foreign,function(x){return x.tons;}).toFixed(2) + ' T</b></td>') +
+                '<p class="ask">Can you tell us which facility these are from?</p>';
+        }
+        if (diffs.length) {
+            var tTheir = sum(diffs,function(x){return x.theirTons;});
+            var tOur   = sum(diffs,function(x){return x.ourTons;});
+            H += '<h2>' + (++s) + '. Weights that differ</h2>' +
+                '<p class="note">Dalmex figures are gross minus tare as recorded on our certified scale.</p>' +
+                table(['Ticket','Date','Gross','Tare','Dalmex net',esc(hauler),'Diff'],
+                    diffs.map(function(x){
+                        var t = tk(x.ticket);
+                        var d = (parseFloat(x.ourTons)||0) - (parseFloat(x.theirTons)||0);
+                        return '<tr><td><b>' + esc(x.ticket) + '</b></td>' +
+                            '<td class="r">' + esc(x.ourDate || x.theirDate || '') + '</td>' +
+                            '<td class="r">' + (t && t.gross_lbs ? Number(t.gross_lbs).toLocaleString() : '—') + '</td>' +
+                            '<td class="r">' + (t && t.tare_lbs  ? Number(t.tare_lbs).toLocaleString()  : '—') + '</td>' +
+                            '<td class="r"><b>' + n2(x.ourTons) + ' T</b></td>' +
+                            '<td class="r">' + n2(x.theirTons) + ' T</td>' +
+                            '<td class="r ' + (Math.abs(d)>0.005?'warn':'') + '">' + (d>=0?'+':'') + d.toFixed(2) + '</td></tr>'; }).join(''),
+                    '<td>' + diffs.length + ' tickets</td><td></td><td></td><td></td>' +
+                    '<td class="r"><b>' + tOur.toFixed(2) + ' T</b></td>' +
+                    '<td class="r"><b>' + tTheir.toFixed(2) + ' T</b></td>' +
+                    '<td class="r warn"><b>' + ((tOur-tTheir)>=0?'+':'') + (tOur-tTheir).toFixed(2) + '</b></td>');
+        }
+        if ((rows.duplicateLines||[]).length) {
+            H += '<h2>' + (++s) + '. Listed twice on the ' + esc(hauler) + ' list</h2>' +
+                table(['Ticket','Date','Tons'],
+                    rows.duplicateLines.map(function(x){
+                        return '<tr><td><b>' + esc(x.ticket) + '</b></td><td class="r">' + esc(x.date) +
+                               '</td><td class="r">' + n2(x.tons) + '</td></tr>'; }).join(''), '');
+        }
+
+        var doc = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+            '<title>Dalmex reconciliation — ' + esc(proj) + '</title><style>' +
+            '*{margin:0;padding:0;box-sizing:border-box}' +
+            'body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;padding:34px 38px;font-size:12.5px;line-height:1.55}' +
+            'h1{font-size:20px;letter-spacing:.5px;border-bottom:3px solid #1E7A47;padding-bottom:8px;margin-bottom:4px}' +
+            '.sub{font-size:11px;color:#555;margin-bottom:18px}' +
+            '.meta{width:100%;margin:14px 0 20px;font-size:12px;border-collapse:collapse}' +
+            '.meta td{padding:3px 0}.meta td:first-child{color:#666;width:90px}' +
+            '.lead{background:#f5f7f4;border-left:3px solid #1E7A47;padding:10px 12px;margin-bottom:18px;font-size:12px}' +
+            'h2{font-size:12.5px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.6px;' +
+               'border-bottom:1px solid #ccc;padding-bottom:4px}' +
+            'table{width:100%;border-collapse:collapse;margin:6px 0 4px;font-size:11.5px}' +
+            'th{background:#f2f2f0;padding:6px 7px;text-align:left;border-bottom:1.5px solid #bbb;' +
+               'font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:#444}' +
+            'td{padding:5px 7px;border-bottom:1px solid #eee}' +
+            '.r{text-align:right}.warn{color:#B3341A}' +
+            'tfoot td{border-top:1.5px solid #888;border-bottom:none;padding-top:7px;background:#fafafa}' +
+            '.note{font-size:11px;color:#555;margin:2px 0 6px}' +
+            '.ask{font-size:11.5px;margin:6px 0 2px;font-style:italic;color:#333}' +
+            '.foot{margin-top:26px;padding-top:12px;border-top:1px solid #ccc;font-size:11px;color:#555}' +
+            '@media print{body{padding:16px}h2{page-break-after:avoid}table{page-break-inside:avoid}}' +
+            '</style></head><body>' +
+            '<h1>DALMEX RECYCLING &mdash; TICKET RECONCILIATION</h1>' +
+            '<div class="sub">2828 Nagle St, Dallas TX 75220 &nbsp;&middot;&nbsp; (214) 352-2000</div>' +
+            '<table class="meta">' +
+            '<tr><td>Project</td><td><b>' + esc(proj) + '</b></td></tr>' +
+            '<tr><td>Hauler</td><td><b>' + esc(hauler) + '</b></td></tr>' +
+            '<tr><td>Period</td><td>' + esc(r.period_from||'') + ' to ' + esc(r.period_to||'') + '</td></tr>' +
+            '<tr><td>Prepared</td><td>' + new Date().toISOString().substring(0,10) + '</td></tr></table>' +
+            '<div class="lead">We compared the ' + esc(hauler) + ' list against Dalmex scale records for ' +
+            esc(proj) + ' over this period. Every Dalmex figure below is weight recorded on our certified scale.</div>' +
+            H +
+            '<div class="foot">Happy to send scale ticket copies for any of the above.<br>' +
+            'Prepared for ' + esc(hauler) + ' &middot; ' + esc(proj) + '</div>' +
+            '</body></html>';
+
+        var w = window.open('', '_blank');
+        if (!w) { this.showToast('Allow pop-ups to open the report'); return; }
+        w.document.write(doc);
+        w.document.close();
+        setTimeout(function(){ try { w.print(); } catch(e) {} }, 450);
+    },
+
     // ------------------------------------------------------------------
     // HAULER-FACING REPORT — written to be sent, not to be worked from.
     //  · DX rows are internal scale captures the hauler has never seen — out.
@@ -12499,9 +12648,14 @@ const DS = {
         var labW = Math.max(hauler.length, (US + ' scale').length) + 3;
         function pad(s) { while (s.length < labW) s += ' '; return s; }
 
+        // _reconTickets is filled by haulerReportPDF before it renders, so the
+        // gross/tare evidence survives even when this project isn't the one
+        // currently loaded in the browser.
         function ticketOf(num) {
             var k = String(num||'').trim().toUpperCase();
-            return (self.state.tickets || []).find(function(t){
+            var pool = (self._reconTickets && self._reconTickets.length)
+                ? self._reconTickets : (self.state.tickets || []);
+            return pool.find(function(t){
                 return String(t.ticket_number||'').trim().toUpperCase() === k; });
         }
         function isDX(n){ return /^DX-/i.test(String(n||'')); }
@@ -13160,7 +13314,8 @@ const DS = {
               '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
               '<button class="btn btn-outline" onclick="DS.reconReport(\'' + r.id + '\')" style="flex:1">Copy report</button>' +
               '<button class="btn btn-outline" onclick="DS.reconCsv(\'' + r.id + '\')" style="flex:1">Download CSV</button>' +
-              '<button class="btn btn-success" onclick="DS.haulerReport(\'' + r.id + '\')" style="flex:1">Report for hauler</button>' +
+              '<button class="btn btn-success" onclick="DS.haulerReportPDF(\'' + r.id + '\')" style="flex:1">Report for hauler (print / PDF)</button>' +
+              '<button class="btn btn-outline" onclick="DS.haulerReport(\'' + r.id + '\')" style="flex:1">…as plain text</button>' +
               '<button class="btn btn-outline" onclick="DS.closeModal(\'reconModal\')" style="flex:1">Close</button>' +
             '</div>';
 
