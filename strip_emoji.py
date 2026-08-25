@@ -67,6 +67,12 @@ for cls in ICON_CLASSES:
     pat = re.compile(
         r'<(span|div)\b[^>]*class="[^"]*\b' + cls + r'\b[^"]*"[^>]*>([^<]{0,12})</\1>\s*')
     def drop(m):
+        # NEVER remove an element that carries an id or is a JS target —
+        # something will be writing to it. (Learned the hard way:
+        # <div class="upload-icon" id="batchUploadIcon">EMOJI</div> was
+        # dropped, and openBatchUpload() threw on the next line.)
+        if re.search(r'\bid\s*=', m.group(0)):
+            return m.group(0)
         if PICTO.search(m.group(2)) and strip_emoji(m.group(2)).strip() == '':
             return ''
         return m.group(0)
@@ -76,7 +82,8 @@ report.append(f"  removed icon-only wrappers ({before-len(h)} chars)")
 # ---- also drop bare decorative emoji divs (font-size:1.6rem style icons) ----
 h = re.sub(
     r'<div\b[^>]*style="[^"]*font-size:1\.6rem[^"]*"[^>]*>([^<]{0,8})</div>\s*',
-    lambda m: '' if PICTO.search(m.group(1)) and not strip_emoji(m.group(1)).strip() else m.group(0),
+    lambda m: '' if (PICTO.search(m.group(1)) and not strip_emoji(m.group(1)).strip()
+                     and not re.search(r'\bid\s*=', m.group(0))) else m.group(0),
     h)
 
 # ---- RULE 3: strip everywhere else ----
@@ -110,6 +117,11 @@ for tag in ('option', 'title'):
             if not m.group(1).strip())
     print(f"  blank <{tag}>: {n}")
 
+src = open(SRC, encoding='utf-8').read()
+ids_before = set(re.findall(r'id="([A-Za-z0-9_-]+)"', src))
+ids_after  = set(re.findall(r'id="([A-Za-z0-9_-]+)"', h))
+lost = sorted(ids_before - ids_after)
+print(f"  IDs lost: {len(lost)}" + (f"  {lost}  <-- CHECK, JS may reference these" if lost else ""))
 print(f"  script tags balanced: {h.count('<script')} / {h.count('</script>')}")
 print(f"  style tags balanced:  {h.count('<style')} / {h.count('</style>')}")
 print(f"  kept typographic marks: " +
