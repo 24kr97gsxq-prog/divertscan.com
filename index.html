@@ -1795,7 +1795,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.10.0',
+    VERSION: '7.12.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -5653,6 +5653,16 @@ const DS = {
         // PERF (added 2026-05-31): render only the first _ticketsRendered rows.
         // Footer shows "Showing X of Y" + Load More button. Filter/sort changes
         // reset _ticketsRendered to _ticketPageSize.
+        // Safety net: the same ticket must never appear twice. Local state can
+        // pick up a second copy of a row (e.g. created locally and then reloaded),
+        // and a doubled row reads as a real duplicate load, which it is not.
+        var _seen = {};
+        tickets = tickets.filter(function(t) {
+            if (!t || !t.id) return true;
+            if (_seen[t.id]) return false;
+            _seen[t.id] = 1; return true;
+        });
+
         const total = tickets.length;
         const renderCount = Math.min(this._ticketsRendered || this._ticketPageSize, total);
         const visibleTickets = tickets.slice(0, renderCount);
@@ -9087,8 +9097,15 @@ const DS = {
             // Nothing failed, so there is nothing left to look at — close it.
             // Short pause so the "N created" state is visible first.
             var self = this;
-            setTimeout(function() {
+            setTimeout(async function() {
                 self.closeModal('batchUploadModal');
+                // Reload from the database rather than trusting the local
+                // unshifts above. Local state can drift from what was actually
+                // stored, which showed the same ticket twice in the list.
+                try {
+                    if (self._showingAllProjects) await self.loadAllProjectTickets();
+                    else if (self.state.currentProject) await self.loadTickets(self.state.currentProject.id);
+                } catch (e) { console.warn('reload after batch failed:', e); }
                 self.renderTickets();
                 self.renderReports();
             }, 900);
@@ -12315,17 +12332,26 @@ const DS = {
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Scanning for duplicates...</div>';
         document.getElementById('dedupDeleteBtn').classList.add('hidden');
 
-        // Get all tickets for current project or all projects
+        // Scope: if the ticket list is showing All Projects, scan all projects.
+        // Otherwise scan the current one. Previously it ALWAYS narrowed to the
+        // current project, so a duplicate sitting in another project was invisible.
         var url = 'tickets?select=id,ticket_number,created_at,net_tons,ticket_date,project_id&limit=5000';
-        if (this.state.currentProject && this.state.currentProject.id) url += '&project_id=eq.' + this.state.currentProject.id;
+        var scopeAll = !!this._showingAllProjects;
+        if (!scopeAll && this.state.currentProject && this.state.currentProject.id) {
+            url += '&project_id=eq.' + this.state.currentProject.id;
+        }
         url += '&order=ticket_number.asc,created_at.asc';
         var tickets = await this.supabase(url);
         if (!tickets || !Array.isArray(tickets)) { el.innerHTML = '<div style="color:var(--danger)">Failed to load tickets. Make sure a project is selected.</div>'; return; }
 
         // Group by ticket_number and find dupes
+        // Normalise the key. Raw values meant '85946' and '85946 ' were treated
+        // as different tickets, so obvious duplicates were reported as none.
         var groups = {};
         tickets.forEach(function(t) {
-            var key = (t.ticket_number || '') + '|' + (t.project_id || '');
+            var num = String(t.ticket_number == null ? '' : t.ticket_number).trim().toUpperCase();
+            if (!num) return;                       // blank numbers aren't duplicates of each other
+            var key = num + '|' + (t.project_id || '');
             if (!groups[key]) groups[key] = [];
             groups[key].push(t);
         });
@@ -12344,7 +12370,10 @@ const DS = {
         });
 
         if (dupeGroups.length === 0) {
-            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--success);font-weight:600;">No duplicates found</div>';
+            el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--success);font-weight:600;">No duplicates found</div>' +
+                '<div style="text-align:center;font-family:var(--mono);font-size:.6rem;color:var(--text-dim);margin-top:4px">' +
+                'searched ' + tickets.length + ' tickets in ' +
+                (scopeAll ? 'all projects' : DS.esc((DS.state.currentProject||{}).name || 'this project')) + '</div>';
             return;
         }
 
@@ -12368,17 +12397,34 @@ const DS = {
 
         var deleted = 0;
         var errors = 0;
+        var errMsgs = [];
         for (var i = 0; i < this._dupeIds.length; i++) {
             var res = await fetch(this.state.supabaseUrl + '/rest/v1/tickets?id=eq.' + this._dupeIds[i], {
                 method: 'DELETE',
                 headers: { 'apikey': this.state.supabaseKey, 'Authorization': 'Bearer ' + this.state.supabaseKey }
             });
-            if (res.ok) { deleted++; } else { errors++; }
+            if (res.ok) { deleted++; }
+            else {
+                errors++;
+                // A ticket with a scale capture attached can't be deleted — the
+                // scale_weights foreign key blocks it. Say so instead of a bare count.
+                try {
+                    var body = await res.text();
+                    if (body.indexOf('scale_weights') !== -1) {
+                        errMsgs.push('one has a scale capture attached — merge it instead of deleting');
+                    } else if (body.indexOf('foreign key') !== -1 || body.indexOf('violates') !== -1) {
+                        errMsgs.push('one is referenced by another record');
+                    }
+                } catch (e) {}
+            }
         }
+        errMsgs = errMsgs.filter(function(v, k, a) { return a.indexOf(v) === k; });
 
         this._dupeIds = [];
         document.getElementById('dedupDeleteBtn').classList.add('hidden');
-        el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--success);font-weight:600;">Removed ' + deleted + ' duplicate' + (deleted !== 1 ? 's' : '') + (errors > 0 ? ' (' + errors + ' errors)' : '') + '</div>';
+        el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--success);font-weight:600;">Removed ' + deleted + ' duplicate' + (deleted !== 1 ? 's' : '') + '</div>' +
+            (errors > 0 ? '<div style="text-align:center;font-size:.65rem;color:var(--warning);padding:0 8px 8px">' +
+                errors + ' could not be removed' + (errMsgs.length ? ' — ' + DS.esc(errMsgs.join('; ')) : '') + '</div>' : '');
         this.showToast('' + deleted + ' duplicates removed');
         // Refresh ticket list
         await this.loadTickets();
