@@ -14,17 +14,20 @@
     <style>
         :root {
             /* DalMex tokens v1 — 2026-08-25.  amber = Jaguar, green = Dalmex.
-               Contrast verified against --bg-card: text 13.5:1, muted 5.2:1,
-               dal 6.0:1, jag 10.2:1, kraft 7.7:1, alert 4.9:1.
-               --text-dim is 3.5:1 — labels and captions only, never body. */
-            --bg-deep:#0B1210;--bg-card:#101915;--bg-card-hover:#16221D;--bg-input:#0D1512;
-            --border:#25352D;--border-strong:#2A3E34;--border-focus:#FFB627;
+               Surfaces lifted 2026-08-25 — the card sat at 1.06:1 against the
+               page, effectively invisible. Card is now 1.15:1, hover 1.30:1.
+               Contrast verified against --bg-card #16211C: text 12.4:1,
+               muted 4.8:1, dal 5.6:1, jag 9.4:1, kraft 7.1:1, alert 5.4:1.
+               --danger was lightened to #EF6B42 to stay above 4.5:1 on the
+               lighter card. --text-dim is 3.2:1 — labels only, never body. */
+            --bg-deep:#0B1210;--bg-card:#16211C;--bg-card-hover:#1E2C26;--bg-input:#111A16;
+            --border:#2E4239;--border-strong:#3A5248;--border-focus:#FFB627;
             --text:#D7E2DB;--text-muted:#7A8F84;--text-dim:#5E7268;
             --jag:#FFB627;--jag-dim:#5C4212;--dal:#3FA870;--dal-dim:#123524;
             --primary:#FFB627;--primary-glow:rgba(255,182,39,.08);--primary-dark:#E0A31F;--primary-light:rgba(255,182,39,.12);
             --success:#3FA870;--success-glow:rgba(63,168,112,.08);--success-light:rgba(63,168,112,.12);
             --warning:#C9A46A;--warning-glow:rgba(201,164,106,.08);--warning-light:rgba(201,164,106,.12);
-            --danger:#E4572E;--danger-glow:rgba(228,87,46,.08);--danger-light:rgba(228,87,46,.12);
+            --danger:#EF6B42;--danger-glow:rgba(239,107,66,.08);--danger-light:rgba(239,107,66,.12);
             --info:#7A8F84;--info-glow:rgba(122,143,132,.08);
             --purple:#8B7BD6;--carbon-green:#3FA870;--leed-gold:#FFB627;
             --ticket:#F2EDE3;--ticket-ink:#1A1410;--kraft:#C9A46A;
@@ -206,6 +209,8 @@
         .gs-meta{font-family:var(--mono);font-size:.6rem;color:var(--text-dim);
             overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .gs-tons{font-family:var(--mono);font-weight:600;font-size:.8rem;white-space:nowrap;flex:0 0 auto}
+        .build-stamp{font-family:var(--mono);font-size:.52rem;letter-spacing:.1em;
+            color:var(--text-dim);margin-top:2px}
         /* ─────────────────────────────────────────────────────────────── */
 </style>
 ```
@@ -331,6 +336,7 @@ document.addEventListener('keydown', function(e){
                 <div>
                     <h1><span>Dalmex</span> Recycling</h1>
                     <div class="header-sub" id="headerSub">powered by DivertScan • LEED MRp2/MRc5</div>
+                    <div class="build-stamp" id="buildStamp"></div>
                 </div>
                 <span class="leed-badge" id="leedBadge">LEED v4</span>
             </div>
@@ -1732,7 +1738,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.7.0',
+    VERSION: '7.8.0',
+    // STANDING RULE: bump VERSION and set BUILD to the deploy date on
+    // EVERY change that ships. It renders in the header sub-line so
+    // anyone can tell at a glance which build they are looking at.
+    BUILD: '2026-08-25',
 
     // ============================================================
     // MATERIAL DEFINITIONS
@@ -4112,7 +4122,7 @@ const DS = {
         try { localStorage.setItem('ds_admin_theme', next);
               localStorage.setItem('ds_admin_theme_ts', String(Date.now())); } catch(e) {}
         var labels = {default: 'Light', dark: 'Dark', green: 'Forest'};
-        this.toast(labels[next] + ' theme');
+        this.showToast(labels[next] + ' theme');
     },
 
     loadTheme() {
@@ -4120,11 +4130,10 @@ const DS = {
             var t = localStorage.getItem('ds_admin_theme');
             // Auto day/night unless a manual pick is <12h old (same rule as the
             // scale tablet and the client portal). Day = light, night = dark.
-            var ts = parseInt(localStorage.getItem('ds_admin_theme_ts') || '0');
-            if (!t || (Date.now() - ts) > 12*3600*1000) {
-                var h = new Date().getHours();
-                t = (h >= 6 && h < 19) ? 'default' : 'dark';
-            }
+            // NOTE: .th-dark / .th-green have no CSS behind them — the base
+            // :root IS the theme. Auto day/night is disabled until a real
+            // light palette exists (needs its own contrast pass).
+            if (!t) t = 'default';
             if (!t) return;
             document.documentElement.classList.remove('th-dark', 'th-green');
             if (t === 'dark') document.documentElement.classList.add('th-dark');
@@ -4135,7 +4144,9 @@ const DS = {
 
     async init() {
         this.loadTheme();
-        console.log(`DivertScan v${this.VERSION} initializing...`);
+        console.log(`DivertScan v${this.VERSION} (build ${this.BUILD}) initializing...`);
+        var _bs = document.getElementById('buildStamp');
+        if (_bs) _bs.textContent = 'v' + this.VERSION + ' \u00b7 ' + this.BUILD;
 
         // Load saved config — check multiple key patterns from older versions
         this.state.apiKey = localStorage.getItem('ds_openai_key') || localStorage.getItem('openai_api_key') || localStorage.getItem('divertscan_openai_key');
@@ -4448,6 +4459,10 @@ const DS = {
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
+                // A .nav-btn without a data-tab is an action button, not a tab.
+                // Without this guard it hid every panel and then threw on
+                // getElementById(undefined) — a black page.
+                if (!tab || !document.getElementById(tab)) return;
                 document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
                 document.getElementById(tab).classList.add('active');
