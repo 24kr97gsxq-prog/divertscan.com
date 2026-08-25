@@ -523,7 +523,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.7.0', BUILD:'2026-08-25',
+VERSION:'2.8.0', BUILD:'2026-08-25',
 
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
@@ -3079,19 +3079,42 @@ rcRender(){
 
   // Every table is theirs-on-the-left, ours-on-the-right, so a difference
   // reads across one row instead of being hunted between two lists.
-  function sbs(title,note,arr,render){
+  // opts.their / opts.our pull the tonnage out of a row so each table can
+  // total its own columns. Without a total you can see that a section has
+  // 15 rows but not whether it is 2 tons or 40.
+  function sbs(title,note,arr,render,opts){
     if(!arr||!arr.length)return '';
+    opts=opts||{};
+    var tTheir=0,tOur=0,haveT=false,haveO=false;
+    arr.forEach(function(x){
+      if(opts.their){var a=parseFloat(opts.their(x));if(isFinite(a)){tTheir+=a;haveT=true;}}
+      if(opts.our){var b=parseFloat(opts.our(x));if(isFinite(b)){tOur+=b;haveO=true;}}
+    });
+    var diffCol=!!(opts.their&&opts.our);
+    var cols=['Ticket','Date','Tons','Zone','Date','Tons','Zone'];
+    if(diffCol)cols.push('Diff');
+    var foot='<tfoot><tr style="border-top:2px solid var(--primary)">'+
+      '<td style="padding:6px;font-weight:700">'+arr.length+' ticket'+(arr.length===1?'':'s')+'</td>'+
+      '<td></td>'+
+      '<td style="padding:6px;font-weight:700">'+(haveT?tTheir.toFixed(2)+' T':'\u2014')+'</td>'+
+      '<td></td><td style="border-left:1px solid var(--border)"></td>'+
+      '<td style="padding:6px;font-weight:700">'+(haveO?tOur.toFixed(2)+' T':'\u2014')+'</td>'+
+      '<td></td>'+
+      (diffCol?'<td style="padding:6px;font-weight:700;color:'+(Math.abs(tOur-tTheir)>0.005?'var(--warning)':'var(--text-d)')+'">'+
+        ((tOur-tTheir)>=0?'+':'')+(tOur-tTheir).toFixed(2)+'</td>':'')+
+      '</tr></tfoot>';
     return card(title,
       (note?'<div style="font-size:.68rem;color:var(--text-d);margin-bottom:8px">'+note+'</div>':'')+
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.68rem;font-family:var(--mono)">'+
       '<thead>'+
         '<tr><th></th>'+
           '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);border-bottom:1px solid var(--border)">Their list</th>'+
-          '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Dalmex</th></tr>'+
+          '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Dalmex</th>'+
+          (diffCol?'<th></th>':'')+'</tr>'+
         '<tr style="border-bottom:1px solid var(--border)">'+
-          ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].map(function(c,i){
+          cols.map(function(c,i){
             return '<th style="text-align:left;padding:4px 6px;color:var(--text-d);font-weight:600'+(i===4?';border-left:1px solid var(--border)':'')+'">'+c+'</th>';}).join('')+
-        '</tr></thead><tbody>'+arr.map(render).join('')+'</tbody></table></div>');
+        '</tr></thead><tbody>'+arr.map(render).join('')+'</tbody>'+foot+'</table></div>');
   }
   function cell(v,off,left){return '<td style="padding:5px 6px'+(left?';border-left:1px solid var(--border)':'')+
     (off?';color:var(--warning);font-weight:700':'')+'">'+(v==null||v===''?'\u2014':P.esc(String(v)))+'</td>';}
@@ -3120,21 +3143,27 @@ rcRender(){
   h+=sbs('Different on our side ('+s.differences+')',
     'Differences are highlighted. Ours come straight off the scale ticket \u2014 tap to see it.',
     r.diffs,function(x){
+      var d=(+x.ourTons)-(+x.theirTons);
       return row(numCell(x.ticket)+
         cell(x.theirDate,x.dateOff)+cell(x.theirTons.toFixed(2)+' T',x.tonsOff)+cell(x.theirZone,x.zoneOff)+
-        cell(x.ourDate,x.dateOff,true)+cell(x.ourTons.toFixed(2)+' T',x.tonsOff)+cell(x.ourZone,x.zoneOff),x.ticket);});
+        cell(x.ourDate,x.dateOff,true)+cell(x.ourTons.toFixed(2)+' T',x.tonsOff)+cell(x.ourZone,x.zoneOff)+
+        '<td style="padding:5px 6px;'+(Math.abs(d)>0.005?'color:var(--warning);font-weight:700':'color:var(--text-d)')+'">'+
+          (d>=0?'+':'')+d.toFixed(2)+'</td>',x.ticket);},
+    {their:function(x){return x.theirTons;},our:function(x){return x.ourTons;}});
 
   h+=sbs('On their list, not in Dalmex ('+s.notInDalmex+')',
     'We have no ticket with these numbers for this period.',
     r.missing,function(x){
       return row(numCell(x.ticket)+cell(x.date)+cell(x.tons.toFixed(2)+' T')+cell(x.zone)+
-        cell('\u2014',false,true)+cell('\u2014')+cell('\u2014'),x.ticket);});
+        cell('\u2014',false,true)+cell('\u2014')+cell('\u2014'),x.ticket);},
+    {their:function(x){return x.tons;}});
 
   h+=sbs('In Dalmex, not on their list ('+s.notOnList+')',
     'Loads we have that the list does not show.',
     r.extra.slice(0,100),function(x){
       return row(numCell(x.ticket)+cell('\u2014')+cell('\u2014')+cell('\u2014')+
-        cell(x.date,false,true)+cell(x.tons.toFixed(2)+' T')+cell(x.zone),x.ticket);});
+        cell(x.date,false,true)+cell(x.tons.toFixed(2)+' T')+cell(x.zone),x.ticket);},
+    {our:function(x){return x.tons;}});
 
   if(s.duplicateLines)h+=card('Listed twice ('+s.duplicateLines+')',
     '<div style="font-size:.68rem;color:var(--text-d);margin-bottom:6px">The same ticket number appears more than once on the list.</div>'+

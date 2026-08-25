@@ -1824,7 +1824,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.30.0',
+    VERSION: '7.31.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -13006,8 +13006,17 @@ const DS = {
             return '<td style="padding:5px 6px"><span style="color:var(--primary);font-weight:600;text-decoration:underline">' +
                 DS.esc(n) + '</span></td>';
         }
-        function sbs(title, note, arr, render, pick) {
+        // opts.their / opts.our pull a tonnage out of a row so each table can
+        // total its own columns and show the net gap.
+        function sbs(title, note, arr, render, pick, opts) {
             if (!arr || !arr.length) return '';
+            opts = opts || {};
+            var tTheir = 0, tOur = 0, haveT = false, haveO = false;
+            arr.forEach(function(x) {
+                if (opts.their) { var a = parseFloat(opts.their(x)); if (isFinite(a)) { tTheir += a; haveT = true; } }
+                if (opts.our)   { var b = parseFloat(opts.our(x));   if (isFinite(b)) { tOur   += b; haveO = true; } }
+            });
+            var diffCol = !!(opts.their && opts.our);
             var capped = arr.slice(0, 50);
             return '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">' +
                 title + ' (' + arr.length + ')</div>' +
@@ -13025,10 +13034,21 @@ const DS = {
                   '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)">Their list</th>' +
                   '<th colspan="3" style="text-align:left;padding:3px 6px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);border-bottom:1px solid var(--primary)">Ours</th></tr>' +
                 '<tr style="border-bottom:1px solid var(--border)">' + (pick ? '<th></th>' : '') +
-                  ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].map(function(c,i){
+                  ['Ticket','Date','Tons','Zone','Date','Tons','Zone'].concat(diffCol?['Diff']:[]).map(function(c,i){
                     return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim);font-weight:600' +
                       (i===4?';border-left:1px solid var(--border)':'') + '">' + c + '</th>'; }).join('') +
-                '</tr></thead><tbody>' + capped.map(render).join('') + '</tbody></table></div>' +
+                '</tr></thead><tbody>' + capped.map(render).join('') + '</tbody>' +
+                '<tfoot><tr style="border-top:2px solid var(--primary)">' + (pick ? '<td></td>' : '') +
+                  '<td style="padding:6px;font-weight:700">' + arr.length + ' ticket' + (arr.length===1?'':'s') + '</td>' +
+                  '<td></td>' +
+                  '<td style="padding:6px;font-weight:700">' + (haveT ? tTheir.toFixed(2) + ' T' : '—') + '</td>' +
+                  '<td></td><td style="border-left:1px solid var(--border)"></td>' +
+                  '<td style="padding:6px;font-weight:700">' + (haveO ? tOur.toFixed(2) + ' T' : '—') + '</td>' +
+                  '<td></td>' +
+                  (diffCol ? '<td style="padding:6px;font-weight:700;color:' +
+                    (Math.abs(tOur-tTheir) > 0.005 ? 'var(--warning)' : 'var(--text-dim)') + '">' +
+                    ((tOur-tTheir) >= 0 ? '+' : '') + (tOur-tTheir).toFixed(2) + '</td>' : '') +
+                '</tr></tfoot></table></div>' +
                 (arr.length > 50 ? '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);padding:4px 6px">showing the first 50 of ' + arr.length + '</div>' : '');
         }
         function row(inner, num, pick) {
@@ -13071,7 +13091,12 @@ const DS = {
                         ourCell(x.ourDate, x.theirDate, x.dateOff, true, x.ticket, 'ticket_date') +
                         cell(x.ourTons + ' T', x.tonsOff) +
                         ourCell(x.ourZone, x.theirZone, x.zoneOff, false, x.ticket, 'zone'),
-                        x.ticket, true); }, true) +
+                        + (function(){ var d = (parseFloat(x.ourTons)||0) - (parseFloat(x.theirTons)||0);
+                          return '<td style="padding:5px 6px;' +
+                            (Math.abs(d) > 0.005 ? 'color:var(--warning);font-weight:700' : 'color:var(--text-dim)') +
+                            '">' + (d >= 0 ? '+' : '') + d.toFixed(2) + '</td>'; })(),
+                        x.ticket, true); }, true,
+                { their:function(x){ return x.theirTons; }, our:function(x){ return x.ourTons; } }) +
 
             (function(){
                 var all = rows.missing || [];
@@ -13091,7 +13116,8 @@ const DS = {
                     return row(numCell(x.ticket) +
                         cell(x.date) + cell(x.tons + ' T') +
                         cell(x.zone + (fo ? '  not our numbering' : '')) +
-                        cell('—', false, true) + cell('—') + cell('—'), x.ticket); });
+                        cell('—', false, true) + cell('—') + cell('—'), x.ticket); },
+                    false, { their:function(x){ return x.tons; } });
             })() +
 
             (function(){
@@ -13105,7 +13131,8 @@ const DS = {
                     return row(numCell(x.ticket) + cell('—') + cell('—') + cell('—') +
                         cell(x.date, false, true) + cell(x.tons + ' T') +
                         cell(x.zone + (like ? '  ~ #' + like.num + ' (' + like.tons + ' T)' : '')),
-                        x.ticket); });
+                        x.ticket); },
+                    false, { our:function(x){ return x.tons; } });
             })() +
 
             ((rows.duplicateLines && rows.duplicateLines.length)
