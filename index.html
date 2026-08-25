@@ -1823,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.19.0',
+    VERSION: '7.20.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12388,9 +12388,55 @@ const DS = {
     // off the scale ticket and a hauler's list is a transcription of it, not
     // the source. (Aug 24: nine of our zones were wrong and their list was
     // right, which is what this is for.)
+    // Dalmex ticket numbers are five digits. Seven-digit numbers on a hauler's
+    // list are somebody else's — a landfill or transfer station receipt — and
+    // will never match. They are noise in a reconciliation, so they can be
+    // folded away rather than read every time.
+    _isForeignTicket(num) {
+        var s = String(num || '').replace(/^DX-/i, '').replace(/\D/g, '');
+        return s.length >= 6;
+    },
+
+    toggleForeignRows(id) {
+        this._reconHideForeign = !this._reconHideForeign;
+        this.viewReconciliation(id);
+    },
+
+    // A DX row is a scale-app capture. If a paper ticket sits on the same day
+    // with nearly the same tonnage, it is very likely the same load recorded
+    // twice — the pattern behind the 22 merges on Aug 24. Say so on the row
+    // instead of leaving it to be spotted by eye.
+    _dxLooksLike(row) {
+        if (!/^DX-/i.test(String(row.ticket || ''))) return null;
+        var tons = parseFloat(row.tons);
+        if (!isFinite(tons) || !row.date) return null;
+        var best = null;
+        (this.state.tickets || []).forEach(function(t) {
+            var num = String(t.ticket_number || '');
+            if (/^DX-/i.test(num)) return;                       // paper only
+            var td = (t.ticket_date || '').substring(0,10);
+            if (!td) return;
+            var dayGap = Math.abs((new Date(td) - new Date(row.date)) / 86400000);
+            if (dayGap > 1) return;                              // same day or next
+            var tt = parseFloat(t.net_tons);
+            if (!isFinite(tt)) return;
+            var diff = Math.abs(tt - tons);
+            if (diff > 0.35) return;                             // ~700 lbs
+            if (!best || diff < best.diff) best = { num: num, diff: diff, date: td, tons: tt };
+        });
+        return best;
+    },
+
     async applyReconValue(num, field, value, btnEl) {
-        if (field !== 'zone' && field !== 'ticket_date') {
-            this.showToast('Only zone and date can be adopted'); return;
+        var ALLOWED = { zone:1, ticket_date:1, net_tons:1 };
+        if (!ALLOWED[field]) { this.showToast('That field cannot be adopted'); return; }
+        // Tonnage is the number every report and invoice rests on, and ours
+        // comes off the scale ticket. Adopting theirs is sometimes right —
+        // #87344 was ours misread — but it must never be a reflex.
+        if (field === 'net_tons') {
+            if (!confirm('Set #' + num + ' to ' + value + ' T from their list?\n\n' +
+                         'Our weight comes off the scale ticket. Only do this if you have ' +
+                         'checked the photo and theirs is right.')) return;
         }
         var key = String(num || '').trim().toUpperCase();
         var t = (this.state.tickets || []).find(function(x) {
@@ -12402,20 +12448,28 @@ const DS = {
         }
         if (!id) { this.showToast('#' + num + ' is not in DivertScan'); return; }
 
-        var patch = {}; patch[field] = value || null;
+        var patch = {};
+        if (field === 'net_tons') {
+            var tn = parseFloat(String(value).replace(/[^0-9.]/g,''));
+            if (!isFinite(tn)) { this.showToast('That tonnage is not a number'); return; }
+            patch.net_tons = tn;
+            patch.net_lbs  = Math.round(tn * 2000);
+        } else {
+            patch[field] = value || null;
+        }
         var res = await this.supabase('tickets?id=eq.' + id, 'PATCH', patch);
         if (res === null) { this.showToast('Could not update #' + num); return; }
 
+        var label = field === 'zone' ? 'zone' : (field === 'net_tons' ? 'tonnage' : 'date');
         this.addAuditEntry('TICKET_EDIT',
-            '#' + num + ' ' + (field === 'zone' ? 'zone' : 'date') + ' set to ' + value +
-            ' from a client reconciliation');
-        if (t) t[field] = value;
+            '#' + num + ' ' + label + ' set to ' + value + ' from a client reconciliation');
+        if (t) { if (field === 'net_tons') { t.net_tons = patch.net_tons; t.net_lbs = patch.net_lbs; } else t[field] = value; }
         if (btnEl) {
             btnEl.textContent = 'applied';
             btnEl.style.pointerEvents = 'none';
             btnEl.style.opacity = '.55';
         }
-        this.showToast('#' + num + ' ' + (field === 'zone' ? 'zone' : 'date') + ' → ' + value);
+        this.showToast('#' + num + ' ' + label + ' → ' + value);
         this.renderTickets();
     },
 
@@ -12568,8 +12622,8 @@ const DS = {
             '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:4px">Tap a ticket number to open the scale ticket.</div>' +
 
             sbs('Different on our side',
-                'Differences highlighted. Zone and date can be adopted from their list — ' +
-                'tonnage cannot, because ours comes off the scale ticket.' +
+                'Differences highlighted. Tap "use theirs" on any field to adopt their value. ' +
+                'Tonnage asks first — ours comes off the scale ticket, so check the photo before overriding it.' +
                 ((rows.differences || []).some(function(x){ return x.zoneOff && x.theirZone; })
                     ? ' <button onclick="DS.applyAllReconZones(\'' + r.id + '\')" ' +
                       'style="font-family:var(--font);font-size:.6rem;font-weight:600;border:1px solid var(--primary);' +
@@ -12580,19 +12634,44 @@ const DS = {
                     return row(numCell(x.ticket) +
                         cell(x.theirDate, x.dateOff) + cell(x.theirTons + ' T', x.tonsOff) + cell(x.theirZone, x.zoneOff) +
                         ourCell(x.ourDate, x.theirDate, x.dateOff, true, x.ticket, 'ticket_date') +
-                        cell(x.ourTons + ' T', x.tonsOff) +
+                        ourCell(x.ourTons + ' T', x.theirTons, x.tonsOff, false, x.ticket, 'net_tons') +
                         ourCell(x.ourZone, x.theirZone, x.zoneOff, false, x.ticket, 'zone'),
                         x.ticket); }) +
 
-            sbs('On their list, not in ours', 'No ticket with these numbers for this period.',
-                rows.missing, function(x) {
-                    return row(numCell(x.ticket) + cell(x.date) + cell(x.tons + ' T') + cell(x.zone) +
-                        cell('—', false, true) + cell('—') + cell('—'), x.ticket); }) +
+            (function(){
+                var all = rows.missing || [];
+                var foreign = all.filter(function(x){ return DS._isForeignTicket(x.ticket); });
+                var shown = DS._reconHideForeign ? all.filter(function(x){ return !DS._isForeignTicket(x.ticket); }) : all;
+                var note = 'No ticket with these numbers for this period.';
+                if (foreign.length) {
+                    note += ' <strong>' + foreign.length + '</strong> of these are six digits or longer — ' +
+                        'not our numbering, most likely a landfill or transfer-station receipt. ' +
+                        '<button onclick="DS.toggleForeignRows(\'' + r.id + '\')" ' +
+                        'style="font-family:var(--font);font-size:.6rem;font-weight:600;border:1px solid var(--primary);' +
+                        'background:transparent;color:var(--primary);border-radius:3px;padding:2px 7px;cursor:pointer;margin-left:4px">' +
+                        (DS._reconHideForeign ? 'show them' : 'hide them') + '</button>';
+                }
+                return sbs('On their list, not in ours', note, shown, function(x) {
+                    var fo = DS._isForeignTicket(x.ticket);
+                    return row(numCell(x.ticket) +
+                        cell(x.date) + cell(x.tons + ' T') +
+                        cell(x.zone + (fo ? '  not our numbering' : '')) +
+                        cell('—', false, true) + cell('—') + cell('—'), x.ticket); });
+            })() +
 
-            sbs('In ours, not on their list', 'Loads we have that they have not billed.',
-                rows.notOnList, function(x) {
+            (function(){
+                var arr = rows.notOnList || [];
+                var dxHits = arr.filter(function(x){ return DS._dxLooksLike(x); }).length;
+                var note = 'Loads we have that they have not billed.';
+                if (dxHits) note += ' <strong>' + dxHits + '</strong> look like a scale capture of a paper ticket we already have — ' +
+                    'same day, tonnage within about 700 lbs. Those are probably one load recorded twice, not an unbilled one.';
+                return sbs('In ours, not on their list', note, arr, function(x) {
+                    var like = DS._dxLooksLike(x);
                     return row(numCell(x.ticket) + cell('—') + cell('—') + cell('—') +
-                        cell(x.date, false, true) + cell(x.tons + ' T') + cell(x.zone), x.ticket); }) +
+                        cell(x.date, false, true) + cell(x.tons + ' T') +
+                        cell(x.zone + (like ? '  ~ #' + like.num + ' (' + like.tons + ' T)' : '')),
+                        x.ticket); });
+            })() +
 
             ((rows.duplicateLines && rows.duplicateLines.length)
                 ? '<div style="font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:14px 0 4px">Listed twice by them (' + rows.duplicateLines.length + ')</div>' +
