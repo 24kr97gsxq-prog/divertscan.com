@@ -4071,7 +4071,14 @@ const DS = {
         const divPct = 100 - (mats.landfill_pct || 0);
         const updates = { ticket_number: document.getElementById('ste_num').value.trim(), ticket_date: document.getElementById('ste_date').value, project_id: document.getElementById('ste_proj').value, gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons, diversion_pct: divPct, diverted_tons: parseFloat((netTons * divPct / 100).toFixed(4)), co2e_avoided: parseFloat(co2e.toFixed(4)), notes: document.getElementById('ste_notes').value.trim() || null, ...mats };
         const result = await this.supabase('tickets?id=eq.' + t.id, 'PATCH', updates);
+        if (result === null) {
+            // A failed save used to re-render the old values silently, which
+            // looks exactly like a successful one.
+            this.showToast('Save failed — check connection, changes not saved');
+            return;
+        }
         if (result && result.length) { Object.assign(t, result[0]); }
+        this.showToast('Ticket ' + (updates.ticket_number || '') + ' updated');
         this._renderScaleTicketView(t);
         this.loadScaleFeed();
     },
@@ -6486,6 +6493,12 @@ const DS = {
             return;
         }
 
+        // Saved. Close immediately — the reload and drift check below can be
+        // slow or can throw, and the edit is already committed either way.
+        // (This used to sit at the very end, so a failed reload left the
+        // modal open on a ticket that had in fact saved.)
+        this.closeModal('editTicketModal');
+
         // Phase 2.7d: Detect driver_name drift between tickets.driver_name and drivers.driver_name
         // This catches the common case where OCR misreads a driver name, user edits the ticket,
         // but the linked drivers-table row still has the wrong name.
@@ -6517,9 +6530,11 @@ const DS = {
         } catch (err) { console.warn('drift check failed:', err); }
 
         // Always reload tickets from database to ensure clean state
-        if (this.state.currentProject) {
-            await this.loadTickets(this.state.currentProject.id);
-        }
+        try {
+            if (this.state.currentProject) {
+                await this.loadTickets(this.state.currentProject.id);
+            }
+        } catch (e) { console.warn('reload after save failed:', e); }
 
         var newProjId = document.getElementById('editTktProject').value;
         var projChanged = this.state.currentProject && newProjId !== this.state.currentProject.id;
@@ -6532,7 +6547,6 @@ const DS = {
 
         this.renderTickets();
         this.renderReports();
-        this.closeModal('editTicketModal');
         this.addAuditEntry('TICKET_EDIT', `Updated: ${ticketNum} | ${netTons}T | ${diversionPct}% div` + (projChanged ? ' | Moved project' : ''));
     },
 
