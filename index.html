@@ -166,6 +166,19 @@
         .status-pill{border-radius:var(--radius);font-family:var(--mono)}
         .btn:focus-visible,.nav-btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
             outline:2px solid var(--border-focus);outline-offset:2px}
+        /* Month controls — export + sort at the TOP of each month card.
+           These used to sit below the ticket table, so on a 90-ticket
+           month you scrolled the whole list to reach Export. */
+        .month-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+            padding-bottom:10px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+        .month-controls .mc-label{font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;
+            text-transform:uppercase;color:var(--text-dim);width:100%;margin-bottom:2px}
+        .month-controls .btn{flex:1;min-width:66px}
+        .month-controls .month-sort{width:auto;flex:0 0 auto;margin-left:auto;
+            padding:6px 8px;font-size:.65rem;font-family:var(--mono)}
+        @media (max-width:520px){
+            .month-controls .month-sort{margin-left:0;width:100%;margin-top:6px}
+        }
         /* ─────────────────────────────────────────────────────────────── */
 </style>
 ```
@@ -7702,6 +7715,19 @@ const DS = {
                     ${monthName} ${year}
                     ${leedInfo.isNonLeed ? '' : `<span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>`}
                 </div>
+                <div class="month-controls">
+                    <span class="mc-label">Export</span>
+                    <button class="btn btn-sm btn-primary" onclick="DS.exportMonthPDF('${key}')">PDF</button>
+                    <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')">XLSX</button>
+                    <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')">CSV</button>
+                    <button class="btn btn-sm btn-success" onclick="DS.exportMonthQBO('${key}')">QBO</button>
+                    <select class="form-input month-sort" onchange="DS.setSortPref(this.value)" title="Sort tickets">
+                        <option value="added_desc"${this._getSortPref()==='added_desc'?' selected':''}>↓ Newest added</option>
+                        <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
+                        <option value="date_desc"${this._getSortPref()==='date_desc'?' selected':''}>↓ Date: newest</option>
+                        <option value="date_asc"${this._getSortPref()==='date_asc'?' selected':''}>↑ Date: oldest</option>
+                    </select>
+                </div>
                 ${leedInfo.isNonLeed ? '<div style="text-align:center;padding:8px 0;margin-bottom:8px;background:var(--bg-input);border-radius:var(--radius);"><div style="font-size:0.7rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>' : `<div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
                     <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${data.divRate}%</div>
                     <div style="font-size:0.65rem; color:var(--text-muted);">Monthly Diversion Rate</div>
@@ -7731,26 +7757,11 @@ const DS = {
                 ${this.renderMaterialBars(data.matTotals, data.totalTons)}
                 ${this.renderZoneSummary(months[key])}
                 <div class="divider"></div>
-                <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px;">
-                    <span style="font-size:.6rem;color:var(--text-muted);font-weight:600;">Sort:</span>
-                    <select class="form-input month-sort" onchange="DS.setSortPref(this.value)" style="padding:5px 7px;font-size:.65rem;width:auto;">
-                        <option value="added_desc"${this._getSortPref()==='added_desc'?' selected':''}>↓ Newest added</option>
-                        <option value="added_asc"${this._getSortPref()==='added_asc'?' selected':''}>↑ Oldest added</option>
-                        <option value="date_desc"${this._getSortPref()==='date_desc'?' selected':''}>↓ Date: newest</option>
-                        <option value="date_asc"${this._getSortPref()==='date_asc'?' selected':''}>↑ Date: oldest</option>
-                    </select>
-                </div>
                 ${this.renderMonthTicketTable(months[key])}
                 <div class="divider"></div>
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
                     <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
                     ${leedInfo.isNonLeed ? '' : '<span>Cumulative: <strong style="color:' + (data.cumRate >= target ? 'var(--success)' : 'var(--warning)') + ';">' + data.cumRate + '%</strong> diverted</span>'}
-                </div>
-                <div class="btn-row mt-8">
-                    <button class="btn btn-sm btn-primary" onclick="DS.exportMonthPDF('${key}')" style="flex:1;">PDF</button>
-                    <button class="btn btn-sm btn-info" onclick="DS.exportMonthXLSX('${key}')" style="flex:1;">XLSX</button>
-                    <button class="btn btn-sm btn-outline" onclick="DS.exportMonthCSV('${key}')" style="flex:1;">CSV</button>
-                    <button class="btn btn-sm btn-success" onclick="DS.exportMonthQBO('${key}')" style="flex:1;">QBO</button>
                 </div>
             </div>`;
         });
