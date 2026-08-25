@@ -1132,6 +1132,7 @@ document.addEventListener('keydown', function(e){
                 <div id="dedupResults" style="margin-bottom:8px"></div>
                 <div class="btn-row">
                     <button class="btn btn-sm btn-warning" onclick="DS.findDuplicates()" style="flex:1">Find Duplicates</button>
+                    <button class="btn btn-sm btn-outline" onclick="DS.findScaleMismatches()" style="flex:1">Check weights vs scale</button>
                     <button class="btn btn-sm btn-danger hidden" id="dedupDeleteBtn" onclick="DS.deleteDuplicates()" style="flex:1">Remove Dupes</button>
                 </div>
             </div>
@@ -1823,7 +1824,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.24.0',
+    VERSION: '7.26.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -5868,6 +5869,17 @@ const DS = {
         }
         this._currentDetailTicketId = t.id;
         document.getElementById('ticketDetailTitle').textContent = `Ticket ${t.ticket_number}`;
+        // Warn if the stored weight disagrees with this ticket's own gross/tare.
+        var _mm = this._scaleMismatch(t);
+        this._detailScaleWarning = _mm
+            ? '<div style="border-left:3px solid var(--danger);background:var(--danger-light);' +
+              'padding:8px 10px;border-radius:var(--radius);margin-bottom:10px;font-size:.7rem;line-height:1.55">' +
+              '<strong>This weight does not match the scale.</strong><br>' +
+              'gross ' + Number(t.gross_lbs).toLocaleString() + ' − tare ' + Number(t.tare_lbs).toLocaleString() +
+              ' = ' + (t.gross_lbs - t.tare_lbs).toLocaleString() + ' lbs = <strong>' + _mm.scaleTons.toFixed(2) + ' T</strong>, ' +
+              'but this ticket is saved as ' + _mm.stored.toFixed(2) + ' T.' +
+              '</div>'
+            : '';
         const mats = Object.keys(this.MATERIALS).map(k => {
             const pct = t[k + '_pct'] || 0;
             const tons = t[k + '_tons'] || 0;
@@ -5922,6 +5934,7 @@ const DS = {
         '</div></div>';
 
         document.getElementById('ticketDetailContent').innerHTML = `
+            ${this._detailScaleWarning || ''}
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
                 ${this.fmtDateTime(t)} • ${t.hauler || ''}${t.driver_name ? ' • Driver: <strong style="color:var(--primary)">' + this.esc(t.driver_name) + '</strong>' : ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
             </div>
@@ -8145,10 +8158,12 @@ const DS = {
             var hasPhotos = t.scale_ticket_image || (Array.isArray(t.debris_images) && t.debris_images.length > 0);
             var divColor = divPct >= 75 ? 'var(--success)' : divPct >= 50 ? 'var(--warning)' : 'var(--danger)';
 
+            var _mm = DS._scaleMismatch(t);
             var _hay = ((t.ticket_number||'') + ' ' + (t.driver_name||'') + ' ' + (t.zone||'')).toLowerCase();
             tbl += '<tr class="mt-row" data-find="' + _hay.replace(/"/g,'') + '" style="border-bottom:1px solid var(--border); cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
                 '<td style="padding:8px 6px; color:var(--text-muted);white-space:nowrap;">' + this.fmtDateTime(t) + '</td>' +
-                '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number + '</td>' +
+                '<td style="padding:8px 6px; font-weight:700; color:var(--text);">' + t.ticket_number +
+                    (_mm ? ' <span title="Stored weight does not match gross minus tare" style="color:var(--danger);font-weight:800">!</span>' : '') + '</td>' +
                 '<td style="padding:8px 6px; color:var(--text);">' + (t.driver_name || '<span style="color:var(--text-dim);font-size:0.65rem;">—</span>') + '</td>' +
                 '<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:600;">' + this.fmt(t.net_tons) + '</td>' +
                 (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); font-weight:700; color:' + divColor + ';">' + divPct + '%</td>') + (_isNL?'':'<td style="padding:8px 6px; text-align:right; font-family:var(--mono); color:var(--text-muted);">' + this.fmt(t.co2e_avoided) + '</td>') +
@@ -12732,6 +12747,20 @@ const DS = {
         }
     },
 
+    // gross − tare is the scale's own answer. If net_tons disagrees with it,
+    // somebody keyed a number rather than letting the scale decide — the
+    // exact failure that put four tickets out on 2026-08-25.
+    _scaleMismatch(t) {
+        if (!t) return null;
+        var g = parseFloat(t.gross_lbs), r = parseFloat(t.tare_lbs), n = parseFloat(t.net_tons);
+        if (!isFinite(g) || !isFinite(r) || !isFinite(n)) return null;
+        if (g <= 0 || r <= 0 || g <= r) return null;
+        var scaleTons = (g - r) / 2000;
+        var gap = n - scaleTons;
+        if (Math.abs(gap) <= 0.02) return null;
+        return { scaleTons: +scaleTons.toFixed(4), stored: n, gap: +gap.toFixed(4) };
+    },
+
     // Dalmex ticket numbers are five digits. Seven-digit numbers on a hauler's
     // list are somebody else's — a landfill or transfer station receipt — and
     // will never match. They are noise in a reconciliation, so they can be
@@ -12772,15 +12801,18 @@ const DS = {
     },
 
     async applyReconValue(num, field, value, btnEl) {
-        var ALLOWED = { zone:1, ticket_date:1, net_tons:1 };
-        if (!ALLOWED[field]) { this.showToast('That field cannot be adopted'); return; }
-        // Tonnage is the number every report and invoice rests on, and ours
-        // comes off the scale ticket. Adopting theirs is sometimes right —
-        // #87344 was ours misread — but it must never be a reflex.
-        if (field === 'net_tons') {
-            if (!confirm('Set #' + num + ' to ' + value + ' T from their list?\n\n' +
-                         'Our weight comes off the scale ticket. Only do this if you have ' +
-                         'checked the photo and theirs is right.')) return;
+        // TONNAGE IS NOT ADOPTABLE. On 2026-08-25 this was used on six
+        // tickets and moved our figure away from our own scale every single
+        // time — because the hauler's tonnage is a transcription of Curtis's
+        // handwritten subtraction, and that subtraction has been confirmed
+        // wrong (#87444 by 80 lbs, #85788 by 400 lbs). gross_lbs and tare_lbs
+        // are the source of truth and sit right there on the ticket.
+        // If a weight is genuinely wrong, fix the gross or tare in the ticket
+        // editor — never copy a number off a list.
+        var ALLOWED = { zone:1, ticket_date:1 };
+        if (!ALLOWED[field]) {
+            this.showToast('Weights come off the scale — fix gross or tare on the ticket instead');
+            return;
         }
         var key = String(num || '').trim().toUpperCase();
         var t = (this.state.tickets || []).find(function(x) {
@@ -12793,46 +12825,14 @@ const DS = {
         if (!id) { this.showToast('#' + num + ' is not in DivertScan'); return; }
 
         var patch = {};
-        if (field === 'net_tons') {
-            var tn = parseFloat(String(value).replace(/[^0-9.]/g,''));
-            if (!isFinite(tn)) { this.showToast('That tonnage is not a number'); return; }
-            patch.net_tons = tn;
-            patch.net_lbs  = Math.round(tn * 2000);
-            // Material tonnages are derived from net_tons and the percentages.
-            // Changing net without them leaves the split adding up to the OLD
-            // weight and diverted_tons stale — which silently moves the
-            // diversion rate on a customer report. Recalculate all of it.
-            var src = t;
-            if (!src) {
-                var full = await this.supabase('tickets?id=eq.' + id + '&limit=1');
-                src = (full && full[0]) || null;
-            }
-            if (src) {
-                var GWP = { wood:.310, occ:.940, metal:1.850, plastic:3.100, concrete:.130, block:.240 };
-                var keys = ['wood','occ','metal','plastic','concrete','block','landfill'];
-                var co2 = 0;
-                keys.forEach(function(k) {
-                    var pct = parseFloat(src[k + '_pct']) || 0;
-                    var tons = +((tn * pct / 100).toFixed(4));
-                    patch[k + '_tons'] = tons;
-                    if (k !== 'landfill' && GWP[k]) co2 += tons * GWP[k];
-                });
-                var divPct = 100 - (parseFloat(src.landfill_pct) || 0);
-                patch.diversion_pct = divPct;
-                patch.diverted_tons = +((tn * divPct / 100).toFixed(4));
-                patch.co2e_avoided  = +(co2.toFixed(4));
-            }
-        } else {
-            patch[field] = value || null;
-        }
+        patch[field] = value || null;
         var res = await this.supabase('tickets?id=eq.' + id, 'PATCH', patch);
         if (res === null) { this.showToast('Could not update #' + num); return; }
 
-        var label = field === 'zone' ? 'zone' : (field === 'net_tons' ? 'tonnage' : 'date');
+        var label = field === 'zone' ? 'zone' : 'date';
         this.addAuditEntry('TICKET_EDIT',
             '#' + num + ' ' + label + ' set to ' + value + ' from a client reconciliation');
-        if (t) { if (field === 'net_tons') { Object.keys(patch).forEach(function(k){ t[k] = patch[k]; }); }
-                 else t[field] = value; }
+        if (t) t[field] = value;
         if (btnEl) {
             btnEl.textContent = 'applied';
             btnEl.style.pointerEvents = 'none';
@@ -13004,8 +13004,9 @@ const DS = {
             '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:4px">Tap a ticket number to open the scale ticket.</div>' +
 
             sbs('Different on our side',
-                'Differences highlighted. Tap "use theirs" on any field to adopt their value. ' +
-                'Tonnage asks first — ours comes off the scale ticket, so check the photo before overriding it.' +
+                'Zone and date can be adopted from their list. <strong>Weights cannot</strong> — ' +
+                'theirs is copied off the paper ticket by hand, ours is gross minus tare from the scale. ' +
+                'If a weight looks wrong, open the ticket and check the gross and tare.' +
                 ((rows.differences || []).some(function(x){ return x.zoneOff && x.theirZone; })
                     ? ' <button onclick="DS.applyAllReconZones(\'' + r.id + '\')" ' +
                       'style="font-family:var(--font);font-size:.6rem;font-weight:600;border:1px solid var(--primary);' +
@@ -13016,7 +13017,7 @@ const DS = {
                     return row(numCell(x.ticket) +
                         cell(x.theirDate, x.dateOff) + cell(x.theirTons + ' T', x.tonsOff) + cell(x.theirZone, x.zoneOff) +
                         ourCell(x.ourDate, x.theirDate, x.dateOff, true, x.ticket, 'ticket_date') +
-                        ourCell(x.ourTons + ' T', x.theirTons, x.tonsOff, false, x.ticket, 'net_tons') +
+                        cell(x.ourTons + ' T', x.tonsOff) +
                         ourCell(x.ourZone, x.theirZone, x.zoneOff, false, x.ticket, 'zone'),
                         x.ticket, true); }, true) +
 
@@ -13098,6 +13099,51 @@ const DS = {
         if (res === null) { this.showToast('Could not update'); return; }
         this.showToast('Marked reviewed');
         this.loadReconciliations();
+    },
+
+    // Sweep every ticket for a stored weight that disagrees with its own
+    // gross and tare. This is the check that would have caught the four
+    // tickets adopted from a hauler's list on 2026-08-25 the same day.
+    async findScaleMismatches() {
+        var el = document.getElementById('dedupResults');
+        if (el) el.innerHTML = '<div style="font-family:var(--mono);font-size:.65rem;color:var(--text-dim);padding:8px">Checking weights against the scale…</div>';
+        var rows = await this.supabase(
+            'tickets?select=id,ticket_number,ticket_date,gross_lbs,tare_lbs,net_tons,project_id&limit=5000');
+        if (!rows) { if (el) el.innerHTML = '<div style="color:var(--danger);font-size:.7rem">Could not load tickets.</div>'; return; }
+        var self = this, bad = [];
+        rows.forEach(function(t) {
+            var mm = self._scaleMismatch(t);
+            if (mm) bad.push({ t: t, mm: mm });
+        });
+        bad.sort(function(a,b){ return Math.abs(b.mm.gap) - Math.abs(a.mm.gap); });
+        var projName = {};
+        (this.state.projects || []).forEach(function(p){ projName[p.id] = p.name; });
+        if (!bad.length) {
+            if (el) el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--success);font-weight:600">Every weight matches its scale reading</div>' +
+                '<div style="text-align:center;font-family:var(--mono);font-size:.6rem;color:var(--text-dim)">checked ' + rows.length + ' tickets</div>';
+            return;
+        }
+        var tons = bad.reduce(function(a,x){ return a + Math.abs(x.mm.gap); }, 0);
+        if (el) el.innerHTML =
+            '<div style="font-size:.75rem;color:var(--danger);font-weight:700;margin-bottom:6px">' +
+            bad.length + ' ticket' + (bad.length>1?'s':'') + ' where the saved weight does not match gross minus tare (' +
+            tons.toFixed(2) + ' T total)</div>' +
+            '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.65rem">' +
+            '<thead><tr style="border-bottom:1px solid var(--border)">' +
+            ['Ticket','Project','Date','Scale','Saved','Out by'].map(function(c){
+                return '<th style="text-align:left;padding:4px 6px;color:var(--text-dim)">' + c + '</th>'; }).join('') +
+            '</tr></thead><tbody>' +
+            bad.slice(0,60).map(function(x){
+                return '<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="DS.showTicketDetail(\'' + x.t.id + '\')">' +
+                    '<td style="padding:4px 6px;color:var(--primary);font-weight:600">' + DS.esc(x.t.ticket_number||'') + '</td>' +
+                    '<td style="padding:4px 6px">' + DS.esc(projName[x.t.project_id]||'') + '</td>' +
+                    '<td style="padding:4px 6px">' + (x.t.ticket_date||'').substring(0,10) + '</td>' +
+                    '<td style="padding:4px 6px">' + x.mm.scaleTons.toFixed(2) + ' T</td>' +
+                    '<td style="padding:4px 6px;color:var(--danger);font-weight:700">' + Number(x.mm.stored).toFixed(2) + ' T</td>' +
+                    '<td style="padding:4px 6px">' + (x.mm.gap > 0 ? '+' : '') + x.mm.gap.toFixed(2) + '</td></tr>';
+            }).join('') + '</tbody></table></div>' +
+            (bad.length > 60 ? '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);padding:4px 6px">showing the first 60</div>' : '') +
+            '<div style="font-size:.65rem;color:var(--text-muted);margin-top:6px">Open a ticket and re-save it to bring the weight back in line with the scale.</div>';
     },
 
     async findDuplicates() {
