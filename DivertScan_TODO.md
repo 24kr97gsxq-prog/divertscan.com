@@ -139,7 +139,22 @@ off the paper number, so the paper number must always survive; merge = move
       toast "Select a single project to export" and return. Also filter
       `renderReports()` to `currentProject.id` as belt-and-braces. This is a
       customer-facing report risk (Non-LEED steel loads on a LEED hospital report).
-2. [ ] **Duplicate-load warning on manual / scanned ticket entry.** Before
+2. [ ] **PR 1 — readable review screen** (`PR1_review_screen_readable.md`,
+      7 edits; edit 7 needs the `rv_date_` line pasted). 130px photo → viewer,
+      weekday beside every date, local-date fallbacks. Presentation only.
+2b. [ ] **PR 2 — match paper tickets to scale captures at scan time.** On
+      scan (both batch paths): find DX in same project, gross ±300 lbs,
+      nearest date. If found: prefill date + driver from the capture, show
+      "matches DX-00095 — Alan, Thu 8/7 4:30pm, 39,780 lbs", and on save
+      UPDATE the DX row in place (ticket_number ← paper #, gross/tare/net ←
+      PAPER values, tare_source = Measured, photo, zone, scan_type,
+      capture_ticket_number ← the DX #). Never insert a second ticket.
+      A DX match forces the batch-OCR path through review instead of
+      auto-create. Also add suspicion: date >3 days from batch neighbours.
+      DECIDED Aug 24: paper values govern (Curtis writes the settled
+      reading); DX number kept in `tickets.capture_ticket_number`
+      (`capture_ticket_number.sql` adds the column + backfills 20).
+2c. [ ] **Duplicate-load warning on manual ticket entry** (single-ticket form) Before
       saving a new ticket, query this project's tickets for the same hauler with
       gross within ±300 lbs and ticket_date within ±1 day. If found, show
       "Looks like #DX-xxxxx (same truck, 8/7, 44,240 lbs) — attach this paper
@@ -173,6 +188,14 @@ off the paper number, so the paper number must always survive; merge = move
   Reset anytime in SQL Editor: `select admin_set_passphrase('new one');`
 
 ## 🔒 SECURITY FOLLOW-UPS
+- [ ] **`public.v_all_drivers` is SECURITY DEFINER** — Supabase advisor rates
+      this CRITICAL (seen Aug 24). The view runs with the creator's rights and
+      bypasses RLS for whoever queries it, so a client-portal token could read
+      driver rows it shouldn't. Check who/what queries it first (the portal
+      RPCs `scale_drivers_for_hauler` / `hauler_by_token` may depend on it),
+      then either recreate it with `security_invoker = true` or drop it if
+      nothing needs it. Do NOT change it blind — the driver page and scale
+      app both resolve drivers through that area.
 - [ ] **Back up `scale_capture.py` + `scale_capture.service` to the GitHub repo
       — STILL NOT DONE. TOP of the list.** Only copy is the Pi's SD card (has
       died before). Now easy with the July 7 lesson: Termius SFTP the two files
