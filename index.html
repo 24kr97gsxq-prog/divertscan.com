@@ -1051,6 +1051,18 @@ document.addEventListener('keydown', function(e){
                 </div>
             </div>
 
+            <!-- Client reconciliations — kept first: it is the one thing here waiting on a reply -->
+            <div class="card">
+                <div class="card-title">Client Reconciliations
+                    <span id="reconBadge" style="margin-left:8px;background:var(--warning);color:var(--bg-deep);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
+                </div>
+                <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px">
+                    Hauler lists a client checked against our tickets. Their numbers, our numbers, and what did not line up.
+                </div>
+                <div id="reconList" style="margin-bottom:8px"></div>
+                <button class="btn btn-sm btn-outline" onclick="DS.loadReconciliations()" style="width:100%">Refresh</button>
+            </div>
+
             <!-- Material Mix Review — auto-applied percentages awaiting human confirmation -->
             <div class="card">
                 <div class="card-title">
@@ -1111,18 +1123,6 @@ document.addEventListener('keydown', function(e){
                     <button class="btn btn-sm btn-primary" onclick="DS.syncSamsara()" style="flex:1">Sync Samsara</button>
                     <button class="btn btn-sm btn-outline" onclick="DS.showSamsaraSettings()" style="flex:0;padding:8px 12px">Settings</button>
                 </div>
-            </div>
-
-            <!-- 6b. Client reconciliations -->
-            <div class="card">
-                <div class="card-title">Client Reconciliations
-                    <span id="reconBadge" style="margin-left:8px;background:var(--warning);color:var(--bg-deep);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:none">0</span>
-                </div>
-                <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px">
-                    Hauler lists a client checked against our tickets. Their numbers, our numbers, and what did not line up.
-                </div>
-                <div id="reconList" style="margin-bottom:8px"></div>
-                <button class="btn btn-sm btn-outline" onclick="DS.loadReconciliations()" style="width:100%">Refresh</button>
             </div>
 
             <!-- 7. Remove Duplicate Tickets -->
@@ -1824,7 +1824,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.26.0',
+    VERSION: '7.30.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12468,13 +12468,36 @@ const DS = {
     //  · Our own gaps (a ticket with no weight yet) are stated as pending,
     //    not shown as "0", which reads as bad data on our side.
     // ------------------------------------------------------------------
-    haulerReport(id) {
+    haulerReport(id, asText) {
         var r = (this._recons || []).find(function(x){ return x.id === id; });
         if (!r) { this.showToast('Not found — refresh the list'); return; }
         var rows = r.rows || {};
         if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
-        var proj = ((this.state.projects||[]).find(function(p){ return p.id === r.project_id; })||{}).name || '';
+        var projRow = (this.state.projects||[]).find(function(p){ return p.id === r.project_id; }) || {};
+        var proj = projRow.name || '';
         var self = this;
+
+        // Name both parties rather than "yours" and "ours". The hauler comes
+        // off the project record; if it isn't set there, take the one that
+        // appears most on this project's tickets.
+        var hauler = (projRow.waste_hauler || '').trim();
+        if (!hauler) {
+            var tally = {};
+            (this.state.tickets || []).forEach(function(t) {
+                if (t.project_id !== r.project_id) return;
+                var hn = (t.hauler || '').trim();
+                if (hn) tally[hn] = (tally[hn] || 0) + 1;
+            });
+            var best = 0;
+            Object.keys(tally).forEach(function(k){ if (tally[k] > best) { best = tally[k]; hauler = k; } });
+        }
+        if (!hauler) hauler = 'your list';
+        var client = (projRow.client || '').trim();
+        var US = 'Dalmex';
+        // Column width follows the longer label so a long hauler name never
+        // collides with the number beside it.
+        var labW = Math.max(hauler.length, (US + ' scale').length) + 3;
+        function pad(s) { while (s.length < labW) s += ' '; return s; }
 
         function ticketOf(num) {
             var k = String(num||'').trim().toUpperCase();
@@ -12484,12 +12507,19 @@ const DS = {
         function isDX(n){ return /^DX-/i.test(String(n||'')); }
 
         var L = [];
+        var sec = 0;                       // sections are numbered as they are emitted,
+        function n(){ return (++sec) + '. '; }   // so an empty one never leaves a gap
         L.push('DALMEX RECYCLING — TICKET RECONCILIATION');
-        L.push(proj + '   ' + (r.period_from||'') + '  to  ' + (r.period_to||''));
-        L.push('Prepared ' + new Date().toISOString().substring(0,10));
         L.push('');
-        L.push('We compared your list against our scale records for this period.');
-        L.push('Everything below is weight recorded on our certified scale.');
+        L.push('Project     ' + proj +
+               ((client && client.toLowerCase() !== hauler.toLowerCase()) ? '   (' + client + ')' : ''));
+        L.push('Hauler      ' + hauler);
+        L.push('Period      ' + (r.period_from||'') + '  to  ' + (r.period_to||''));
+        L.push('Prepared    ' + new Date().toISOString().substring(0,10));
+        L.push('');
+        L.push('We compared the ' + hauler + ' list against the Dalmex scale');
+        L.push('records for ' + proj + ' over this period.');
+        L.push('Every Dalmex figure below is weight recorded on our certified scale.');
         L.push('');
         L.push('----------------------------------------------------------');
 
@@ -12498,16 +12528,17 @@ const DS = {
         if (unbilled.length) {
             var t1 = unbilled.reduce(function(a,x){ return a + (parseFloat(x.tons)||0); }, 0);
             L.push('');
-            L.push('1. LOADS ON OUR SCALE THAT ARE NOT ON YOUR LIST');
+            L.push(n() + 'ON THE DALMEX SCALE, NOT ON THE ' + hauler.toUpperCase() + ' LIST');
             L.push('   ' + unbilled.length + ' tickets · ' + t1.toFixed(2) + ' tons');
             L.push('');
-            L.push('   TICKET     DATE          ZONE     TONS');
+            L.push('   TICKET     DATE          ZONE     TONS  (Dalmex scale)');
             unbilled.forEach(function(x){
                 L.push('   ' + String(x.ticket).padEnd(11) + String(x.date||'').padEnd(14) +
                        String(x.zone||'-').padEnd(9) + (parseFloat(x.tons)||0).toFixed(2));
             });
             L.push('');
-            L.push('   Please confirm whether these were billed under different numbers.');
+            L.push('   Could ' + hauler + ' confirm whether these were billed under');
+            L.push('   different numbers?');
         }
 
         // 2. on their list, not in ours — our numbering only
@@ -12516,15 +12547,15 @@ const DS = {
             L.push('');
             L.push('----------------------------------------------------------');
             L.push('');
-            L.push('2. ON YOUR LIST, NOT IN OUR RECORDS');
+            L.push(n() + 'ON THE ' + hauler.toUpperCase() + ' LIST, NOT IN DALMEX RECORDS');
             L.push('');
-            L.push('   TICKET     DATE          ZONE     TONS');
+            L.push('   TICKET     DATE          ZONE     TONS  (' + hauler + ')');
             theirsOnly.forEach(function(x){
                 L.push('   ' + String(x.ticket).padEnd(11) + String(x.date||'').padEnd(14) +
                        String(x.zone||'-').padEnd(9) + (parseFloat(x.tons)||0).toFixed(2));
             });
             L.push('');
-            L.push('   Could you send us a copy of these tickets?');
+            L.push('   Could you send Dalmex a copy of these tickets?');
         }
 
         // 3. foreign numbering
@@ -12534,10 +12565,10 @@ const DS = {
             L.push('');
             L.push('----------------------------------------------------------');
             L.push('');
-            L.push('3. NUMBERS THAT ARE NOT DALMEX TICKETS');
+            L.push(n() + 'NUMBERS THAT ARE NOT DALMEX TICKETS');
             L.push('   ' + foreign.length + ' entries · ' + t3.toFixed(2) + ' tons');
             L.push('');
-            L.push('   Our ticket numbers are five digits. These are six or more,');
+            L.push('   Dalmex ticket numbers are five digits. These are six or more,');
             L.push('   so we think they came from another facility.');
             L.push('');
             L.push('   TICKET       DATE          TONS');
@@ -12560,21 +12591,21 @@ const DS = {
             L.push('');
             L.push('----------------------------------------------------------');
             L.push('');
-            L.push('4. WEIGHTS THAT DIFFER');
+            L.push(n() + 'WEIGHTS THAT DIFFER');
             L.push('');
-            L.push('   Our figures are gross minus tare as recorded on the scale.');
+            L.push('   Dalmex figures are gross minus tare as recorded on the scale.');
             L.push('');
             real.forEach(function(o){
                 var x = o.d, t = o.t;
                 L.push('   Ticket #' + x.ticket + '   ' + (x.ourDate || x.theirDate || ''));
-                L.push('     your list      ' + parseFloat(x.theirTons).toFixed(2) + ' T');
+                L.push('     ' + pad(hauler) + parseFloat(x.theirTons).toFixed(2) + ' T');
                 if (t && t.gross_lbs && t.tare_lbs) {
                     var net = t.gross_lbs - t.tare_lbs;
-                    L.push('     our scale      gross ' + Number(t.gross_lbs).toLocaleString() +
+                    L.push('     ' + pad(US + ' scale') + 'gross ' + Number(t.gross_lbs).toLocaleString() +
                            '  -  tare ' + Number(t.tare_lbs).toLocaleString() +
                            '  =  ' + net.toLocaleString() + ' lbs  =  ' + (net/2000).toFixed(2) + ' T');
                 } else {
-                    L.push('     our scale      ' + parseFloat(x.ourTons).toFixed(2) + ' T');
+                    L.push('     ' + pad(US + ' scale') + parseFloat(x.ourTons).toFixed(2) + ' T');
                 }
                 L.push('');
             });
@@ -12583,15 +12614,15 @@ const DS = {
             L.push('');
             L.push('----------------------------------------------------------');
             L.push('');
-            L.push('5. STILL CONFIRMING ON OUR SIDE');
+            L.push(n() + 'STILL CONFIRMING AT DALMEX');
             L.push('');
             pending.forEach(function(x){
-                L.push('   Ticket #' + x.ticket + '   your list shows ' +
+                L.push('   Ticket #' + x.ticket + '   the ' + hauler + ' list shows ' +
                        parseFloat(x.theirTons).toFixed(2) + ' T');
             });
             L.push('');
-            L.push('   We are checking these against the paper ticket with our');
-            L.push('   weigher and will come back to you.');
+            L.push('   Dalmex is checking these against the paper ticket with the');
+            L.push('   weigher and will come back to ' + hauler + '.');
         }
 
         // 6. duplicates on their list
@@ -12599,7 +12630,7 @@ const DS = {
             L.push('');
             L.push('----------------------------------------------------------');
             L.push('');
-            L.push('6. LISTED TWICE ON YOUR LIST');
+            L.push(n() + 'LISTED TWICE ON THE ' + hauler.toUpperCase() + ' LIST');
             L.push('');
             rows.duplicateLines.forEach(function(x){
                 L.push('   Ticket #' + x.ticket + '   ' + (x.date||'') + '   ' +
@@ -12612,12 +12643,30 @@ const DS = {
         L.push('');
         L.push('Happy to send scale ticket copies for any of the above.');
         L.push('');
+        L.push('Prepared for ' + hauler + ' \u00b7 ' + proj);
+        L.push('');
         L.push('Dalmex Recycling Inc.   2828 Nagle St, Dallas TX 75220');
         L.push('(214) 352-2000');
 
+        var text = L.join('\n');
+        if (asText) return text;               // caller wants the words, not a file
         var name = 'Dalmex_reconciliation_' + proj.replace(/[^A-Za-z0-9]+/g,'_') + '_' +
                    (r.period_from||'') + '_to_' + (r.period_to||'') + '.txt';
-        this._downloadText(name, L.join('\n'), 'text/plain');
+        this._downloadText(name, text, 'text/plain');
+    },
+
+    // The note is what the client actually reads in their portal. Typing a
+    // sentence there when a full report exists is the wrong shape — this
+    // drops the report itself in, ready to edit before sending.
+    useReportAsNote(id) {
+        var text = this.haulerReport(id, true);
+        var box = document.getElementById('reconNote');
+        if (!box) return;
+        if (box.value.trim() && !confirm('Replace what is in the note with the full report?')) return;
+        box.value = text;
+        box.style.height = '320px';
+        box.focus();
+        this.showToast('Report loaded — edit it, then Save note');
     },
 
     // CSV of the whole comparison — one row per ticket, tagged by category,
@@ -12926,6 +12975,9 @@ const DS = {
     viewReconciliation(id) {
         var r = (this._recons || []).find(function(x){ return x.id === id; });
         if (!r) { this.showToast('Not found — refresh the list'); return; }
+        // Applying a value re-renders this whole modal, which used to wipe
+        // anything typed in the note. Keep the draft per report so it survives.
+        if (this._reconNoteFor !== id) { this._reconNoteFor = id; this._reconNoteDraft = null; }
         var rows = r.rows || {};
         if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
 
@@ -13068,8 +13120,15 @@ const DS = {
                   rows.unreadable.slice(0,30).map(function(x){ return DS.esc(x); }).join('<br>') + '</div>'
                 : '') +
 
-            '<div style="margin-top:14px"><label style="font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Note back to the client</label>' +
-            '<textarea class="form-input" id="reconNote" rows="3" style="margin-top:4px;font-size:.78rem">' + DS.esc(r.admin_notes || '') + '</textarea></div>' +
+            '<div style="margin-top:14px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<label style="font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Note back to the client \u2014 they see this in their portal</label>' +
+            '<button onclick="DS.useReportAsNote(\'' + r.id + '\')" style="font-family:var(--font);font-size:.6rem;font-weight:600;border:1px solid var(--primary);background:transparent;color:var(--primary);border-radius:3px;padding:2px 8px;cursor:pointer">Use the full report</button>' +
+            '</div>' +
+            '<textarea class="form-input" id="reconNote" rows="3" style="margin-top:4px;font-size:.78rem" ' +
+            'oninput="DS._reconNoteDraft = this.value">' +
+            DS.esc(DS._reconNoteDraft != null ? DS._reconNoteDraft : (r.admin_notes || '')) +
+            '</textarea></div>' +
             '<div class="btn-row mt-8">' +
               '<button class="btn btn-primary" onclick="DS.saveReconciliationNote(\'' + r.id + '\')" style="flex:1">Save note</button>' +
               '<button class="btn btn-outline" onclick="DS.reconReport(\'' + r.id + '\')" style="flex:1">Copy report</button>' +
@@ -13085,10 +13144,40 @@ const DS = {
     },
 
     async saveReconciliationNote(id) {
-        var note = (document.getElementById('reconNote') || {}).value || '';
+        var box = document.getElementById('reconNote');
+        if (!box) {
+            // Without this the old code saved '' and reported success.
+            this.showToast('Could not find the note box — reopen the report');
+            return;
+        }
+        var note = box.value || '';
+        var existing = ((this._recons || []).find(function(x){ return x.id === id; }) || {}).admin_notes || '';
+        if (!note.trim() && existing.trim()) {
+            if (!confirm('The note is empty. Clear the note the client can currently see?')) return;
+        }
+        if (!note.trim() && !existing.trim()) {
+            this.showToast('Nothing to save — type a note, or press "Use the full report"');
+            return;
+        }
         var res = await this.supabase('client_reconciliations?id=eq.' + id, 'PATCH', { admin_notes: note });
-        if (res === null) { this.showToast('Could not save the note'); return; }
-        this.showToast('Note saved — the client will see it');
+        if (res === null) {
+            // A silent failure here is the worst outcome: it looks sent and
+            // the client never sees it. Say exactly what to check.
+            this.showToast('NOT saved — the database rejected the write. Check the UPDATE grant on client_reconciliations.');
+            var box = document.getElementById('reconNote');
+            if (box) { box.style.borderColor = 'var(--danger)'; box.style.borderWidth = '2px'; }
+            return;
+        }
+        // Read it back. A 200 with nothing changed still means the client
+        // sees nothing, and that has bitten us today.
+        var check = await this.supabase('client_reconciliations?id=eq.' + id + '&select=admin_notes');
+        var saved = check && check[0] && (check[0].admin_notes || '');
+        if (saved !== note) {
+            this.showToast('NOT saved — the write went through but nothing changed. Check row-level security.');
+            return;
+        }
+        this._reconNoteDraft = null;
+        this.showToast('Saved — the client sees this in their portal now');
         this.closeModal('reconModal');
         this.loadReconciliations();
     },
