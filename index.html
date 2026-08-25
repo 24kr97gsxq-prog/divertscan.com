@@ -1823,7 +1823,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.18.0',
+    VERSION: '7.19.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12383,6 +12383,62 @@ const DS = {
     // The stored report holds ticket NUMBERS, not ids. Look it up in the
     // loaded list first; fall back to the database so a ticket from another
     // project still opens.
+    // Adopt the hauler's value for one field on one ticket, straight from the
+    // reconciliation view. Zone and date only — NOT tonnage. Our weights come
+    // off the scale ticket and a hauler's list is a transcription of it, not
+    // the source. (Aug 24: nine of our zones were wrong and their list was
+    // right, which is what this is for.)
+    async applyReconValue(num, field, value, btnEl) {
+        if (field !== 'zone' && field !== 'ticket_date') {
+            this.showToast('Only zone and date can be adopted'); return;
+        }
+        var key = String(num || '').trim().toUpperCase();
+        var t = (this.state.tickets || []).find(function(x) {
+            return String(x.ticket_number || '').trim().toUpperCase() === key; });
+        var id = t && t.id;
+        if (!id) {
+            var rows = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(num) + '&select=id&limit=1');
+            if (rows && rows.length) id = rows[0].id;
+        }
+        if (!id) { this.showToast('#' + num + ' is not in DivertScan'); return; }
+
+        var patch = {}; patch[field] = value || null;
+        var res = await this.supabase('tickets?id=eq.' + id, 'PATCH', patch);
+        if (res === null) { this.showToast('Could not update #' + num); return; }
+
+        this.addAuditEntry('TICKET_EDIT',
+            '#' + num + ' ' + (field === 'zone' ? 'zone' : 'date') + ' set to ' + value +
+            ' from a client reconciliation');
+        if (t) t[field] = value;
+        if (btnEl) {
+            btnEl.textContent = 'applied';
+            btnEl.style.pointerEvents = 'none';
+            btnEl.style.opacity = '.55';
+        }
+        this.showToast('#' + num + ' ' + (field === 'zone' ? 'zone' : 'date') + ' → ' + value);
+        this.renderTickets();
+    },
+
+    // Adopt every differing zone in one go — the common case when a hauler
+    // has re-tagged a month and our side is behind.
+    async applyAllReconZones(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        if (!r) return;
+        var rows = r.rows || {};
+        if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch(e) { rows = {}; } }
+        var list = (rows.differences || []).filter(function(x){ return x.zoneOff && x.theirZone; });
+        if (!list.length) { this.showToast('No zone differences to apply'); return; }
+        if (!confirm('Set the zone on ' + list.length + ' ticket' + (list.length>1?'s':'') +
+                     ' to match their list? Weights and dates are not touched.')) return;
+        var done = 0;
+        for (var i = 0; i < list.length; i++) {
+            await this.applyReconValue(list[i].ticket, 'zone', list[i].theirZone, null);
+            done++;
+        }
+        this.showToast(done + ' zone' + (done>1?'s':'') + ' updated');
+        this.viewReconciliation(id);
+    },
+
     async openTicketByNumber(num) {
         var key = String(num || '').trim().toUpperCase();
         var hit = (this.state.tickets || []).find(function(t) {
@@ -12457,6 +12513,20 @@ const DS = {
                 (off ? ';color:var(--warning);font-weight:700' : '') + '">' +
                 (v == null || v === '' ? '—' : DS.esc(String(v))) + '</td>';
         }
+        // Our value, with a one-tap "use theirs" when it differs.
+        // Offered for zone and date only — weights come off the scale ticket.
+        function ourCell(ourVal, theirVal, off, left, num, field) {
+            var can = off && theirVal !== '' && theirVal != null;
+            return '<td style="padding:5px 6px' + (left ? ';border-left:1px solid var(--border)' : '') +
+                (off ? ';color:var(--warning);font-weight:700' : '') + '">' +
+                (ourVal == null || ourVal === '' ? '—' : DS.esc(String(ourVal))) +
+                (can ? '<button onclick="event.stopPropagation();DS.applyReconValue(\'' + DS.esc(String(num)) +
+                       '\',\'' + field + '\',\'' + DS.esc(String(theirVal)) + '\',this)" ' +
+                       'style="margin-left:6px;font-family:var(--font);font-size:.55rem;font-weight:600;' +
+                       'border:1px solid var(--primary);background:transparent;color:var(--primary);' +
+                       'border-radius:3px;padding:1px 5px;cursor:pointer">use theirs</button>' : '') +
+                '</td>';
+        }
         function numCell(n) {
             return '<td style="padding:5px 6px"><span style="color:var(--primary);font-weight:600;text-decoration:underline">' +
                 DS.esc(n) + '</span></td>';
@@ -12497,11 +12567,21 @@ const DS = {
                 : '') +
             '<div style="font-size:.65rem;color:var(--text-muted);margin-bottom:4px">Tap a ticket number to open the scale ticket.</div>' +
 
-            sbs('Different on our side', 'Differences highlighted. Ours come off the scale ticket.',
+            sbs('Different on our side',
+                'Differences highlighted. Zone and date can be adopted from their list — ' +
+                'tonnage cannot, because ours comes off the scale ticket.' +
+                ((rows.differences || []).some(function(x){ return x.zoneOff && x.theirZone; })
+                    ? ' <button onclick="DS.applyAllReconZones(\'' + r.id + '\')" ' +
+                      'style="font-family:var(--font);font-size:.6rem;font-weight:600;border:1px solid var(--primary);' +
+                      'background:transparent;color:var(--primary);border-radius:3px;padding:2px 7px;cursor:pointer;margin-left:4px">' +
+                      'use their zones for all</button>'
+                    : ''),
                 rows.differences, function(x) {
                     return row(numCell(x.ticket) +
                         cell(x.theirDate, x.dateOff) + cell(x.theirTons + ' T', x.tonsOff) + cell(x.theirZone, x.zoneOff) +
-                        cell(x.ourDate, x.dateOff, true) + cell(x.ourTons + ' T', x.tonsOff) + cell(x.ourZone, x.zoneOff),
+                        ourCell(x.ourDate, x.theirDate, x.dateOff, true, x.ticket, 'ticket_date') +
+                        cell(x.ourTons + ' T', x.tonsOff) +
+                        ourCell(x.ourZone, x.theirZone, x.zoneOff, false, x.ticket, 'zone'),
                         x.ticket); }) +
 
             sbs('On their list, not in ours', 'No ticket with these numbers for this period.',
