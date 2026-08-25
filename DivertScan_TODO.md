@@ -132,6 +132,12 @@ off the paper number, so the paper number must always survive; merge = move
       April (27 tickets across Test/Hayes/Hospital). Data corrected via
       `fix_dx_utc_dates.sql`; the code fix stops it recurring. Smallest,
       most urgent change on the list — do this one first.
+      PATCHED FILES READY: `scale.html` (1 line) + `index.html` (2 lines,
+      orphan-resolve path had the same bug). Upload both in ONE PR.
+      See `PR0_fix_utc_ticket_date.md`. NOT included: scale.html line 2031
+      `todayISO` uses UTC to query today's tare candidates, so "Most Recent
+      Tare Today" silently disappears after 7pm — own PR, changes which
+      tare gets suggested.
 1. [ ] **Block month exports when "All Projects" view is active.** `exportMonthPDF/
       XLSX/CSV/QBO` read `_monthGroups` built from `state.tickets`; after
       `loadAllProjectTickets()` that list is every project but the file is still
@@ -180,6 +186,60 @@ off the paper number, so the paper number must always survive; merge = move
       so every DX net is an estimate until merged. Store a measured empty
       weight per truck; flag Tare Source = Estimated until one exists.
 
+## 🔗 DRIVER LINKS — found Aug 24 (started from "Dewey's 4 tickets are missing")
+The driver card queries `tickets?driver_id=eq.<id>` — FK only, never name.
+So any ticket with a null `driver_id` is invisible on every driver card.
+888 tickets were unlinked, back to Sep 2025.
+- [x] Linked 99 August + 70 earlier by exact name+hauler match
+      (`backfill_driver_links.sql`, `backfill_driver_links_alltime.sql`).
+- [x] Dewey's missing 4 = "Dewey" ×3 + "Deway" ×1, all unlinked.
+- [x] **5 typo tickets fixed and linked** — Deway→Dewey, Stephen→Stephan ×2,
+      Steph→Stephan, Allan→Alan. Dewey's 4th August load is #87430.
+- [x] **"Willie" ×2 + "Willie D" ×1 → Willie G.** Two had his 33,000 tare;
+      #87707 (7/24) had gross 29,000 / tare 23,000 — OCR read both leading
+      3s as 2s, net 3.00 T is right. **Gross/tare on #87707 still need
+      correcting from the photo** (tonnage unaffected, but it'd look wrong
+      in an audit).
+- [ ] **Alma, Alex, Jumbo** (Jaguar, not on roster) — new hires? Add to
+      drivers or leave. **NA ×2, Q** (Ranger — no drivers on file at all).
+- [ ] **803 tickets, 2,585 T, have NO driver name anywhere** (687 Jaguar,
+      back to Sep 2025). Not recoverable from data. Real fix is forward-
+      looking: make driver required at capture / on the batch review row.
+- [ ] **Reggie has left** — mark inactive, don't delete (2 tickets must stay
+      linked). Keeps him out of the driver picker.
+- [ ] **Driver card can't find a driver by name.** Add: show unlinked
+      tickets matching the name with a "link these" button, so this
+      self-heals instead of silently hiding loads.
+
+## ⚠️ TWO ANOMALIES found while doing the above
+- [x] **Future-dated ticket #85974 fixed** — paper reads 8/20/26, Zone A,
+      2.60 T. Batch OCR took the YEAR digits as the day ("8/20/26" → 8/26).
+      Sixth distinct OCR date failure mode found Aug 24. Outside the 8/1–15
+      window, so Ross's numbers are unaffected.
+- [x] **Unapproved-hauler check: RESOLVED, only 1 row.** DX-00129 is a
+      `pi_scale_walkin` Robert entered himself while testing (Santos covering
+      for Domingo). Walk-ins go to the non-LEED walk-in project and take a
+      free-text hauler by design, so no rule was broken. Note: the column is
+      `approved_haulers.name`, not `hauler_name`.
+- [ ] **Walk-in tickets bypass the approved-hauler list entirely.** Fine when
+      Robert is at the scale; less fine if a driver can type any company into
+      a live ticket. Decide: pick from list + "Other (type it)" escape hatch,
+      and flag free-text ones for review.
+
+## 🔁 MONTHLY TRUE-UP TOOLING (built Aug 24)
+Three files to commit to the repo root so they sync into the Claude project:
+- `reconcile.py` — hauler's raw email + our export → differences + CSV.
+  Parses the email as-sent; no hand-cleaning. Catches duplicate lines,
+  foreign ticket numbers, weight/zone/date differences both ways.
+- `health_check.sql` — 9 read-only blocks, one per problem class found
+  Aug 24. Block 2 auto-finds paper/capture pairs of the same load;
+  block 5 flags OCR dates >3 days from their ticket-number neighbours
+  (would have caught 85873/85874 and 85974 on scan day).
+- `TRUE_UP_RUNBOOK.md` — order of operations, the rules that cost time to
+  learn, and a prompt to paste into a new chat.
+- [ ] Commit all three (straight to main — not served by Pages, no PR
+      needed), then "Sync now" in the project knowledge panel.
+
 ## 🔑 STANDING RULES (unchanged)
 - CO₂e / carbon = INTERNAL-ONLY. Customer & LEED reports are weight-based only.
 - Per-project reports LEED-clean; only internal Portfolio view blends
@@ -188,8 +248,10 @@ off the paper number, so the paper number must always survive; merge = move
   Reset anytime in SQL Editor: `select admin_set_passphrase('new one');`
 
 ## 🔒 SECURITY FOLLOW-UPS
-- [ ] **`public.v_all_drivers` is SECURITY DEFINER** — Supabase advisor rates
-      this CRITICAL (seen Aug 24). The view runs with the creator's rights and
+- [ ] **EIGHT SECURITY DEFINER views, all rated CRITICAL** (Aug 24):
+      `v_all_drivers`, `v_hauler_drivers`, `v_dispatcher_roster`,
+      `v_driver_logbook`, `v_admin_review`, `v_fleet_tares`,
+      `project_summary`, `project_material_totals`. The view runs with the creator's rights and
       bypasses RLS for whoever queries it, so a client-portal token could read
       driver rows it shouldn't. Check who/what queries it first (the portal
       RPCs `scale_drivers_for_hauler` / `hauler_by_token` may depend on it),
@@ -216,6 +278,19 @@ off the paper number, so the paper number must always survive; merge = move
       whether public read is needed; lock the rest.
 - [ ] **Long-term: Supabase Auth for the admin app.** The passphrase-RPC unlock
       covers daily needs; full Auth is still the right end state. Plan properly.
+
+## 🌐 SPANISH IN THE SCALE APP (from DX-00129, Aug 24)
+Robert's own note on that ticket: "we need to have a Spanish option. Santos
+barely can understand English." This isn't cosmetic — if a driver can't read
+the prompts, his tare source, zone and driver selection are all guesses, which
+is the same root cause as the missing driver names and estimated tares.
+- [ ] scale.html only has a few dozen strings — pull them into a small
+      `STR = { en: {...}, es: {...} }` map and add an EN/ES toggle that
+      persists per device. Far smaller job than translating the admin app.
+- [ ] Prioritise the screens a driver actually touches: driver select,
+      hauler/project select, zone buttons, tare estimate options, confirm.
+- [ ] Ask Curtis which drivers need it before building — may be more than
+      Santos.
 
 ## 🟢 EASY / QUICK WINS
 - [ ] **Mark averaged-tare DX loads as "Estimated"** — one careful SQL UPDATE
