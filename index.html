@@ -1821,11 +1821,22 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.37.0',
+    VERSION: '7.38.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
     BUILD: '2026-08-25',
+
+    // Today's calendar date in Dallas, as YYYY-MM-DD.
+    // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
+    // anything typed in the evening was being stamped with TOMORROW'S date --
+    // including the Scan tab's date field, which is written straight to
+    // ticket_date and service_date. Every place that needs "today" as a date
+    // goes through here. Full timestamps (created_at etc.) still use UTC,
+    // which is correct for them.
+    _todayLocal() {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    },
 
     // ============================================================
     // MATERIAL DEFINITIONS
@@ -3072,7 +3083,7 @@ const DS = {
             driver_name: newDriver || current.driver_name,
             // Once reassigned to a real project, scan_type is no longer walk-in
             scan_type: 'pi_scale',
-            notes: (current.notes || '') + ' [Reassigned from Walk-in Inbox on ' + new Date().toISOString().substring(0,10) + ']'
+            notes: (current.notes || '') + ' [Reassigned from Walk-in Inbox on ' + DS._todayLocal() + ']'
         };
 
         this.showLoading('Reassigning...');
@@ -4278,7 +4289,7 @@ const DS = {
         if (this.state.supabaseKey) document.getElementById('supabaseKey').value = '••••••••';
 
         // Set today's date
-        document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('manualDate').value = DS._todayLocal();
 
         // Setup navigation
         this.setupNav();
@@ -6817,7 +6828,7 @@ const DS = {
 
         // Build ticket
         // Force year to 2026 on any date
-        var rawDate = document.getElementById('manualDate').value || new Date().toISOString().split('T')[0];
+        var rawDate = document.getElementById('manualDate').value || DS._todayLocal();
         if (rawDate && rawDate.length >= 4 && rawDate.substring(0,4) !== '2026') {
             rawDate = '2026' + rawDate.substring(4);
             document.getElementById('manualDate').value = rawDate;
@@ -6955,7 +6966,7 @@ const DS = {
         document.getElementById('manualHauler').value = 'Jaguar Waste Management';
         document.getElementById('manualContainer').value = '30';
         if (document.getElementById('manualZone')) document.getElementById('manualZone').value = '';
-        document.getElementById('manualDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('manualDate').value = DS._todayLocal();
         this.state.debrisPhotos = [];
         this.state.debrisBase64 = [];
         this.state.ocrPhoto = null;
@@ -7639,7 +7650,7 @@ const DS = {
         var totTons = 0, divTons = 0, co2e = 0;
         allTickets.forEach(function(t) { totTons += parseFloat(t.net_tons) || 0; divTons += parseFloat(t.diverted_tons) || 0; co2e += parseFloat(t.co2e_avoided) || 0; });
         rows.push('TOTALS,,' + allTickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + (totTons - divTons).toFixed(2) + ',' + (totTons > 0 ? Math.round(divTons/totTons*100) : 0) + '%,' + co2e.toFixed(1));
-        this.downloadFile(rows.join('\n'), 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.csv', 'text/csv');
+        this.downloadFile(rows.join('\n'), 'DivertScan_All_Projects_' + DS._todayLocal() + '.csv', 'text/csv');
         this.showToast('All projects CSV exported');
     },
 
@@ -7717,7 +7728,7 @@ const DS = {
             var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'DivertScan_All_Projects_' + new Date().toISOString().split('T')[0] + '.xlsx';
+            a.download = 'DivertScan_All_Projects_' + DS._todayLocal() + '.xlsx';
             a.click();
             DS.showToast('All projects XLSX exported');
         });
@@ -7776,7 +7787,7 @@ const DS = {
             var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'DivertScan_All_Scale_Tickets_' + new Date().toISOString().split('T')[0] + '.xlsx';
+            a.download = 'DivertScan_All_Scale_Tickets_' + DS._todayLocal() + '.xlsx';
             a.click();
             DS.showToast('All scale tickets exported');
         });
@@ -8602,7 +8613,7 @@ const DS = {
                         var photoTons2 = +(photoNet2 / 2000).toFixed(4);
                         // Parse date and force year to 2026
                         var rawDate2 = parsed.date || parsed.printed_date || '';
-                        var tktDate2 = new Date().toISOString().split('T')[0];
+                        var tktDate2 = DS._todayLocal();
                         if (rawDate2) {
                             // Handle multiple formats: MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD, M-D-YY
                             var clean = rawDate2.replace(/-/g,'/').trim();
@@ -8627,7 +8638,7 @@ const DS = {
                         // Final validation — if date is still bad, use today
                         var testDate = new Date(tktDate2);
                         if (isNaN(testDate.getTime()) || tktDate2.substring(0,4) !== '2026') {
-                            tktDate2 = new Date().toISOString().split('T')[0];
+                            tktDate2 = DS._todayLocal();
                             if (tktDate2.substring(0,4) !== '2026') tktDate2 = '2026' + tktDate2.substring(4);
                         }
                         if (photoTons2 > 0) {
@@ -8710,7 +8721,7 @@ const DS = {
                                 // Phase 2.8: SUSPICION CHECK — flag for human review instead of auto-create
                                 // ============================================================
                                 var suspicions = [];
-                                var todayStr_ = new Date().toISOString().split('T')[0];
+                                var todayStr_ = DS._todayLocal();
 
                                 // Check 1: Date validity
                                 if (!rawDate2 || !parsed.date) {
@@ -8882,7 +8893,7 @@ const DS = {
         if (oldReview) oldReview.remove();
 
         var DS = this;
-        var todayStr_ = new Date().toISOString().split('T')[0];
+        var todayStr_ = DS._todayLocal();
 
         var html = '<div id="batchReviewSection" style="margin-top:16px;padding:14px;border:2px solid var(--warning);border-radius:10px;background:rgba(245,158,11,0.06)">' +
             '<div style="font-size:.9rem;font-weight:800;color:var(--warning);margin-bottom:4px">Review Needed (' + pending.length + ' ticket' + (pending.length>1?'s':'') + ')</div>' +
@@ -9278,7 +9289,7 @@ const DS = {
             }).join(',') + '\n';
         });
 
-        this.downloadFile(csv, `DivertScan_${this.state.currentProject?.name || 'export'}_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+        this.downloadFile(csv, `DivertScan_${this.state.currentProject?.name || 'export'}_${DS._todayLocal()}.csv`, 'text/csv');
     },
 
     exportJSON() {
@@ -9300,7 +9311,7 @@ const DS = {
             version: this.VERSION
         };
         this.downloadFile(JSON.stringify(data, null, 2),
-            'DivertScan_' + (this.state.currentProject?.name || 'export') + '_' + new Date().toISOString().split('T')[0] + '.json',
+            'DivertScan_' + (this.state.currentProject?.name || 'export') + '_' + DS._todayLocal() + '.json',
             'application/json');
     },
 
@@ -9973,7 +9984,7 @@ const DS = {
         rows.push('Generated,' + new Date().toLocaleDateString());
         rows.push('Powered by,DivertScan v7.7');
         var name = (proj.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
-        this.downloadFile(rows.join('\n'), 'DivertScan_Compliance_' + name + '_' + new Date().toISOString().split('T')[0] + '.csv', 'text/csv');
+        this.downloadFile(rows.join('\n'), 'DivertScan_Compliance_' + name + '_' + DS._todayLocal() + '.csv', 'text/csv');
         this.showToast('Compliance CSV exported');
     },
 
@@ -10096,7 +10107,7 @@ const DS = {
         lines.push('Dalmex Recycling LLC • TCEQ RN103219481');
         lines.push('══════════════════════════════════════════════════════');
         var name = (proj.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
-        this.downloadFile(lines.join('\n'), 'LEED_Consultant_Summary_' + name + '_' + new Date().toISOString().split('T')[0] + '.txt', 'text/plain');
+        this.downloadFile(lines.join('\n'), 'LEED_Consultant_Summary_' + name + '_' + DS._todayLocal() + '.txt', 'text/plain');
         this.showToast('Consultant summary exported');
     },
 
@@ -10800,7 +10811,7 @@ const DS = {
 
             scaleTickets.forEach(function(item, i) {
                 var ocr = item.ocr;
-                var today = new Date().toISOString().split('T')[0];
+                var today = DS._todayLocal();
                 // Provenance banner for hauler-reviewed rows: who checked it and
                 // exactly which fields they corrected, so approving is informed
                 // rather than blind.
@@ -11051,10 +11062,10 @@ const DS = {
             var tare = parseInt((document.getElementById('mt_tare_'+i)||{}).value) || 0;
             var netLbs = gross - tare;
             var netTons = +(netLbs / 2000).toFixed(4);
-            var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || new Date().toISOString().split('T')[0];
+            var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || DS._todayLocal();
             // Block future dates at save time
             if (new Date(tktDate).getTime() > Date.now() + 86400000) {
-                tktDate = new Date().toISOString().split('T')[0];
+                tktDate = DS._todayLocal();
             }
 
             var ticketData = {
@@ -11729,7 +11740,7 @@ const DS = {
                     var netTons = netLbs / 2000;
                     // Validate OCR date — reject if >90 days old or in the future
                     var ocrDate = ocr.date;
-                    var today = new Date().toISOString().split('T')[0];
+                    var today = DS._todayLocal();
                     if (ocrDate) {
                         var dMs = new Date(ocrDate).getTime();
                         var nowMs = Date.now();
@@ -11936,7 +11947,7 @@ const DS = {
         this._timeMatchPairs = [];
 
         // Default to today's date
-        var today = new Date().toISOString().split('T')[0];
+        var today = DS._todayLocal();
         document.getElementById('timeMatchDate').value = today;
         document.getElementById('timeMatchResults').innerHTML = '';
         document.getElementById('timeMatchActions').classList.add('hidden');
@@ -12592,7 +12603,7 @@ const DS = {
             '<tr><td>Project</td><td><b>' + esc(proj) + '</b></td></tr>' +
             '<tr><td>Hauler</td><td><b>' + esc(hauler) + '</b></td></tr>' +
             '<tr><td>Period</td><td>' + esc(r.period_from||'') + ' to ' + esc(r.period_to||'') + '</td></tr>' +
-            '<tr><td>Prepared</td><td>' + new Date().toISOString().substring(0,10) + '</td></tr></table>' +
+            '<tr><td>Prepared</td><td>' + DS._todayLocal() + '</td></tr></table>' +
             '<div class="lead">We compared the ' + esc(hauler) + ' list against Dalmex scale records for ' +
             esc(proj) + ' over this period. Every Dalmex figure below is weight recorded on our certified scale.</div>' +
             H +
@@ -12669,7 +12680,7 @@ const DS = {
                ((client && client.toLowerCase() !== hauler.toLowerCase()) ? '   (' + client + ')' : ''));
         L.push('Hauler      ' + hauler);
         L.push('Period      ' + (r.period_from||'') + '  to  ' + (r.period_to||''));
-        L.push('Prepared    ' + new Date().toISOString().substring(0,10));
+        L.push('Prepared    ' + DS._todayLocal());
         L.push('');
         L.push('We compared the ' + hauler + ' list against the Dalmex scale');
         L.push('records for ' + proj + ' over this period.');
