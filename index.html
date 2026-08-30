@@ -122,7 +122,22 @@
     .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
     .photo-thumb{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer}
     .remove-btn{position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none}
-    .ticket-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+    .ticket-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+    /* Density + small-screen pass (Aug 30) for 430px-wide viewports (iPhone Pro Max):
+       pills wrap, cards go single column, modals fit the screen. */
+    @media(max-width:480px){
+      .header{padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top))}
+      .header h1{font-size:1rem}
+      .status-row{gap:4px}
+      .status-pill{font-size:.6rem;padding:3px 7px}
+      .content-area{padding:8px}
+      .card{padding:10px}
+      .modal{max-width:100vw;border-radius:12px 12px 0 0}
+      .ticket-item{gap:6px;padding:6px 0}
+      .ticket-title{font-size:.78rem}
+      .ticket-meta{font-size:.6rem}
+      .project-grid{grid-template-columns:1fr}
+    }
     .ticket-item:hover{background:var(--primary-glow)}
     .ticket-icon{font-size:1.1rem}.ticket-info{flex:1;min-width:0}
     .ticket-title{font-weight:700;font-size:.8rem;letter-spacing:-.01em}
@@ -1838,7 +1853,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.42.0',
+    VERSION: '7.43.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -12454,7 +12469,7 @@ const DS = {
         var matKeys = Object.keys(this.MATERIALS);
         var projMap = {};
         this.state.projects.forEach(function(p) { projMap[p.id] = p.name; });
-        var noMaterials = [], noPhoto = [], noWeight = [], lowDiversion = [];
+        var noMaterials = [], noPhoto = [], noWeight = [], lowDiversion = [], suspectWeights = [];
         tickets.forEach(function(t) {
             var hasMaterials = matKeys.some(function(k) { return (t[k + '_pct'] || 0) > 0; });
             var hasPhoto = !!t.scale_ticket_image;
@@ -12464,8 +12479,18 @@ const DS = {
             else if (!hasMaterials) noMaterials.push(t);
             if (!hasPhoto && hasWeight) noPhoto.push(t);
             if (hasWeight && hasMaterials && divPct === 0) lowDiversion.push(t);
+            // SUSPECT WEIGHTS (Aug 30): catches the 2,000-lb-idle-as-tare bug and
+            // zero-tare tickets (#87475's 17.2 T, DX-00145's 18.32 T). A real truck
+            // grosses and tares well above 10,000 lb; a real C&D net is under ~12 T.
+            var g = parseFloat(t.gross_lbs) || 0, tr = parseFloat(t.tare_lbs) || 0, nt = parseFloat(t.net_tons) || 0;
+            t._suspectWhy =
+                (g > 0 && g < 10000) ? 'gross only ' + g.toLocaleString() + ' lb' :
+                (tr > 0 && tr < 10000) ? 'tare only ' + tr.toLocaleString() + ' lb — scale idle reading?' :
+                (g > 0 && tr === 0 && nt > 0) ? 'no tare — whole gross counted as net' :
+                (nt > 12) ? nt.toFixed(2) + ' T on one load' : null;
+            if (t._suspectWhy) suspectWeights.push(t);
         });
-        var totalIssues = noWeight.length + noMaterials.length + noPhoto.length;
+        var totalIssues = noWeight.length + noMaterials.length + noPhoto.length + suspectWeights.length;
         var badge = document.getElementById('pendingReviewBadge');
         if (totalIssues > 0) { badge.textContent = totalIssues; badge.style.display = 'inline'; }
         else { badge.style.display = 'none'; }
@@ -12473,7 +12498,20 @@ const DS = {
             el.innerHTML = '<div style="text-align:center;padding:16px;"><div style="font-size:1.5rem;margin-bottom:6px;">\u2705</div><div style="font-size:.8rem;color:var(--success);font-weight:600;">All ' + tickets.length + ' tickets look good!</div></div>';
             return;
         }
-        var html = '<div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">' + totalIssues + ' issue' + (totalIssues !== 1 ? 's' : '') + ' found across ' + tickets.length + ' tickets</div>';
+        var html = '<div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px;">' + totalIssues + ' issue' + (totalIssues !== 1 ? 's' : '') + ' found across the newest ' + tickets.length + ' tickets</div>';
+        if (suspectWeights.length > 0) {
+            html += '<div style="margin-bottom:10px;">';
+            html += '<div style="font-size:.65rem;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">\u2696\uFE0F Suspect Weights (' + suspectWeights.length + ') \u2014 check these first</div>';
+            suspectWeights.slice(0, 10).forEach(function(t) {
+                var proj = projMap[t.project_id] || '';
+                html += '<div class="ticket-item" style="padding:6px 0;cursor:pointer;" onclick="DS.showTicketDetail(\'' + t.id + '\')">' +
+                    '<div class="ticket-icon" style="background:var(--danger-light);font-size:.8rem;">\u2696\uFE0F</div>' +
+                    '<div class="ticket-info"><div class="ticket-title" style="font-size:.75rem;">' + DS.esc(t.ticket_number) + (proj ? ' <span style="color:var(--primary);font-size:.65rem;">\u2022 ' + proj + '</span>' : '') + '</div>' +
+                    '<div class="ticket-meta">' + DS.fmtDateTime(t) + ' \u2022 ' + (parseFloat(t.net_tons)||0).toFixed(2) + ' T \u2022 <span style="color:var(--danger)">' + t._suspectWhy + '</span></div></div></div>';
+            });
+            if (suspectWeights.length > 10) html += '<div style="font-size:.65rem;color:var(--text-dim);padding:4px 0;">...and ' + (suspectWeights.length - 10) + ' more</div>';
+            html += '</div>';
+        }
         if (noWeight.length > 0) {
             html += '<div style="margin-bottom:10px;">';
             html += '<div style="font-size:.65rem;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">\u274C Missing Weight Data (' + noWeight.length + ')</div>';
@@ -13234,6 +13272,17 @@ const DS = {
             var period = (r.period_from || r.period_to)
                 ? (r.period_from || 'start') + ' → ' + (r.period_to || 'today')
                 : 'no period set — compared against every ticket on the project';
+            // Reviewed ones collapse to one compact line (Aug 30) — the full note and
+            // per-ticket rows are still there behind Open. Delete removes it for good.
+            if (!isOpen) {
+                return '<div style="border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;margin-bottom:6px;background:var(--bg-card);display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                    '<div style="flex:1;min-width:160px"><span style="font-weight:700;font-size:.72rem">' + DS.esc(projName[r.project_id] || 'Unknown project') + '</span>' +
+                    ' <span style="font-family:var(--mono);font-size:.58rem;color:var(--text-dim)">' + DS.esc(r.submitted_by || 'client') + ' \u00b7 ' + (r.created_at || '').substring(0,10) + ' \u00b7 ' + period + '</span></div>' +
+                    '<span style="font-family:var(--mono);font-size:.5rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:10px;border:1px solid var(--border);color:var(--text-dim)">reviewed</span>' +
+                    '<button class="btn btn-sm btn-outline" style="width:auto;padding:3px 10px;font-size:.6rem" onclick="DS.viewReconciliation(\'' + r.id + '\')">Open</button>' +
+                    '<button class="btn btn-sm" style="width:auto;padding:3px 10px;font-size:.6rem;color:var(--danger);border:1px solid var(--danger);background:transparent" onclick="DS.deleteReconciliation(\'' + r.id + '\')">\uD83D\uDDD1</button>' +
+                '</div>';
+            }
             return '<div style="border:1px solid ' + (isOpen ? 'var(--warning)' : 'var(--border)') +
                 ';border-radius:var(--radius);padding:10px;margin-bottom:8px;background:var(--bg-card)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">' +
@@ -13258,6 +13307,17 @@ const DS = {
                 (r.admin_notes ? '<div style="font-size:.65rem;color:var(--text-muted);margin-top:6px"><strong>Your note:</strong> ' + DS.esc(r.admin_notes) + '</div>' : '') +
                 '</div>';
         }).join('');
+    },
+
+    async deleteReconciliation(id) {
+        var r = (this._recons || []).find(function(x){ return x.id === id; });
+        var name = r ? ((this.state.projects.find(p => p.id === r.project_id) || {}).name || 'reconciliation') + ' \u00b7 ' + (r.created_at || '').substring(0,10) : 'this reconciliation';
+        if (!confirm('Delete the reviewed reconciliation for ' + name + '? The client\u2019s submitted list and your note go with it. This cannot be undone.')) return;
+        var res = await this.supabase('client_reconciliations?id=eq.' + id, 'DELETE');
+        if (res === null) { this.showToast('Delete failed \u2014 check the RLS policy allows DELETE'); return; }
+        this.addAuditEntry('RECON_DELETE', 'Deleted reviewed reconciliation: ' + name);
+        this.showToast('Reconciliation deleted');
+        this.loadReconciliations();
     },
 
     viewReconciliation(id) {
