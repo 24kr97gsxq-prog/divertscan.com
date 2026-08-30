@@ -20,9 +20,25 @@
             var t = localStorage.getItem('ds_theme');
             var ts = parseInt(localStorage.getItem('ds_theme_ts') || '0');
             if (!t || (Date.now() - ts) > 12*3600*1000) {
-                var h = new Date().getHours(); t = (h >= 6 && h < 19) ? 'day' : 'night';
+                // Mirror the device's own light/dark setting (Aug 30). Clock is
+                // only the fallback for browsers without matchMedia.
+                if (window.matchMedia) {
+                    t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'day';
+                } else {
+                    var h = new Date().getHours(); t = (h >= 6 && h < 19) ? 'day' : 'night';
+                }
             }
             if (t === 'day') document.documentElement.setAttribute('data-theme','day');
+            // Follow the device live: if the iPad flips appearance mid-shift and
+            // there's no fresh manual pick, the page flips with it.
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e){
+                    var ts2 = parseInt(localStorage.getItem('ds_theme_ts') || '0');
+                    if ((Date.now() - ts2) > 12*3600*1000) {
+                        document.documentElement.setAttribute('data-theme', e.matches ? 'night' : 'day');
+                    }
+                });
+            }
         } catch (e) {}
     })();
     </script>
@@ -1426,7 +1442,14 @@ async function pollWeights() {
             const candTime  = new Date(candidate.captured_at).getTime();
             const tareAfterGross = candTime > grossTime;
 
-            if (tareAfterGross && candidate.weight_lbs < grossReading.weight_lbs - 2000 && candidate.id !== grossReading.id) {
+            // TARE SANITY (Aug 30): an empty truck still weighs most of what the
+            // loaded truck weighed — real tares run 60-85% of gross. The scale
+            // idles around 2,000 lb, and that idle reading was being auto-paired
+            // as the tare, minting phantom 17-18 ton tickets (#87475, DX-00145).
+            // A candidate under 33% of gross (or under 4,000 lb) is deck noise,
+            // never an empty truck.
+            const plausibleTare = candidate.weight_lbs >= Math.max(4000, grossReading.weight_lbs * 0.33);
+            if (tareAfterGross && plausibleTare && candidate.weight_lbs < grossReading.weight_lbs - 2000 && candidate.id !== grossReading.id) {
                 if (!tareReading || candidate.id !== tareReading.id) {
                     tareReading = candidate;
                     showTare(tareReading);
@@ -1703,6 +1726,22 @@ function showNet() {
     document.getElementById('netCard').style.display = 'block';
     document.getElementById('netLbs').textContent = Number(netLbs).toLocaleString();
     document.getElementById('netTons').textContent = netTons + ' tons';
+    // Heavy-load caution (Aug 30): a C&D load over 12 T is rare (legit ones
+    // exist, e.g. heavy steel) — flag it so the driver double-checks the tare
+    // before the ticket is created, instead of the office finding it in audit.
+    var warnEl = document.getElementById('netHeavyWarn');
+    if (!warnEl) {
+        warnEl = document.createElement('div');
+        warnEl.id = 'netHeavyWarn';
+        warnEl.style.cssText = 'display:none;margin-top:8px;padding:8px 12px;border:1px solid var(--amber,#f59e0b);border-radius:8px;color:var(--amber,#f59e0b);font-size:.75rem;font-weight:700;';
+        document.getElementById('netCard').appendChild(warnEl);
+    }
+    if (netLbs > 24000) {
+        warnEl.textContent = '\u26A0\uFE0F ' + netTons + ' tons is an unusually heavy load \u2014 double-check the tare before creating this ticket.';
+        warnEl.style.display = 'block';
+    } else {
+        warnEl.style.display = 'none';
+    }
     document.getElementById('netTicket').textContent = TICKET_PREFIX + '-' + String(nextTicketNum).padStart(5, '0');
     checkReady();
 }
