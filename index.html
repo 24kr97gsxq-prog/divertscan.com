@@ -9279,7 +9279,7 @@ const DS = {
         const headers = ['ticket_number','ticket_date','hauler','gross_lbs','tare_lbs','net_lbs','net_tons',
             'wood_pct','gypsum_pct','plastic_pct','occ_pct','metal_pct','concrete_pct','block_pct','landfill_pct',
             'wood_tons','gypsum_tons','plastic_tons','occ_tons','metal_tons','concrete_tons','block_tons','landfill_tons',
-            'diversion_pct','diverted_tons','co2e_avoided','scan_type','zone','audit_id'];
+            'diversion_pct','diverted_tons','scan_type','zone','audit_id'];
 
         let csv = headers.join(',') + '\n';
         tickets.forEach(t => {
@@ -9741,7 +9741,6 @@ const DS = {
         sum.push(['Diverted:', totals.divertedTons]);
         sum.push(['Landfill:', totals.totalTons - totals.divertedTons]);
         sum.push(['Diversion Rate:', totals.divRate / 100]);
-        sum.push(['CO2e Avoided:', totals.co2e]);
         sum.push(['Target Met:', totals.divRate >= (proj.leed_target != null ? proj.leed_target : 50) ? 'YES' : 'NO']);
         sum.push([]);
         sum.push(['MONTHLY BREAKDOWN']);
@@ -9942,7 +9941,7 @@ const DS = {
         var matKeys = Object.keys(this.MATERIALS);
         var header = ['Date','Ticket No','Zone','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
         matKeys.forEach(function(k) { header.push(DS.MATERIALS[k].name + ' %'); header.push(DS.MATERIALS[k].name + ' Tons'); });
-        header.push('Total Diverted Tons','Diversion %','CO2e Avoided (mt)','Scale Ticket Photo','AI Classified','Human Verified');
+        header.push('Total Diverted Tons','Diversion %','Scale Ticket Photo','AI Classified','Human Verified');
         var rows = [header.join(',')];
         tickets.forEach(function(t) {
             var row = [
@@ -9961,20 +9960,18 @@ const DS = {
             });
             row.push(t.diverted_tons || 0);
             row.push((t.diversion_pct || 0) + '%');
-            row.push(t.co2e_avoided || 0);
             row.push(t.scale_ticket_image ? 'Yes' : 'No');
             row.push(t.ai_notes ? 'Yes' : 'No');
             row.push(t.human_verified ? 'Yes' : 'No');
             rows.push(row.join(','));
         });
-        var totTons = 0, divTons = 0, co2e = 0;
+        var totTons = 0, divTons = 0;
         tickets.forEach(function(t) {
             totTons += parseFloat(t.net_tons) || 0;
             divTons += parseFloat(t.diverted_tons) || 0;
-            co2e += parseFloat(t.co2e_avoided) || 0;
         });
         rows.push('');
-        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + (totTons > 0 ? Math.round(divTons/totTons*100) : 0) + '%,' + co2e.toFixed(1));
+        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + (totTons > 0 ? Math.round(divTons/totTons*100) : 0) + '%');
         rows.push('');
         rows.push('Project,' + '"' + (proj.name || '') + '"');
         rows.push('LEED Version,' + (proj.leed_version || 'v4'));
@@ -9996,7 +9993,7 @@ const DS = {
         if (!proj) return;
         var tickets = await this.supabase('tickets?project_id=eq.' + id + '&order=ticket_date.asc');
         if (!tickets || tickets.length === 0) { this.showToast('No tickets found'); return; }
-        var totTons = 0, divTons = 0, co2e = 0, withPhoto = 0;
+        var totTons = 0, divTons = 0, withPhoto = 0;
         var matTotals = {};
         var months = {};
         var matKeys = Object.keys(this.MATERIALS);
@@ -10006,7 +10003,6 @@ const DS = {
             var dt = parseFloat(t.diverted_tons) || 0;
             totTons += nt;
             divTons += dt;
-            co2e += parseFloat(t.co2e_avoided) || 0;
             if (t.scale_ticket_image) withPhoto++;
             matKeys.forEach(function(k) { matTotals[k] += parseFloat(t[k + '_tons']) || 0; });
             var mk = (t.ticket_date || '').substring(0, 7);
@@ -10051,7 +10047,6 @@ const DS = {
         lines.push('Diverted:             ' + divTons.toFixed(2) + ' T');
         lines.push('Landfill:             ' + landfillTons.toFixed(2) + ' T');
         lines.push('Diversion Rate:       ' + divRate + '%  ' + (divRate >= tgt ? '✓ MEETS TARGET' : 'BELOW TARGET'));
-        lines.push('CO₂e Avoided:         ' + co2e.toFixed(1) + ' mt');
         lines.push('Total Tickets:        ' + tickets.length);
         lines.push('With Scale Photos:    ' + withPhoto + '/' + tickets.length + ' (' + (tickets.length > 0 ? Math.round(withPhoto/tickets.length*100) : 0) + '%)');
         lines.push('');
