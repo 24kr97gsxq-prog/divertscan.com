@@ -4959,6 +4959,23 @@ const DS = {
         }, 100);
     },
 
+    // Fetch EVERY row of a tickets query, paging past PostgREST's silent
+    // 1,000-row cap (the Aug 30 bug: Children's Hospital passed 1,000 tickets
+    // and every report quietly truncated at exactly 1,000). Pass a query
+    // WITHOUT limit/offset; call sites add ,id to the order as a tiebreaker
+    // so pages never skip or duplicate rows. Returns null if any page fails,
+    // so callers fail loud instead of silently reporting partial data.
+    async fetchAllTickets(baseQuery) {
+        var all = [], page = 1000, offset = 0;
+        for (;;) {
+            var batch = await this.supabase(baseQuery + '&limit=' + page + '&offset=' + offset);
+            if (!batch) return null;
+            all = all.concat(batch);
+            if (batch.length < page) return all;
+            offset += page;
+        }
+    },
+
     async supabase(endpoint, method = 'GET', body = null) {
         if (!this.state.supabaseUrl || !this.state.supabaseKey) {
             this.showToast('Configure Supabase in Audit > Settings');
@@ -5619,13 +5636,13 @@ const DS = {
     async loadTickets(projectId) {
         const slimUrl = 'tickets?project_id=eq.' + projectId +
                     '&select=' + encodeURIComponent(this._ticketListColumns) +
-                    '&order=created_at.desc';
-        let data = await this.supabase(slimUrl);
+                    '&order=created_at.desc,id.desc';
+        let data = await this.fetchAllTickets(slimUrl);
         // Safety fallback — if slim column list errored (e.g. a column doesn't
         // exist in this DB), retry with SELECT *. Slower but always works.
         if (!data) {
             console.warn('Slim ticket fetch failed; falling back to SELECT *');
-            data = await this.supabase('tickets?project_id=eq.' + projectId + '&order=created_at.desc');
+            data = await this.fetchAllTickets('tickets?project_id=eq.' + projectId + '&order=created_at.desc,id.desc');
         }
         if (data) {
             this.state.tickets = data;
@@ -7481,7 +7498,7 @@ const DS = {
         el.innerHTML = '<div class="card"><div style="text-align:center;padding:20px;color:var(--text-muted);">Loading all projects...</div></div>';
         var projects = await this.supabase('projects?select=id,name,leed_version,leed_target,location,client,general_contractor&order=name.asc');
         if (!projects || projects.length === 0) { el.innerHTML = '<div class="card"><div style="color:var(--danger)">No projects found</div></div>'; return; }
-        var allTickets = await this.supabase('tickets?select=id,project_id,ticket_date,net_tons,diverted_tons,landfill_tons,co2e_avoided,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,cardboard_tons,drywall_tons,diversion_pct&order=ticket_date.asc&limit=5000');
+        var allTickets = await this.fetchAllTickets('tickets?select=id,project_id,ticket_date,net_tons,diverted_tons,landfill_tons,co2e_avoided,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,cardboard_tons,drywall_tons,diversion_pct&order=ticket_date.asc,id.asc');
         if (!allTickets) allTickets = [];
         var matKeys = Object.keys(this.MATERIALS);
         var grandTotal = 0, grandDiv = 0, grandLandfill = 0, grandCO2e = 0, grandTickets = 0;
@@ -7614,7 +7631,7 @@ const DS = {
     async exportCombinedCSV() {
         this.showLoading('Exporting all projects...');
         var projects = await this.supabase('projects?select=id,name,leed_version&order=name.asc');
-        var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_pct,wood_tons,occ_pct,occ_tons,metal_pct,metal_tons,plastic_pct,plastic_tons,concrete_pct,concrete_tons,block_pct,block_tons,gypsum_pct,gypsum_tons,cardboard_pct,cardboard_tons,drywall_pct,drywall_tons,landfill_pct&order=ticket_date.asc&limit=5000');
+        var allTickets = await this.fetchAllTickets('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_pct,wood_tons,occ_pct,occ_tons,metal_pct,metal_tons,plastic_pct,plastic_tons,concrete_pct,concrete_tons,block_pct,block_tons,gypsum_pct,gypsum_tons,cardboard_pct,cardboard_tons,drywall_pct,drywall_tons,landfill_pct&order=ticket_date.asc,id.asc');
         this.hideLoading();
         if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
         var projMap = {};
@@ -7658,7 +7675,7 @@ const DS = {
         if (typeof ExcelJS === 'undefined') { this.showToast('ExcelJS loading... try again'); return; }
         this.showLoading('Building Excel report...');
         var projects = await this.supabase('projects?select=id,name,leed_version,leed_target&order=name.asc');
-        var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,cardboard_tons,drywall_tons&order=ticket_date.asc&limit=5000');
+        var allTickets = await this.fetchAllTickets('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,landfill_tons,diversion_pct,co2e_avoided,wood_tons,occ_tons,metal_tons,plastic_tons,concrete_tons,block_tons,gypsum_tons,cardboard_tons,drywall_tons&order=ticket_date.asc,id.asc');
         this.hideLoading();
         if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
         var projMap = {};
@@ -7738,7 +7755,7 @@ const DS = {
         if (typeof ExcelJS === 'undefined') { this.showToast('ExcelJS loading... try again'); return; }
         this.showLoading('Exporting all scale tickets...');
         var projects = await this.supabase('projects?select=id,name&order=name.asc');
-        var allTickets = await this.supabase('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,diversion_pct,co2e_avoided,scale_ticket_image&order=ticket_date.asc&limit=5000');
+        var allTickets = await this.fetchAllTickets('tickets?select=id,project_id,ticket_number,ticket_date,hauler,gross_lbs,tare_lbs,net_lbs,net_tons,diverted_tons,diversion_pct,co2e_avoided,scale_ticket_image&order=ticket_date.asc,id.asc');
         this.hideLoading();
         if (!projects || !allTickets) { this.showToast('Failed to load data'); return; }
         var projMap = {};
@@ -9936,7 +9953,7 @@ const DS = {
         if (!id) { this.showToast('Select a project first'); return; }
         var proj = this.state.projects.find(function(p) { return p.id === id; });
         if (!proj) return;
-        var tickets = await this.supabase('tickets?project_id=eq.' + id + '&order=ticket_date.asc');
+        var tickets = await this.fetchAllTickets('tickets?project_id=eq.' + id + '&order=ticket_date.asc,id.asc');
         if (!tickets || tickets.length === 0) { this.showToast('No tickets found'); return; }
         var matKeys = Object.keys(this.MATERIALS);
         var header = ['Date','Ticket No','Zone','Hauler','Gross (lbs)','Tare (lbs)','Net (lbs)','Net Tons'];
@@ -9991,7 +10008,7 @@ const DS = {
         if (!id) { this.showToast('Select a project first'); return; }
         var proj = this.state.projects.find(function(p) { return p.id === id; });
         if (!proj) return;
-        var tickets = await this.supabase('tickets?project_id=eq.' + id + '&order=ticket_date.asc');
+        var tickets = await this.fetchAllTickets('tickets?project_id=eq.' + id + '&order=ticket_date.asc,id.asc');
         if (!tickets || tickets.length === 0) { this.showToast('No tickets found'); return; }
         var totTons = 0, divTons = 0, withPhoto = 0;
         var matTotals = {};
@@ -10054,6 +10071,7 @@ const DS = {
         lines.push('───────────────────────────────────────────────────');
         var activeStreams = 0;
         matKeys.forEach(function(k) {
+            if (k === 'landfill') return; // printed once below — this loop was doubling the Landfill line
             if (matTotals[k] > 0.001) {
                 activeStreams++;
                 var pct = totTons > 0 ? (matTotals[k] / totTons * 100).toFixed(1) : 0;
@@ -10343,7 +10361,7 @@ const DS = {
         if (!proj) return;
 
         info.style.display = 'block';
-        var tickets = await this.supabase('tickets?project_id=eq.' + id + '&order=ticket_date.desc');
+        var tickets = await this.fetchAllTickets('tickets?project_id=eq.' + id + '&order=ticket_date.desc,id.desc');
         if (!tickets) tickets = [];
 
         var totTons = 0, divTons = 0, withPhoto = 0, withMaterials = 0;
