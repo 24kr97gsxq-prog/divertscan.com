@@ -49,6 +49,13 @@
     .header h1{font-size:1.1rem;font-weight:700;letter-spacing:.02em;color:var(--text)}
     .header h1 span{color:var(--primary);font-weight:700}
     .header-sub{font-size:.6rem;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:1px;font-weight:500}
+    /* Projects tab: use the whole screen on iPad/desktop — 2+ columns instead of
+       full-width rows with dead space on the right. Falls back to one column on
+       phones. Cards stretch to equal height so rows stay tidy. */
+    .project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:10px;align-items:stretch}
+    .project-grid>.ticket-item{margin-bottom:0;height:100%;box-sizing:border-box}
+    .project-grid>.empty-state{grid-column:1/-1}
+    @media(max-width:700px){.project-grid{grid-template-columns:1fr}}
     .leed-badge{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:var(--leed-gold);padding:4px 10px;border-radius:6px;font-size:.65rem;font-weight:700}
     .status-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
     .status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.65rem;font-weight:500;background:var(--bg-input);border:1px solid var(--border);color:var(--text-muted)}
@@ -647,7 +654,7 @@ document.addEventListener('keydown', function(e){
             <div class="card">
                 <div class="card-title">Projects</div>
                 <button class="btn btn-primary mb-12" onclick="DS.showNewProjectModal()">+ New Project</button>
-                <div id="projectList">
+                <div id="projectList" class="project-grid">
                     <div class="empty-state">
                         <div class="empty-text">No projects yet</div>
                     </div>
@@ -1831,7 +1838,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.40.0',
+    VERSION: '7.41.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -5221,23 +5228,31 @@ const DS = {
         }
     },
 
-    async flushVanessa() {
+    async flushVanessa(manual) {
         if (this.vanessa._flushing) return;
-        if (!navigator.onLine) return;
+        if (!navigator.onLine) { if (manual) this.showToast('Offline — will retry when back online'); return; }
         this.vanessa._flushing = true;
+        var ok = 0, failed = 0, total = 0;
         try {
             const items = await this.vanessa.list();
             if (items.length === 0) return;
-            console.log('Vanessa: flushing', items.length, 'pending writes');
+            total = items.length;
+            console.log('Vanessa: flushing', items.length, 'pending writes' + (manual ? ' (manual — retry cap ignored)' : ''));
             for (const item of items) {
-                if (item.retries >= 5) {
+                // BUG FIX (Aug 30): items at max retries were skipped forever, so the
+                // pill count never moved and clicking it appeared to do nothing. A
+                // MANUAL click now always retries everything; only the automatic
+                // background flush respects the cap (to avoid hammering a bad write).
+                if (!manual && item.retries >= 5) {
                     console.warn('Vanessa: max retries reached for', item.label);
                     continue;
                 }
                 const data = await this.supabase(item.endpoint, item.method, item.body);
                 if (data !== null) {
+                    ok++;
                     await this.vanessa.remove(item.id);
                 } else {
+                    failed++;
                     await this.vanessa.updateRetry(item.id, (item.retries || 0) + 1);
                     if (this.sullivanIsDegraded()) break; // back off if Supabase is struggling
                 }
@@ -5247,6 +5262,11 @@ const DS = {
         } finally {
             this.vanessa._flushing = false;
             this._updateVanessaBadge();
+            if (manual) {
+                if (ok && !failed) this.showToast('\u2705 Synced all ' + ok + ' pending record' + (ok === 1 ? '' : 's'));
+                else if (ok) this.showToast('Synced ' + ok + ' of ' + total + ' \u2014 ' + failed + ' still failing');
+                else if (total) this.showToast('\u274C 0 of ' + total + ' synced \u2014 check sign-in and connection, then use Vanessa Queue Test on the Audit tab');
+            }
         }
     },
 
@@ -5268,7 +5288,7 @@ const DS = {
                 pill.className = 'status-pill';
                 pill.style.cssText = 'cursor:pointer;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:var(--warning);';
                 pill.title = 'Pending records waiting to sync. Click to retry now.';
-                pill.onclick = () => this.flushVanessa();
+                pill.onclick = () => this.flushVanessa(true);
                 host.appendChild(pill);
             }
             pill.style.display = '';
