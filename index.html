@@ -1111,7 +1111,10 @@ document.addEventListener('keydown', function(e){
                     Hauler lists a client checked against our tickets. Their numbers, our numbers, and what did not line up.
                 </div>
                 <div id="reconList" style="margin-bottom:8px"></div>
-                <button class="btn btn-sm btn-outline" onclick="DS.loadReconciliations()" style="width:100%">Refresh</button>
+                <div class="btn-row">
+                    <button class="btn btn-sm btn-primary" onclick="DS.showAdminReconModal()" style="flex:1">+ New — paste a hauler list</button>
+                    <button class="btn btn-sm btn-outline" onclick="DS.loadReconciliations()" style="flex:1">Refresh</button>
+                </div>
             </div>
 
             <!-- Material Mix Review — auto-applied percentages awaiting human confirmation -->
@@ -1878,7 +1881,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.44.0',
+    VERSION: '7.45.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -13460,6 +13463,198 @@ const DS = {
         this.showToast('Reconciliation deleted');
         this.loadReconciliations();
     },
+
+    // ============================================================
+    // v7.45 — ADMIN-SIDE RECONCILIATION
+    // ------------------------------------------------------------
+    // Same engine as the client portal (client.html), so a list Ross at
+    // Ranger emails Robert can be pasted here directly instead of costuming
+    // up as a client. The parser and comparison are ports of the portal's
+    // rcParse/rcRun — keep them in sync if the portal's ever change. The
+    // saved row is shaped exactly like a client submission, so the existing
+    // viewer, "use theirs", review and delete all work on it unchanged.
+    // ============================================================
+    reconParseList(text, year) {
+        var MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+        var rows = [], skipped = [], seen = {}, curZone = '';
+        var lines = String(text || '').split(/\r?\n/);
+        for (var li = 0; li < lines.length; li++) {
+            var line = lines[li].replace(/\u00a0/g, ' ').trim();
+            if (!line) continue;
+            var zh = line.match(/^zone\s+([A-Z])\s*:?\s*$/i);
+            if (zh) { curZone = zh[1].toUpperCase(); continue; }
+            if (/^(date|ticket|tickets|qty|#)\b/i.test(line) && !/\d{3}/.test(line)) continue;
+            var cells = /[\t,]/.test(line) ? line.split(/[\t,]/).map(function(c){ return c.trim(); }) : [line];
+            var hay = cells.join(' ');
+            var tons = null, mT = hay.match(/(\d+(?:\.\d+)?)\s*(?:tons?|t)\b/i);
+            if (mT) tons = parseFloat(mT[1]);
+            var date = null, mD;
+            if ((mD = hay.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))) date = mD[1] + '-' + mD[2] + '-' + mD[3];
+            else if ((mD = hay.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/))) {
+                var mo = +mD[1], da = +mD[2], yr = mD[3] ? +mD[3] : year; if (yr < 100) yr += 2000;
+                if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31) date = yr + '-' + ('0'+mo).slice(-2) + '-' + ('0'+da).slice(-2);
+            } else if ((mD = hay.match(/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,?\s*(\d{4}))?\b/))) {
+                var mm = MONTHS[mD[1].toLowerCase()];
+                if (mm) date = (mD[3] ? +mD[3] : year) + '-' + ('0'+mm).slice(-2) + '-' + ('0'+(+mD[2])).slice(-2);
+            }
+            if (tons === null) {
+                var toks = hay.split(/\s+/);
+                for (var ci = toks.length - 1; ci >= 0; ci--) {
+                    var c = toks[ci].replace(/[,$]/g, '');
+                    if (!/^\d+\.\d+$/.test(c)) continue;
+                    if (/\$/.test(toks[ci])) continue;
+                    if (date && hay.indexOf(c) === hay.indexOf(date)) continue;
+                    var v = parseFloat(c); if (v > 0 && v < 60) { tons = v; break; }
+                }
+            }
+            var ticket = null, mH = hay.match(/#\s*([A-Za-z]{0,3}-?\d{3,9})/);
+            if (mH) ticket = mH[1];
+            if (!ticket) {
+                var cands = hay.match(/\b(?:DX-)?\d{4,9}\b/g) || [];
+                for (var k = 0; k < cands.length; k++) {
+                    var bare = cands[k].replace(/^DX-/, '');
+                    if (date && date.replace(/-/g, '').indexOf(bare) >= 0) continue;
+                    if (bare.length >= 4 && bare.length <= 9) { ticket = cands[k]; break; }
+                }
+            }
+            var zone = curZone, zi = hay.match(/zone\s*([A-Z])\b/i);
+            if (zi) zone = zi[1].toUpperCase();
+            else if (cells.length > 1) { for (var zc = cells.length - 1; zc >= 0; zc--) {
+                if (/^[A-F]$/i.test(cells[zc])) { zone = cells[zc].toUpperCase(); break; } } }
+            if (ticket && tons !== null) {
+                var key = String(ticket).replace(/^#/, '').trim().toUpperCase();
+                var rec = { ticket: key, date: date, tons: tons, zone: zone, raw: line };
+                if (seen[key]) rec.duplicate = true;
+                seen[key] = (seen[key] || 0) + 1; rows.push(rec);
+            } else if (/\d{4}/.test(line)) skipped.push(line);
+        }
+        return { rows: rows, skipped: skipped };
+    },
+
+    showAdminReconModal() {
+        if (!document.getElementById('adminReconModal')) {
+            var d = document.createElement('div');
+            d.className = 'modal-overlay'; d.id = 'adminReconModal';
+            d.innerHTML = '<div class="modal" style="position:relative;max-width:640px">' +
+                '<button type="button" class="modal-x" onclick="DS.closeModal(\'adminReconModal\')" aria-label="Close">✕</button>' +
+                '<div class="modal-handle"></div>' +
+                '<div class="modal-title">New reconciliation — paste a hauler list</div>' +
+                '<div style="font-size:.7rem;color:var(--text-muted);margin-bottom:10px">Paste the list the hauler sent (tickets, dates, tons — messy is fine). It gets checked against our tickets exactly like a client submission, and lands in the list below for review.</div>' +
+                '<div class="form-group"><label class="form-label">Project</label><select class="form-input" id="arProj"></select></div>' +
+                '<div class="form-group"><label class="form-label">List from (hauler / person)</label><input type="text" class="form-input" id="arHauler" placeholder="e.g. Ranger Waste — Ross"></div>' +
+                '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">From (optional)</label><input type="date" class="form-input" id="arFrom"></div>' +
+                '<div class="form-group" style="flex:1"><label class="form-label">To (optional)</label><input type="date" class="form-input" id="arTo"></div></div>' +
+                '<div style="font-size:.62rem;color:var(--text-dim);margin:-4px 0 8px">Leave dates blank and the period is taken from the dates on the list itself.</div>' +
+                '<div class="form-group"><label class="form-label">The list</label><textarea class="form-input" id="arText" rows="9" placeholder="#86819  8/31  1.72 tons  Zone A&#10;#86817  8/31  0.36 T&#10;..." style="font-family:var(--mono);font-size:.7rem"></textarea></div>' +
+                '<div id="arResult" style="margin-bottom:10px"></div>' +
+                '<div class="btn-row">' +
+                '<button class="btn btn-sm btn-outline" onclick="DS.closeModal(\'adminReconModal\')" style="flex:1">Cancel</button>' +
+                '<button class="btn btn-sm btn-primary" id="arRunBtn" onclick="DS.adminReconRun()" style="flex:1">Compare</button>' +
+                '<button class="btn btn-sm btn-success" id="arSaveBtn" onclick="DS.adminReconSave()" style="flex:1;display:none">Save to Audit</button>' +
+                '</div></div>';
+            document.body.appendChild(d);
+        }
+        var sel = document.getElementById('arProj');
+        sel.innerHTML = (this.state.projects || []).map(function(p){
+            return '<option value="' + p.id + '">' + DS.esc(p.name) + '</option>'; }).join('');
+        document.getElementById('arResult').innerHTML = '';
+        document.getElementById('arSaveBtn').style.display = 'none';
+        this._adminRecon = null;
+        this.openModal('adminReconModal');
+    },
+
+    async adminReconRun() {
+        var txt = document.getElementById('arText').value;
+        if (!txt || !txt.trim()) { this.showToast('Paste the list first'); return; }
+        var projId = document.getElementById('arProj').value;
+        var from = document.getElementById('arFrom').value || '';
+        var to = document.getElementById('arTo').value || '';
+        var btn = document.getElementById('arRunBtn');
+        btn.disabled = true; btn.textContent = 'Comparing…';
+
+        var parsed = this.reconParseList(txt, new Date().getFullYear());
+        // No range given → take it from the list, same as the portal does.
+        // Without this the whole project's history shows up as "not on the list".
+        var derived = false;
+        if (!from && !to) {
+            var ds = parsed.rows.map(function(r){ return r.date; }).filter(Boolean).sort();
+            if (ds.length) { from = ds[0]; to = ds[ds.length - 1]; derived = true; }
+        }
+        var q = 'tickets?project_id=eq.' + projId + '&select=ticket_number,ticket_date,net_tons,zone&limit=10000';
+        var all = await this.supabase(q);
+        btn.disabled = false; btn.textContent = 'Compare';
+        if (!all) { this.showToast('Could not load tickets'); return; }
+        var ours = all.filter(function(t){
+            var d = (t.ticket_date || '').substring(0, 10);
+            if (from && d < from) return false;
+            if (to && d > to) return false;
+            return true; });
+        var byNum = {};
+        ours.forEach(function(t){ var k = String(t.ticket_number || '').trim().toUpperCase();
+            if (k && !byNum[k]) byNum[k] = t; });
+        var matched = [], missing = [], diffs = [], theirNums = {};
+        parsed.rows.forEach(function(r){
+            if (r.duplicate) return;
+            theirNums[r.ticket] = 1;
+            var o = byNum[r.ticket];
+            if (!o) { missing.push(r); return; }
+            var d = { ticket: r.ticket, theirTons: r.tons, ourTons: +(o.net_tons || 0),
+                      theirDate: r.date, ourDate: (o.ticket_date || '').substring(0, 10),
+                      theirZone: r.zone || '', ourZone: o.zone || '' };
+            d.tonsOff = Math.abs(d.ourTons - d.theirTons) > 0.02;
+            d.dateOff = !!(r.date && d.ourDate && r.date !== d.ourDate);
+            d.zoneOff = !!(d.theirZone && d.ourZone && d.theirZone !== d.ourZone);
+            if (d.tonsOff || d.dateOff || d.zoneOff) diffs.push(d); else matched.push(d);
+        });
+        var extra = ours.filter(function(t){
+            return !theirNums[String(t.ticket_number || '').trim().toUpperCase()]; });
+        var dupes = parsed.rows.filter(function(r){ return r.duplicate; });
+        this._adminRecon = {
+            projId: projId, from: from || null, to: to || null, derived: derived,
+            summary: { listed: parsed.rows.length, matched: matched.length, differences: diffs.length,
+                       notInDalmex: missing.length, notOnList: extra.length,
+                       duplicateLines: dupes.length, unreadableLines: parsed.skipped.length },
+            rows: { missing: missing, differences: diffs,
+                    notOnList: extra.map(function(t){ return { ticket: t.ticket_number,
+                        date: (t.ticket_date || '').substring(0, 10), tons: +(t.net_tons || 0), zone: t.zone || '' }; }),
+                    duplicateLines: dupes, unreadable: parsed.skipped }
+        };
+        var s = this._adminRecon.summary;
+        var chip = function(label, n, color){
+            return '<div style="background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;flex:1;min-width:86px">' +
+                '<div style="font-family:var(--mono);font-size:1rem;font-weight:700' + (color && n ? ';color:' + color : '') + '">' + n + '</div>' +
+                '<div style="font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim)">' + label + '</div></div>'; };
+        document.getElementById('arResult').innerHTML =
+            '<div style="font-family:var(--mono);font-size:.6rem;color:var(--text-dim);margin-bottom:6px">Compared ' +
+            (from || to ? (from || 'start') + ' → ' + (to || 'today') : 'everything on this project') +
+            (derived ? ' · taken from the dates on the list' : '') + '</div>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            chip('Listed', s.listed, '') + chip('Match', s.matched, 'var(--success)') +
+            chip('Differ', s.differences, 'var(--warning)') + chip('Not in ours', s.notInDalmex, 'var(--warning)') +
+            chip('Not on theirs', s.notOnList, 'var(--primary)') +
+            (s.unreadableLines ? chip('Unreadable', s.unreadableLines, 'var(--danger)') : '') + '</div>' +
+            (s.listed === 0 ? '<div style="color:var(--danger);font-size:.68rem;margin-top:8px">Nothing usable on the list — each line needs at least a ticket number and a tonnage.</div>' : '');
+        document.getElementById('arSaveBtn').style.display = s.listed ? '' : 'none';
+    },
+
+    async adminReconSave() {
+        var r = this._adminRecon;
+        if (!r) { this.showToast('Run Compare first'); return; }
+        var hauler = document.getElementById('arHauler').value.trim() || 'hauler list';
+        var res = await this.supabase('client_reconciliations', 'POST', {
+            project_id: r.projId, status: 'submitted',
+            period_from: r.from, period_to: r.to,
+            submitted_by: hauler + ' · entered by admin',
+            summary: r.summary, rows: r.rows
+        });
+        if (res === null) { this.showToast('Save failed — run the v7.45 SQL (INSERT policy on client_reconciliations)'); return; }
+        this.addAuditEntry('RECON_ADMIN', hauler + ': ' + r.summary.listed + ' listed, ' +
+            r.summary.notInDalmex + ' not in ours, ' + r.summary.notOnList + ' not on theirs');
+        this.showToast('Saved — it is in the list below');
+        this.closeModal('adminReconModal');
+        this.loadReconciliations();
+    },
+
 
     viewReconciliation(id) {
         var r = (this._recons || []).find(function(x){ return x.id === id; });
