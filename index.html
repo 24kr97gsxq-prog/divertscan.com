@@ -1881,7 +1881,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.45.0',
+    VERSION: '7.46.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -13509,6 +13509,11 @@ const DS = {
             }
             var ticket = null, mH = hay.match(/#\s*([A-Za-z]{0,3}-?\d{3,9})/);
             if (mH) ticket = mH[1];
+            // v7.46 — landfill/transfer tickets like 42-05926251 (two digits,
+            // dash, long number) captured whole so the foreign-ticket
+            // classifier can recognize them. Digits-dash-digits this long
+            // can't be a date, so no clash with the date patterns above.
+            if (!ticket) { var mF = hay.match(/\b(\d{2}-\d{5,9})\b/); if (mF) ticket = mF[1]; }
             if (!ticket) {
                 var cands = hay.match(/\b(?:DX-)?\d{4,9}\b/g) || [];
                 for (var k = 0; k < cands.length; k++) {
@@ -13545,7 +13550,10 @@ const DS = {
                 '<div style="display:flex;gap:8px"><div class="form-group" style="flex:1"><label class="form-label">From (optional)</label><input type="date" class="form-input" id="arFrom"></div>' +
                 '<div class="form-group" style="flex:1"><label class="form-label">To (optional)</label><input type="date" class="form-input" id="arTo"></div></div>' +
                 '<div style="font-size:.62rem;color:var(--text-dim);margin:-4px 0 8px">Leave dates blank and the period is taken from the dates on the list itself.</div>' +
-                '<div class="form-group"><label class="form-label">The list</label><textarea class="form-input" id="arText" rows="9" placeholder="#86819  8/31  1.72 tons  Zone A&#10;#86817  8/31  0.36 T&#10;..." style="font-family:var(--mono);font-size:.7rem"></textarea></div>' +
+                '<input type="file" id="arPdf" accept="application/pdf,.pdf,text/plain,.txt" style="display:none" onchange="DS.adminReconReadFile(this)">' +
+                '<div class="form-group"><label class="form-label">The list</label>' +
+                '<button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:6px" onclick="document.getElementById(\'arPdf\').click()">\ud83d\udcc4 Read a PDF (or .txt) into the box</button>' +
+                '<textarea class="form-input" id="arText" rows="9" placeholder="#86819  8/31  1.72 tons  Zone A&#10;#86817  8/31  0.36 T&#10;..." style="font-family:var(--mono);font-size:.7rem"></textarea></div>' +
                 '<div id="arResult" style="margin-bottom:10px"></div>' +
                 '<div class="btn-row">' +
                 '<button class="btn btn-sm btn-outline" onclick="DS.closeModal(\'adminReconModal\')" style="flex:1">Cancel</button>' +
@@ -13561,6 +13569,52 @@ const DS = {
         document.getElementById('arSaveBtn').style.display = 'none';
         this._adminRecon = null;
         this.openModal('adminReconModal');
+    },
+
+    // v7.46 — read a PDF's text layer into the paste box. Lines are rebuilt
+    // from character positions so table rows stay rows. Scanned PDFs have no
+    // text layer — those get a clear message instead of silent emptiness.
+    async adminReconReadFile(input) {
+        var f = input.files && input.files[0]; input.value = '';
+        if (!f) return;
+        var ta = document.getElementById('arText');
+        if (/text\/plain|\.txt$/i.test(f.type + ' ' + f.name)) {
+            var txt = await f.text();
+            ta.value = (ta.value ? ta.value + '\n' : '') + txt;
+            this.showToast('Text file read — check it, then Compare');
+            return;
+        }
+        if (!window.pdfjsLib) { this.showToast('PDF reader not loaded \u2014 check connection'); return; }
+        try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+        this.showToast('Reading PDF\u2026');
+        try {
+            var buf = await f.arrayBuffer();
+            var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+            var out = [], chars = 0;
+            for (var p = 1; p <= pdf.numPages; p++) {
+                var page = await pdf.getPage(p);
+                var tc = await page.getTextContent();
+                var lines = [];
+                tc.items.forEach(function(it) {
+                    if (!it.str || !it.str.trim()) return;
+                    var y = it.transform[5], x = it.transform[4];
+                    var hit = null;
+                    for (var i = 0; i < lines.length; i++) { if (Math.abs(lines[i].y - y) <= 2.5) { hit = lines[i]; break; } }
+                    if (!hit) { hit = { y: y, items: [] }; lines.push(hit); }
+                    hit.items.push({ x: x, s: it.str });
+                });
+                lines.sort(function(a, b) { return b.y - a.y; });
+                lines.forEach(function(L) {
+                    var line = L.items.sort(function(a, b) { return a.x - b.x; })
+                        .map(function(i) { return i.s; }).join(' ').replace(/\s+/g, ' ').trim();
+                    if (line) { out.push(line); chars += line.length; }
+                });
+            }
+            if (!chars) { this.showToast('That PDF has no text layer (it is a scan) \u2014 type the lines or use a text export'); return; }
+            var ta2 = document.getElementById('arText');
+            ta2.value = (ta2.value ? ta2.value + '\n' : '') + out.join('\n');
+            this.showToast('Read ' + pdf.numPages + ' page' + (pdf.numPages > 1 ? 's' : '') + ' \u2014 check the text, then Compare');
+        } catch (e) { this.showToast('Could not read that PDF: ' + (e.message || e)); }
     },
 
     async adminReconRun() {
