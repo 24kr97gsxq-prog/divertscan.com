@@ -1881,7 +1881,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.46.0',
+    VERSION: '7.48.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -1909,6 +1909,31 @@ const DS = {
         concrete: { name: 'Concrete',       icon: '', color: '#78716c', gwp: 0.130 },
         block:    { name: 'Block/Brick',    icon: '', color: '#a16207', gwp: 0.240 },
         landfill: { name: 'Landfill',       icon: '', color: 'var(--danger)', gwp: 0.520 }
+    },
+
+    // v7.48 — paper grades for Walk-in / Non-LEED tickets. Domingo brings
+    // printers mix and white ledger, others bring DLK; the construction set
+    // alone had nowhere to put them (OCC already exists above as occ).
+    // These ONLY appear on tickets whose project is leed_version 'none' —
+    // LEED tickets, sliders, math and reports are untouched. Manual entry
+    // and the scale drawer still use the construction set (v7.49 scope).
+    PAPER_MATERIALS: {
+        printers_mix: { name: 'Printers Mix',        icon: '', color: '#0ea5e9', gwp: 0.940 },
+        swl:          { name: 'White Ledger (SWL)',  icon: '', color: '#cbd5e1', gwp: 0.940 },
+        dlk:          { name: 'DLK',                 icon: '', color: '#94a3b8', gwp: 0.940 }
+    },
+    _paperPresets: {
+        printers_full: { label: 'Printers Mix — full load', mix: { printers_mix: 98, landfill: 2 } },
+        swl_full:      { label: 'White Ledger — full load', mix: { swl: 98, landfill: 2 } },
+        dlk_full:      { label: 'DLK — full load',          mix: { dlk: 98, landfill: 2 } }
+    },
+    _isNonLeedProject(projId) {
+        const p = (this.state.projects || []).find(p => p.id === projId);
+        return !!p && p.leed_version === 'none';
+    },
+    materialsFor(projId) {
+        if (!this._isNonLeedProject(projId)) return this.MATERIALS;
+        return Object.assign({}, this.MATERIALS, this.PAPER_MATERIALS);
     },
 
     // ============================================================
@@ -6482,6 +6507,11 @@ const DS = {
             }
         }
 
+        // v7.48 — the slider set depends on the ticket's project type
+        const _projSel = document.getElementById('editTktProject');
+        const _isNL = this._isNonLeedProject(_projSel ? _projSel.value : t.project_id);
+        this._editMats = this.materialsFor(_projSel ? _projSel.value : t.project_id);
+
         let defaultBtnHtml = '';
         if (!hasMaterials) {
             defaultBtnHtml = '<div id="materialDefaultPanel" style="background:rgba(0,201,167,0.08);border:1px dashed var(--primary);border-radius:8px;padding:12px;margin-bottom:12px;">' +
@@ -6493,16 +6523,18 @@ const DS = {
             // Container-type presets (always available — for single-material loads)
             defaultBtnHtml += '<div style="font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px;">Single-material container?</div>';
             defaultBtnHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
-            Object.keys(this._containerTypePresets).forEach(presetKey => {
-                const preset = this._containerTypePresets[presetKey];
+            const _presetSet = Object.assign({}, this._containerTypePresets, _isNL ? this._paperPresets : {});
+            Object.keys(_presetSet).forEach(presetKey => {
+                const preset = _presetSet[presetKey];
                 defaultBtnHtml += '<button type="button" onclick="DS.applyContainerTypePreset(\'' + presetKey + '\')" style="padding:8px 6px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:.7rem;font-weight:600;cursor:pointer;text-align:center;line-height:1.2;">' + preset.label + '</button>';
             });
             defaultBtnHtml += '</div>';
             defaultBtnHtml += '</div>';
         }
 
-        el.innerHTML = defaultBtnHtml + Object.keys(this.MATERIALS).map(k => {
-            const m = this.MATERIALS[k];
+        el.innerHTML = (_isNL ? '<div class="form-group" style="margin-bottom:10px"><label class="form-label">Baled or loose?</label><select class="form-input" id="editBaledLoose"><option value="loose">Loose</option><option value="baled">Baled</option></select></div>' : '') +
+        defaultBtnHtml + Object.keys(this._editMats).map(k => {
+            const m = this._editMats[k];
             const val = t[k + '_pct'] || 0;
             return `<div class="material-row">
                 <span class="material-label">${m.icon} ${m.name.split('/')[0]}</span>
@@ -6515,6 +6547,7 @@ const DS = {
             </div>`;
         }).join('') +
         '<button type="button" class="btn btn-sm btn-outline" style="width:100%;margin-top:6px" onclick="DS.restToLandfill(\'editSlider_\')">Put the rest in Landfill → 100%</button>';
+        if (_isNL) { const bl = document.getElementById('editBaledLoose'); if (bl) bl.value = t.baled_loose || 'loose'; }
         this.updateEditPctTotal();
 
         // Scale ticket photo area
@@ -6698,10 +6731,10 @@ const DS = {
     },
 
     applyContainerTypePreset(presetKey) {
-        const preset = this._containerTypePresets[presetKey];
+        const preset = this._containerTypePresets[presetKey] || this._paperPresets[presetKey];
         if (!preset) return;
 
-        Object.keys(this.MATERIALS).forEach(k => {
+        Object.keys(this._editMats || this.MATERIALS).forEach(k => {
             const slider = document.getElementById('editSlider_' + k);
             if (slider) {
                 slider.value = preset.mix[k] || 0;
@@ -6726,8 +6759,9 @@ const DS = {
     },
 
     updateEditPctTotal() {
+        const M = this._editMats || this.MATERIALS;   // v7.48
         let total = 0;
-        Object.keys(this.MATERIALS).forEach(k => {
+        Object.keys(M).forEach(k => {
             total += parseInt(document.getElementById('editSlider_' + k)?.value || 0);
         });
         const el = document.getElementById('editPctTotal');
@@ -6742,10 +6776,10 @@ const DS = {
 
         // Calculate live CO2e
         let co2e = 0;
-        Object.keys(this.MATERIALS).forEach(k => {
+        Object.keys(M).forEach(k => {
             if (k !== 'landfill') {
                 const pct = parseInt(document.getElementById('editSlider_' + k)?.value || 0);
-                co2e += (netTons * pct / 100) * this.MATERIALS[k].gwp;
+                co2e += (netTons * pct / 100) * M[k].gwp;
             }
         });
 
@@ -6779,9 +6813,10 @@ const DS = {
 
         // Material percentages
         const mats = {};
+        const M = this._editMats || this.MATERIALS;   // v7.48 — paper grades ride on non-LEED
         let totalPct = 0;
-        Object.keys(this.MATERIALS).forEach(k => {
-            const pct = parseInt(document.getElementById(`editSlider_${k}`).value) || 0;
+        Object.keys(M).forEach(k => {
+            const pct = parseInt(document.getElementById(`editSlider_${k}`)?.value) || 0;
             mats[k + '_pct'] = pct;
             mats[k + '_tons'] = +(netTons * pct / 100).toFixed(4);
             totalPct += pct;
@@ -6797,8 +6832,8 @@ const DS = {
         const divertedTons = +(netTons * diversionPct / 100).toFixed(4);
 
         let co2e = 0;
-        Object.keys(this.MATERIALS).forEach(k => {
-            if (k !== 'landfill') co2e += (mats[k + '_tons'] || 0) * this.MATERIALS[k].gwp;
+        Object.keys(M).forEach(k => {
+            if (k !== 'landfill') co2e += (mats[k + '_tons'] || 0) * M[k].gwp;
         });
         co2e = +co2e.toFixed(4);
 
@@ -6823,6 +6858,9 @@ const DS = {
             last_modified: new Date().toISOString(),
             ...mats
         };
+        // v7.48 — baled/loose only exists on non-LEED tickets
+        const _bl = document.getElementById('editBaledLoose');
+        if (_bl) updates.baled_loose = _bl.value || null;
 
         this.showLoading('Saving...');
         const result = await this.supabase(`tickets?id=eq.${id}`, 'PATCH', updates);
@@ -7282,8 +7320,9 @@ const DS = {
     // 100%. If the recovered materials already exceed 100, say so instead
     // of silently clamping.
     restToLandfill(prefix) {
+        const M = (prefix === 'editSlider_' && this._editMats) ? this._editMats : this.MATERIALS;
         let others = 0;
-        Object.keys(this.MATERIALS).forEach(k => {
+        Object.keys(M).forEach(k => {
             if (k !== 'landfill') others += parseInt(document.getElementById(prefix + k)?.value || 0);
         });
         if (others > 100) {
@@ -10472,8 +10511,64 @@ const DS = {
             '<div id="mixSum_'+i+'" style="font-size:.65rem;font-weight:700"></div></div>' +
             (thumbs ? '<div style="display:flex;gap:4px;margin-bottom:6px;overflow-x:auto">'+thumbs+'</div>'
                     : '<div style="font-size:.6rem;color:var(--text-dim);margin-bottom:6px">No photos on this ticket — verifying from the paper record</div>') +
-            '<details style="margin-bottom:6px"><summary style="font-size:.65rem;color:var(--text-muted);cursor:pointer">Adjust percentages (currently ' + (t.diversion_pct||0) + '% diversion)</summary><div style="padding-top:6px">' + sliders + '</div></details>' +
+            '<details style="margin-bottom:6px"><summary style="font-size:.65rem;color:var(--text-muted);cursor:pointer">Adjust percentages (currently ' + (t.diversion_pct||0) + '% diversion)</summary><div style="padding-top:6px">' + sliders +
+            '<button class="btn btn-sm btn-outline" style="width:100%;margin-top:6px" onclick="DS.balanceMix('+i+')">\u2696\ufe0f Balance the rest to 100%</button>' +
+            '<div style="font-size:.56rem;color:var(--text-dim);margin-top:3px">Set what you can see, tap Balance — the materials you did not touch are filled to make 100%. Heavy loads for the box size lean the fill toward steel, concrete and block.</div>' +
+            '</div></details>' +
             '<button class="btn btn-sm btn-success" style="width:100%" onclick="DS.confirmMix('+i+')">Confirm Mix</button></div>';
+    },
+
+    // v7.47 — Robert's balance filter. He sets the material(s) he can see in
+    // the debris photos; this fills the ones he did NOT touch so the total
+    // lands on exactly 100. The fill is proportional to what those materials
+    // already held, with one yard-truth bias: a heavy load for a roll-off
+    // (high tons) is dense material, so steel/concrete/block take a larger
+    // share of the fill the heavier the ticket runs. Touched inputs are never
+    // altered; Confirm still does the saving.
+    balanceMix(i) {
+        var t = this._mixQueue && this._mixQueue[i];
+        if (!t) return;
+        var touched = [], untouched = [], setSum = 0;
+        Object.keys(this.MATERIALS).forEach(function(k) {
+            var el = document.getElementById('mix_' + i + '_' + k);
+            if (!el) return;
+            var v = parseFloat(el.value) || 0;
+            if (v !== (t[k + '_pct'] || 0)) { touched.push(k); setSum += v; }
+            else untouched.push(k);
+        });
+        if (!touched.length) { this.showToast('Adjust a material first, then Balance fills in the rest'); return; }
+        if (setSum > 100) { this.showToast('What you set already totals ' + setSum + '% — bring one down first'); return; }
+        if (!untouched.length) { this.showToast('Every material was adjusted by hand — nothing left to balance'); return; }
+        var remaining = 100 - setSum;
+        // Heaviness bias: at ~3T and under, no lean; grows to 3x on the dense
+        // trio by ~7T. Tune here if the yard disagrees with the curve.
+        var tons = parseFloat(t.net_tons) || 0;
+        var heavyBias = 1 + Math.max(0, Math.min(2, (tons - 3) / 2));
+        var DENSE = { steel: 1, concrete: 1, block: 1 };
+        var weights = {}, wSum = 0;
+        untouched.forEach(function(k) {
+            var base = Math.max(t[k + '_pct'] || 0, 0.5);   // floor so zeroed materials can still receive
+            var w = base * (DENSE[k] ? heavyBias : 1);
+            weights[k] = w; wSum += w;
+        });
+        var acc = 0, vals = {};
+        untouched.forEach(function(k, idx) {
+            var v = (idx === untouched.length - 1) ? (remaining - acc)               // last one absorbs rounding
+                : Math.round(remaining * weights[k] / wSum);
+            v = Math.max(0, v); acc += v; vals[k] = v;
+        });
+        // rounding can leave the last slot negative on tiny remainders — clamp and re-fix on the largest
+        var total = setSum; untouched.forEach(function(k){ total += vals[k]; });
+        if (total !== 100) {
+            var big = untouched.slice().sort(function(a, b){ return vals[b] - vals[a]; })[0];
+            vals[big] += (100 - total);
+        }
+        untouched.forEach(function(k) {
+            var el = document.getElementById('mix_' + i + '_' + k);
+            if (el) el.value = vals[k];
+        });
+        this._mixSum(i);
+        this.showToast('Balanced to 100% — ' + (heavyBias > 1.4 ? 'heavy load, fill leaned toward steel/concrete/block' : 'filled in proportion') + '. Confirm when it matches the photos.');
     },
 
     _mixSum(i) {
