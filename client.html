@@ -532,7 +532,55 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.8.0', BUILD:'2026-08-25',
+VERSION:'2.8.2', BUILD:'2026-09-19',
+
+// v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
+// "Do not change any previous percentages that we have already reported
+// to the hospital." Months before RATE_EXACT_FROM show and are judged
+// exactly as they were reported: a whole-number rate, and the whole number
+// decides On Track / below (August 2026 was 74.86%, reported as 75%, On
+// Track). From RATE_EXACT_FROM on, the rule below applies: one decimal,
+// never rounded up onto the target, verdicts on the exact rate.
+// Project-to-date figures stay whole numbers, as they have always been
+// shown; once they include a month from RATE_EXACT_FROM on they are judged
+// exactly and are never rounded up onto the target.
+// Same date and rules as the admin app (index.html v7.48.2) — change both
+// together, and only ever move the date forward.
+RATE_EXACT_FROM:'2026-09',
+// True when month k (YYYY-MM…) was reported under the old rule.
+_asRep(k){return !!k&&String(k).substring(0,7)<P.RATE_EXACT_FROM;},
+// Latest month (YYYY-MM) in a set of tickets: the month a running total ends on.
+_lastKey(tix){var k='';(tix||[]).forEach(function(t){var d=String(t.ticket_date||t.service_date||'').substring(0,7);if(d.length===7&&d>k)k=d;});return k||null;},
+// The number a rate is judged (and drawn) on: whole for reported months, exact after.
+rateVal(pct,k){pct=+pct||0;return P._asRep(k)?Math.round(pct):pct;},
+// One month's rate as display text: "75" for reported months, "74.9" after.
+rateText(pct,k,tgt){pct=+pct||0;return P._asRep(k)?String(Math.round(pct)):P.fmtRate(pct,tgt);},
+// Project-to-date rate as display text (k = last month it covers): whole
+// number as always; from RATE_EXACT_FROM on never rounded up onto the target.
+runText(pct,k,tgt){pct=+pct||0;var r=Math.round(pct);
+if(P._asRep(k)||tgt==null||!(pct<tgt&&r>=tgt))return String(r);return P.fmtRate(pct,tgt);},
+// Excel number format for one month's rate cell.
+xlRateFmtKey(pct,k,tgt){return P._asRep(k)?'0%':P.xlRateFmt(pct,tgt);},
+
+// v2.8.1 — diversion rates. Every met / not-met decision uses the EXACT rate;
+// display is one decimal ("74.9"). A rate just under the target is never
+// rounded up onto it (74.96 shows "74.96", not "75.0"). Same rules as the
+// admin app v7.48.1. Before this, rates were rounded to whole numbers first,
+// so a month at 74.86% showed "75%" and "On Track".
+// v2.8.2 — applies from RATE_EXACT_FROM on (see above).
+fmtRate(pct,tgt){pct=+pct||0;var r=Math.round(pct*10)/10;
+if(tgt==null||!(pct<tgt&&r>=tgt))return r.toFixed(1);
+var r2=Math.round(pct*100)/100;if(r2>=tgt)r2=(Math.round(tgt*100)-1)/100;return r2.toFixed(2);},
+// Gap to target, from the rate as shown, so the two always add up.
+rateGap(shown,tgt){var d=(String(shown).split('.')[1]||'').length;return (tgt-parseFloat(shown)).toFixed(d);},
+// Excel number format for a rate cell (the cell keeps the exact value).
+// v2.8.2 — if two decimals would still land on the target (74.996 → "75.00%"),
+// use as many as it takes ("74.996%").
+xlRateFmt(pct,tgt){pct=+pct||0;if(tgt==null||!(pct<tgt&&Math.round(pct*10)/10>=tgt))return '0.0%';
+for(var d=2;d<6;d++){var f=Math.pow(10,d);if(Math.round(pct*f)/f<tgt)break;}
+return '0.'+'000000'.substring(0,d)+'%';},
+// The open project's target, or null for Non-LEED.
+_rateTgt(){var p=P.cp;if(!p||p.leed_version==='none')return null;return p.leed_target!=null?p.leed_target:50;},
 
 cl:null,pj:[],cp:null,tx:[],_u:{s:[],d:[]},_up:null,_mg:{},
 
@@ -998,8 +1046,9 @@ renderDash(){var p=P.cp,t=P.tx,tot=0,dv=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
 t.forEach(function(x){var tn=+(x.net_tons)||0;tot+=tn;dv+=+(x.diverted_tons)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((x[k+'_pct']||0)/100);});});
-var rate=tot>0?Math.round(dv/tot*100):0,tgt=p.leed_target!=null?p.leed_target:50;
-var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+// v2.8.2 — project-to-date: whole number as always, judged per runText / rateVal
+var rateX=tot>0?dv/tot*100:0,tgt=p.leed_target!=null?p.leed_target:50,dKey=P._lastKey(t),rate=P.runText(rateX,dKey,tgt),rateV=P.rateVal(rateX,dKey);
+var gc=rateV>=tgt?'var(--success)':rateV>=tgt*.67?'var(--warning)':'var(--danger)';
 document.getElementById('dName').textContent=p.name;
 document.getElementById('dMeta').textContent=[p.client,p.waste_hauler,p.location].filter(Boolean).join(' • ');
 document.getElementById('dStats').innerHTML='<div class="sc"><div class="sv">'+t.length+'</div><div class="sl">Tickets</div></div>'+
@@ -1014,7 +1063,7 @@ document.getElementById('dStats').parentNode.insertBefore(stampEl,document.getEl
 stampEl.textContent=lastDate?('Data through '+lastDate+' \u00b7 weights from certified truck scale \u00b7 report generated '+new Date().toLocaleDateString()):'';
 document.getElementById('dGauge').innerHTML=p.leed_version==='none'?
 '<div style="padding:10px;border-radius:var(--r);background:var(--bg);border:1px solid var(--border);text-align:center"><div style="font-size:.75rem;font-weight:600;color:var(--text-m)">Non-LEED • Tracking Only</div></div>':
-'<div style="padding:10px;border-radius:var(--r);background:'+(rate>=tgt?'var(--success-bg)':rate>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div><div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div><div style="font-size:.6rem;color:var(--text-m)">LEED '+(p.leed_version||'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'On Track':''+(tgt-rate)+'% below')+'</div></div>';
+'<div style="padding:10px;border-radius:var(--r);background:'+(rateV>=tgt?'var(--success-bg)':rateV>=tgt*.67?'var(--warning-bg)':'var(--danger-bg)')+'"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div><div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(parseFloat(rate),100)+'%;background:'+gc+';border-radius:3px"></div></div><div style="font-size:.6rem;color:var(--text-m)">LEED '+(p.leed_version||'v4')+' Target: '+tgt+'% • '+(rateV>=tgt?'On Track':(P._asRep(dKey)?''+(tgt-rateV):P.rateGap(rate,tgt))+'% below')+'</div></div>';
 var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?mc[k]/tot*100:0;
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%<span class="mpt">'+P.f(mc[k])+' T</span></div></div>';});
 document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
@@ -1578,7 +1627,7 @@ P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);if(k.length>=7
 P._mg=months;var keys=Object.keys(months).sort().reverse(),tgt=P.cp.leed_target!=null?P.cp.leed_target:50,html='';
 keys.forEach(function(key){var tix=months[key],pts=key.split('-'),label=mn[+pts[1]]+' '+pts[0];
 var tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var c=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+var rateX=tons>0?div/tons*100:0,rate=P.rateText(rateX,key,tgt),rateV=P.rateVal(rateX,key);var c=rateV>=tgt?'var(--success)':rateV>=tgt*.67?'var(--warning)':'var(--danger)';// v2.8.2 — reported months as reported
 html+='<div class="c" onclick="P.openMo(\''+key+'\')" style="cursor:pointer"><div style="display:flex;align-items:center;gap:10px">'+
 (P.cp&&P.cp.leed_version==='none'?'':'<div style="font-size:1.1rem;font-weight:800;color:'+c+';min-width:42px">'+rate+'%</div>')+
 '<div style="flex:1"><div style="font-weight:700;font-size:.8rem">'+label+'</div>'+
@@ -1711,8 +1760,8 @@ var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0,mc={};
 Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
-var rate=tons>0?Math.round(div/tons*100):0;var tgt=P.cp?(P.cp.leed_target!=null?P.cp.leed_target:50):50;
-var gc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+var tgt=P.cp?(P.cp.leed_target!=null?P.cp.leed_target:50):50;var rateX=tons>0?div/tons*100:0,rate=P.rateText(rateX,key,tgt),rateV=P.rateVal(rateX,key),asRep=P._asRep(key);// v2.8.2 — reported months as reported
+var gc=rateV>=tgt?'var(--success)':rateV>=tgt*.67?'var(--warning)':'var(--danger)';
 // Materials HTML
 var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tons>0?mc[k]/tons*100:0;
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%<span class="mpt">'+P.f(mc[k])+' T</span></div></div>';});
@@ -1731,8 +1780,8 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div style="font-weight:80
 (P.cp&&P.cp.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(div)+'</div><div class="sl">Diverted</div></div>')+'</div>'+
 (P.cp&&P.cp.leed_version==='none'?'':
 '<div style="padding:8px 0;text-align:center"><div style="font-size:1.8rem;font-weight:800;color:'+gc+'">'+rate+'%</div>'+
-'<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(rate,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
-'<div style="font-size:.6rem;color:var(--text-m)">LEED '+(P.cp?P.cp.leed_version||'v4':'v4')+' Target: '+tgt+'% • '+(rate>=tgt?'On Track':''+(tgt-rate)+'% below')+'</div></div>')+
+'<div style="height:5px;border-radius:3px;background:var(--border);margin:4px 16px;overflow:hidden"><div style="height:100%;width:'+Math.min(asRep?rateV:rateX,100)+'%;background:'+gc+';border-radius:3px"></div></div>'+
+'<div style="font-size:.6rem;color:var(--text-m)">LEED '+(P.cp?P.cp.leed_version||'v4':'v4')+' Target: '+tgt+'% • '+(rateV>=tgt?'On Track':(asRep?''+(tgt-rateV):P.rateGap(rate,tgt))+'% below')+'</div></div>')+
 (mh?'<div class="ct" style="margin-top:6px">Materials</div>'+mh:'')+P.renderZoneSummary(tix)+'</div>'+
 '<div class="c" style="padding:8px"><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="text" class="fi" id="moSearch" placeholder="Search..." oninput="P.filterMo(this.value)" style="padding:7px 10px;font-size:.8rem;border-width:1px;flex:1;min-width:120px">'+
 '<select class="fi" id="moZoneFilter" onchange="P.filterMo(document.getElementById(\'moSearch\').value)" style="padding:7px;font-size:.75rem;width:auto;flex:0 0 auto"><option value="">All Zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option></select>'+
@@ -1763,8 +1812,9 @@ if(!_nl2)h+='<td class="r m bld" style="'+dc+'">'+dp+'%</td>';
 h+='<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td>';
 h+='<td class="ctr">'+pi+'</td>';
 h+='</tr>';});
-var totalRate=sumTons>0?Math.round(sumDiv/sumTons*100):0;
-var trc=totalRate>=75?'color:var(--success)':totalRate>=50?'color:var(--warning)':'color:var(--danger)';
+// v2.8.2 — the month decides how its total shows (reported months as reported)
+var mKey=P._lastKey(tix),totalX=sumTons>0?sumDiv/sumTons*100:0,totalRate=P.rateText(totalX,mKey,P._rateTgt()),totalV=P.rateVal(totalX,mKey);
+var trc=totalV>=75?'color:var(--success)':totalV>=50?'color:var(--warning)':'color:var(--danger)';
 h+='</tbody><tfoot><tr style="border-top:2px solid var(--primary);font-weight:700">';
 h+='<td colspan="3">TOTALS ('+tix.length+' tickets)</td>';
 h+='<td class="r m">'+P.f(sumTons)+'</td>';
@@ -1778,7 +1828,7 @@ P.renderMoTix(filtered);},
 
 emailRpt(key){var tix=P._mg[key]||[];var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 var label=mf[+pts[1]]+' '+pts[0],tons=0,div=0;tix.forEach(function(t){tons+=+(t.net_tons)||0;div+=+(t.diverted_tons)||0;});
-var rate=tons>0?Math.round(div/tons*100):0;var proj=P.cp?P.cp.name:'Project';
+var rate=P.rateText(tons>0?div/tons*100:0,key,P._rateTgt());var proj=P.cp?P.cp.name:'Project';// v2.8.2 — reported months as reported
 var subj=proj+' — '+label+' Waste Diversion Report';
 var body='Hi,\n\nPlease find the '+label+' waste diversion report for '+proj+'.\n\nSummary:\nTickets: '+tix.length+'\nTotal Tonnage: '+P.f(tons)+' T\nDiverted: '+P.f(div)+' T\nDiversion Rate: '+rate+'%\n\nBest regards,\n'+(P.cl?P.cl.name:'');
 var el=document.createElement('div');el.id='emailMenu';
@@ -1799,8 +1849,12 @@ tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)
 tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
 var landfill=tons-div;if(landfill<0)landfill=0;
-var rate=tons>0?Math.round(div/tons*100):0;var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
-var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
+// v2.8.2 — a month already reported shows its reported rate and verdict (whole
+// number). From RATE_EXACT_FROM on: ON TRACK / BELOW TARGET on the exact rate,
+// rate shown at one decimal (v2.8.1).
+var rateX=tons>0?div/tons*100:0,rate=P.rateText(rateX,key,ver==='none'?null:tgt);
+var ok=P.rateVal(rateX,key)>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
 // Build dynamic material columns from MT
 var matKeys=Object.keys(MT);
 var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
@@ -1827,7 +1881,8 @@ var zonePdfHtml='<h2>Tonnage by Zone — '+label+'</h2>'+(zoneRows?'<table><tr><
 var ptdTons=0,ptdDiv=0,ptdGross=0,ptdTare=0,ptdTix=P.tx.length;
 P.tx.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;ptdGross+=+(t.gross_lbs)||0;ptdTare+=+(t.tare_lbs)||0;});
 var ptdLandfill=ptdTons-ptdDiv;if(ptdLandfill<0)ptdLandfill=0;
-var ptdRate=ptdTons>0?Math.round(ptdDiv/ptdTons*100):0;
+// v2.8.2 — project-to-date: whole number as always, judged per runText / rateVal
+var ptdX=ptdTons>0?ptdDiv/ptdTons*100:0,ptdKey=P._lastKey(P.tx),ptdRate=P.runText(ptdX,ptdKey,ver==='none'?null:tgt),ptdOk=P.rateVal(ptdX,ptdKey)>=tgt;
 var w=window.open('','_blank');
 w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+P.esc(proj.name)+'</title>'+
 '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.6}'+
@@ -1869,8 +1924,8 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<div class="stat"><b>'+P.f(ptdTons)+'</b><span>Generated (T)</span></div>'+
 '<div class="stat"><b style="color:var(--success)">'+P.f(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
 '<div class="stat"><b style="color:var(--danger)">'+P.f(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
-'<div class="stat"><b style="color:'+(ptdRate>=tgt?'var(--success)':'var(--danger)')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
-(ptdRate!==rate?'<div class="note">Cumulative project diversion: '+P.f(ptdDiv)+' T diverted / '+P.f(ptdTons)+' T generated = '+ptdRate+'%'+(ver==='none'?'':ptdRate>=tgt?' (meets '+tgt+'% target)':' (below '+tgt+'% target)')+'</div>':'')+
+'<div class="stat"><b style="color:'+(ptdOk?'var(--success)':'var(--danger)')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+(ptdRate!==rate?'<div class="note">Cumulative project diversion: '+P.f(ptdDiv)+' T diverted / '+P.f(ptdTons)+' T generated = '+ptdRate+'%'+(ver==='none'?'':ptdOk?' (meets '+tgt+'% target)':' (below '+tgt+'% target)')+'</div>':'')+
 // MATERIALS
 zonePdfHtml+
 '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
@@ -2132,16 +2187,16 @@ var pv=Math.round(dvp*100);r.getCell(11).font={bold:true,size:10,color:{argb:pv>
 if(t.scale_ticket_image){r.getCell(27).value={text:'View Photo',hyperlink:t.scale_ticket_image};r.getCell(27).font={size:9,color:{argb:'FF3B82F6'},underline:true};}
 });
 // Totals
-var tdp=sTn>0?sDv/sTn:0;
+var tdp=sTn>0?sDv/sTn:0;var _xf=P.xlRateFmtKey(tdp*100,P._lastKey(tix),proj&&proj.leed_version==='none'?null:(proj&&proj.leed_target!=null?proj.leed_target:50));// v2.8.2 — reported months '0%' as reported; one decimal after
 var tr=ws.addRow(['TOTALS','','','',sG,sG/2000,sT,sT/2000,sN,sTn,tdp,sDv]);
 sR(tr,{fill:dkG,font:{bold:true,size:10,color:wht}});
-[11].forEach(function(ci){tr.getCell(ci).numFmt='0%';});[6,8,10,12].forEach(function(ci){tr.getCell(ci).numFmt='0.00';});[5,7,9].forEach(function(ci){tr.getCell(ci).numFmt='#,##0';});
+tr.getCell(11).numFmt=_xf;[6,8,10,12].forEach(function(ci){tr.getCell(ci).numFmt='0.00';});[5,7,9].forEach(function(ci){tr.getCell(ci).numFmt='#,##0';});
 // Summary
 ws.addRow([]);
 [['Total Tonnage',+sTn.toFixed(2)],['Diverted',+sDv.toFixed(2)],['Landfill',+Math.max(0,sTn-sDv).toFixed(2)],['Diversion %',tdp]].forEach(function(d){
 var r=ws.addRow(d);r.getCell(1).font={bold:true,size:10,color:{argb:'FF52525B'}};
 r.getCell(2).font={bold:true,size:11,color:{argb:d[0]==='Landfill'?'FFDC2626':'FF1B5E20'}};
-if(d[0]==='Diversion %')r.getCell(2).numFmt='0%';else r.getCell(2).numFmt='0.00';});
+if(d[0]==='Diversion %')r.getCell(2).numFmt=_xf;else r.getCell(2).numFmt='0.00';});
 // Zone breakdown
 ws.addRow([]);var zt=ws.addRow(['TONNAGE BY ZONE']);zt.font={bold:true,size:12,color:wht};zt.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:dkG};
 var zh=ws.addRow(['Zone','Tickets','Total (T)','Diverted (T)','Landfill (T)','Div %']);zh.font={bold:true,color:wht};zh.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:mdG};});
@@ -2313,6 +2368,11 @@ var tgt=proj.leed_target!=null?proj.leed_target:50;
 var ver=proj.leed_version||'v4';
 var isNL=ver==='none';
 var onTarget=divPct>=tgt;
+// v2.8.2 — this summary has always shown the exact rate at one decimal. A scope
+// that ends before RATE_EXACT_FROM shows exactly what it showed before; from
+// then on a rate just under the target is not rounded up onto it (v2.8.1).
+var sumKey=P._lastKey(tix),sumRate=P._asRep(sumKey)?divPct.toFixed(1):P.fmtRate(divPct,tgt);
+var sumGap=P._asRep(sumKey)?(tgt-divPct).toFixed(1):P.rateGap(sumRate,tgt);
 
 // Top-5 helpers
 var top=function(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a];}).slice(0,5).map(function(k){return {name:k,tons:o[k]};});};
@@ -2366,7 +2426,7 @@ var html='<!DOCTYPE html><html><head><meta charset=utf-8><title>'+P.esc(proj.nam
 '<div class="kpi"><div class="v">'+totalTons.toFixed(2)+'</div><div class="l">Tons</div></div>'+
 (isNL?'':'<div class="kpi"><div class="v">'+totalDiv.toFixed(2)+'</div><div class="l">Diverted (T)</div></div>')+
 '</div>'+
-(isNL?'':'<div class="target '+(onTarget?'on':'off')+'">Diversion '+divPct.toFixed(1)+'% — '+(onTarget?'On Target':((tgt-divPct).toFixed(1)+'% below target'))+'</div>')+
+(isNL?'':'<div class="target '+(onTarget?'on':'off')+'">Diversion '+sumRate+'% — '+(onTarget?'On Target':(sumGap+'% below target'))+'</div>')+
 '<div class="two-col"><div><h2>Materials</h2><table><tr><th>Material</th><th class="r">Tons</th><th class="r">%</th></tr>'+matRows+'</table></div>'+
 '<div><h2>Top Haulers</h2><table><tr><th>Hauler</th><th class="r">Tons</th></tr>'+hRows+'</table>'+
 '<h2 style="margin-top:12px">Top Drivers</h2><table><tr><th>Driver</th><th class="r">Tons</th></tr>'+dRows+'</table></div></div>'+
@@ -2773,7 +2833,7 @@ if(!isNL){h+='<div style="position:absolute;left:0;right:0;bottom:'+(20+100*tgt/
 h+='<div style="position:absolute;right:2px;bottom:'+(22+100*tgt/100)+'px;font-size:.5rem;color:var(--warning);font-weight:700;z-index:2">'+tgt+'% target</div>';}
 keys.forEach(function(k){var d=months[k],pct=d.tons/maxT*100,divPct=d.tons>0?d.div/d.tons:0;
 var divH=pct*divPct,lfH=pct-divH;var pts=k.split('-');var label=mn[+pts[1]];
-var rate=d.tons>0?Math.round(d.div/d.tons*100):0;var rc=rate>=tgt?'var(--success)':rate>=tgt*.67?'var(--warning)':'var(--danger)';
+var rateX=d.tons>0?d.div/d.tons*100:0,rate=P.rateText(rateX,k,tgt),rateV=P.rateVal(rateX,k);var rc=rateV>=tgt?'var(--success)':rateV>=tgt*.67?'var(--warning)':'var(--danger)';// v2.8.2 — reported months as reported
 h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">';
 if(!isNL)h+='<div style="font-size:.5rem;font-weight:700;color:'+rc+';margin-bottom:2px">'+rate+'%</div>';
 h+='<div style="width:100%;max-width:32px;display:flex;flex-direction:column;border-radius:3px;overflow:hidden">';
@@ -2791,8 +2851,11 @@ P.tx.forEach(function(t){var k=(t.ticket_date||'').substring(0,7);
 if(k===ym){cur.tons+=+(t.net_tons)||0;cur.div+=+(t.diverted_tons)||0;cur.count++;}
 if(k===pym){lst.tons+=+(t.net_tons)||0;lst.div+=+(t.diverted_tons)||0;lst.count++;}});
 if(lst.count===0&&cur.count===0){document.getElementById('dComparison').innerHTML='';return;}
-var curRate=cur.tons>0?Math.round(cur.div/cur.tons*100):0,lstRate=lst.tons>0?Math.round(lst.div/lst.tons*100):0;
-var tonsDiff=cur.tons-lst.tons,rateDiff=curRate-lstRate;
+// v2.8.2 — each month as it is judged: reported months as reported (whole number)
+var curRate=P.rateText(cur.tons>0?cur.div/cur.tons*100:0,ym,P._rateTgt()),lstRate=P.rateText(lst.tons>0?lst.div/lst.tons*100:0,pym,P._rateTgt());
+// the change is shown to as many decimals as the two rates it compares (75 vs 76 → "1")
+var rdDec=Math.max((String(curRate).split('.')[1]||'').length,(String(lstRate).split('.')[1]||'').length);
+var tonsDiff=cur.tons-lst.tons,rateDiff=parseFloat(curRate)-parseFloat(lstRate);
 var h='<div style="display:flex;gap:8px">';
 h+='<div style="flex:1;background:var(--primary-glow);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
 h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[now.getMonth()+1]+' (current)</div>';
@@ -2806,7 +2869,7 @@ if(lst.tons>0){h+='<div style="flex:0 0 60px;display:flex;flex-direction:column;
 var ta=tonsDiff>=0?'▲':'▼',tc=tonsDiff>=0?'var(--success)':'var(--danger)';
 h+='<div style="font-size:.7rem;font-weight:800;color:'+tc+'">'+ta+Math.abs(tonsDiff).toFixed(1)+'T</div>';
 if(!isNL){var ra=rateDiff>=0?'▲':'▼',rc=rateDiff>=0?'var(--success)':'var(--danger)';
-h+='<div style="font-size:.6rem;font-weight:700;color:'+rc+'">'+ra+Math.abs(rateDiff)+'%</div>';}
+h+='<div style="font-size:.6rem;font-weight:700;color:'+rc+'">'+ra+Math.abs(rateDiff).toFixed(rdDec)+'%</div>';}
 h+='</div>';}
 h+='</div>';document.getElementById('dComparison').innerHTML=h;},
 
