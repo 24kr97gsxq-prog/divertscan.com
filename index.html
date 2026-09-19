@@ -1881,11 +1881,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.48.0',
+    VERSION: '7.48.1',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-09-03',
+    BUILD: '2026-09-18',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -8069,14 +8069,15 @@ const DS = {
         document.getElementById('statLandfillTons').textContent = this.fmt(totals.landfillTons);
         document.getElementById('statCO2e').textContent = this.fmt(totals.co2e);
 
-        // Update gauge
-        document.getElementById('gaugeValue').textContent = totals.divRate + '%';
+        // Update gauge (v7.48.1 — one decimal; colour judged on the exact rate)
+        const gaugeTarget = proj.leed_target != null ? proj.leed_target : 75;
+        document.getElementById('gaugeValue').textContent = this.fmtRate(totals.divRateExact, [gaugeTarget, 50].concat(this._rateLines(proj) || [])) + '%';
         const maxArc = 251.2;
-        const arcLen = (totals.divRate / 100) * maxArc;
+        const arcLen = (totals.divRateExact / 100) * maxArc;
         document.getElementById('gaugeArc').setAttribute('stroke-dasharray', `${arcLen} ${maxArc}`);
 
-        const gaugeColor = totals.divRate >= (proj.leed_target != null ? proj.leed_target : 75) ? 'var(--success)' :
-                           totals.divRate >= 50 ? 'var(--warning)' : 'var(--danger)';
+        const gaugeColor = totals.divRateExact >= gaugeTarget ? 'var(--success)' :
+                           totals.divRateExact >= 50 ? 'var(--warning)' : 'var(--danger)';
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
         var gContainer = document.getElementById('gaugeContainer');
@@ -8112,8 +8113,53 @@ const DS = {
             });
         });
 
-        const divRate = totalTons > 0 ? Math.round(divertedTons / totalTons * 100) : 0;
-        return { totalTons, divertedTons, landfillTons, co2e, divRate, matTotals, ticketCount: tickets.length };
+        // v7.48.1 — divRateExact is the true percentage (74.859...). Every
+        // met / not-met decision uses it. divRate is the same number at one
+        // decimal (74.9) for display only. Before this, divRate was rounded to
+        // a whole number and the target checks compared THAT, so a month at
+        // 74.86% displayed as 75% and passed a 75% target.
+        const divRateExact = totalTons > 0 ? divertedTons / totalTons * 100 : 0;
+        const divRate = Math.round(divRateExact * 10) / 10;
+        return { totalTons, divertedTons, landfillTons, co2e, divRate, divRateExact, matTotals, ticketCount: tickets.length };
+    },
+
+    // v7.48.1 — diversion rate as display text, one decimal ("74.9").
+    // `lines` is the target, or a list of lines that matter (target + LEED
+    // tiers). A rate just under a line is never rounded up onto it:
+    // 74.96 shows "74.96", not "75.0"; 74.998 shows "74.99".
+    fmtRate(pct, lines) {
+        pct = +pct || 0;
+        var t = this._rateCrossed(pct, lines);
+        if (t === null) return (Math.round(pct * 10) / 10).toFixed(1);
+        var r2 = Math.round(pct * 100) / 100;
+        if (r2 >= t) r2 = (Math.round(t * 100) - 1) / 100;
+        return r2.toFixed(2);
+    },
+
+    // The line (if any) that one-decimal rounding would carry this rate up onto.
+    _rateCrossed(pct, lines) {
+        var r = Math.round(pct * 10) / 10;
+        var list = [].concat(lines == null ? [] : lines);
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] != null && pct < list[i] && r >= list[i]) return list[i];
+        }
+        return null;
+    },
+
+    // v7.48.1 — the matching Excel number format for a rate cell. The cell
+    // always holds the exact value; this only controls how it displays.
+    xlRateFmt(pct, lines) {
+        return this._rateCrossed(+pct || 0, lines) === null ? '0.0%' : '0.00%';
+    },
+
+    // v7.48.1 — the lines a project's rate is judged against: its target plus
+    // its LEED tiers (v4: 50% = 1 point, 75% = 2 points). Null for Non-LEED.
+    // Defaults to the open project.
+    _rateLines(p) {
+        p = p || this.state.currentProject;
+        if (!p || p.leed_version === 'none') return null;
+        var info = this.getLeedInfo(p);
+        return [p.leed_target != null ? p.leed_target : info.target].concat(info.tiers.map(function(x) { return x.pct; }));
     },
 
     renderMaterialBars(matTotals, totalTons) {
@@ -8166,7 +8212,7 @@ const DS = {
             const totals = this.calcTicketTotals(mTickets);
             cumTons += totals.totalTons;
             cumDiverted += totals.divertedTons;
-            const cumRate = cumTons > 0 ? Math.round(cumDiverted / cumTons * 100) : 0;
+            const cumRate = cumTons > 0 ? cumDiverted / cumTons * 100 : 0;   // v7.48.1 — exact
             monthDataMap[key] = { ...totals, cumTons, cumDiverted, cumRate };
         });
 
@@ -8181,14 +8227,18 @@ const DS = {
             const monthName = monthNames[parseInt(month)] || month;
             const data = monthDataMap[key];
             const target = (proj.leed_target != null ? proj.leed_target : leedInfo.target);
-            const statusColor = data.divRate >= target ? 'var(--success)' :
-                                data.divRate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
-            const statusIcon = data.divRate >= target ? '' : data.divRate >= (target * 0.67) ? '' : '';
+            // v7.48.1 — judge the month on the exact rate; show it at one decimal
+            const rate = data.divRateExact;
+            const rateLines = this._rateLines(proj);
+            const shownRate = this.fmtRate(rate, rateLines);
+            const statusColor = rate >= target ? 'var(--success)' :
+                                rate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
+            const statusIcon = rate >= target ? '' : rate >= (target * 0.67) ? '' : '';
 
             // LEED credit scoring
             var creditLabel = '';
             for (var ti = leedInfo.tiers.length - 1; ti >= 0; ti--) {
-                if (data.divRate >= leedInfo.tiers[ti].pct) { creditLabel = leedInfo.tiers[ti].label; break; }
+                if (rate >= leedInfo.tiers[ti].pct) { creditLabel = leedInfo.tiers[ti].label; break; }
             }
             var scoreLine = '';
             if (leedInfo.isNonLeed) {
@@ -8197,7 +8247,13 @@ const DS = {
                 scoreLine = 'LEED ' + leedInfo.version + ' ' + leedInfo.credit + ' • Target: ' + target + '%';
                 if (creditLabel) scoreLine += ' • ' + creditLabel + ' ✓';
                 else if (leedInfo.isPrereq) scoreLine += ' • PREREQUISITE NOT MET';
-                else scoreLine += ' • ' + (target - data.divRate) + '% below target';
+                // v7.48.1 — say plainly when a month misses its target, even when it
+                // still earns a lower tier (74.9% on a 75% target = 1 point, not met).
+                // The gap is taken from the rate as shown, so the two always add up.
+                if (rate < target && !(leedInfo.isPrereq && !creditLabel)) {
+                    var gapDec = (shownRate.split('.')[1] || '').length;
+                    scoreLine += ' • ' + (target - parseFloat(shownRate)).toFixed(gapDec) + '% below target';
+                }
             }
 
             html += `
@@ -8207,7 +8263,7 @@ const DS = {
                     <span class="mh-caret" id="mhc-${key}">▸</span>
                     ${monthName} ${year}
                     <span class="mh-count">${data.ticketCount} tickets</span>
-                    ${leedInfo.isNonLeed ? '' : `<span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${data.divRate}%</span>`}
+                    ${leedInfo.isNonLeed ? '' : `<span style="margin-left:auto; font-size:0.75rem; color:${statusColor};">${statusIcon} ${shownRate}%</span>`}
                 </div>
                 <div class="month-controls">
                     <span class="mc-label">Export</span>
@@ -8233,8 +8289,8 @@ const DS = {
                         <option value="driver_asc"${this._getSortPref()==='driver_asc'?' selected':''}>Driver A–Z</option>
                     </select>
                 </div>
-                ${leedInfo.isNonLeed ? '<div style="text-align:center;padding:8px 0;margin-bottom:8px;background:var(--bg-input);border-radius:var(--radius);"><div style="font-size:0.7rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>' : `<div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${data.divRate >= target ? 'var(--success-light)' : data.divRate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
-                    <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${data.divRate}%</div>
+                ${leedInfo.isNonLeed ? '<div style="text-align:center;padding:8px 0;margin-bottom:8px;background:var(--bg-input);border-radius:var(--radius);"><div style="font-size:0.7rem;color:var(--text-muted);">Non-LEED • Tracking Only</div></div>' : `<div style="text-align:center; padding:8px 0; margin-bottom:8px; background:${rate >= target ? 'var(--success-light)' : rate >= 50 ? 'var(--warning-light)' : 'var(--danger-light)'}; border-radius:var(--radius);">
+                    <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${shownRate}%</div>
                     <div style="font-size:0.65rem; color:var(--text-muted);">Monthly Diversion Rate</div>
                     <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 16px 0; overflow:hidden;">
                         <div style="height:100%; border-radius:3px; width:${data.divRate}%; background:${statusColor};"></div>
@@ -8269,7 +8325,7 @@ const DS = {
                 <div class="divider"></div>
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
                     <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
-                    ${leedInfo.isNonLeed ? '' : '<span>Cumulative: <strong style="color:' + (data.cumRate >= target ? 'var(--success)' : 'var(--warning)') + ';">' + data.cumRate + '%</strong> diverted</span>'}
+                    ${leedInfo.isNonLeed ? '' : '<span>Cumulative: <strong style="color:' + (data.cumRate >= target ? 'var(--success)' : 'var(--warning)') + ';">' + this.fmtRate(data.cumRate, rateLines) + '%</strong> diverted</span>'}
                 </div>
             </div>`;
         });
@@ -8430,7 +8486,7 @@ const DS = {
                 '</tr>';
         }
 
-        var totalDivRate = sumTons > 0 ? Math.round(sumDiverted / sumTons * 100) : 0;
+        var totalDivRate = this.fmtRate(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, this._rateLines());   // v7.48.1
         tbl += '</tbody><tfoot>' +
             '<tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">' +
             '<td style="padding:8px 6px; font-weight:800;" colspan="3">TOTALS</td>' +
@@ -8529,7 +8585,7 @@ const DS = {
                 '</tr>';
         });
 
-        const totalDivRate = sumTons > 0 ? Math.round(sumDiverted / sumTons * 100) : 0;
+        const totalDivRate = this.fmtRate(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, this._rateLines());   // v7.48.1
         html += `</tbody>
             <tfoot>
                 <tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">
@@ -9627,10 +9683,10 @@ const DS = {
                 total_tons: +totals.totalTons.toFixed(4),
                 diverted_tons: +totals.divertedTons.toFixed(4),
                 landfill_tons: +totals.landfillTons.toFixed(4),
-                diversion_rate_pct: totals.divRate,
+                diversion_rate_pct: +totals.divRateExact.toFixed(4),   // v7.48.1 — was a whole number
                 co2e_avoided_mt: +totals.co2e.toFixed(4),
                 leed_target_pct: this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75,
-                target_met: totals.divRate >= (this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75)
+                target_met: totals.divRateExact >= (this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75)
             },
             tickets: this.state.tickets,
             exported_at: new Date().toISOString(),
@@ -9669,9 +9725,11 @@ const DS = {
             tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
             matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
         var landfill=Math.max(0,tons-div);
-        var rate=tons>0?Math.round(div/tons*100):0;
         var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
-        var ok=rate>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+        // v7.48.1 — ON TRACK / BELOW TARGET is decided on the exact rate; `rate` is display text at one decimal
+        var rateExact=tons>0?div/tons*100:0;
+        var rate=DS.fmtRate(rateExact,DS._rateLines(proj));
+        var ok=rateExact>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
         var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 
         // Cumulative project-to-date
@@ -9679,7 +9737,8 @@ const DS = {
         var ptdTons=0,ptdDiv=0;
         allTix.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;});
         var ptdLandfill=Math.max(0,ptdTons-ptdDiv);
-        var ptdRate=ptdTons>0?Math.round(ptdDiv/ptdTons*100):0;
+        var ptdExact=ptdTons>0?ptdDiv/ptdTons*100:0;   // v7.48.1 — exact for the colour, one decimal for display
+        var ptdRate=DS.fmtRate(ptdExact,DS._rateLines(proj));
 
         // Ticket rows
         var rows='';
@@ -9744,7 +9803,7 @@ const DS = {
         '<div class="stat"><b>'+DS.fmt(ptdTons)+'</b><span>Generated (T)</span></div>'+
         '<div class="stat"><b style="color:#059669">'+DS.fmt(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
         '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
-        '<div class="stat"><b style="color:'+(ptdRate>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+        '<div class="stat"><b style="color:'+(ptdExact>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
         '<h2>Tonnage by Zone — '+label+'</h2>'+
         (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>')+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
@@ -9953,6 +10012,9 @@ const DS = {
 
         // Totals row
         var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
+        // v7.48.1 — the month's rate shows one decimal (74.9%, not 75%). Cells keep the exact value.
+        var xlLines = DS._rateLines(proj);
+        var rateFmt = DS.xlRateFmt(totalDivPct * 100, xlLines);
         var totRow = ws.addRow(['TOTALS','','',
             sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
             totalDivPct, sumDiverted,
@@ -9970,6 +10032,7 @@ const DS = {
             border: thinBorder
         });
         [10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
+        totRow.getCell(10).numFmt = rateFmt;   // v7.48.1 — month's diversion rate, one decimal
         [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
         [4,6,8].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
 
@@ -9986,7 +10049,7 @@ const DS = {
             var r = ws.addRow(d);
             r.getCell(1).font = {bold:true, size:10, color:{argb:'52525B'}};
             r.getCell(2).font = {bold:true, size:11, color:{argb: d[0]==='Landfill' ? redText : dkGreen}};
-            if (d[0]==='Recycled Material %') r.getCell(2).numFmt = '0%';
+            if (d[0]==='Recycled Material %') r.getCell(2).numFmt = rateFmt;   // v7.48.1
             else if (d[0]!=='Material Streams') r.getCell(2).numFmt = '0.00';
         });
 
@@ -10027,7 +10090,7 @@ const DS = {
         });
 
         this.showToast('Downloaded ' + monthName + ' ' + year + ' XLSX');
-        this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + Math.round(totalDivPct*100) + '% diverted');
+        this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + DS.fmtRate(totalDivPct*100, xlLines) + '% diverted');
     },
 
     exportAllXLSX() {
@@ -10066,11 +10129,15 @@ const DS = {
         sum.push(['Total Tonnage:', totals.totalTons]);
         sum.push(['Diverted:', totals.divertedTons]);
         sum.push(['Landfill:', totals.totalTons - totals.divertedTons]);
-        sum.push(['Diversion Rate:', totals.divRate / 100]);
-        sum.push(['Target Met:', totals.divRate >= (proj.leed_target != null ? proj.leed_target : 50) ? 'YES' : 'NO']);
+        // v7.48.1 — rates are stored exact and shown at one decimal; YES/NO is
+        // decided on the exact rate (was a whole-number rate, so 74.86% read 75%).
+        var fullTgt = proj.leed_target != null ? proj.leed_target : 50;
+        var fullLines = DS._rateLines(proj);
+        sum.push(['Diversion Rate:', totals.divRateExact / 100]);
+        sum.push(['Target Met:', totals.divRateExact >= fullTgt ? 'YES' : 'NO']);
         sum.push([]);
         sum.push(['MONTHLY BREAKDOWN']);
-        sum.push(['Month', 'Tickets', 'Tonnage', 'Diverted', 'Landfill', 'Rate']);
+        sum.push(['Month', 'Tickets', 'Tonnage', 'Diverted', 'Landfill', 'Rate', 'Target Met']);
 
         // Group by month
         var months = {};
@@ -10085,19 +10152,21 @@ const DS = {
             var mTix = months[key];
             var mTotals = DS.calcTicketTotals(mTix);
             var pts = key.split('-');
-            sum.push([monthNames[+pts[1]] + ' ' + pts[0], mTix.length, mTotals.totalTons, mTotals.divertedTons, mTotals.totalTons - mTotals.divertedTons, mTotals.divRate / 100]);
+            sum.push([monthNames[+pts[1]] + ' ' + pts[0], mTix.length, mTotals.totalTons, mTotals.divertedTons, mTotals.totalTons - mTotals.divertedTons, mTotals.divRateExact / 100, mTotals.divRateExact >= fullTgt ? 'YES' : 'NO']);
         });
 
         var sumWs = XLSX.utils.aoa_to_sheet(sum);
-        sumWs['!cols'] = [{wch:20},{wch:30},{wch:12},{wch:12},{wch:12},{wch:10}];
+        sumWs['!cols'] = [{wch:20},{wch:30},{wch:12},{wch:12},{wch:12},{wch:10},{wch:11}];
         // Format percentages and numbers
         var targetCell = XLSX.utils.encode_cell({r:10, c:3});
         if (sumWs[targetCell]) sumWs[targetCell].z = '0%';
         var rateCell = XLSX.utils.encode_cell({r:27, c:1});
-        if (sumWs[rateCell]) sumWs[rateCell].z = '0%';
-        for (var mr = 33; mr < 33 + sortedKeys.length; mr++) {
+        if (sumWs[rateCell]) sumWs[rateCell].z = DS.xlRateFmt(totals.divRateExact, fullLines);
+        // Month rows start at row 32 (0-based): 30 = MONTHLY BREAKDOWN, 31 = header.
+        // v7.48.1 — the loop started at 33, so the first month was never formatted.
+        for (var mr = 32; mr < 32 + sortedKeys.length; mr++) {
             var rc = XLSX.utils.encode_cell({r:mr, c:5});
-            if (sumWs[rc]) sumWs[rc].z = '0%';
+            if (sumWs[rc]) sumWs[rc].z = DS.xlRateFmt(sumWs[rc].v * 100, fullLines);
             [2,3,4].forEach(function(c) { var a = XLSX.utils.encode_cell({r:mr,c:c}); if(sumWs[a]) sumWs[a].z = '0.00'; });
         }
         XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
@@ -10123,7 +10192,10 @@ const DS = {
                 d.push([df,parseInt(t.ticket_number)||t.ticket_number,t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,
                     tn>0?dv/tn:0,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);
             });
-            d.push(['Totals','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
+            // v7.48.1 — added the empty Zone cell. Without it every total sat one column
+            // to the left (tons under "Net (lbs)", the rate under "Tons", diverted tons
+            // under "Div%" showing as 64472%).
+            d.push(['Totals','','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
             var mWs = XLSX.utils.aoa_to_sheet(d);
             mWs['!cols']=[{wch:12},{wch:10},{wch:6},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
             // Auto-filter + frozen top row (SheetJS syntax)
@@ -10135,6 +10207,9 @@ const DS = {
                 [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0.00';});
                 [3,5,7].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='#,##0';});
             }
+            // v7.48.1 — the month's total rate at one decimal (per-ticket rates stay whole numbers)
+            var totRateCell = XLSX.utils.encode_cell({r:mTix.length+1, c:9});
+            if (mWs[totRateCell]) mWs[totRateCell].z = DS.xlRateFmt(mWs[totRateCell].v * 100, fullLines);
             XLSX.utils.book_append_sheet(wb, mWs, mName + ' ' + pts[0]);
         });
 
@@ -10297,7 +10372,8 @@ const DS = {
             divTons += parseFloat(t.diverted_tons) || 0;
         });
         rows.push('');
-        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + (totTons > 0 ? Math.round(divTons/totTons*100) : 0) + '%');
+        // v7.48.1 — rate at one decimal (was a whole number)
+        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + DS.fmtRate(totTons > 0 ? divTons/totTons*100 : 0, DS._rateLines(proj)) + '%');
         rows.push('');
         rows.push('Project,' + '"' + (proj.name || '') + '"');
         rows.push('LEED Version,' + (proj.leed_version || 'v4'));
@@ -10339,10 +10415,12 @@ const DS = {
                 months[mk].count++;
             }
         });
-        var divRate = totTons > 0 ? Math.round(divTons / totTons * 100) : 0;
+        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;   // v7.48.1 — verdicts use this
         var landfillTons = totTons - divTons;
         var ver = proj.leed_version || 'v4';
         var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
+        var tgtLines = DS._rateLines(proj);
+        var divRate = DS.fmtRate(divExact, tgtLines);                 // display text, one decimal
         var lines = [];
         lines.push('══════════════════════════════════════════════════════');
         lines.push('LEED ' + ver + ' WASTE DIVERSION COMPLIANCE SUMMARY');
@@ -10372,7 +10450,7 @@ const DS = {
         lines.push('Total Tonnage:        ' + totTons.toFixed(2) + ' T');
         lines.push('Diverted:             ' + divTons.toFixed(2) + ' T');
         lines.push('Landfill:             ' + landfillTons.toFixed(2) + ' T');
-        lines.push('Diversion Rate:       ' + divRate + '%  ' + (divRate >= tgt ? '✓ MEETS TARGET' : 'BELOW TARGET'));
+        lines.push('Diversion Rate:       ' + divRate + '%  ' + (divExact >= tgt ? '✓ MEETS TARGET' : 'BELOW TARGET'));
         lines.push('Total Tickets:        ' + tickets.length);
         lines.push('With Scale Photos:    ' + withPhoto + '/' + tickets.length + ' (' + (tickets.length > 0 ? Math.round(withPhoto/tickets.length*100) : 0) + '%)');
         lines.push('');
@@ -10396,8 +10474,10 @@ const DS = {
         lines.push('───────────────────────────────────────────────────');
         Object.keys(months).sort().forEach(function(mk) {
             var m = months[mk];
-            var mr = m.tons > 0 ? Math.round(m.div / m.tons * 100) : 0;
-            lines.push(mk + ':  ' + m.count + ' tickets  |  ' + m.tons.toFixed(2) + ' T total  |  ' + m.div.toFixed(2) + ' T diverted  |  ' + mr + '% diversion');
+            // v7.48.1 — one decimal, plus a per-month met / below flag judged on the exact rate
+            var mExact = m.tons > 0 ? m.div / m.tons * 100 : 0;
+            var mFlag = ver === 'none' ? '' : (mExact >= tgt ? '  ✓ meets target' : '  below target');
+            lines.push(mk + ':  ' + m.count + ' tickets  |  ' + m.tons.toFixed(2) + ' T total  |  ' + m.div.toFixed(2) + ' T diverted  |  ' + DS.fmtRate(mExact, tgtLines) + '% diversion' + mFlag);
         });
         lines.push('');
         lines.push('VERIFIED END MARKETS');
@@ -10736,9 +10816,10 @@ const DS = {
             if (t.scale_ticket_image) withPhoto++;
             if (Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; })) withMaterials++;
         });
-        var divRate = totTons > 0 ? Math.round(divTons / totTons * 100) : 0;
+        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;   // v7.48.1 — the check uses this
         var ver = proj.leed_version || 'v4';
         var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
+        var divRate = this.fmtRate(divExact, this._rateLines(proj));  // display text, one decimal
 
         document.getElementById('auditProjSummary').innerHTML =
             '<div style="font-weight:700;margin-bottom:4px">' + this.esc(proj.name) + '</div>' +
@@ -10753,7 +10834,7 @@ const DS = {
         // 1. Diversion rate
         checks.push({
             label: 'Diversion Rate ≥ ' + tgt + '%',
-            pass: divRate >= tgt,
+            pass: divExact >= tgt,
             detail: divRate + '% achieved'
         });
 
