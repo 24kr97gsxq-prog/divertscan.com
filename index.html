@@ -1881,11 +1881,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.48.1',
+    VERSION: '7.48.2',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-09-18',
+    BUILD: '2026-09-19',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -8069,15 +8069,21 @@ const DS = {
         document.getElementById('statLandfillTons').textContent = this.fmt(totals.landfillTons);
         document.getElementById('statCO2e').textContent = this.fmt(totals.co2e);
 
-        // Update gauge (v7.48.1 — one decimal; colour judged on the exact rate)
+        // Update gauge. v7.48.2 — this is project-to-date, so it is a whole
+        // number as it has always been shown (see RATE_EXACT_FROM). Once it
+        // includes a month from that date on, it is judged on the exact rate
+        // and never rounded up onto the target or the 50% line.
         const gaugeTarget = proj.leed_target != null ? proj.leed_target : 75;
-        document.getElementById('gaugeValue').textContent = this.fmtRate(totals.divRateExact, [gaugeTarget, 50].concat(this._rateLines(proj) || [])) + '%';
+        const gaugeKey = this._lastMonthKey(tickets);
+        const gaugeText = this.runText(totals.divRateExact, gaugeKey, [gaugeTarget, 50].concat(this._rateLines(proj) || []));
+        const gaugeVal = this.rateVal(totals.divRateExact, gaugeKey);
+        document.getElementById('gaugeValue').textContent = gaugeText + '%';
         const maxArc = 251.2;
-        const arcLen = (totals.divRateExact / 100) * maxArc;
+        const arcLen = (parseFloat(gaugeText) / 100) * maxArc;   // drawn at the number shown
         document.getElementById('gaugeArc').setAttribute('stroke-dasharray', `${arcLen} ${maxArc}`);
 
-        const gaugeColor = totals.divRateExact >= gaugeTarget ? 'var(--success)' :
-                           totals.divRateExact >= 50 ? 'var(--warning)' : 'var(--danger)';
+        const gaugeColor = gaugeVal >= gaugeTarget ? 'var(--success)' :
+                           gaugeVal >= 50 ? 'var(--warning)' : 'var(--danger)';
         document.getElementById('gaugeArc').setAttribute('stroke', gaugeColor);
         document.getElementById('gaugeValue').style.color = gaugeColor;
         var gContainer = document.getElementById('gaugeContainer');
@@ -8113,11 +8119,13 @@ const DS = {
             });
         });
 
-        // v7.48.1 — divRateExact is the true percentage (74.859...). Every
-        // met / not-met decision uses it. divRate is the same number at one
-        // decimal (74.9) for display only. Before this, divRate was rounded to
-        // a whole number and the target checks compared THAT, so a month at
-        // 74.86% displayed as 75% and passed a 75% target.
+        // v7.48.1 — divRateExact is the true percentage (74.859...). divRate
+        // is the same number at one decimal (74.9). Before this, divRate was
+        // rounded to a whole number and the target checks compared THAT, so a
+        // month at 74.86% displayed as 75% and passed a 75% target.
+        // v7.48.2 — months already reported keep that whole-number rate and
+        // verdict (see RATE_EXACT_FROM). Show and judge rates through
+        // rateText / runText / rateMet, never straight off these fields.
         const divRateExact = totalTons > 0 ? divertedTons / totalTons * 100 : 0;
         const divRate = Math.round(divRateExact * 10) / 10;
         return { totalTons, divertedTons, landfillTons, co2e, divRate, divRateExact, matTotals, ticketCount: tickets.length };
@@ -8148,8 +8156,20 @@ const DS = {
 
     // v7.48.1 — the matching Excel number format for a rate cell. The cell
     // always holds the exact value; this only controls how it displays.
+    // v7.48.2 — if two decimals would still land on the line (74.996 → "75.00%"),
+    // use as many as it takes ("74.996%").
     xlRateFmt(pct, lines) {
-        return this._rateCrossed(+pct || 0, lines) === null ? '0.0%' : '0.00%';
+        pct = +pct || 0;
+        if (this._rateCrossed(pct, lines) === null) return '0.0%';
+        var list = [].concat(lines == null ? [] : lines);
+        for (var d = 2; d <= 6; d++) {
+            var f = Math.pow(10, d), r = Math.round(pct * f) / f, hit = false;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] != null && pct < list[i] && r >= list[i]) hit = true;
+            }
+            if (!hit) break;
+        }
+        return '0.' + '000000'.substring(0, Math.min(d, 6)) + '%';
     },
 
     // v7.48.1 — the lines a project's rate is judged against: its target plus
@@ -8160,6 +8180,89 @@ const DS = {
         if (!p || p.leed_version === 'none') return null;
         var info = this.getLeedInfo(p);
         return [p.leed_target != null ? p.leed_target : info.target].concat(info.tiers.map(function(x) { return x.pct; }));
+    },
+
+    // ------------------------------------------------------------
+    // v7.48.2 — MONTHS ALREADY REPORTED DO NOT CHANGE.
+    // Robert, Sep 19 2026: "Do not change any previous percentages that
+    // we have already reported to the hospital."
+    // Months before RATE_EXACT_FROM were reported as whole numbers, and
+    // the whole number decided met / not met (August 2026 was 74.86%,
+    // reported as 75%, on track). Those months keep exactly that — on
+    // screen, in every export, and in the customer portal.
+    // From RATE_EXACT_FROM on, the v7.48.1 rule applies: one decimal,
+    // never rounded up onto a target or tier line, verdicts on the
+    // exact rate.
+    // Project-to-date figures stay whole numbers, as they have always
+    // been shown; one that includes a month from RATE_EXACT_FROM on is
+    // judged exactly and is never rounded up onto a line.
+    // If a month's report has already gone out under the old rule,
+    // move this date forward. Never move it back.
+    // client.html (customer portal) carries the same date — change both.
+    // ------------------------------------------------------------
+    RATE_EXACT_FROM: '2026-09',
+
+    // True when month `key` (YYYY-MM…) was reported under the old rule.
+    _asReported(key) {
+        return !!key && String(key).substring(0, 7) < this.RATE_EXACT_FROM;
+    },
+
+    // Latest month (YYYY-MM) in a set of tickets: the month a running total ends on.
+    _lastMonthKey(tickets) {
+        var k = '';
+        (tickets || []).forEach(function(t) {
+            var d = String(t.ticket_date || t.service_date || '').substring(0, 7);
+            if (d.length === 7 && d > k) k = d;
+        });
+        return k || null;
+    },
+
+    // The number a rate is judged (and drawn) on: the whole number for
+    // reported months, the exact rate after. `key` is the month, or the
+    // last month a running total covers.
+    rateVal(pct, key) {
+        pct = +pct || 0;
+        return this._asReported(key) ? Math.round(pct) : pct;
+    },
+
+    // Met / not met against `thr`, judged the way that month is judged.
+    rateMet(pct, key, thr) {
+        return this.rateVal(pct, key) >= thr;
+    },
+
+    // One month's rate as display text: "75" for reported months, "74.9" after.
+    rateText(pct, key, lines) {
+        pct = +pct || 0;
+        return this._asReported(key) ? String(Math.round(pct)) : this.fmtRate(pct, lines);
+    },
+
+    // Project-to-date (running) rate as display text; `key` is the last month
+    // it covers. A whole number, as always, unless the running total includes
+    // a month from RATE_EXACT_FROM on and rounding would carry it up onto a
+    // line: then it shows the decimals ("74.6"), never "75".
+    runText(pct, key, lines) {
+        pct = +pct || 0;
+        if (this._asReported(key) || !this._runCrossed(pct, lines)) return String(Math.round(pct));
+        return this.fmtRate(pct, lines);
+    },
+
+    // True when whole-number rounding would carry this rate up onto a line.
+    _runCrossed(pct, lines) {
+        var r = Math.round(pct);
+        var list = [].concat(lines == null ? [] : lines);
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] != null && pct < list[i] && r >= list[i]) return true;
+        }
+        return false;
+    },
+
+    // Excel number formats matching rateText (one month) and runText (running total).
+    xlRateFmtKey(pct, key, lines) {
+        return this._asReported(key) ? '0%' : this.xlRateFmt(pct, lines);
+    },
+    xlRunFmt(pct, key, lines) {
+        pct = +pct || 0;
+        return (this._asReported(key) || !this._runCrossed(pct, lines)) ? '0%' : this.xlRateFmt(pct, lines);
     },
 
     renderMaterialBars(matTotals, totalTons) {
@@ -8227,10 +8330,13 @@ const DS = {
             const monthName = monthNames[parseInt(month)] || month;
             const data = monthDataMap[key];
             const target = (proj.leed_target != null ? proj.leed_target : leedInfo.target);
-            // v7.48.1 — judge the month on the exact rate; show it at one decimal
-            const rate = data.divRateExact;
+            // v7.48.2 — a month already reported shows and is judged exactly as
+            // reported (whole number). From RATE_EXACT_FROM on: judged on the
+            // exact rate, shown at one decimal (v7.48.1).
+            const asReported = this._asReported(key);
+            const rate = this.rateVal(data.divRateExact, key);
             const rateLines = this._rateLines(proj);
-            const shownRate = this.fmtRate(rate, rateLines);
+            const shownRate = this.rateText(data.divRateExact, key, rateLines);
             const statusColor = rate >= target ? 'var(--success)' :
                                 rate >= (target * 0.67) ? 'var(--warning)' : 'var(--danger)';
             const statusIcon = rate >= target ? '' : rate >= (target * 0.67) ? '' : '';
@@ -8247,10 +8353,12 @@ const DS = {
                 scoreLine = 'LEED ' + leedInfo.version + ' ' + leedInfo.credit + ' • Target: ' + target + '%';
                 if (creditLabel) scoreLine += ' • ' + creditLabel + ' ✓';
                 else if (leedInfo.isPrereq) scoreLine += ' • PREREQUISITE NOT MET';
+                // v7.48.2 — a reported month keeps its reported wording.
+                else if (asReported) scoreLine += ' • ' + (target - rate) + '% below target';
                 // v7.48.1 — say plainly when a month misses its target, even when it
                 // still earns a lower tier (74.9% on a 75% target = 1 point, not met).
                 // The gap is taken from the rate as shown, so the two always add up.
-                if (rate < target && !(leedInfo.isPrereq && !creditLabel)) {
+                if (!asReported && rate < target && !(leedInfo.isPrereq && !creditLabel)) {
                     var gapDec = (shownRate.split('.')[1] || '').length;
                     scoreLine += ' • ' + (target - parseFloat(shownRate)).toFixed(gapDec) + '% below target';
                 }
@@ -8293,7 +8401,7 @@ const DS = {
                     <div style="font-size:1.6rem; font-weight:800; color:${statusColor};">${shownRate}%</div>
                     <div style="font-size:0.65rem; color:var(--text-muted);">Monthly Diversion Rate</div>
                     <div style="height:6px; border-radius:3px; background:var(--border); margin:6px 16px 0; overflow:hidden;">
-                        <div style="height:100%; border-radius:3px; width:${data.divRate}%; background:${statusColor};"></div>
+                        <div style="height:100%; border-radius:3px; width:${asReported ? rate : data.divRate}%; background:${statusColor};"></div>
                     </div>
                     <div style="font-size:0.6rem; color:var(--text-dim); margin-top:4px;">${scoreLine}</div>
                 </div>`}
@@ -8319,13 +8427,13 @@ const DS = {
                 ${this.renderZoneSummary(months[key])}
                 <div class="divider"></div>
                 <div class="mt-wrap" id="mtw-${key}" hidden>
-                    ${this.renderMonthTicketTable(months[key])}
+                    ${this.renderMonthTicketTable(months[key], key)}
                     <div class="mt-empty" id="mte-${key}" hidden>No ticket matches that search.</div>
                 </div>
                 <div class="divider"></div>
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
                     <span>Project-to-Date: ${this.fmt(data.cumTons)}T total</span>
-                    ${leedInfo.isNonLeed ? '' : '<span>Cumulative: <strong style="color:' + (data.cumRate >= target ? 'var(--success)' : 'var(--warning)') + ';">' + this.fmtRate(data.cumRate, rateLines) + '%</strong> diverted</span>'}
+                    ${leedInfo.isNonLeed ? '' : '<span>Cumulative: <strong style="color:' + (this.rateMet(data.cumRate, key, target) ? 'var(--success)' : 'var(--warning)') + ';">' + this.runText(data.cumRate, key, rateLines) + '%</strong> diverted</span>'}
                 </div>
             </div>`;
         });
@@ -8442,8 +8550,9 @@ const DS = {
         if (tbl) tbl.style.display = (q && shown === 0) ? 'none' : '';
     },
 
-    renderMonthTicketTable(tickets) {
+    renderMonthTicketTable(tickets, monthKey) {
         if (!tickets || tickets.length === 0) return '';
+        monthKey = monthKey || this._lastMonthKey(tickets);   // v7.48.2 — the month decides how its rate shows
         var _isNL = this.state.currentProject && this.state.currentProject.leed_version === 'none';
 
         // Apply user-selected sort preference (Phase 2.7c)
@@ -8486,7 +8595,7 @@ const DS = {
                 '</tr>';
         }
 
-        var totalDivRate = this.fmtRate(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, this._rateLines());   // v7.48.1
+        var totalDivRate = this.rateText(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, monthKey, this._rateLines());   // v7.48.2
         tbl += '</tbody><tfoot>' +
             '<tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">' +
             '<td style="padding:8px 6px; font-weight:800;" colspan="3">TOTALS</td>' +
@@ -8585,7 +8694,7 @@ const DS = {
                 '</tr>';
         });
 
-        const totalDivRate = this.fmtRate(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, this._rateLines());   // v7.48.1
+        const totalDivRate = this.rateText(sumTons > 0 ? sumDiverted / sumTons * 100 : 0, monthKey, this._rateLines());   // v7.48.2
         html += `</tbody>
             <tfoot>
                 <tr style="border-top:2px solid var(--primary); background:var(--primary-glow);">
@@ -9713,10 +9822,12 @@ const DS = {
         var pts = monthKey.split('-');
         var mf = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
         var label = mf[+pts[1]] + ' ' + pts[0];
-        this._generatePDF(proj, tix, label);
+        this._generatePDF(proj, tix, label, monthKey);
     },
 
-    _generatePDF(proj, tix, label) {
+    // monthKey is set for a one-month report and decides how that month's rate
+    // shows (v7.48.2). Without it (All Time) the rate is a running total.
+    _generatePDF(proj, tix, label, monthKey) {
         tix = tix.slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
         var tons=0,div=0,tGross=0,tTare=0,mc={};
         var matKeys = Object.keys(this.MATERIALS);
@@ -9726,10 +9837,14 @@ const DS = {
             matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
         var landfill=Math.max(0,tons-div);
         var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
-        // v7.48.1 — ON TRACK / BELOW TARGET is decided on the exact rate; `rate` is display text at one decimal
+        // v7.48.2 — a month already reported shows its reported rate and verdict
+        // (whole number). From RATE_EXACT_FROM on: ON TRACK / BELOW TARGET on the
+        // exact rate, rate shown at one decimal. All Time is a running total.
         var rateExact=tons>0?div/tons*100:0;
-        var rate=DS.fmtRate(rateExact,DS._rateLines(proj));
-        var ok=rateExact>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+        var rLines=DS._rateLines(proj);
+        var rKey=monthKey||DS._lastMonthKey(tix);
+        var rate=monthKey?DS.rateText(rateExact,monthKey,rLines):DS.runText(rateExact,rKey,rLines);
+        var ok=DS.rateMet(rateExact,rKey,tgt);var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
         var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 
         // Cumulative project-to-date
@@ -9737,8 +9852,11 @@ const DS = {
         var ptdTons=0,ptdDiv=0;
         allTix.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;});
         var ptdLandfill=Math.max(0,ptdTons-ptdDiv);
-        var ptdExact=ptdTons>0?ptdDiv/ptdTons*100:0;   // v7.48.1 — exact for the colour, one decimal for display
-        var ptdRate=DS.fmtRate(ptdExact,DS._rateLines(proj));
+        // v7.48.2 — project-to-date: whole number as always; judged and shown per runText
+        var ptdExact=ptdTons>0?ptdDiv/ptdTons*100:0;
+        var ptdKey=DS._lastMonthKey(allTix);
+        var ptdRate=DS.runText(ptdExact,ptdKey,rLines);
+        var ptdOk=DS.rateMet(ptdExact,ptdKey,tgt);
 
         // Ticket rows
         var rows='';
@@ -9803,7 +9921,7 @@ const DS = {
         '<div class="stat"><b>'+DS.fmt(ptdTons)+'</b><span>Generated (T)</span></div>'+
         '<div class="stat"><b style="color:#059669">'+DS.fmt(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
         '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
-        '<div class="stat"><b style="color:'+(ptdExact>=tgt?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+        '<div class="stat"><b style="color:'+(ptdOk?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
         '<h2>Tonnage by Zone — '+label+'</h2>'+
         (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>')+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
@@ -10012,9 +10130,11 @@ const DS = {
 
         // Totals row
         var totalDivPct = sumTons > 0 ? sumDiverted/sumTons : 0;
-        // v7.48.1 — the month's rate shows one decimal (74.9%, not 75%). Cells keep the exact value.
+        // v7.48.2 — a month already reported shows its reported whole-number rate
+        // ('0%', as before). From RATE_EXACT_FROM on, one decimal (74.9%, not 75%).
+        // Cells keep the exact value either way.
         var xlLines = DS._rateLines(proj);
-        var rateFmt = DS.xlRateFmt(totalDivPct * 100, xlLines);
+        var rateFmt = DS.xlRateFmtKey(totalDivPct * 100, monthKey, xlLines);
         var totRow = ws.addRow(['TOTALS','','',
             sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
             totalDivPct, sumDiverted,
@@ -10032,7 +10152,7 @@ const DS = {
             border: thinBorder
         });
         [10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
-        totRow.getCell(10).numFmt = rateFmt;   // v7.48.1 — month's diversion rate, one decimal
+        totRow.getCell(10).numFmt = rateFmt;   // month's diversion rate (v7.48.2 rule)
         [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
         [4,6,8].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
 
@@ -10049,7 +10169,7 @@ const DS = {
             var r = ws.addRow(d);
             r.getCell(1).font = {bold:true, size:10, color:{argb:'52525B'}};
             r.getCell(2).font = {bold:true, size:11, color:{argb: d[0]==='Landfill' ? redText : dkGreen}};
-            if (d[0]==='Recycled Material %') r.getCell(2).numFmt = rateFmt;   // v7.48.1
+            if (d[0]==='Recycled Material %') r.getCell(2).numFmt = rateFmt;   // v7.48.2 rule
             else if (d[0]!=='Material Streams') r.getCell(2).numFmt = '0.00';
         });
 
@@ -10090,7 +10210,7 @@ const DS = {
         });
 
         this.showToast('Downloaded ' + monthName + ' ' + year + ' XLSX');
-        this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + DS.fmtRate(totalDivPct*100, xlLines) + '% diverted');
+        this.addAuditEntry('EXPORT_XLSX', monthName + ' ' + year + ' — ' + tickets.length + ' tickets, ' + DS.rateText(totalDivPct*100, monthKey, xlLines) + '% diverted');
     },
 
     exportAllXLSX() {
@@ -10129,12 +10249,17 @@ const DS = {
         sum.push(['Total Tonnage:', totals.totalTons]);
         sum.push(['Diverted:', totals.divertedTons]);
         sum.push(['Landfill:', totals.totalTons - totals.divertedTons]);
-        // v7.48.1 — rates are stored exact and shown at one decimal; YES/NO is
-        // decided on the exact rate (was a whole-number rate, so 74.86% read 75%).
+        // v7.48.2 — months already reported keep the whole-number rate and the
+        // YES/NO they were reported with. From RATE_EXACT_FROM on, a month is
+        // stored exact, shown at one decimal and judged on the exact rate.
+        // The project rate is a running total: a whole number, as always
+        // (see runText). A project that only has reported months shows it
+        // exactly as reported.
         var fullTgt = proj.leed_target != null ? proj.leed_target : 50;
         var fullLines = DS._rateLines(proj);
-        sum.push(['Diversion Rate:', totals.divRateExact / 100]);
-        sum.push(['Target Met:', totals.divRateExact >= fullTgt ? 'YES' : 'NO']);
+        var fullKey = DS._lastMonthKey(allTickets);
+        sum.push(['Diversion Rate:', DS._asReported(fullKey) ? Math.round(totals.divRateExact) / 100 : totals.divRateExact / 100]);
+        sum.push(['Target Met:', DS.rateMet(totals.divRateExact, fullKey, fullTgt) ? 'YES' : 'NO']);
         sum.push([]);
         sum.push(['MONTHLY BREAKDOWN']);
         sum.push(['Month', 'Tickets', 'Tonnage', 'Diverted', 'Landfill', 'Rate', 'Target Met']);
@@ -10152,7 +10277,9 @@ const DS = {
             var mTix = months[key];
             var mTotals = DS.calcTicketTotals(mTix);
             var pts = key.split('-');
-            sum.push([monthNames[+pts[1]] + ' ' + pts[0], mTix.length, mTotals.totalTons, mTotals.divertedTons, mTotals.totalTons - mTotals.divertedTons, mTotals.divRateExact / 100, mTotals.divRateExact >= fullTgt ? 'YES' : 'NO']);
+            sum.push([monthNames[+pts[1]] + ' ' + pts[0], mTix.length, mTotals.totalTons, mTotals.divertedTons, mTotals.totalTons - mTotals.divertedTons,
+                DS._asReported(key) ? Math.round(mTotals.divRateExact) / 100 : mTotals.divRateExact / 100,
+                DS.rateMet(mTotals.divRateExact, key, fullTgt) ? 'YES' : 'NO']);
         });
 
         var sumWs = XLSX.utils.aoa_to_sheet(sum);
@@ -10161,12 +10288,12 @@ const DS = {
         var targetCell = XLSX.utils.encode_cell({r:10, c:3});
         if (sumWs[targetCell]) sumWs[targetCell].z = '0%';
         var rateCell = XLSX.utils.encode_cell({r:27, c:1});
-        if (sumWs[rateCell]) sumWs[rateCell].z = DS.xlRateFmt(totals.divRateExact, fullLines);
+        if (sumWs[rateCell]) sumWs[rateCell].z = DS.xlRunFmt(totals.divRateExact, fullKey, fullLines);
         // Month rows start at row 32 (0-based): 30 = MONTHLY BREAKDOWN, 31 = header.
         // v7.48.1 — the loop started at 33, so the first month was never formatted.
         for (var mr = 32; mr < 32 + sortedKeys.length; mr++) {
             var rc = XLSX.utils.encode_cell({r:mr, c:5});
-            if (sumWs[rc]) sumWs[rc].z = DS.xlRateFmt(sumWs[rc].v * 100, fullLines);
+            if (sumWs[rc]) sumWs[rc].z = DS.xlRateFmtKey(sumWs[rc].v * 100, sortedKeys[mr - 32], fullLines);
             [2,3,4].forEach(function(c) { var a = XLSX.utils.encode_cell({r:mr,c:c}); if(sumWs[a]) sumWs[a].z = '0.00'; });
         }
         XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
@@ -10207,9 +10334,10 @@ const DS = {
                 [4,6,8,10,12,14,16,18,20,22,24].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='0.00';});
                 [3,5,7].forEach(function(c){var a=XLSX.utils.encode_cell({r:r2,c:c});if(mWs[a])mWs[a].z='#,##0';});
             }
-            // v7.48.1 — the month's total rate at one decimal (per-ticket rates stay whole numbers)
+            // The month's total rate: whole number for a month already reported,
+            // one decimal from RATE_EXACT_FROM on (v7.48.2). Per-ticket rates stay whole numbers.
             var totRateCell = XLSX.utils.encode_cell({r:mTix.length+1, c:9});
-            if (mWs[totRateCell]) mWs[totRateCell].z = DS.xlRateFmt(mWs[totRateCell].v * 100, fullLines);
+            if (mWs[totRateCell]) mWs[totRateCell].z = DS.xlRateFmtKey(mWs[totRateCell].v * 100, key, fullLines);
             XLSX.utils.book_append_sheet(wb, mWs, mName + ' ' + pts[0]);
         });
 
@@ -10372,8 +10500,8 @@ const DS = {
             divTons += parseFloat(t.diverted_tons) || 0;
         });
         rows.push('');
-        // v7.48.1 — rate at one decimal (was a whole number)
-        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + DS.fmtRate(totTons > 0 ? divTons/totTons*100 : 0, DS._rateLines(proj)) + '%');
+        // v7.48.2 — project-to-date rate: whole number as always (see runText)
+        rows.push('TOTALS,,' + tickets.length + ' tickets,,,,' + totTons.toFixed(2) + ',,,,,,,,,,,,,,,' + divTons.toFixed(2) + ',' + DS.runText(totTons > 0 ? divTons/totTons*100 : 0, DS._lastMonthKey(tickets), DS._rateLines(proj)) + '%');
         rows.push('');
         rows.push('Project,' + '"' + (proj.name || '') + '"');
         rows.push('LEED Version,' + (proj.leed_version || 'v4'));
@@ -10415,12 +10543,15 @@ const DS = {
                 months[mk].count++;
             }
         });
-        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;   // v7.48.1 — verdicts use this
+        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;
         var landfillTons = totTons - divTons;
         var ver = proj.leed_version || 'v4';
         var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
         var tgtLines = DS._rateLines(proj);
-        var divRate = DS.fmtRate(divExact, tgtLines);                 // display text, one decimal
+        // v7.48.2 — project-to-date: whole number as always, judged per runText / rateMet
+        var allKey = DS._lastMonthKey(tickets);
+        var divRate = DS.runText(divExact, allKey, tgtLines);
+        var divMet = DS.rateMet(divExact, allKey, tgt);
         var lines = [];
         lines.push('══════════════════════════════════════════════════════');
         lines.push('LEED ' + ver + ' WASTE DIVERSION COMPLIANCE SUMMARY');
@@ -10450,7 +10581,7 @@ const DS = {
         lines.push('Total Tonnage:        ' + totTons.toFixed(2) + ' T');
         lines.push('Diverted:             ' + divTons.toFixed(2) + ' T');
         lines.push('Landfill:             ' + landfillTons.toFixed(2) + ' T');
-        lines.push('Diversion Rate:       ' + divRate + '%  ' + (divExact >= tgt ? '✓ MEETS TARGET' : 'BELOW TARGET'));
+        lines.push('Diversion Rate:       ' + divRate + '%  ' + (divMet ? '✓ MEETS TARGET' : 'BELOW TARGET'));
         lines.push('Total Tickets:        ' + tickets.length);
         lines.push('With Scale Photos:    ' + withPhoto + '/' + tickets.length + ' (' + (tickets.length > 0 ? Math.round(withPhoto/tickets.length*100) : 0) + '%)');
         lines.push('');
@@ -10474,10 +10605,11 @@ const DS = {
         lines.push('───────────────────────────────────────────────────');
         Object.keys(months).sort().forEach(function(mk) {
             var m = months[mk];
-            // v7.48.1 — one decimal, plus a per-month met / below flag judged on the exact rate
+            // v7.48.2 — each month shown and flagged the way it is judged: a month
+            // already reported as reported (whole number), later months exactly.
             var mExact = m.tons > 0 ? m.div / m.tons * 100 : 0;
-            var mFlag = ver === 'none' ? '' : (mExact >= tgt ? '  ✓ meets target' : '  below target');
-            lines.push(mk + ':  ' + m.count + ' tickets  |  ' + m.tons.toFixed(2) + ' T total  |  ' + m.div.toFixed(2) + ' T diverted  |  ' + DS.fmtRate(mExact, tgtLines) + '% diversion' + mFlag);
+            var mFlag = ver === 'none' ? '' : (DS.rateMet(mExact, mk, tgt) ? '  ✓ meets target' : '  below target');
+            lines.push(mk + ':  ' + m.count + ' tickets  |  ' + m.tons.toFixed(2) + ' T total  |  ' + m.div.toFixed(2) + ' T diverted  |  ' + DS.rateText(mExact, mk, tgtLines) + '% diversion' + mFlag);
         });
         lines.push('');
         lines.push('VERIFIED END MARKETS');
@@ -10816,10 +10948,12 @@ const DS = {
             if (t.scale_ticket_image) withPhoto++;
             if (Object.keys(DS.MATERIALS).some(function(k) { return (t[k + '_pct'] || 0) > 0; })) withMaterials++;
         });
-        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;   // v7.48.1 — the check uses this
+        var divExact = totTons > 0 ? divTons / totTons * 100 : 0;
         var ver = proj.leed_version || 'v4';
         var tgt = proj.leed_target != null ? proj.leed_target : (ver === 'v5' ? 75 : 50);
-        var divRate = this.fmtRate(divExact, this._rateLines(proj));  // display text, one decimal
+        // v7.48.2 — project-to-date: whole number as always, judged per runText / rateMet
+        var allKey = this._lastMonthKey(tickets);
+        var divRate = this.runText(divExact, allKey, this._rateLines(proj));
 
         document.getElementById('auditProjSummary').innerHTML =
             '<div style="font-weight:700;margin-bottom:4px">' + this.esc(proj.name) + '</div>' +
@@ -10834,7 +10968,7 @@ const DS = {
         // 1. Diversion rate
         checks.push({
             label: 'Diversion Rate ≥ ' + tgt + '%',
-            pass: divExact >= tgt,
+            pass: this.rateMet(divExact, allKey, tgt),
             detail: divRate + '% achieved'
         });
 
