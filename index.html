@@ -1144,6 +1144,56 @@ document.addEventListener('keydown', function(e){
                 </div>
             </div>
 
+            <!-- EVIDENCE PHOTOS — representative library (Methodology §4) -->
+            <div class="card" id="evCard">
+                <div class="card-title">Evidence Photos</div>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px">Photos of the yard, sorted piles, processing and outbound loads, kept by date so they can be produced if anyone reviews the records. <b>These are never attached to a load</b> — a load's own photo lives on its ticket.</p>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Date taken</label>
+                        <input type="date" class="form-input" id="evDate"></div>
+                    <div class="form-group"><label class="form-label">What it shows</label>
+                        <select class="form-input" id="evCat" style="padding:10px 12px">
+                            <option value="sorted">Sorted pile — one material</option>
+                            <option value="inbound">Incoming material, before sorting</option>
+                            <option value="operations">Sorting / processing in action</option>
+                            <option value="facility">The yard or facility</option>
+                            <option value="outbound">Outbound load or receipt</option>
+                            <option value="other">Other</option>
+                        </select></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Material (if it is one pile)</label>
+                        <select class="form-input" id="evMat" style="padding:10px 12px">
+                            <option value="">— Mixed / not one material —</option>
+                        </select></div>
+                    <div class="form-group"><label class="form-label">Project (optional)</label>
+                        <select class="form-input" id="evProject" style="padding:10px 12px"><option value="">Whole yard — no project</option></select></div>
+                </div>
+                <div class="form-group"><label class="form-label">Note (optional)</label>
+                    <input type="text" class="form-input" id="evCaption" placeholder="e.g. wood pile before grinding, north side"></div>
+                <div class="form-group"><label class="form-label">Photos</label>
+                    <input type="file" accept="image/*" multiple class="form-input" id="evFiles"></div>
+                <button class="btn btn-success" id="evUploadBtn" onclick="DS.evUpload()">Add photos</button>
+                <div id="evProgress" style="font-size:.75rem;color:var(--text-muted);margin-top:8px"></div>
+                <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:10px">
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Show</label>
+                            <select class="form-input" id="evFilterCat" style="padding:10px 12px" onchange="DS.evLoad()">
+                                <option value="">Everything</option>
+                                <option value="sorted">Sorted piles</option>
+                                <option value="inbound">Incoming material</option>
+                                <option value="operations">Sorting / processing</option>
+                                <option value="facility">Yard / facility</option>
+                                <option value="outbound">Outbound</option>
+                                <option value="other">Other</option>
+                            </select></div>
+                        <div class="form-group"><label class="form-label">Month</label>
+                            <input type="month" class="form-input" id="evFilterMonth" onchange="DS.evLoad()"></div>
+                    </div>
+                    <div id="evList"><button class="btn btn-sm btn-outline" onclick="DS.evLoad()">Load photos</button></div>
+                </div>
+            </div>
+
             <!-- 3. Hauler Management (MOVED UP) -->
             <div class="card">
                 <div class="card-title">Hauler Management</div>
@@ -10657,6 +10707,103 @@ const DS = {
     // adjusts if needed, and confirms. Confirming stamps mix_source='verified'
     // with a timestamp, so estimated vs verified is provable per ticket.
     // ============================================================
+    // ============================================================
+    // EVIDENCE PHOTOS — the representative library (Methodology §4).
+    // Yard, sorted piles, processing, outbound: dated and labelled, and
+    // NEVER attached to a load ticket (a load's own photo lives there).
+    // Bucket "evidence-photos" + table evidence_photos (dalmex_evidence.sql).
+    // Add + view only: there is no delete, evidence is never removed.
+    // ============================================================
+    _evCats: { sorted: 'Sorted pile', inbound: 'Incoming material', operations: 'Sorting / processing', facility: 'Yard / facility', outbound: 'Outbound', other: 'Other' },
+
+    evInit() {
+        var d = document.getElementById('evDate');
+        if (!d) return;
+        if (!d.value) d.value = DS._todayLocal();
+        var m = document.getElementById('evFilterMonth');
+        if (m && !m.value) m.value = DS._todayLocal().slice(0, 7);
+        var self = this, ms = document.getElementById('evMat');
+        if (ms && ms.options.length <= 1) {
+            ms.innerHTML = '<option value="">— Mixed / not one material —</option>' +
+                Object.keys(this.MATERIALS).map(function (k) { return '<option value="' + k + '">' + self.MATERIALS[k].name + '</option>'; }).join('');
+        }
+        var ps = document.getElementById('evProject'), projs = (this.state && this.state.projects) || [];
+        if (ps && ps.options.length <= 1 && projs.length) {
+            ps.innerHTML = '<option value="">Whole yard — no project</option>' +
+                projs.map(function (p) { return '<option value="' + p.id + '">' + self.esc(p.name) + '</option>'; }).join('');
+        }
+    },
+
+    async evUpload() {
+        var $ = function (id) { return document.getElementById(id); };
+        var files = Array.prototype.slice.call(($('evFiles').files) || []);
+        if (!files.length) return this.showToast('Pick the photos first');
+        var day = $('evDate').value;
+        if (!day) return this.showToast('Enter the date the photos were taken');
+        if (new Date(day + 'T12:00:00').getTime() > Date.now() + 86400000) return this.showToast('That date is in the future');
+        var cat = $('evCat').value, mat = $('evMat').value, pid = $('evProject').value, cap = $('evCaption').value.trim();
+        var who = (this.state && this.state.currentUser && (this.state.currentUser.email || this.state.currentUser.name)) ||
+                  ((typeof agSession !== 'undefined' && agSession && agSession.user && agSession.user.email) || '');
+        var btn = $('evUploadBtn'); btn.disabled = true; btn.textContent = 'Uploading…';
+        var ok = 0, failed = 0;
+        for (var i = 0; i < files.length; i++) {
+            $('evProgress').textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + '…';
+            var f = files[i];
+            var ext = (f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            var path = day + '/' + cat + '_' + Date.now() + '_' + i + '.' + ext;
+            var url = await this.supabaseUpload('evidence-photos', path, f);
+            if (!url) { failed++; continue; }
+            var res = await this.supabase('evidence_photos', 'POST', {
+                url: url, taken_on: day, category: cat, material: mat || null,
+                project_id: pid || null, caption: cap || null, added_by: who || null, file_name: f.name
+            });
+            if (res) ok++; else failed++;
+        }
+        btn.disabled = false; btn.textContent = 'Add photos';
+        $('evProgress').textContent = '';
+        $('evFiles').value = ''; $('evCaption').value = '';
+        this.showToast(ok + ' photo' + (ok === 1 ? '' : 's') + ' added' + (failed ? ' — ' + failed + ' failed, try those again' : ''));
+        if (ok) { try { this.addAuditEntry('EVIDENCE_PHOTOS', ok + ' photo(s) added for ' + day + ' (' + cat + (mat ? ', ' + mat : '') + ')'); } catch (e) {} }
+        this.evLoad();
+    },
+
+    async evLoad() {
+        var el = document.getElementById('evList');
+        if (!el) return;
+        this.evInit();
+        el.innerHTML = '<div style="font-size:.75rem;color:var(--text-muted)">Loading…</div>';
+        var cat = (document.getElementById('evFilterCat') || {}).value || '';
+        var mon = (document.getElementById('evFilterMonth') || {}).value || '';
+        var q = 'evidence_photos?select=*&order=taken_on.desc,added_at.desc&limit=300';
+        if (cat) q += '&category=eq.' + cat;
+        if (mon) {
+            var d = new Date(mon + '-01T12:00:00'); d.setMonth(d.getMonth() + 1);
+            q += '&taken_on=gte.' + mon + '-01&taken_on=lt.' + d.toISOString().slice(0, 10);
+        }
+        var rows = await this.supabase(q);
+        if (!rows) { el.innerHTML = '<div style="font-size:.75rem;color:var(--danger)">Could not load — run dalmex_evidence.sql first.</div>'; return; }
+        if (!rows.length) { el.innerHTML = '<div style="font-size:.75rem;color:var(--text-muted)">No photos for that filter yet.</div>'; return; }
+        var self = this, names = {};
+        ((this.state && this.state.projects) || []).forEach(function (p) { names[p.id] = p.name; });
+        var byCat = {};
+        rows.forEach(function (r) { byCat[r.category] = (byCat[r.category] || 0) + 1; });
+        el.innerHTML = '<div style="font-size:.75rem;font-weight:700;margin-bottom:6px">' + rows.length + ' photo' + (rows.length > 1 ? 's' : '') + ' — ' +
+            Object.keys(byCat).map(function (k) { return (self._evCats[k] || k) + ' ' + byCat[k]; }).join(' · ') + '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px">' +
+            rows.map(function (r) {
+                var label = (self._evCats[r.category] || r.category) +
+                    (r.material && self.MATERIALS[r.material] ? ' · ' + self.MATERIALS[r.material].name : '') +
+                    (r.project_id && names[r.project_id] ? ' · ' + names[r.project_id] : '');
+                return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+                    '<img src="' + self.esc(r.url) + '" loading="lazy" onclick="window.open(\'' + self.esc(r.url) + '\',\'_blank\')" style="width:100%;height:96px;object-fit:cover;cursor:pointer;display:block">' +
+                    '<div style="padding:5px 6px;font-size:.62rem;line-height:1.35">' +
+                    '<div style="font-weight:700">' + self.esc(r.taken_on || '') + '</div>' +
+                    '<div style="color:var(--text-muted)">' + self.esc(label) + '</div>' +
+                    (r.caption ? '<div style="color:var(--text-muted)">' + self.esc(r.caption) + '</div>' : '') +
+                    '</div></div>';
+            }).join('') + '</div>';
+    },
+
     async loadMixReview() {
         var el = document.getElementById('mixReviewContent');
         if (!el) return;
