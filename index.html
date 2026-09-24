@@ -599,10 +599,7 @@ document.addEventListener('keydown', function(e){
                     <div class="form-group">
                         <label class="form-label">Hauler</label>
                         <select class="form-input" id="manualHauler" style="padding:10px 12px">
-                            <option value="Jaguar Waste Management" selected>Jaguar Waste Management</option>
-                            <option value="B&B Waste">B&B Waste</option>
-                            <option value="Liberty Demolition">Liberty Demolition</option>
-                            <option value="Ranger Waste Management LLC">Ranger Waste Management LLC</option>
+                            <option value="">&mdash; Loading approved haulers &mdash;</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -625,6 +622,26 @@ document.addEventListener('keydown', function(e){
                 <div class="form-group">
                     <label class="form-label">Service Date</label>
                     <input type="date" class="form-input" id="manualDate">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Weigher</label>
+                        <input type="text" class="form-input" id="manualWeigher" placeholder="e.g. Raul">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tare Source</label>
+                        <select class="form-input" id="manualTareSource" style="padding:10px 12px">
+                            <option value="">&mdash; Choose &mdash;</option>
+                            <option value="measured">Measured</option>
+                            <option value="estimated">Estimated</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="font-size:.65rem;color:var(--text-dim);margin:-4px 0 12px">
+                    <b>Measured</b> means the truck was weighed empty on the scale for this load.
+                    A standard or averaged tare &mdash; DX at ~32,540, or any figure carried over
+                    from another day \u2014 is <b>Estimated</b>. Both are fine; the record just has
+                    to say which, because an auditor will ask.
                 </div>
                 <div class="form-group">
                     <label class="form-label">Notes</label>
@@ -1935,11 +1952,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.48.3',
+    VERSION: '7.49.3',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-09-19',
+    BUILD: '2026-09-23',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -4403,6 +4420,33 @@ const DS = {
         } catch(e) {}
     },
 
+    // The approved hauler list, straight from the table, for the scan form.
+    // Same source the Edit Ticket screen uses, so the two screens can never
+    // offer different haulers. If the call fails the list is left saying so
+    // rather than guessing - a guessed hauler is worse than no hauler.
+    async _fillScanHaulers() {
+        var sel = document.getElementById('manualHauler');
+        if (!sel) return;
+        var keep = sel.value;
+        try {
+            var rows = await this.supabase('approved_haulers?select=name&order=name.asc');
+            if (!rows || !rows.length) {
+                sel.innerHTML = '<option value="">\u2014 No approved haulers found \u2014</option>';
+                return;
+            }
+            this._approvedHaulers = rows.map(function (r) { return r.name; });
+            var opts = '<option value="">\u2014 Choose hauler \u2014</option>';
+            this._approvedHaulers.forEach(function (n) {
+                opts += '<option value="' + DS.esc(n) + '">' + DS.esc(n) + '</option>';
+            });
+            sel.innerHTML = opts;
+            if (keep && this._approvedHaulers.indexOf(keep) >= 0) sel.value = keep;
+        } catch (e) {
+            console.warn('approved hauler list failed to load', e);
+            sel.innerHTML = '<option value="">\u2014 Could not load haulers \u2014 reload the page \u2014</option>';
+        }
+    },
+
     async init() {
         this.loadTheme();
         console.log(`DivertScan v${this.VERSION} (build ${this.BUILD}) initializing...`);
@@ -4450,6 +4494,7 @@ const DS = {
         // Load data from Supabase
         if (this.state.supabaseUrl && this.state.supabaseKey) {
             await this.loadProjects();
+            this._fillScanHaulers();
             this.updateDbStatus('Connected', 'success');
             // Check for pending queue items to show badge
             this.checkPendingQueue();
@@ -7059,6 +7104,18 @@ const DS = {
         if (net <= 0) { this.showToast('Net weight must be positive'); return; }
         const netTons = +(net / 2000).toFixed(4);
 
+        // Every ticket says who weighed it and where the tare came from. A
+        // ticket that cannot answer those two questions is not evidence.
+        const weigherEl = document.getElementById('manualWeigher');
+        const tareSrcEl = document.getElementById('manualTareSource');
+        const weigher = weigherEl ? weigherEl.value.trim() : '';
+        const tareSource = tareSrcEl ? tareSrcEl.value : '';
+        if (!weigher) { this.showToast('Enter the weigher \u2014 who weighed this load'); if (weigherEl) weigherEl.focus(); return; }
+        if (!tareSource) { this.showToast('Choose the tare source \u2014 Measured, or Estimated for a standard tare'); if (tareSrcEl) tareSrcEl.focus(); return; }
+        const haulerEl = document.getElementById('manualHauler');
+        const haulerPicked = haulerEl ? haulerEl.value.trim() : '';
+        if (!haulerPicked) { this.showToast('Choose the hauler'); if (haulerEl) haulerEl.focus(); return; }
+
         // Gather material percentages
         const mats = {};
         let totalPct = 0;
@@ -7107,11 +7164,16 @@ const DS = {
             ticket_number: ticketNum,
             ticket_date: rawDate,
             gross_lbs: gross, tare_lbs: tare, net_lbs: net, net_tons: netTons,
-            hauler: (await this._resolveHauler(document.getElementById('manualHauler').value)) || 'Jaguar Waste Management',
+            hauler: (await this._resolveHauler(haulerPicked)) || haulerPicked,
             container_size: parseInt(document.getElementById('manualContainer').value) || 30,
             zone: (document.getElementById('manualZone') || {}).value || null,
             notes: document.getElementById('manualNotes').value.trim() || null,
             scan_type: this.state.ocrBase64 ? 'ocr' : 'manual',
+            weigher: weigher,
+            tare_source: tareSource,
+            // Not yet checked by a person. Material Mix Review reads exactly
+            // this, so without it a scan-tab ticket is never reviewable.
+            mix_source: 'estimated',
             service_date: rawDate,
             diversion_pct: diversionPct, diverted_tons: divertedTons,
             co2e_avoided: co2e, captured_at: new Date().toISOString(),
@@ -7141,7 +7203,7 @@ const DS = {
         if (wt.ok && wt.data && wt.data.length > 0) {
             this.state.tickets.unshift(wt.data[0]);
             this.showToast('Ticket #' + ticketNum + ' saved — ' + netTons + ' T');
-            this.addAuditEntry('TICKET_CREATE', ticketNum + ' | ' + netTons + 'T | ' + diversionPct + '% div');
+            this.addAuditEntry('TICKET_CREATE', ticketNum + ' | ' + netTons + 'T | ' + diversionPct + '% div | weigher: ' + weigher + ' | tare: ' + tareSource);
             this.resetScanForm();
             this.renderReports();
         } else if (wt.queued) {
@@ -7227,14 +7289,15 @@ const DS = {
     },
 
     resetScanForm() {
-        ['manualTicketNum','manualGross','manualTare','manualNet','manualTons','manualNotes'].forEach(id => {
+        ['manualTicketNum','manualGross','manualTare','manualNet','manualTons','manualNotes','manualWeigher'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        document.getElementById('manualHauler').value = 'Jaguar Waste Management';
+        document.getElementById('manualHauler').value = '';
         document.getElementById('manualContainer').value = '30';
         if (document.getElementById('manualZone')) document.getElementById('manualZone').value = '';
         document.getElementById('manualDate').value = DS._todayLocal();
+        if (document.getElementById('manualTareSource')) document.getElementById('manualTareSource').value = '';
         this.state.debrisPhotos = [];
         this.state.debrisBase64 = [];
         this.state.ocrPhoto = null;
@@ -10153,7 +10216,7 @@ const DS = {
 
             var photoUrl = t.scale_ticket_image || '';
             var r = ws.addRow([
-                dateFmt, parseInt(t.ticket_number)||t.ticket_number, t.zone||'',
+                dateFmt, (t.ticket_number == null ? '' : String(t.ticket_number)), t.zone||'',
                 gross, gross/2000, tare, tare/2000, net, tons,
                 divPct, diverted,
                 wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt,
@@ -10371,7 +10434,7 @@ const DS = {
                 var dv=wt+gt+pt+ot+mt+ct+bt;
                 sG+=g;sT+=ta;sTn+=tn;sD+=dv;
                 var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp2=df.split('-');df=parseInt(dp2[1])+'/'+parseInt(dp2[2])+'/'+dp2[0];}
-                d.push([df,parseInt(t.ticket_number)||t.ticket_number,t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,
+                d.push([df,(t.ticket_number == null ? '' : String(t.ticket_number)),t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,
                     tn>0?dv/tn:0,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);
             });
             // v7.48.1 — added the empty Zone cell. Without it every total sat one column
@@ -10808,7 +10871,7 @@ const DS = {
         var el = document.getElementById('mixReviewContent');
         if (!el) return;
         el.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">Loading...</div>';
-        var rows = await this.supabase('tickets?mix_source=eq.estimated&select=id,ticket_number,ticket_date,net_tons,diversion_pct,project_id,scale_ticket_image,debris_images,zone,hauler,' + Object.keys(this.MATERIALS).map(function(k){return k+'_pct';}).join(',') + '&order=ticket_date.desc&limit=100');
+        var rows = await this.supabase('tickets?mix_source=eq.estimated&select=id,ticket_number,ticket_date,net_tons,diversion_pct,project_id,scale_ticket_image,debris_images,notes,zone,hauler,' + Object.keys(this.MATERIALS).map(function(k){return k+'_pct';}).join(',') + '&order=ticket_date.desc&limit=100');
         if (rows === null) { el.innerHTML = '<div style="color:var(--danger);font-size:.7rem">Failed to load. If mix_source does not exist yet, run mix_review_setup.sql first.</div>'; return; }
         this._mixQueue = rows;
         var badge = document.getElementById('mixBadge');
@@ -10828,7 +10891,7 @@ const DS = {
     // are never silently stamped without saving; confirm those individually.
     async verifyAllShown() {
         var q = this._mixQueue || [];
-        var ids = [], skipped = 0;
+        var ids = [], skipped = 0, self0 = this;
         for (var i = 0; i < q.length; i++) {
             var row = document.getElementById('mixRow_' + i);
             if (!row) continue;                       // already confirmed individually
@@ -10841,7 +10904,21 @@ const DS = {
             ids.push({ id: q[i].id, idx: i, num: q[i].ticket_number });
         }
         if (!ids.length) { this.showToast(skipped ? 'All remaining rows have adjustments — confirm those individually' : 'Nothing to verify'); return; }
-        if (!confirm('Mark ' + ids.length + ' ticket' + (ids.length>1?'s':'') + ' as verified as-shown?' + (skipped ? ' (' + skipped + ' adjusted row' + (skipped>1?'s':'') + ' will stay for individual confirm)' : ''))) return;
+        // Anything implausible gets NAMED before a bulk stamp, not found after.
+        var _odd = [];
+        ids.forEach(function (x) {
+            var row = q[x.idx];
+            if (!row) return;
+            var why = self0._mixOddReasons(row.diversion_pct, row.landfill_pct, row, row);
+            if (why.length) _odd.push(x.num + ' \u2014 ' + why.join('; '));
+        });
+        var _msg = 'Mark ' + ids.length + ' ticket' + (ids.length>1?'s':'') + ' as verified as-shown?' +
+                   (skipped ? ' (' + skipped + ' adjusted row' + (skipped>1?'s':'') + ' will stay for individual confirm)' : '');
+        if (_odd.length) {
+            _msg += '\n\nWorth a second look first:\n\u2022 ' + _odd.join('\n\u2022 ') +
+                    '\n\nThese are the numbers a reviewer asks about. Stamp them anyway?';
+        }
+        if (!confirm(_msg)) return;
         this.showLoading('Verifying ' + ids.length + '...');
         var now = new Date().toISOString();
         var res = await this.supabase('tickets?id=in.(' + ids.map(function(x){return x.id;}).join(',') + ')', 'PATCH',
@@ -10949,6 +11026,52 @@ const DS = {
         return total;
     },
 
+    // ---- is this number believable? --------------------------------------
+    // MS-0921-CH6 was stamped verified at 100% diversion - no landfill at all
+    // on a mixed hospital load - and went out on the Children's report before
+    // anyone caught it. This asks first. It never blocks: a genuinely clean
+    // load still gets stamped, with a note saying someone looked on purpose.
+    //
+    // ONE rule in ONE place - the single Confirm and the bulk stamp both ask
+    // this function, so they can never drift apart.
+    _mixOddReasons: function (divPct, landfillPct, t, pcts) {
+        var out = [];
+        var p = pcts || t || {};
+        // A clean SINGLE-material load with no landfill is normal and honest:
+        // a steel-only box off Hayes, a load of white ledger off the walk-in
+        // scale. Warning on those would fire on nearly every ticket, and a
+        // warning that fires every time is a warning nobody reads. It is a
+        // MIXED load with no landfill at all that nobody should be able to
+        // stamp without looking.
+        var streams = 0;
+        for (var k in this.MATERIALS) {
+            if (k !== 'landfill' && (+p[k + '_pct'] || 0) >= 10) streams++;
+        }
+        if ((landfillPct || 0) === 0 && streams >= 2) {
+            out.push('no landfill at all, on a load carrying ' + streams + ' different materials');
+        }
+        var target = null;
+        try {
+            var proj = (this.state.projects || []).filter(function (p2) { return p2.id === t.project_id; })[0];
+            if (proj && proj.leed_target) target = +proj.leed_target;
+        } catch (e) {}
+        // The starting mix sits just above target by design, so only a
+        // MEANINGFUL overshoot is worth stopping for - five points or more.
+        // A Non-LEED job carries target 0, which is falsy, so it stays quiet.
+        if (target && divPct >= target + 5) {
+            out.push('well above the project target of ' + target + '% (this load is ' + Math.round(divPct) + '%)');
+        }
+        return out;
+    },
+
+    _mixLooksOff: function (divPct, landfillPct, t, pcts) {
+        var out = this._mixOddReasons(divPct, landfillPct, t, pcts);
+        if (!out.length) return null;
+        return 'Before this is stamped as checked:\n\n\u2022 ' + out.join('\n\u2022 ') +
+               '\n\nThat can be right \u2014 but it is the number a reviewer asks about first, so it should come from the photos rather than from a default.\n\n' +
+               'Are you confirming it against what you can see in the load?';
+    },
+
     async confirmMix(i) {
         var t = this._mixQueue && this._mixQueue[i];
         if (!t) return;
@@ -10979,6 +11102,13 @@ const DS = {
         upd.diversion_pct = Math.round(divPct);
         upd.diverted_tons = +(netTons * divPct / 100).toFixed(4);
         upd.co2e_avoided = +(upd.diverted_tons * 0.85).toFixed(4);
+        var _warn = this._mixLooksOff(upd.diversion_pct, upd.landfill_pct, t, upd);
+        if (_warn) {
+            if (!confirm(_warn)) { this.showToast('Left unverified \u2014 nothing changed'); return; }
+            upd.notes = (t.notes ? t.notes + ' \u00b7 ' : '') +
+                'Unusual mix confirmed against the load photos when verified (' + Math.round(upd.diversion_pct) + '% diversion, ' +
+                Math.round(upd.landfill_pct || 0) + '% landfill)';
+        }
         upd.mix_source = 'verified';
         upd.mix_verified_at = new Date().toISOString();
         var res = await this.supabase('tickets?id=eq.' + t.id, 'PATCH', upd);
