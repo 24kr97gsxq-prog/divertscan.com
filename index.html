@@ -1952,7 +1952,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.49.4',
+    VERSION: '7.49.5',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -9067,7 +9067,7 @@ const DS = {
                     '- Project/Job: handwritten site name (e.g. "Childrens Hospital", "Hayes", "Ross Building", may say "Hospital" or "CH")\n' +
                     '- Zone: single letter A/B/C/D/E/F if present, often near project name\n' +
                     '- Container: number, usually 20, 30, or 40 (cubic yards)\n' +
-                    '- GENERIC PADS (v7.49.4): some tickets are plain Adams "general purpose" carbonless forms with NO Dalmex header and NO preprinted number. The "No." box is blank or has a handwritten code such as G-0926-1 - report that code as ticket_number if present, else null. Weights are stacked in the DESCRIPTION column (gross above tare, a line, net below if written). Project and zone are written beside them. NAME is the driver. Read everything else normally.\n\n' +
+                    '- GENERIC PADS: some tickets are plain Adams "general purpose" carbonless forms with NO Dalmex header and NO preprinted number. For these set generic_pad to true. Their "No." box is usually blank: if it is blank, ticket_number MUST be null - never invent one and never use the date as the number. Weights are stacked in the DESCRIPTION column (gross above tare, a line, net below if written). Project and zone are written beside them. NAME is the driver. Read everything else normally.\n\n' +
                     'Return ONLY valid JSON with this exact structure:\n' +
                     '{\n' +
                     '  "ticket_number":"<string or null>",\n' +
@@ -9080,6 +9080,7 @@ const DS = {
                     '  "project":"<string or null>",\n' +
                     '  "zone":"<A|B|C|D|E|F or null>",\n' +
                     '  "container":<number or null>,\n' +
+                    '  "generic_pad":<true|false>,\n' +
                     '  "confidence":<0-100>\n' +
                     '}\n\n' +
                     'RULES:\n' +
@@ -9112,6 +9113,20 @@ const DS = {
                 // v7.49.4 — generic pad: weights read but no number. Assign
                 // G-MMDD-<gross> (unique without a counter) and mark it so the
                 // suspicion check below sends it to review instead of auto-create.
+                // v7.49.5 — a generic pad is ALWAYS auto-numbered and reviewed,
+                // whatever the model thinks it read (Sep 30: it returned the
+                // prompt's example string once and the date once, and both
+                // auto-created). Same for a "number" that is really the date
+                // or a malformed G- code.
+                if (parsed && parsed.ticket_number) {
+                    var gRaw_ = String(parsed.ticket_number).trim();
+                    var gLooksDate_ = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(gRaw_) || /^\d{2}-\d{4}$/.test(gRaw_) || /^\d{6}$/.test(gRaw_);
+                    var gBadG_ = /^G-/i.test(gRaw_) && !/^G-\d{4}-\d{4,6}$/i.test(gRaw_);
+                    if (parsed.generic_pad === true || parsed.generic_pad === 'true' || gLooksDate_ || gBadG_) {
+                        parsed._readNumber = gRaw_;
+                        parsed.ticket_number = null;
+                    }
+                }
                 if (parsed && !parsed.ticket_number) {
                     var gGross_ = parseInt(parsed.gross_lbs || parsed.gross) || 0;
                     if (gGross_ > 0) {
@@ -9309,7 +9324,7 @@ const DS = {
                                 // v7.49.4 — generic pad, auto-numbered: always a human decision.
                                 if (parsed._autoNumbered) {
                                     suspicions.push('Generic pad, auto-numbered ' + ticketNum + ' - confirm tare source');
-                                    newTicket.notes = (newTicket.notes ? newTicket.notes + ' | ' : '[batch OCR] ') + 'Generic pad, no preprinted number; auto-numbered ' + ticketNum;
+                                    newTicket.notes = (newTicket.notes ? newTicket.notes + ' | ' : '[batch OCR] ') + 'Generic pad, no preprinted number; auto-numbered ' + ticketNum + (parsed._readNumber ? ' (model read "' + parsed._readNumber + '", discarded)' : '');
                                 }
 
                                 // Check 1: Date validity
