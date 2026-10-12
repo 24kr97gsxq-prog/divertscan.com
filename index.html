@@ -1952,7 +1952,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.49.5',
+    VERSION: '7.50.0',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -8886,6 +8886,11 @@ const DS = {
         this._batchProcessed = {};
         this._batchOCRRunning = false;
         this._batchPendingReview = [];  // Phase 2.8: tickets flagged for human review before save
+        this._batchPiCtx = {};          // v7.50.0: Pi-reading pairing per photo
+        this._batchPiStats = { linked: 0, none: 0, look: 0, already: 0 };
+        this._batchSeen = {};           // v7.50.0: date + gross of every photo read, for look-alike checks
+        this._batchPiDeferred = [];
+        this._batchSummaryMatched = 0; this._batchSummaryFlagged = 0; this._batchSummarySkipped = 0;
 
         const title = type === 'scale' ? 'Batch Upload — Scale Tickets' : 'Batch Upload — Debris Photos';
         document.getElementById('batchUploadTitle').textContent = title;
@@ -8978,6 +8983,7 @@ const DS = {
                 <img id="batchThumb_${idx}" src="" onclick="DS.previewBatchPhoto(${idx})" style="width:100px; height:100px; object-fit:cover; border-radius:10px; border:2px solid var(--border); background:var(--bg-input); cursor:pointer; flex-shrink:0;">
                 <div style="flex:1; min-width:0;">
                     <div id="batchStatus_${idx}" style="font-size:0.7rem; color:var(--text-muted); margin-bottom:6px;">${this.esc(file.name)}</div>
+                    <div id="batchPi_${idx}" style="font-size:0.68rem; color:var(--text-muted); margin-bottom:6px;"></div>
                     <select class="form-select" id="batchSelect_${idx}" style="font-size:0.8rem; padding:8px;" onchange="DS.setBatchMatch(${idx}, this.value)">
                         ${optionsHtml}
                     </select>
@@ -9021,6 +9027,10 @@ const DS = {
 
         let matched = 0, flagged = 0;
         const tickets = this.state.tickets;
+        if (!this._batchSeen) this._batchSeen = {};
+        if (!this._batchPiStats) this._batchPiStats = { linked: 0, none: 0, look: 0, already: 0 };
+        if (!this._batchPiCtx) this._batchPiCtx = {};
+        await this._ensureApprovedHaulers();  // v7.50.0
 
         for (let idx = 0; idx < this._batchFiles.length; idx++) {
             // Skip already-processed photos
@@ -9060,6 +9070,7 @@ const DS = {
                     'TICKET LAYOUT NOTES:\n' +
                     '- Ticket number: RED PREPRINTED 5-digit number at top right (e.g. 86445)\n' +
                     '- Date: handwritten at top, year is always 2026\n' +
+                    '- Time: the time of the weigh, if one is written (often beside the date, or labelled Time, In or Out). Many tickets have no time; then use null. Never take a time from anywhere but the ticket.\n' +
                     '- Gross/Tare/Net: numbered weight rows, usually 30000-46000 lb range for trucks\n' +
                     '- WEIGHTS ARE OFTEN UNLABELED: two big numbers stacked in the right column, a line under them, and the difference written below. When unlabeled: the LARGER number (30000-46000) is GROSS, the SMALLER is TARE (tare is often written ABOVE gross), and the number under the line is NET. Check that gross minus tare equals net. If it does, report all three - this is reading, not guessing.\n' +
                     '- Hauler: stamped or written (typically "Jaguar Waste Management", "B&B", "Liberty", or "Ranger")\n' +
@@ -9072,6 +9083,7 @@ const DS = {
                     '{\n' +
                     '  "ticket_number":"<string or null>",\n' +
                     '  "date":"<YYYY-MM-DD or null>",\n' +
+                    '  "time":"<the time exactly as written, including AM/PM only if written, or null>",\n' +
                     '  "gross_lbs":<number or 0>,\n' +
                     '  "tare_lbs":<number or 0>,\n' +
                     '  "net_lbs":<number or 0>,\n' +
@@ -9191,6 +9203,12 @@ const DS = {
                             }
                             if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
                         }
+                        // v7.50.0 — pair with the Pi reading. Paper and system gross
+                        // disagreeing means a person confirms the pair.
+                        var piGross_ = dbGross > 0 ? dbGross : photoGross;
+                        this._batchSeen[idx] = { date: matchedTicket.ticket_date, gross: piGross_, number: String(matchedTicket.ticket_number) };
+                        await this._batchPairPi(idx, matchedTicket, parsed.time, piGross_,
+                            { hold: dbGross > 0 && photoGross > 0 && Math.abs(photoGross - dbGross) > 100 });
                     } else {
                         // Ticket not found locally — check database before creating
                         var dupeDb = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&project_id=eq.' + this.state.currentProject.id + '&select=id,ticket_number,ticket_date,net_tons');
@@ -9283,14 +9301,21 @@ const DS = {
                                     tare_lbs: photoTare2,
                                     net_lbs: photoNet2,
                                     net_tons: photoTons2,
-                                    hauler: (await this._resolveHauler(parsed.hauler)) || 'Jaguar Waste Management',
+                                    hauler: null,  // v7.50.0: set below, never a silent default
                                     scan_type: 'batch_ocr',
+                                    mix_source: 'estimated',  // v7.50.0: so it reaches Material Mix Review
                                     diversion_pct: divPct2,
                                     diverted_tons: divTons2,
                                     landfill_tons: +(photoTons2 * lfPct2 / 100).toFixed(4),
                                     co2e_avoided: +co2e2.toFixed(4),
                                     captured_at: new Date().toISOString()
                                 };
+                                // v7.50.0 — hauler: what the paper says (resolved through
+                                // hauler_aliases); if nothing is read, the project's default
+                                // hauler from approved_haulers when exactly one is set.
+                                // Otherwise blank, and the ticket goes to review to pick one.
+                                var haulerInfo_ = await this._batchHauler(parsed.hauler, projId);
+                                newTicket.hauler = haulerInfo_.name;
                                 // Phase 2.7a: write OCR-extracted driver/zone/container to their columns
                                 if (parsed.driver)    newTicket.driver_name   = String(parsed.driver).trim();
                                 if (parsed.zone)      newTicket.zone          = String(parsed.zone).trim().toUpperCase();
@@ -9300,7 +9325,8 @@ const DS = {
                                 // Sets driver_id (FK) so reports/dashboards work; driver_name stays as OCR text
                                 if (parsed.driver) {
                                     try {
-                                        const driverHauler = parsed.hauler || 'Jaguar Waste Management';
+                                        const driverHauler = newTicket.hauler || null;
+                                        if (!driverHauler) throw new Error('no hauler yet - driver is resolved when the hauler is picked in review');
                                         const driverId = await this._resolveDriverId(parsed.driver, driverHauler);
                                         if (driverId) newTicket.driver_id = driverId;
                                     } catch(dErr) { console.warn('Driver resolve failed:', dErr); }
@@ -9311,6 +9337,7 @@ const DS = {
                                 var ocrNoteParts = [];
                                 if (parsed.project) ocrNoteParts.push('OCR project: ' + parsed.project);
                                 if (parsed.driver)  ocrNoteParts.push('Driver: ' + parsed.driver);
+                                if (haulerInfo_.source === 'project default') ocrNoteParts.push('No hauler on the paper; project default hauler used');
                                 if (ocrNoteParts.length > 0) newTicket.notes = '[batch OCR] ' + ocrNoteParts.join(' | ');
                                 if (scaleUrl) newTicket.scale_ticket_image = scaleUrl;
                                 Object.assign(newTicket, matData2);
@@ -9341,9 +9368,18 @@ const DS = {
                                     }
                                 }
 
+                                this._batchSeen[idx] = { date: tktDate2, gross: photoGross2, number: ticketNum };  // v7.50.0
+
                                 // Check 2: Driver name
                                 if (!parsed.driver || !String(parsed.driver).trim()) {
                                     suspicions.push('Driver name missing');
+                                }
+
+                                // v7.50.0 — Check 2b: hauler must be one on the approved list
+                                if (!newTicket.hauler) {
+                                    suspicions.push('Hauler not read - pick one');
+                                } else if (haulerInfo_.approved === false) {
+                                    suspicions.push('Hauler "' + String(newTicket.hauler).replace(/[<>&"']/g, '') + '" is not on the approved list - pick one');
                                 }
 
                                 // Check 3: Weights sanity
@@ -9420,6 +9456,7 @@ const DS = {
                                         }
                                         if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
                                         this.addAuditEntry('TICKET_CREATE', '#' + ticketNum + ' auto-created from batch OCR | ' + photoTons2 + 'T' + (parsed.driver ? ' | driver: ' + parsed.driver : ''));
+                                        await this._batchPairPi(idx, created[0], parsed.time, photoGross2, {});
                                     }
                                 } else {
                                     var errText = await postRes.text();
@@ -9460,6 +9497,16 @@ const DS = {
             }
         }
 
+        // v7.50.0 — tickets with no time on the paper are paired now that every
+        // photo in the batch has been read (look-alikes in the batch count as rivals).
+        var piDeferred_ = this._batchPiDeferred || [];
+        this._batchPiDeferred = [];
+        for (var pdi_ = 0; pdi_ < piDeferred_.length; pdi_++) {
+            var pd_ = piDeferred_[pdi_];
+            pd_.opts.final = true;
+            await this._batchPairPi(pd_.idx, pd_.ticket, pd_.rawTime, pd_.gross, pd_.opts);
+        }
+
         if (btn) {
             btn.disabled = true;
             const reviewCnt = (this._batchPendingReview || []).length;
@@ -9479,6 +9526,8 @@ const DS = {
         // PR 7.44: post-batch summary card — the one-glance answer to
         // "what happened to my N pages?" Uses only the counters the loop
         // already tracks; anything unaccounted for is in a red row above.
+        this._batchSummaryMatched = matched;
+        this._batchSummaryFlagged = flagged;
         this._renderBatchSummary(matched, flagged);
 
         // Phase 2.8: If any tickets were flagged, show the review section
@@ -9494,8 +9543,9 @@ const DS = {
         var el = document.getElementById('batchSummaryReport');
         if (!el) return;
         var total = (this._batchFiles || []).length;
-        var pending = this._batchPendingReview || [];
-        var accounted = matched + pending.length;
+        var pending = (this._batchPendingReview || []).filter(function (p) { return !p.done && !p.skipped; });
+        var skippedN_ = this._batchSummarySkipped || 0;
+        var accounted = matched + pending.length + skippedN_;
         var unread = Math.max(0, total - accounted);
 
         var rows = '';
@@ -9507,8 +9557,19 @@ const DS = {
         if (pending.length > 0) {
             rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">Held for review</span><span style="font-family:var(--mono);font-weight:700;color:var(--warning);">' + pending.length + '</span></div>';
         }
+        if (skippedN_ > 0) {
+            rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">Skipped in review</span><span style="font-family:var(--mono);font-weight:700;">' + skippedN_ + '</span></div>';
+        }
         if (unread > 0) {
             rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">Could not read</span><span style="font-family:var(--mono);font-weight:700;color:var(--danger);">' + unread + '</span></div>';
+        }
+        // v7.50.0 — Pi pairing
+        var ps_ = this._batchPiStats || {};
+        if ((ps_.linked || 0) + (ps_.already || 0) + (ps_.none || 0) + (ps_.look || 0) > 0) {
+            rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;margin-top:4px;border-top:1px solid var(--border);"><span style="color:var(--text-muted);">Linked to a Pi reading</span><span style="font-family:var(--mono);font-weight:700;color:var(--success);">' + ((ps_.linked || 0) + (ps_.already || 0)) + '</span></div>';
+            if (ps_.problem > 0) rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">Pi link not made (see lines above)</span><span style="font-family:var(--mono);font-weight:700;color:var(--danger);">' + ps_.problem + '</span></div>';
+            if (ps_.look > 0) rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">Pi reading needs a look</span><span style="font-family:var(--mono);font-weight:700;color:var(--warning);">' + ps_.look + '</span></div>';
+            if (ps_.none > 0) rows += '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-muted);">No Pi reading</span><span style="font-family:var(--mono);font-weight:700;">' + ps_.none + '</span></div>';
         }
 
         var flaggedList = '';
@@ -9567,6 +9628,13 @@ const DS = {
             var projOpts = DS.state.projects.map(function(p) {
                 return '<option value="' + p.id + '"' + (p.id === t.project_id ? ' selected' : '') + '>' + DS.esc(p.name) + '</option>';
             }).join('');
+            // v7.50.0 — hauler picker from approved_haulers (never hard-coded)
+            var haulList_ = (DS._approvedHaulers || []).slice();
+            var haulSel_ = haulList_.indexOf(t.hauler) >= 0 ? t.hauler : '';
+            var haulOpts = '<option value=""' + (haulSel_ ? '' : ' selected') + '>Pick hauler</option>' +
+                haulList_.map(function(n) {
+                    return '<option value="' + DS.esc(n) + '"' + (n === haulSel_ ? ' selected' : '') + '>' + DS.esc(n) + '</option>';
+                }).join('');
 
             html += '<div id="reviewRow_' + ri + '" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--bg-input)">' +
                 // Header
@@ -9592,6 +9660,9 @@ const DS = {
                         // Project
                         '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">Project</div>' +
                         '<select id="rv_proj_' + ri + '" class="form-input" style="margin-bottom:6px;font-size:.75rem;font-weight:600">' + projOpts + '</select>' +
+                        // Hauler (v7.50.0)
+                        '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">Hauler</div>' +
+                        '<select id="rv_hauler_' + ri + '" class="form-input" style="margin-bottom:6px;font-size:.75rem;font-weight:600">' + haulOpts + '</select>' +
                         // Driver
                         '<div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">Driver</div>' +
                         '<input type="text" id="rv_driver_' + ri + '" class="form-input" value="' + DS.esc(t.driver_name || '') + '" placeholder="Driver name" style="margin-bottom:6px;font-size:.8rem">' +
@@ -9603,6 +9674,7 @@ const DS = {
                         '</div>' +
                     '</div>' +
                 '</div>' +
+                '<div id="rv_err_' + ri + '" style="font-size:.65rem;color:var(--danger);font-weight:700;margin-top:4px"></div>' +
             '</div>';
         });
 
@@ -9680,6 +9752,7 @@ const DS = {
         for (var ri = 0; ri < pending.length; ri++) {
             var item = pending[ri];
             if (item.skipped) { skipped++; continue; }
+            if (item.done) continue;  // v7.50.0: created on an earlier pass
 
             var rowEl = document.getElementById('reviewRow_' + ri);
             if (!rowEl) continue;
@@ -9693,8 +9766,13 @@ const DS = {
             var editedTare = parseInt(document.getElementById('rv_tare_' + ri).value) || 0;
             var editedNet = editedGross - editedTare;
             var editedTons = +(editedNet / 2000).toFixed(4);
+            var haulerEl_ = document.getElementById('rv_hauler_' + ri);
+            var editedHauler = haulerEl_ ? haulerEl_.value : (item.ticketData.hauler || '');
+            var errEl_ = document.getElementById('rv_err_' + ri);
+            if (errEl_) errEl_.textContent = '';
 
-            if (editedNet <= 0 || !editedDate || !editedNum) {
+            if (editedNet <= 0 || !editedDate || !editedNum || !editedHauler) {
+                if (errEl_) errEl_.textContent = !editedHauler ? 'Pick a hauler' : (!editedNum ? 'Ticket # is blank' : (!editedDate ? 'Date is blank' : 'Gross must be more than tare'));
                 if (rowEl) {
                     rowEl.style.background = 'rgba(220,38,38,0.15)';
                     rowEl.style.borderColor = 'var(--danger)';
@@ -9741,6 +9819,7 @@ const DS = {
                 landfill_tons: +(editedTons * lfPct / 100).toFixed(4),
                 co2e_avoided: +co2e.toFixed(4),
                 driver_name: editedDriver || null,
+                hauler: editedHauler,
                 human_verified: true,
                 signed_by: 'Batch review approved'
             }, matData);
@@ -9748,12 +9827,22 @@ const DS = {
             // Re-resolve driver_id from edited name
             if (editedDriver) {
                 try {
-                    var dId = await this._resolveDriverId(editedDriver, newTicket.hauler || 'Jaguar Waste Management');
+                    var dId = await this._resolveDriverId(editedDriver, newTicket.hauler || null);
                     if (dId) newTicket.driver_id = dId;
                     else delete newTicket.driver_id;  // clear stale id if name changed
                 } catch(dErr) { /* non-fatal */ }
             } else {
                 delete newTicket.driver_id;
+            }
+
+            // v7.50.0 — a retry must never create the same ticket twice
+            var dupe_ = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(editedNum) + '&project_id=eq.' + editedProj + '&select=id&limit=1');
+            if (Array.isArray(dupe_) && dupe_.length) {
+                item.done = true;
+                var errDup_ = document.getElementById('rv_err_' + ri);
+                if (errDup_) errDup_.textContent = 'Ticket #' + editedNum + ' is already saved on this project - not created again';
+                if (rowEl) { rowEl.style.background = 'rgba(120,120,120,0.12)'; rowEl.style.borderColor = 'var(--border)'; }
+                continue;
             }
 
             // POST
@@ -9773,17 +9862,22 @@ const DS = {
                     if (createdData && createdData.length > 0) {
                         this.state.tickets.unshift(createdData[0]);
                         created++;
+                        item.done = true;
+                        if (this._batchSeen) this._batchSeen[item.idx] = { date: editedDate, gross: editedGross, number: editedNum };
                         if (rowEl) {
                             rowEl.style.background = 'rgba(34,197,94,0.15)';
                             rowEl.style.borderColor = 'var(--success)';
                             rowEl.style.borderWidth = '2px';
                         }
                         this.addAuditEntry('TICKET_CREATE', '#' + editedNum + ' from batch review | ' + editedTons + 'T' + (editedDriver ? ' | driver: ' + editedDriver : ''));
+                        await this._batchPairPi(item.idx, createdData[0], item.ocr && item.ocr.time, editedGross, {});
                     }
                 } else {
                     failed++;
                     var errText = await postRes.text();
                     console.error('Review create error:', postRes.status, errText);
+                    var errPost_ = document.getElementById('rv_err_' + ri);
+                    if (errPost_) errPost_.textContent = 'Not saved (' + postRes.status + '): ' + String(errText).substring(0, 120);
                     if (rowEl) {
                         rowEl.style.background = 'rgba(220,38,38,0.15)';
                         rowEl.style.borderColor = 'var(--danger)';
@@ -9799,21 +9893,28 @@ const DS = {
             }
         }
 
-        // Clear the queue once processed
-        this._batchPendingReview = [];
+        // Clear the queue once processed — unless a row failed, so it can be fixed and retried (v7.50.0)
+        if (failed === 0) this._batchPendingReview = [];
 
         if (btn) {
             var parts = [];
             if (created > 0) parts.push(created + ' created');
             if (skipped > 0) parts.push(skipped + ' skipped');
-            if (failed > 0) parts.push(failed + ' failed');
-            btn.textContent = '' + parts.join(', ');
-            btn.disabled = true;
+            if (failed > 0) parts.push(failed + ' to fix');
+            btn.textContent = failed > 0 ? parts.join(', ') + ' \u2014 fix the red rows, then tap again' : '' + parts.join(', ');
+            btn.disabled = failed === 0;
         }
 
         this.renderTickets();
         this.renderReports();
-        if (failed === 0) {
+        this._batchSummarySkipped = skipped;
+        this._batchSummaryMatched = (this._batchSummaryMatched || 0) + created;
+        this._renderBatchSummary(this._batchSummaryMatched, this._batchSummaryFlagged || 0);
+        var piLook_ = (this._batchPiStats || {}).look || 0;
+        if (failed === 0 && piLook_ > 0) {
+            // v7.50.0 — stay open so the Pi readings that need a look can be picked.
+            this.showToast(created + ' created — ' + piLook_ + ' Pi reading' + (piLook_ !== 1 ? 's' : '') + ' to pick above');
+        } else if (failed === 0) {
             this.showToast('' + created + ' reviewed ticket' + (created !== 1 ? 's' : '') + ' created');
             // Nothing failed, so there is nothing left to look at — close it.
             // Short pause so the "N created" state is visible first.
@@ -9834,6 +9935,298 @@ const DS = {
             // Some rows failed — stay open so the red rows can be read.
             this.showToast('' + created + ' created, ' + failed + ' failed — check rows in red');
         }
+    },
+
+    // ============================================================
+    // v7.50.0 — PAIR SCANNED PAPER TICKETS WITH PI READINGS
+    // ============================================================
+    // The paper ticket is the record. Pairing only links the Pi reading
+    // (scale_weights.ticket_id, status confirmed); it never changes a ticket's
+    // tons, weights, date or split. The rules are the ones the Oct 11 hand-run
+    // SQL used (17 of 17 confirmed):
+    //   time on the paper -> a reading within 20 min of it and 500 lb of gross
+    //   no time           -> a reading the same day within 100 lb of gross, and
+    //                        no OTHER ticket that day within 100 lb of it
+    //   exactly one fits -> linked; none -> "no Pi reading"; several -> a person picks.
+    PI_PAIR_TIME_MIN: 20,
+    PI_PAIR_LBS_TIMED: 500,
+    PI_PAIR_LBS_UNTIMED: 100,
+
+    // Time as written on the paper -> candidate minutes after midnight.
+    // With AM/PM or a 24-hour time there is one candidate; without AM/PM a
+    // 1-11 o'clock time could be morning or night (trucks run both), so both.
+    _parseTicketTime(raw) {
+        if (raw === null || raw === undefined) return [];
+        var s = String(raw).trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!s || s === 'null') return [];
+        var m = s.match(/^(\d{1,2})(?:[:.;\s]?(\d{2}))?\s*(?:([ap])\.?\s*m?\.?)?$/);
+        if (!m) return [];
+        var h = parseInt(m[1], 10), mi = m[2] ? parseInt(m[2], 10) : 0, ap = m[3] || null;
+        if (mi > 59 || h > 23) return [];
+        if (ap) {
+            if (h < 1 || h > 12) return [];
+            return [((h % 12) + (ap === 'p' ? 12 : 0)) * 60 + mi];
+        }
+        if (h === 0 || h >= 13) return [h * 60 + mi];
+        if (h === 12) return [12 * 60 + mi, mi];
+        return [h * 60 + mi, (h + 12) * 60 + mi];
+    },
+
+    _fmtClock(min) {
+        var h = Math.floor(min / 60) % 24, mm = min % 60;
+        return ((h % 12) || 12) + ':' + String(mm).padStart(2, '0') + ' ' + (h >= 12 ? 'PM' : 'AM');
+    },
+
+    // Dallas date + minutes after midnight for a stored timestamp.
+    _chicagoParts(iso) {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return null;
+        var p = {};
+        new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit',
+            day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+            .formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
+        return { date: p.year + '-' + p.month + '-' + p.day, minutes: (parseInt(p.hour, 10) % 24) * 60 + parseInt(p.minute, 10) };
+    },
+
+    _dayDiff(a, b) {  // b minus a, in days; both YYYY-MM-DD
+        var x = a.split('-').map(Number), y = b.split('-').map(Number);
+        return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 86400000);
+    },
+
+    async _ensureApprovedHaulers() {
+        if (Array.isArray(this._approvedHaulers) && this._approvedHaulers.length) return this._approvedHaulers;
+        try {
+            var rows = await this.supabase('approved_haulers?select=name&order=name.asc');
+            if (Array.isArray(rows)) this._approvedHaulers = rows.map(function (r) { return r.name; });
+        } catch (e) { console.warn('approved haulers load failed', e); }
+        return this._approvedHaulers || [];
+    },
+
+    // Hauler for a batch-created ticket. Returns { name, source, approved }.
+    async _batchHauler(rawName, projectId) {
+        var list = await this._ensureApprovedHaulers();
+        var name = rawName ? await this._resolveHauler(rawName) : null;
+        if (name) {
+            // If the approved list didn't load, treat the name as unchecked -> review.
+            return { name: name, source: 'paper', approved: list.length ? list.indexOf(name) >= 0 : false };
+        }
+        try {
+            var rows = await this.supabase('approved_haulers?default_project_id=eq.' + projectId + '&select=name');
+            if (Array.isArray(rows) && rows.length === 1) return { name: rows[0].name, source: 'project default', approved: true };
+        } catch (e) { /* fall through to review */ }
+        return { name: null, source: 'none', approved: null };
+    },
+
+    // Find the Pi reading for one ticket. o = { ticketId, date, gross, times, ticketNumber }
+    async _findPiReading(o) {
+        var out = { status: 'none', reading: null, candidates: [], why: '' };
+        if (!o || !o.date || !(o.gross > 0)) { out.status = 'skip'; return out; }
+        if (o.ticketId) {
+            var have = await this.supabase('scale_weights?ticket_id=eq.' + o.ticketId + '&select=id,weight_lbs,captured_at&limit=1');
+            if (Array.isArray(have) && have.length) { out.status = 'already'; out.reading = have[0]; return out; }
+        }
+        var d0 = Date.UTC(+o.date.substring(0, 4), +o.date.substring(5, 7) - 1, +o.date.substring(8, 10));
+        var from = new Date(d0 - 86400000).toISOString(), to = new Date(d0 + 2 * 86400000).toISOString();
+        var rows = await this.supabase('scale_weights?status=eq.pending&ticket_id=is.null' +
+            '&captured_at=gte.' + encodeURIComponent(from) + '&captured_at=lt.' + encodeURIComponent(to) +
+            '&select=id,weight_lbs,captured_at&order=captured_at.asc&limit=500');
+        if (!Array.isArray(rows)) { out.status = 'error'; return out; }
+        var DS = this, times = o.times || [];
+        rows.forEach(function (r) {
+            var cp = DS._chicagoParts(r.captured_at);
+            if (!cp) return;
+            var w = Number(r.weight_lbs) || 0;
+            r._clock = cp.minutes; r._date = cp.date; r._diff = Math.round(w - o.gross);
+            if (times.length) {
+                var rel = DS._dayDiff(o.date, cp.date) * 1440 + cp.minutes;
+                var best = null;
+                times.forEach(function (t) { var g = Math.abs(rel - t); if (best === null || g < best) best = g; });
+                if (best <= DS.PI_PAIR_TIME_MIN && Math.abs(r._diff) <= DS.PI_PAIR_LBS_TIMED) { r._gap = best; out.candidates.push(r); }
+            } else if (cp.date === o.date && Math.abs(r._diff) <= DS.PI_PAIR_LBS_UNTIMED) {
+                out.candidates.push(r);
+            }
+        });
+        if (out.candidates.length === 1 && !times.length) {
+            // No time on the paper: another ticket that day at about this weight
+            // could own the reading just as well, so a person decides.
+            var w1 = Number(out.candidates[0].weight_lbs);
+            var others = await this.supabase('tickets?ticket_date=eq.' + o.date +
+                '&gross_lbs=gte.' + Math.floor(w1 - this.PI_PAIR_LBS_UNTIMED) +
+                '&gross_lbs=lte.' + Math.ceil(w1 + this.PI_PAIR_LBS_UNTIMED) + '&select=id,ticket_number&limit=10');
+            if (!Array.isArray(others)) { out.status = 'error'; return out; }
+            var rivals = others.filter(function (t) { return t.id !== o.ticketId; }).map(function (t) { return t.ticket_number; });
+            // Photos in this batch not saved yet (e.g. waiting in review) count too.
+            var seen = this._batchSeen || {};
+            Object.keys(seen).forEach(function (k) {
+                var e = seen[k];
+                if (String(k) === String(o.idx) || e.date !== o.date || !(e.gross > 0)) return;
+                if (Math.abs(e.gross - w1) <= DS.PI_PAIR_LBS_UNTIMED && rivals.indexOf(e.number) < 0) rivals.push(e.number);
+            });
+            if (rivals.length) {
+                out.status = 'ambiguous';
+                out.why = 'no time on the paper, and #' + rivals.join(', #') + ' weighs about the same that day';
+                return out;
+            }
+        }
+        if (out.candidates.length === 1) { out.status = 'match'; out.reading = out.candidates[0]; }
+        else if (out.candidates.length > 1) { out.status = 'ambiguous'; out.why = out.candidates.length + ' Pi readings fit'; }
+        return out;
+    },
+
+    // Link one reading to one ticket. Only succeeds if the reading is still
+    // pending and unlinked, so two screens can never double-link it.
+    // Returns 'linked', 'taken' (reading or ticket already linked) or 'error'.
+    async _linkPiReading(readingId, ticketId) {
+        try {
+            // One reading per ticket: refuse if this ticket already has one.
+            var have = await this.supabase('scale_weights?ticket_id=eq.' + encodeURIComponent(ticketId) + '&select=id&limit=1');
+            if (!Array.isArray(have)) return 'error';
+            if (have.length) return 'taken';
+            var rows = await this.supabase('scale_weights?id=eq.' + encodeURIComponent(readingId) + '&ticket_id=is.null&status=eq.pending', 'PATCH',
+                { ticket_id: ticketId, status: 'confirmed', resolved_at: new Date().toISOString() });
+            if (!Array.isArray(rows)) return 'error';
+            return rows.length === 1 ? 'linked' : 'taken';
+        } catch (e) { console.warn('Pi link failed', e); return 'error'; }
+    },
+
+    // Fill tickets.load_time from the paper, only where it is blank. Never fatal.
+    async _fillLoadTime(ticketId, minutes) {
+        if (!ticketId || minutes === null || minutes === undefined) return;
+        var hhmm = String(Math.floor(minutes / 60) % 24).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+        try {
+            await this.supabase('tickets?id=eq.' + encodeURIComponent(ticketId) + '&load_time=is.null', 'PATCH', { load_time: hhmm });
+        } catch (e) { /* load_time is a convenience; the ticket stands without it */ }
+    },
+
+    // Pair one batch photo's ticket with its Pi reading and show the result.
+    async _batchPairPi(idx, ticket, rawTime, gross, opts) {
+        opts = opts || {};
+        if (!ticket || !ticket.id) return;
+        if (!this._batchPiStats) this._batchPiStats = { linked: 0, none: 0, look: 0, already: 0 };
+        if (!this._batchPiCtx) this._batchPiCtx = {};
+        var times = this._parseTicketTime(rawTime);
+        var ctx = { ticketId: ticket.id, ticketNumber: ticket.ticket_number, times: times };
+        this._batchPiCtx[idx] = ctx;
+        // No time on the paper: wait until every photo in the batch has been
+        // read, so a look-alike ticket later in the same batch counts as a rival.
+        if (!times.length && this._batchOCRRunning && !opts.final) {
+            (this._batchPiDeferred = this._batchPiDeferred || []).push({ idx: idx, ticket: ticket, rawTime: rawTime, gross: gross, opts: opts });
+            var elD = document.getElementById('batchPi_' + idx);
+            if (elD) { elD.textContent = '\u2696 Pi reading: checked when the whole batch is read'; elD.style.color = 'var(--text-muted)'; }
+            return;
+        }
+        var res;
+        try {
+            res = await this._findPiReading({ ticketId: ticket.id, date: ticket.ticket_date, gross: Number(gross) || 0, times: times, idx: idx });
+        } catch (e) { res = { status: 'error', candidates: [] }; }
+        if (res.status === 'match' && opts.hold) {
+            res.status = 'ambiguous';
+            res.why = 'the paper and the system weights differ, so confirm';
+        }
+        ctx.candidates = res.candidates || [];
+        ctx.why = res.why || '';
+        if (res.status === 'match') {
+            var linkRes = await this._linkPiReading(res.reading.id, ticket.id);
+            if (linkRes === 'linked') {
+                this._batchPiStats.linked++;
+                this._fillLoadTime(ticket.id, this._pickTime(times, res.reading));
+                this.addAuditEntry('PI_LINK', '#' + ticket.ticket_number + ' linked to Pi reading ' + this._fmtClock(res.reading._clock) + ' ' + Number(res.reading.weight_lbs).toLocaleString() + ' lb (batch upload)');
+            } else {
+                res.status = linkRes === 'taken' ? 'taken' : 'error';
+                this._batchPiStats.problem = (this._batchPiStats.problem || 0) + 1;
+            }
+        } else {
+            if (times.length === 1) this._fillLoadTime(ticket.id, times[0]);
+            if (res.status === 'already') this._batchPiStats.already++;
+            else if (res.status === 'none') this._batchPiStats.none++;
+            else if (res.status === 'ambiguous') this._batchPiStats.look++;
+        }
+        ctx.status = res.status;
+        this._renderBatchPiLine(idx, res);
+    },
+
+    // Which paper time to store when AM/PM was missing: the one the reading confirmed.
+    _pickTime(times, reading) {
+        if (!times || !times.length) return null;
+        if (times.length === 1 || !reading) return times.length === 1 ? times[0] : null;
+        var DS = this, best = null, bestGap = null;
+        times.forEach(function (t) {
+            var g = Math.abs(t - reading._clock);
+            g = Math.min(g, 1440 - g);
+            if (bestGap === null || g < bestGap) { bestGap = g; best = t; }
+        });
+        return best;
+    },
+
+    _renderBatchPiLine(idx, res) {
+        var el = document.getElementById('batchPi_' + idx);
+        if (!el) return;
+        var DS = this, ctx = (this._batchPiCtx || {})[idx] || {};
+        var timeTxt = ctx.times && ctx.times.length === 1 ? ' near ' + this._fmtClock(ctx.times[0]) : (ctx.times && ctx.times.length ? '' : ' that day');
+        var read = function (r) {
+            var d = r._diff || 0;
+            return DS._fmtClock(r._clock) + ' · ' + Number(r.weight_lbs).toLocaleString() + ' lb (' + (d > 0 ? '+' : '') + d.toLocaleString() + ')';
+        };
+        var html = '', color = 'var(--text-muted)';
+        if (res.status === 'match') {
+            html = '⚖ Linked to Pi reading ' + read(res.reading);
+            color = 'var(--success)';
+        } else if (res.status === 'already') {
+            var cp = this._chicagoParts(res.reading.captured_at);
+            html = '⚖ Already linked to Pi reading' + (cp ? ' ' + this._fmtClock(cp.minutes) : '') + ' · ' + Number(res.reading.weight_lbs).toLocaleString() + ' lb';
+            color = 'var(--success)';
+        } else if (res.status === 'none') {
+            html = '⚖ No Pi reading' + timeTxt + ' at this weight';
+        } else if (res.status === 'skip') {
+            html = '⚖ No gross weight, so not paired with the Pi';
+        } else if (res.status === 'ambiguous') {
+            color = 'var(--warning)';
+            html = '⚖ <strong>Pi reading needs a look</strong>: ' + DS.esc(res.why || '') + '<br>' +
+                (res.candidates || []).slice(0, 6).map(function (r) {
+                    return '<button class="btn btn-sm btn-outline" style="font-size:.62rem;padding:3px 8px;margin:3px 4px 0 0" onclick="DS._batchPickPi(' + idx + ',\'' + r.id + '\')">' + read(r) + '</button>';
+                }).join('') +
+                '<button class="btn btn-sm btn-outline" style="font-size:.62rem;padding:3px 8px;margin:3px 0 0 0" onclick="DS._batchPickPi(' + idx + ',null)">None of these</button>';
+        } else if (res.status === 'taken') {
+            html = '⚖ <strong>Pi reading needs a look</strong>: the matching reading was just taken by another ticket, or this ticket already has one. The ticket is saved.';
+            color = 'var(--warning)';
+        } else {
+            html = '⚖ Could not check the Pi readings (connection). The ticket is saved; pair it later.';
+            color = 'var(--danger)';
+        }
+        el.innerHTML = html;
+        el.style.color = color;
+    },
+
+    async _batchPickPi(idx, readingId) {
+        var ctx = (this._batchPiCtx || {})[idx];
+        if (!ctx || ctx.status !== 'ambiguous') return;
+        var el = document.getElementById('batchPi_' + idx);
+        if (!readingId) {
+            ctx.status = 'none';
+            this._batchPiStats.look = Math.max(0, this._batchPiStats.look - 1);
+            this._batchPiStats.none++;
+            if (el) { el.innerHTML = '⚖ Left unpaired (your call)'; el.style.color = 'var(--text-muted)'; }
+            this._renderBatchSummary(this._batchSummaryMatched || 0, this._batchSummaryFlagged || 0);
+            return;
+        }
+        var r = (ctx.candidates || []).find(function (c) { return String(c.id) === String(readingId); });
+        ctx.status = 'linking';  // a second tap does nothing while this one runs
+        if (el) el.querySelectorAll('button').forEach(function (bt) { bt.disabled = true; });
+        var linkRes = await this._linkPiReading(readingId, ctx.ticketId);
+        if (linkRes === 'linked') {
+            ctx.status = 'match';
+            this._batchPiStats.look = Math.max(0, this._batchPiStats.look - 1);
+            this._batchPiStats.linked++;
+            if (r) this._fillLoadTime(ctx.ticketId, this._pickTime(ctx.times, r));
+            this.addAuditEntry('PI_LINK', '#' + ctx.ticketNumber + ' linked to Pi reading ' + (r ? this._fmtClock(r._clock) + ' ' + Number(r.weight_lbs).toLocaleString() + ' lb' : readingId) + ' (picked by hand)');
+            this._renderBatchPiLine(idx, { status: 'match', reading: r || { _clock: 0, weight_lbs: 0, _diff: 0 } });
+        } else {
+            ctx.status = 'ambiguous';
+            this._renderBatchPiLine(idx, { status: 'ambiguous', candidates: ctx.candidates || [], why: ctx.why || '' });
+            if (el) el.insertAdjacentHTML('beforeend', '<div style="color:var(--danger);margin-top:3px">' +
+                (linkRes === 'taken' ? 'That reading was already taken (or this ticket already has one). Nothing changed.' : 'Could not link (connection). Nothing changed; try again.') + '</div>');
+        }
+        this._renderBatchSummary(this._batchSummaryMatched || 0, this._batchSummaryFlagged || 0);
     },
 
     // Compress image to max dimension to reduce API payload
