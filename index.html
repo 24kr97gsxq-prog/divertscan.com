@@ -1776,6 +1776,7 @@ document.addEventListener('keydown', function(e){
         <div id="batchSummaryReport"></div>
         <div id="batchActions" class="hidden">
             <div class="divider"></div>
+            <button class="btn btn-primary" id="batchAttachBtn" onclick="DS.executeBatchUpload()" style="width:100%;margin-bottom:8px">Attach photos to the tickets picked</button>
             <button class="btn btn-success" onclick="DS.closeModal('batchUploadModal');DS.renderTickets();DS.renderReports();DS.showToast('Batch complete');">Done — Close</button>
         </div>
         <button class="btn btn-outline mt-8" onclick="DS.closeModal('batchUploadModal')">Cancel</button>
@@ -1952,7 +1953,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.0',
+    VERSION: '7.50.1',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -8887,6 +8888,7 @@ const DS = {
         this._batchOCRRunning = false;
         this._batchPendingReview = [];  // Phase 2.8: tickets flagged for human review before save
         this._batchPiCtx = {};          // v7.50.0: Pi-reading pairing per photo
+        this._batchAttached = {};       // v7.50.1: photos already attached this batch
         this._batchPiStats = { linked: 0, none: 0, look: 0, already: 0 };
         this._batchSeen = {};           // v7.50.0: date + gross of every photo read, for look-alike checks
         this._batchPiDeferred = [];
@@ -9157,10 +9159,22 @@ const DS = {
 
                 if (parsed && parsed.ticket_number) {
                     const ticketNum = String(parsed.ticket_number).trim();
-                    const matchedTicket = tickets.find(t =>
-                        String(t.ticket_number) === ticketNum ||
-                        String(t.ticket_number) === ticketNum.replace(/^0+/, '')
-                    );
+                    // v7.50.1 — match ignoring leading zeros and an MS- prefix on either
+                    // side ("2915" finds 02915; "15875" finds MS-15875). Exact match wins;
+                    // two or more loose matches -> a person picks from the list.
+                    const normNum_ = function (x) { return String(x || '').trim().toUpperCase().replace(/^MS-/, '').replace(/^0+(?=\d)/, ''); };
+                    const exact_ = tickets.filter(t => String(t.ticket_number) === ticketNum);
+                    const loose_ = exact_.length ? exact_ : tickets.filter(t => normNum_(t.ticket_number) === normNum_(ticketNum));
+                    if (loose_.length > 1) {
+                        this._batchProcessed[idx] = true;
+                        if (statusEl) {
+                            statusEl.innerHTML = 'Read <strong>#' + this.esc(ticketNum) + '</strong> - more than one ticket fits (' + loose_.map(t => this.esc(t.ticket_number)).join(', ') + '). Pick the right one below, then tap Attach.';
+                            statusEl.style.color = 'var(--warning)';
+                        }
+                        if (rowEl) { rowEl.style.background = 'var(--warning-light)'; }
+                        continue;
+                    }
+                    const matchedTicket = loose_[0];
 
                     if (matchedTicket) {
                         // Cross-check weights from photo against database — verify only, never change
@@ -9172,10 +9186,10 @@ const DS = {
                         const dbTare = parseInt(matchedTicket.tare_lbs) || 0;
                         const dbNet = parseInt(matchedTicket.net_lbs) || 0;
 
-                        if (photoGross > 0 && Math.abs(photoGross - dbGross) > 100) {
+                        if (photoGross > 0 && dbGross > 0 && Math.abs(photoGross - dbGross) > 100) {
                             discrepancies.push('Gross: photo=' + photoGross.toLocaleString() + ' vs db=' + dbGross.toLocaleString());
                         }
-                        if (photoTare > 0 && Math.abs(photoTare - dbTare) > 100) {
+                        if (photoTare > 0 && dbTare > 0 && Math.abs(photoTare - dbTare) > 100) {
                             discrepancies.push('Tare: photo=' + photoTare.toLocaleString() + ' vs db=' + dbTare.toLocaleString());
                         }
                         if (photoNet > 0 && Math.abs(photoNet - dbNet) > 100) {
@@ -9205,6 +9219,7 @@ const DS = {
                         }
                         // v7.50.0 — pair with the Pi reading. Paper and system gross
                         // disagreeing means a person confirms the pair.
+                        await this._batchAttachScalePhoto(idx, matchedTicket);  // v7.50.1
                         var piGross_ = dbGross > 0 ? dbGross : photoGross;
                         this._batchSeen[idx] = { date: matchedTicket.ticket_date, gross: piGross_, number: String(matchedTicket.ticket_number) };
                         await this._batchPairPi(idx, matchedTicket, parsed.time, piGross_,
@@ -10229,6 +10244,38 @@ const DS = {
         this._renderBatchSummary(this._batchSummaryMatched || 0, this._batchSummaryFlagged || 0);
     },
 
+    // v7.50.1 — attach the scanned photo to a ticket found by its number, only if that
+    // ticket has no scale-ticket photo yet. Never overwrites, never fatal.
+    async _batchAttachScalePhoto(idx, ticket) {
+        if (!this._batchAttached) this._batchAttached = {};
+        var st = document.getElementById('batchStatus_' + idx);
+        if (!ticket || this._batchAttached[idx]) return;
+        if (ticket.scale_ticket_image) {
+            this._batchAttached[idx] = true;
+            if (st) st.innerHTML += '<br><span style="color:var(--text-muted)">Already had a scale photo - kept it</span>';
+            return;
+        }
+        try {
+            var file = this._batchFiles[idx];
+            var ext = (file && file.name && file.name.split('.').pop()) || 'jpg';
+            var path = (ticket.project_id || this.state.currentProject.id) + '/' + ticket.ticket_number + '_scale_' + Date.now() + '.' + ext;
+            var url = await this.supabaseUpload('ticket-photos', path, file);
+            if (!url) throw new Error('upload failed');
+            var rows = await this.supabase('tickets?id=eq.' + ticket.id + '&or=(scale_ticket_image.is.null,scale_ticket_image.eq.)', 'PATCH', { scale_ticket_image: url });
+            if (Array.isArray(rows) && rows.length === 1) {
+                ticket.scale_ticket_image = url;
+                this._batchAttached[idx] = true;
+                if (st) st.innerHTML += '<br><span style="color:var(--success)">Photo attached</span>';
+                this.addAuditEntry('BATCH_PHOTO', 'Scale photo → ' + ticket.ticket_number + ' (matched by number)');
+            } else {
+                this._batchAttached[idx] = true;
+                if (st) st.innerHTML += '<br><span style="color:var(--text-muted)">Already had a scale photo - kept it</span>';
+            }
+        } catch (e) {
+            if (st) st.innerHTML += '<br><span style="color:var(--danger)">Photo not attached (' + this.esc(e.message || 'error') + ') - tap "Attach photos" to retry</span>';
+        }
+    },
+
     // Compress image to max dimension to reduce API payload
     compressImage(base64, maxDim) {
         return new Promise((resolve) => {
@@ -10264,16 +10311,26 @@ const DS = {
             return;
         }
 
-        let uploaded = 0, failed = 0;
-        this.showLoading(`Uploading ${matched.length} photos...`);
+        let uploaded = 0, failed = 0, kept = 0;
+        if (!this._batchAttached) this._batchAttached = {};
+        this.showLoading(`Uploading photos...`);
 
         for (let idx = 0; idx < this._batchFiles.length; idx++) {
             const ticketId = this._batchMatches[idx];
             if (!ticketId) continue;
+            if (this._batchAttached[idx]) continue;  // v7.50.1: done already in this batch
 
             const file = this._batchFiles[idx];
             const ticket = this.state.tickets.find(t => t.id === ticketId);
             if (!ticket) continue;
+            // v7.50.1: a ticket that already has its scale photo keeps it
+            if (this._batchType === 'scale' && ticket.scale_ticket_image) {
+                kept++;
+                this._batchAttached[idx] = true;
+                var stK_ = document.getElementById('batchStatus_' + idx);
+                if (stK_) stK_.innerHTML += '<br><span style="color:var(--text-muted)">#' + this.esc(ticket.ticket_number) + ' already had a scale photo - kept it</span>';
+                continue;
+            }
 
             const ext = file.name.split('.').pop() || 'jpg';
 
@@ -10284,6 +10341,9 @@ const DS = {
                     await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { scale_ticket_image: url });
                     ticket.scale_ticket_image = url;
                     uploaded++;
+                    this._batchAttached[idx] = true;
+                    var stA_ = document.getElementById('batchStatus_' + idx);
+                    if (stA_) stA_.innerHTML += '<br><span style="color:var(--success)">Photo attached to #' + this.esc(ticket.ticket_number) + '</span>';
                     this.addAuditEntry('BATCH_PHOTO', `Scale photo → ${ticket.ticket_number}`);
                 } else { failed++; }
             } else {
@@ -10295,19 +10355,18 @@ const DS = {
                     await this.supabase(`tickets?id=eq.${ticketId}`, 'PATCH', { debris_images: urls });
                     ticket.debris_images = urls;
                     uploaded++;
+                    this._batchAttached[idx] = true;
                     this.addAuditEntry('BATCH_PHOTO', `Debris photo → ${ticket.ticket_number}`);
                 } else { failed++; }
             }
         }
 
         this.hideLoading();
-        this.closeModal('batchUploadModal');
-
-        if (failed > 0) {
-            this.showToast(`${uploaded} uploaded, ${failed} failed`);
-        } else {
-            this.showToast(`${uploaded} photo${uploaded > 1 ? 's' : ''} uploaded ✓`);
-        }
+        // v7.50.1: stay open so the lines above can be read; Done closes it.
+        var msg_ = uploaded + ' photo' + (uploaded !== 1 ? 's' : '') + ' attached';
+        if (kept) msg_ += ', ' + kept + ' already had one (kept)';
+        if (failed) msg_ += ', ' + failed + ' failed';
+        this.showToast(msg_);
 
         this.renderTickets();
     },
