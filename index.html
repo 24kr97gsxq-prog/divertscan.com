@@ -1953,7 +1953,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.3',
+    VERSION: '7.50.4',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -11884,7 +11884,7 @@ const DS = {
             '<div style="margin-top:8px;padding:8px;background:var(--bg-input);border-radius:var(--radius);font-size:.65rem">' +
             '<div style="font-weight:700;margin-bottom:3px">TCEQ Authorization</div>' +
             '<div>TPDES MSGP TXR05GW18 — Sector N (SIC 5093) — Active</div>' +
-            '<div>RN103219481 / CN605438985 — Eff: 11/7/2025, Exp: 8/14/2026</div>' +
+            '<div>RN103219481 / CN605438985 — Eff: 11/7/2025, Exp: 8/14/2031 (renewed 10/7/2026)</div>' +
             '<div style="color:var(--text-dim);margin-top:2px">Recycling facility exempt from MSW permit per 30 TAC 330.11(e)</div>' +
             '</div>';
     },
@@ -12457,6 +12457,13 @@ const DS = {
         // Also fetch ALL tickets to catch cross-project dupes by ticket number
         var allTicketNums = {};
         projectTickets.forEach(function(t) { if (t.ticket_number) allTicketNums[String(t.ticket_number).trim()] = t; });
+        // v7.50.4 — loose lookup ("2915" finds 02915, "15875" finds MS-15875), used only
+        // when exactly one ticket fits; and the set of tickets that existed before this batch.
+        var normNumQ_ = function (x) { return String(x || '').trim().toUpperCase().replace(/^MS-/, '').replace(/^0+(?=\d)/, ''); };
+        var looseNums_ = {};
+        projectTickets.forEach(function(t) { if (t.ticket_number) { var k = normNumQ_(t.ticket_number); (looseNums_[k] = looseNums_[k] || []).push(t); } });
+        var preexisting_ = {};
+        projectTickets.forEach(function(t) { preexisting_[t.id] = true; });
 
         for (var i = 0; i < scaleTickets.length; i++) {
             var item = scaleTickets[i];
@@ -12533,26 +12540,31 @@ const DS = {
             // Normalize ticket number for comparison
             var normalizedNum = String(tktNum).trim();
             var existing = allTicketNums[normalizedNum];
+            if (!existing) {
+                var loose_ = looseNums_[normNumQ_(normalizedNum)] || [];
+                if (loose_.length === 1 && preexisting_[loose_[0].id]) existing = loose_[0];
+            }
             var ticketId = null;
 
             if (existing) {
-                var existDebris = Array.isArray(existing.debris_images) ? existing.debris_images.slice() : [];
-                ticketData.debris_images = existDebris;
-                // Read project from per-ticket dropdown
-                var rowProjEl = document.getElementById('mt_proj_' + i);
-                var rowProjId = rowProjEl ? rowProjEl.value : q0.project_id;
-                ticketData.project_id = rowProjId;
-                // Fill-blanks-only on an EXISTING ticket: the ticket is the record,
-                // the photo is evidence. Zone/driver/hauler land only where empty;
-                // a photo can never relabel a load that was already labelled.
-                if (rowZone && !existing.zone) ticketData.zone = rowZone;
+                // v7.50.4 — an EXISTING ticket is the record; the photo is evidence. Attach
+                // the photo and fill blanks only. Weights, tons, date, project and the mix
+                // are never changed here (this used to overwrite all of them, including
+                // verified splits and the tons taken from Jaguar's lists).
+                var xPatch = {};
+                if (!existing.scale_ticket_image && item.q.photo_url) xPatch.scale_ticket_image = item.q.photo_url;
+                if (rowZone && !existing.zone) xPatch.zone = rowZone;
                 if (rowDriver && !existing.driver_name) {
-                    ticketData.driver_name = rowDriver;
-                    try { var xdId = await this._resolveDriverId(rowDriver, existing.hauler || batchHauler); if (xdId) ticketData.driver_id = xdId; } catch(e) {}
+                    xPatch.driver_name = rowDriver;
+                    try { var xdId = await this._resolveDriverId(rowDriver, existing.hauler || batchHauler); if (xdId) xPatch.driver_id = xdId; } catch(e) {}
                 }
-                if (existing.hauler) delete ticketData.hauler;
-                // Update existing ticket with new photo/data
-                await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', ticketData);
+                if (!existing.hauler && batchHauler) xPatch.hauler = batchHauler;
+                var xG = parseInt(existing.gross_lbs) || 0, xT = parseInt(existing.tare_lbs) || 0;
+                if (gross > 0 && (!xG || Math.abs(gross - xG) > 100 || Math.abs(tare - xT) > 100)) {
+                    xPatch.notes = (existing.notes ? existing.notes + ' | ' : '') + 'Photo Queue ' + DS._todayLocal() +
+                        ': photo reads gross ' + gross + ' / tare ' + tare + ' - not applied (ticket keeps its own weights and tons).';
+                }
+                if (Object.keys(xPatch).length) await this.supabase('tickets?id=eq.' + existing.id, 'PATCH', xPatch);
                 ticketId = existing.id;
                 updated++;
             } else {
@@ -12614,6 +12626,9 @@ const DS = {
                 var aiDebris = debrisMap[aiInfo.id];
                 console.log('DEBRIS AI: Ticket #' + aiInfo.num + ' has ' + (aiDebris ? aiDebris.length : 0) + ' debris photos');
                 if (!aiDebris || !aiDebris.length) continue;
+                // v7.50.4 — never re-mix a ticket that existed before this batch (its split
+                // may be verified); the debris photos are still attached to it above.
+                if (preexisting_[aiInfo.id]) continue;
 
                 this.showLoading('Analyzing debris for ticket #' + aiInfo.num + ' (' + (ai+1) + '/' + createdTicketIds.length + ')...');
 
@@ -12659,6 +12674,10 @@ const DS = {
                             landfill_tons: +(tkTons * (mats.landfill||0) / 100).toFixed(4),
                             ai_classified: true
                         };
+                        // v7.50.4 — keep the per-material tons in step with the new percentages
+                        ['wood','gypsum','plastic','occ','metal','concrete','block','landfill'].forEach(function (k) {
+                            matPatch[k + '_tons'] = +(tkTons * (mats[k] || 0) / 100).toFixed(4);
+                        });
                         console.log('DEBRIS AI patching ticket #' + aiInfo.num + ':', JSON.stringify(matPatch));
                         await this.supabase('tickets?id=eq.' + aiInfo.id, 'PATCH', matPatch);
                         console.log('DEBRIS AI: Ticket #' + aiInfo.num + ' patched successfully');
