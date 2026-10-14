@@ -1953,7 +1953,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.1',
+    VERSION: '7.50.2',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -10559,15 +10559,27 @@ const DS = {
         const monthName = monthNames[parseInt(month)];
 
         const headers = ['Date','Ticket No','Zone','GWT (lbs)','Tare (lbs)','Net (lbs)','Tons','Wood %','Wood','Gypsum %','Gypsum','Plastic %','Plastic','OCC %','OCC','Metal %','Metal','Concrete %','Concrete','Block %','Block','Total Diverted','Diverted %'];
-        let csv = headers.join(',') + '\n';
+        // v7.50.2 — quote any field holding a comma, quote or line break ("Sep 1, 2026"
+        // used to split into two columns and shift every number after it).
+        const cell = v => {
+            if (v === null || v === undefined) return '';
+            const str = String(v);
+            return /[",\r\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+        };
+        let csv = headers.map(cell).join(',') + '\n';
         tickets.sort((a,b) => (a.ticket_date || '').localeCompare(b.ticket_date || ''));
         tickets.forEach(t => {
-            const netLbs = (parseInt(t.gross_lbs)||0) - (parseInt(t.tare_lbs)||0);
+            // v7.50.2 — blank, not 0, when the system has no gross/tare (provisional loads)
+            const gross = parseInt(t.gross_lbs) || 0;
+            const tare = parseInt(t.tare_lbs) || 0;
             const tons = parseFloat(t.net_tons) || 0;
+            const netLbs = (parseInt(t.net_lbs) || 0) > 0 ? parseInt(t.net_lbs)
+                         : (gross > 0 && tare > 0) ? gross - tare
+                         : (tons > 0 ? Math.round(tons * 2000) : '');
             const divTons = parseFloat(t.diverted_tons) || 0;
             const divPct = t.diversion_pct || 0;
             csv += [
-                this.fmtDate(t.ticket_date), t.ticket_number, t.zone || '', t.gross_lbs, t.tare_lbs, netLbs, tons.toFixed(2),
+                this.fmtDate(t.ticket_date), t.ticket_number, t.zone || '', gross > 0 ? gross : '', tare > 0 ? tare : '', netLbs, tons.toFixed(2),
                 (t.wood_pct||0)+'%', (tons*(t.wood_pct||0)/100).toFixed(2),
                 (t.gypsum_pct||0)+'%', (tons*(t.gypsum_pct||0)/100).toFixed(2),
                 (t.plastic_pct||0)+'%', (tons*(t.plastic_pct||0)/100).toFixed(2),
@@ -10576,7 +10588,7 @@ const DS = {
                 (t.concrete_pct||0)+'%', (tons*(t.concrete_pct||0)/100).toFixed(2),
                 (t.block_pct||0)+'%', (tons*(t.block_pct||0)/100).toFixed(2),
                 divTons.toFixed(2), divPct+'%'
-            ].join(',') + '\n';
+            ].map(cell).join(',') + '\n';
         });
         this.downloadFile(csv, 'DivertScan_' + (proj?.name||'Report') + '_' + monthName + '_' + year + '.csv', 'text/csv');
     },
