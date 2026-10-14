@@ -1953,7 +1953,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.2',
+    VERSION: '7.50.3',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -4007,7 +4007,7 @@ const DS = {
                 }
             }
             if (projectConfig) {
-                const mix = this._generateRandomMix(projectConfig.ranges);
+                const mix = this._mixFromConfig(projectConfig);
                 // Phase 2.7b: materials in non_diverted list count toward landfill, not diversion
                 // Example: Hayes plastic isn't recycled, so it shouldn't inflate diversion %
                 const nonDiverted = new Set(projectConfig.non_diverted || []);
@@ -6706,6 +6706,8 @@ const DS = {
     _projectMaterialDefaults: {
         // Children's Hospital: matches historical real data from May 2026 report
         'childrens hospital': {
+            // v7.50.3 — start at the reviewed split, not a wide random spread
+            target: { landfill: [20, 28], split: { wood: 41.5, occ: 19.5, metal: 15.5 }, jitter: 2 },
             ranges: {
                 wood:     [32, 50],   // historical avg 40%, varies widely
                 occ:      [8, 22],    // historical avg 14.5%, packaging stream
@@ -6715,9 +6717,11 @@ const DS = {
                 block:    [0, 0],
                 landfill: [22, 38]    // historical avg 31.7%
             },
-            typical_diversion: '~67%'
+            typical_diversion: '~76%'
         },
         'hospital': {
+            // v7.50.3 — start at the reviewed split, not a wide random spread
+            target: { landfill: [20, 28], split: { wood: 41.5, occ: 19.5, metal: 15.5 }, jitter: 2 },
             ranges: {
                 wood:     [32, 50],
                 occ:      [8, 22],
@@ -6727,7 +6731,7 @@ const DS = {
                 block:    [0, 0],
                 landfill: [22, 38]
             },
-            typical_diversion: '~67%'
+            typical_diversion: '~76%'
         },
         // Hayes: non-LEED metal recovery project (Walmart shelving)
         // Dominant weight is metal shelving; OCC packaging recovered;
@@ -6777,6 +6781,31 @@ const DS = {
         return Math.floor(Math.random() * (max - min + 1)) + min;
     },
 
+    // v7.50.3 — pick the starting mix for a project config: the reviewed target split
+    // when the project has one, otherwise the old per-material ranges (Hayes etc.).
+    _mixFromConfig(cfg) {
+        if (cfg && cfg.target) return this._generateTargetMix(cfg.target);
+        return this._generateRandomMix(cfg.ranges);
+    },
+
+    // v7.50.3 — landfill picked in its range; the rest split in fixed proportions with a
+    // little variation. Whole numbers that always total 100.
+    _generateTargetMix(t) {
+        var lf = this._randInRange(t.landfill[0], t.landfill[1]);
+        var div = 100 - lf, keys = Object.keys(t.split), sum = 0, mix = {}, j = t.jitter || 0, used = 0;
+        keys.forEach(function (k) { sum += t.split[k]; });
+        var self = this;
+        keys.forEach(function (k, i) {
+            if (i === keys.length - 1) { mix[k] = Math.max(0, div - used); return; }
+            var v = Math.round(div * t.split[k] / sum) + self._randInRange(-j, j);
+            v = Math.max(0, Math.min(div - used, v));
+            mix[k] = v; used += v;
+        });
+        mix.landfill = 100 - keys.reduce(function (a, k) { return a + mix[k]; }, 0);
+        Object.keys(this.MATERIALS || {}).forEach(function (k) { if (mix[k] === undefined) mix[k] = 0; });
+        return mix;
+    },
+
     // Helper: generate randomized mix from a ranges spec, ensures total = 100
     _generateRandomMix(ranges) {
         const mix = {};
@@ -6789,6 +6818,14 @@ const DS = {
             mix[k] = this._randInRange(min, max);
             runningTotal += mix[k];
         });
+        // v7.50.3 — ranges can add up to more than 100 (Hayes reached 104): trim the
+        // excess off the largest material so the mix always totals exactly 100.
+        if (runningTotal > 100) {
+            let extra = runningTotal - 100;
+            const big = keys.filter(k => k !== 'landfill').sort((a, b) => mix[b] - mix[a])[0];
+            mix[big] = Math.max(0, mix[big] - extra);
+            runningTotal = 100;
+        }
         // Landfill = remainder
         mix.landfill = Math.max(0, 100 - runningTotal);
         return mix;
@@ -6813,7 +6850,7 @@ const DS = {
         }
 
         // Generate fresh randomized mix
-        const mix = this._generateRandomMix(projectConfig.ranges);
+        const mix = this._mixFromConfig(projectConfig);
 
         // Apply to sliders
         Object.keys(this.MATERIALS).forEach(k => {
@@ -7339,9 +7376,9 @@ const DS = {
                     break;
                 }
             }
-            if (projectConfig && projectConfig.ranges) {
+            if (projectConfig && (projectConfig.ranges || projectConfig.target)) {
                 // Generate one realistic mix from the project's ranges
-                var mix = this._generateRandomMix(projectConfig.ranges);
+                var mix = this._mixFromConfig(projectConfig);
                 // Backfill any missing keys with 0 so downstream code is safe
                 matKeys.forEach(function(k) { if (mix[k] === undefined) mix[k] = 0; });
                 // Carry non_diverted so callers can compute diversion correctly
