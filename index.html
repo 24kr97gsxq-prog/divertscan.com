@@ -194,6 +194,14 @@
     .nav-btn.active{color:var(--text);border-bottom-color:var(--primary)}.nav-btn:hover{color:var(--text-muted)}
     .nav-btn.active::before{display:none}.nav-icon{font-size:1rem}
     @media(max-width:480px){.stats-grid{grid-template-columns:repeat(2,1fr)}.form-row{flex-direction:column}}
+    /* v7.51.1 — phones: nothing pinned (header + tabs scroll away with the page), tabs wrap. */
+    @media(max-width:520px){
+      html,body{height:auto;overflow-y:auto;overflow-x:hidden}
+      .app-shell{height:auto;min-height:100dvh;overflow:visible}
+      .content-area{overflow:visible;flex:none;padding-bottom:40px}
+      .bottom-nav{flex-wrap:wrap;overflow-x:visible;min-height:0;padding:2px 2px 0}
+      .nav-btn{padding:9px 7px;font-size:.62rem}
+    }
     @media print{.header,.bottom-nav,.btn,.photo-upload{display:none!important}.app-shell{height:auto;overflow:visible}.content-area{overflow:visible;padding:0}.card{border:1px solid #ccc;page-break-inside:avoid}}
 
         /* ── DalMex theme v1 — display face + geometry ─────────────────
@@ -867,6 +875,15 @@ document.addEventListener('keydown', function(e){
                 <div class="card-title">Project Dashboard</div>
                 <div id="reportProjectName" style="font-size:1.1rem; font-weight:700; margin-bottom:4px;">Select a project</div>
                 <div id="reportProjectMeta" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;"></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                    <span style="font-size:.7rem;color:var(--text-muted)">Received at</span>
+                    <select id="reportLocFilter" class="form-input" style="flex:1;font-size:.8rem;padding:6px 8px" onchange="DS._reportLoc=this.value;DS.renderReports()">
+                        <option value="all">All loads</option>
+                        <option value="dalmex">DalMex only</option>
+                        <option value="metro">Metropolitan only (MS-)</option>
+                    </select>
+                </div>
+                <div id="reportLocBanner" style="display:none;font-size:.72rem;font-weight:700;color:var(--warning);margin-bottom:8px"></div>
                 <div class="btn-row">
                     <button class="btn btn-sm btn-primary" id="viewMonthlyBtn" onclick="DS.setReportView('monthly')">By Month</button>
                     <button class="btn btn-sm btn-outline" id="viewAllBtn" onclick="DS.setReportView('all')">All Time</button>
@@ -1248,6 +1265,14 @@ document.addEventListener('keydown', function(e){
                     <button class="btn btn-sm btn-primary" onclick="DS.syncSamsara()" style="flex:1">Sync Samsara</button>
                     <button class="btn btn-sm btn-outline" onclick="DS.showSamsaraSettings()" style="flex:0;padding:8px 12px">Settings</button>
                 </div>
+            </div>
+
+            <!-- v7.51.1 Missing scale-ticket photos -->
+            <div class="card">
+                <div class="card-title">Missing Scale-Ticket Photos</div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">Loads on the selected project with no scale-ticket photo yet, by month - the paper still to scan.</p>
+                <button class="btn btn-sm btn-outline" onclick="DS.showMissingPhotos()" style="width:100%">Show missing photos</button>
+                <div id="missingPhotoResults" style="margin-top:8px"></div>
             </div>
 
             <!-- v7.50.7 Import hauler list -->
@@ -1965,7 +1990,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.7',
+    VERSION: '7.51.1',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -4788,6 +4813,7 @@ const DS = {
                 document.getElementById(tab).classList.add('active');
                 btn.classList.add('active');
                 document.getElementById('contentArea').scrollTop = 0;
+                try { window.scrollTo(0, 0); } catch (e) {}  // v7.51.1: phones scroll the page itself
                 // Remember where the operator is, so a reload comes back here
                 // instead of dumping them on the first tab.
                 try { localStorage.setItem('ds_admin_tab', tab); } catch(e) {}
@@ -5703,6 +5729,7 @@ const DS = {
         // Activate the reports nav button
         document.querySelectorAll('.nav-btn').forEach(function(b) { if (b.dataset.tab === 'reportsTab') b.classList.add('active'); });
         document.getElementById('contentArea').scrollTop = 0;
+        try { window.scrollTo(0, 0); } catch (e) {}
         this.renderReports();
     },
 
@@ -6168,6 +6195,7 @@ const DS = {
     },
 
     async showTicketDetail(id) {
+        var openSeq_ = this._detailSeq = (this._detailSeq || 0) + 1;  // v7.51.1: a later open wins
         var t = this.state.tickets.find(x => x.id === id);
         // PERF (added 2026-05-31): list rows are SLIM (no debris_images, signature,
         // ai_notes, raw_ocr_data). When opening the detail modal we always fetch
@@ -6185,6 +6213,7 @@ const DS = {
         } else if (!t) {
             this.showToast('Ticket not found'); return;
         }
+        if (openSeq_ !== this._detailSeq) return;
         this._currentDetailTicketId = t.id;
         document.getElementById('ticketDetailTitle').textContent = `Ticket ${t.ticket_number}`;
         // Warn if the stored weight disagrees with this ticket's own gross/tare.
@@ -6198,6 +6227,29 @@ const DS = {
               'but this ticket is saved as ' + _mm.stored.toFixed(2) + ' T.' +
               '</div>'
             : '';
+        // v7.50.9 — paper time, Pi reading, weigher, tare source in one line
+        var scaleLine_ = '';
+        try {
+            var bits_ = [];
+            if (t.load_time) {
+                var lt_ = String(t.load_time).split(':');
+                bits_.push('Paper time <strong>' + this._fmtClock((parseInt(lt_[0], 10) || 0) * 60 + (parseInt(lt_[1], 10) || 0)) + '</strong>');
+            }
+            var sw_ = await this.supabase('scale_weights?ticket_id=eq.' + t.id + '&select=weight_lbs,captured_at&order=captured_at.desc&limit=1');
+            if (openSeq_ !== this._detailSeq) return;
+            if (Array.isArray(sw_) && sw_.length) {
+                var cp_ = this._chicagoParts(sw_[0].captured_at), w_ = Number(sw_[0].weight_lbs) || 0, g_ = Number(t.gross_lbs) || 0;
+                var dd_ = (cp_ && cp_.date !== t.ticket_date) ? ' (' + cp_.date.substring(5).replace('-', '/') + ')' : '';
+                bits_.push('Pi reading <strong>' + (cp_ ? this._fmtClock(cp_.minutes) : '') + dd_ + ' · ' + w_.toLocaleString() + ' lb</strong>' +
+                    (g_ ? ' <span style="color:' + (Math.abs(w_ - g_) <= 100 ? 'var(--success)' : 'var(--warning)') + '">(' + (w_ - g_ >= 0 ? '+' : '') + (w_ - g_).toLocaleString() + ' vs paper)</span>' : ''));
+            } else if (Array.isArray(sw_)) {
+                bits_.push('No Pi reading linked');
+            }
+            if (t.weigher) bits_.push('Weigher ' + this.esc(t.weigher));
+            bits_.push('Tare ' + (t.tare_source ? this.esc(t.tare_source) : '<span style="color:var(--warning)">source not set</span>'));
+            scaleLine_ = '<div style="font-size:0.7rem; color:var(--text-muted); margin:-4px 0 12px; display:flex; gap:10px; flex-wrap:wrap;">' + bits_.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>';
+        } catch (e) { scaleLine_ = ''; }
+        this._detailScaleLine = scaleLine_;
         const mats = Object.keys(this.MATERIALS).map(k => {
             const pct = t[k + '_pct'] || 0;
             const tons = t[k + '_tons'] || 0;
@@ -6256,6 +6308,7 @@ const DS = {
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
                 ${this.fmtDateTime(t)} • ${t.hauler || ''}${t.driver_name ? ' • Driver: <strong style="color:var(--primary)">' + this.esc(t.driver_name) + '</strong>' : ''} • ${t.scan_type || 'manual'}${t.zone ? ' • Zone ' + t.zone : ''}
             </div>
+            ${this._detailScaleLine || ''}
             <div style="font-size:0.65rem; color:var(--text-dim); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap;">
                 ${t.created_at ? '<span>Uploaded: ' + new Date(t.created_at).toLocaleString() + ' (' + this.timeAgo(t.created_at) + ')</span>' : ''}
                 ${t.updated_at && t.updated_at !== t.created_at ? '<span>Updated: ' + new Date(t.updated_at).toLocaleString() + '</span>' : ''}
@@ -8214,9 +8267,38 @@ const DS = {
     // ============================================================
     // REPORTS & DASHBOARD
     // ============================================================
+    // v7.51.0 — receiving-location filter (Metropolitan-received loads carry an MS- number)
+    _reportLoc: 'all',
+    _filterByLoc(list) {
+        var loc = this._reportLoc || 'all';
+        if (loc === 'all') return list;
+        return (list || []).filter(function (t) {
+            var ms = /^MS-/i.test(String(t.ticket_number || ''));
+            return loc === 'metro' ? ms : !ms;
+        });
+    },
+    _locSuffix(forFile) {
+        var loc = this._reportLoc || 'all';
+        if (loc === 'all') return '';
+        if (forFile) return loc === 'metro' ? '_Metropolitan_only' : '_DalMex_only';
+        return loc === 'metro' ? ' (received at Metropolitan only)' : ' (received at DalMex only)';
+    },
+
     renderReports() {
         const proj = this.state.currentProject;
-        const tickets = this.state.tickets;
+        const tickets = this._filterByLoc(this.state.tickets);
+        // v7.51.0 — month groups of ALL loads, for the QuickBooks export (never filtered)
+        this._monthGroupsAll = {};
+        var allGrp_ = this._monthGroupsAll;
+        (this.state.tickets || []).forEach(function (t) { var k = String(t.ticket_date || t.service_date || '').substring(0, 7); if (k.length === 7) (allGrp_[k] = allGrp_[k] || []).push(t); });
+        var locSel_ = document.getElementById('reportLocFilter');
+        if (locSel_ && locSel_.value !== (this._reportLoc || 'all')) locSel_.value = this._reportLoc || 'all';
+        var locBan_ = document.getElementById('reportLocBanner');
+        if (locBan_) {
+            var on_ = (this._reportLoc || 'all') !== 'all';
+            locBan_.style.display = on_ ? 'block' : 'none';
+            locBan_.textContent = on_ ? 'Showing ' + tickets.length + ' of ' + (this.state.tickets || []).length + ' loads' + this._locSuffix() + ' - the screen and the PDF / month CSV / month XLSX reports use this subset; the full exports and QuickBooks always use all loads' : '';
+        }
 
         if (!proj) {
             document.getElementById('reportProjectName').textContent = 'Select a project';
@@ -8454,7 +8536,7 @@ const DS = {
 
     renderMonthlyReport() {
         const proj = this.state.currentProject;
-        const tickets = this.state.tickets;
+        const tickets = this._filterByLoc(this.state.tickets);  // v7.51.0
         const container = document.getElementById('reportMonthly');
 
         if (!proj || tickets.length === 0) {
@@ -10570,6 +10652,31 @@ const DS = {
         return Object.assign({}, pi, rows[0], patch);
     },
 
+    // v7.51.1 — which loads still need their paper scanned
+    showMissingPhotos() {
+        var el = document.getElementById('missingPhotoResults');
+        var proj = this.state.currentProject;
+        if (!el) return;
+        if (!proj) { el.innerHTML = '<div style="font-size:.75rem;color:var(--danger)">Select a project first.</div>'; return; }
+        var all = this.state.tickets || [], miss = {}, mt = {}, total = 0, DS_ = this;
+        all.forEach(function (t) {
+            var k = String(t.ticket_date || '').substring(0, 7);
+            if (!k) return;
+            mt[k] = (mt[k] || 0) + 1;
+            if (!t.scale_ticket_image) { (miss[k] = miss[k] || []).push(t); total++; }
+        });
+        var keys = Object.keys(miss).sort().reverse();
+        if (!keys.length) { el.innerHTML = '<div style="font-size:.75rem;color:var(--success)">Every load on ' + DS_.esc(proj.name) + ' has a scale-ticket photo.</div>'; return; }
+        var html = '<div style="font-size:.75rem;margin-bottom:6px"><b>' + total + ' of ' + all.length + '</b> loads on ' + DS_.esc(proj.name) + ' have no scale-ticket photo.</div>';
+        keys.forEach(function (k) {
+            var list = miss[k].sort(function (a, b) { return String(a.ticket_date).localeCompare(String(b.ticket_date)) || String(a.ticket_number).localeCompare(String(b.ticket_number)); });
+            html += '<details style="margin-bottom:4px"><summary style="font-size:.72rem;cursor:pointer"><b>' + k + '</b> · ' + list.length + ' of ' + mt[k] + ' missing</summary>' +
+                '<div style="font-family:var(--mono);font-size:.65rem;color:var(--text-muted);padding:4px 0 4px 12px;line-height:1.6">' +
+                list.map(function (t) { return DS_.esc(t.ticket_number) + ' (' + String(t.ticket_date).substring(5) + ')'; }).join(', ') + '</div></details>';
+        });
+        el.innerHTML = html;
+    },
+
     // ============================================================
     // v7.50.7 — IMPORT HAULER LIST (paste -> preview -> apply)
     // ============================================================
@@ -10852,9 +10959,9 @@ const DS = {
     exportPDF() {
         var proj = this.state.currentProject;
         if (!proj) { this.showToast('Select a project first'); return; }
-        var tickets = this.state.tickets;
+        var tickets = this._filterByLoc(this.state.tickets);  // v7.51.1: same subset as the screen, and labelled
         if (!tickets.length) { this.showToast('No tickets to export'); return; }
-        this._generatePDF(proj, tickets, 'All Time');
+        this._generatePDF(proj, tickets, 'All Time' + this._locSuffix());
     },
 
     exportMonthPDF(monthKey) {
@@ -10864,7 +10971,7 @@ const DS = {
         if (!tix.length) { this.showToast('No tickets for this month'); return; }
         var pts = monthKey.split('-');
         var mf = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-        var label = mf[+pts[1]] + ' ' + pts[0];
+        var label = mf[+pts[1]] + ' ' + pts[0] + this._locSuffix();  // v7.51.0
         this._generatePDF(proj, tix, label, monthKey);
     },
 
@@ -10891,7 +10998,7 @@ const DS = {
         var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 
         // Cumulative project-to-date
-        var allTix = this.state.tickets;
+        var allTix = this._filterByLoc(this.state.tickets);  // v7.51.0: project-to-date matches the subset
         var ptdTons=0,ptdDiv=0;
         allTix.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;});
         var ptdLandfill=Math.max(0,ptdTons-ptdDiv);
@@ -10923,8 +11030,8 @@ const DS = {
         if(!zoneData[z])zoneData[z]={count:0,tons:0,div:0,lf:0};zoneData[z].count++;
         var tn=+(t.net_tons)||0,dv=+(t.diverted_tons)||0;zoneData[z].tons+=tn;zoneData[z].div+=dv;zoneData[z].lf+=tn-dv;});
         var zoneRows='';if(hasZones){var zKeys=Object.keys(zoneData).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
-        zKeys.forEach(function(z){var d=zoneData[z];var zr=d.tons>0?Math.round(d.div/d.tons*100):0;
-        var zc=zr>=75?'#059669':zr>=50?'#d97706':'#dc2626';
+        zKeys.forEach(function(z){var d=zoneData[z];var zx=d.tons>0?d.div/d.tons*100:0;var zr=DS.rateText(zx,rKey,[tgt,50]);var zv=DS.rateVal(zx,rKey);  // v7.51.1: same rule as the month rate
+        var zc=zv>=75?'#059669':zv>=50?'#d97706':'#dc2626';
         zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:#a1a1aa">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+DS.fmt(d.tons)+'</td><td class=r style="color:#059669">'+DS.fmt(d.div)+'</td><td class=r style="color:#dc2626">'+DS.fmt(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
 
         var w=window.open('','_blank');
@@ -11022,7 +11129,7 @@ const DS = {
                 divTons.toFixed(2), divPct+'%'
             ].map(cell).join(',') + '\n';
         });
-        this.downloadFile(csv, 'DivertScan_' + (proj?.name||'Report') + '_' + monthName + '_' + year + '.csv', 'text/csv');
+        this.downloadFile(csv, 'DivertScan_' + (proj?.name||'Report') + '_' + monthName + '_' + year + this._locSuffix(true) + '.csv', 'text/csv');
     },
 
     exportMonthXLSX(monthKey) {
@@ -11086,7 +11193,7 @@ const DS = {
 
         ws.mergeCells('A2:Y2');
         var subtitleCell = ws.getCell('A2');
-        subtitleCell.value = monthName + ' ' + year + ' — ' + (proj?.name||'');
+        subtitleCell.value = monthName + ' ' + year + this._locSuffix() + ' — ' + (proj?.name||'');  // v7.51.1
         subtitleCell.font = {bold:true, size:12, color:{argb:dkGreen}};
         subtitleCell.alignment = {horizontal:'center'};
         ws.getRow(2).height = 22;
@@ -11257,7 +11364,7 @@ const DS = {
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + '.xlsx';
+            a.download = 'DivertScan_' + (proj?.name||'Report').replace(/[^a-zA-Z0-9]/g,'_') + '_' + monthName + '_' + year + this._locSuffix(true) + '.xlsx';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -11403,7 +11510,7 @@ const DS = {
     exportMonthQBO(monthKey) {
         var proj = this.state.currentProject;
         if (!proj) { this.showToast('Select a project first'); return; }
-        var tickets = (this._monthGroups && this._monthGroups[monthKey]) || [];
+        var tickets = (this._monthGroupsAll && this._monthGroupsAll[monthKey]) || (this._monthGroups && this._monthGroups[monthKey]) || [];  // v7.51.0: never filtered
         tickets = tickets.filter(function(t) { return (parseFloat(t.net_tons) || 0) > 0; });
         if (!tickets.length) { this.showToast('No tickets for ' + monthKey); return; }
 
@@ -11997,6 +12104,11 @@ const DS = {
         // A Non-LEED job carries target 0, which is falsy, so it stays quiet.
         if (target && divPct >= target + 5) {
             out.push('well above the project target of ' + target + '% (this load is ' + Math.round(divPct) + '%)');
+        }
+        // v7.50.8 — and well BELOW it: a slipped slider (55% on a hospital load) used to go
+        // through silently. Ten points under target is where it's worth a second look.
+        if (target && divPct !== null && divPct !== undefined && divPct !== '' && divPct <= target - 10) {
+            out.push('well below the project target of ' + target + '% (this load is ' + Math.round(divPct) + '%)');
         }
         return out;
     },
