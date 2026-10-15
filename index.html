@@ -1250,6 +1250,18 @@ document.addEventListener('keydown', function(e){
                 </div>
             </div>
 
+            <!-- v7.50.7 Import hauler list -->
+            <div class="card" id="haulerListCard">
+                <div class="card-title">Import Hauler List</div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">Paste a hauler's haul list (one load per line, e.g. <span style="font-family:var(--mono)">10/1 #03084 4:35pm 5.15 Ton (Hospital Zone A Dalmex)</span>) for the project selected at the top. You'll see what will happen to each line before anything is saved.</p>
+                <textarea id="hlText" class="form-input" rows="6" placeholder="Paste the list here" style="width:100%;font-family:var(--mono);font-size:.72rem"></textarea>
+                <div class="btn-row" style="margin-top:8px">
+                    <button class="btn btn-sm btn-primary" onclick="DS.previewHaulerList()" style="flex:1">Check list</button>
+                    <button class="btn btn-sm btn-success hidden" id="hlApplyBtn" onclick="DS.applyHaulerList()" style="flex:1">Apply</button>
+                </div>
+                <div id="hlResults" style="margin-top:8px"></div>
+            </div>
+
             <!-- 7. Remove Duplicate Tickets -->
             <div class="card">
                 <div class="card-title">Remove Duplicate Tickets</div>
@@ -1953,7 +1965,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.6',
+    VERSION: '7.50.7',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -10556,6 +10568,144 @@ const DS = {
         if (times.length === 1) this._fillLoadTime(pi.id, times[0]);
         this.addAuditEntry('PI_MERGE', pi.ticket_number + ' -> #' + p.number + ' (paper scanned; ' + oldTons + ' T -> ' + tons + ' T)');
         return Object.assign({}, pi, rows[0], patch);
+    },
+
+    // ============================================================
+    // v7.50.7 — IMPORT HAULER LIST (paste -> preview -> apply)
+    // ============================================================
+    _parseHaulerList(text) {
+        var DS_ = this, rows = [];
+        String(text || '').split(/\r?\n/).forEach(function (raw) {
+            var line = raw.trim();
+            if (!line) return;
+            var d = line.match(/(^|\s)(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?=\s|$)/);
+            var n = line.match(/#\s*([A-Za-z]*-?\d{3,6})/);
+            if (!d || !n) { if (/\d/.test(line) && /#/.test(line)) rows.push({ raw: line, bad: 'could not read the date or ticket number' }); return; }
+            var t = line.match(/(\d{1,2}):(\d{2})\s*([ap])\.?\s*m\.?/i);
+            var tons = line.match(/(\d+(?:\.\d+)?)\s*tons?\b/i);
+            var z = line.match(/zone\s*([A-F])\b/i);
+            var metro = /metro/i.test(line);
+            var num = n[1].toUpperCase();
+            if (metro && !/^MS-/.test(num)) num = 'MS-' + num;
+            var mm = parseInt(d[2], 10), dd = parseInt(d[3], 10);
+            if (mm < 1 || mm > 12 || dd < 1 || dd > 31) { rows.push({ raw: line, bad: 'date ' + d[2] + '/' + d[3] + ' is not a real date' }); return; }
+            var date = d[4] ? ((d[4].length === 2 ? '20' + d[4] : d[4]) + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0')) : DS_._smartYearDate(mm, dd);
+            var mins = null;
+            if (t) { var h = parseInt(t[1], 10) % 12 + (t[3].toLowerCase() === 'p' ? 12 : 0); mins = h * 60 + parseInt(t[2], 10); }
+            if (!tons || !(parseFloat(tons[1]) > 0)) { rows.push({ raw: line, bad: 'no tons on the line' }); return; }
+            rows.push({ raw: line, date: date, num: num, minutes: mins, tons: +parseFloat(tons[1]).toFixed(4), zone: z ? z[1].toUpperCase() : null, metro: metro });
+        });
+        return rows;
+    },
+
+    // Chicago wall-clock (date + minutes) -> UTC ISO string, DST-safe.
+    _chicagoIso(date, minutes) {
+        var y = +date.substring(0, 4), m = +date.substring(5, 7), d = +date.substring(8, 10);
+        var h = Math.floor((minutes || 0) / 60), mi = (minutes || 0) % 60;
+        var guess = Date.UTC(y, m - 1, d, h + 6, mi);
+        for (var k = 0; k < 3; k++) {
+            var cp = this._chicagoParts(new Date(guess).toISOString());
+            var diff = (this._dayDiff(cp.date, date) * 1440 + (h * 60 + mi)) - cp.minutes;
+            if (!diff) break;
+            guess += diff * 60000;
+        }
+        return new Date(guess).toISOString();
+    },
+
+    async previewHaulerList() {
+        var proj = this.state.currentProject, out = document.getElementById('hlResults'), applyBtn = document.getElementById('hlApplyBtn');
+        if (applyBtn) applyBtn.classList.add('hidden');
+        this._hlPlan = null;
+        if (!proj) { this.showToast('Select a project first'); return; }
+        var rows = this._parseHaulerList((document.getElementById('hlText') || {}).value);
+        var good = rows.filter(function (r) { return !r.bad; });
+        if (!good.length) { out.innerHTML = '<div style="color:var(--danger);font-size:.75rem">No loads read from the paste.</div>'; return; }
+        out.innerHTML = '<div style="font-size:.75rem;color:var(--text-muted)">Checking ' + good.length + ' loads…</div>';
+        var dates = good.map(function (r) { return r.date; }).sort();
+        var inRange = await this.supabase('tickets?project_id=eq.' + proj.id + '&ticket_date=gte.' + dates[0] + '&ticket_date=lte.' + dates[dates.length - 1] + '&select=*');
+        var variants = [];
+        good.forEach(function (r) { var b = r.num.replace(/^MS-/, ''); [b, b.replace(/^0+(?=\d)/, ''), 'MS-' + b, 'MS-' + b.replace(/^0+(?=\d)/, '')].forEach(function (v) { if (variants.indexOf(v) < 0) variants.push(v); }); });
+        var anyNum = await this.supabase('tickets?ticket_number=in.(' + variants.map(function (v) { return '"' + v + '"'; }).join(',') + ')&select=id,ticket_number,project_id,ticket_date,net_tons');
+        if (!Array.isArray(inRange) || !Array.isArray(anyNum)) { out.innerHTML = '<div style="color:var(--danger);font-size:.75rem">Could not read DivertScan (connection). Nothing changed - try again.</div>'; return; }
+        var norm = function (x) { return String(x || '').toUpperCase().replace(/^MS-/, '').replace(/^0+(?=\d)/, ''); };
+        var claimed = {}, plan = [];
+        good.forEach(function (r) {
+            var hit = anyNum.filter(function (t) { return norm(t.ticket_number) === norm(r.num) && (/^MS-/.test(r.num) === /^MS-/.test(String(t.ticket_number).toUpperCase()) || norm(t.ticket_number) === norm(r.num)); });
+            if (hit.length) {
+                var h0 = hit[0];
+                var note = h0.project_id !== proj.id ? 'on a DIFFERENT project' : (Math.abs((parseFloat(h0.net_tons) || 0) - r.tons) > 0.02 ? 'DivertScan has ' + h0.net_tons + ' T' : 'tons match');
+                if (h0.project_id === proj.id && h0.ticket_date && h0.ticket_date !== r.date) note += '; DivertScan has it dated ' + h0.ticket_date;
+                plan.push({ r: r, action: 'already', ticket: h0, note: note });
+                return;
+            }
+            var cands = inRange.filter(function (t) { return t.ticket_date === r.date && /^(DX-|ORPH-)/.test(t.ticket_number) && !claimed[t.id] && Math.abs((parseFloat(t.net_tons) || 0) - r.tons) <= 0.02; });
+            if (cands.length === 1) { claimed[cands[0].id] = true; plan.push({ r: r, action: 'renumber', ticket: cands[0] }); }
+            else if (cands.length > 1) plan.push({ r: r, action: 'ambiguous', note: cands.map(function (c) { return c.ticket_number; }).join(', ') + ' have the same tons' });
+            else plan.push({ r: r, action: 'new' });
+        });
+        var leftover = inRange.filter(function (t) { return /^(DX-|ORPH-)/.test(t.ticket_number) && !claimed[t.id]; });
+        this._hlPlan = { project: proj, plan: plan };
+        var DS_ = this, cnt = { already: 0, renumber: 0, new: 0, ambiguous: 0 }, tot = 0;
+        plan.forEach(function (p) { cnt[p.action]++; tot += p.r.tons; });
+        var label = { already: 'Already in', renumber: 'Renumber Pi ticket', new: 'Add (provisional)', ambiguous: 'Needs a look' };
+        var color = { already: 'var(--text-muted)', renumber: 'var(--primary)', new: 'var(--success)', ambiguous: 'var(--warning)' };
+        var html = '<div style="font-size:.75rem;margin-bottom:6px"><b>' + plan.length + ' loads · ' + (+tot.toFixed(2)) + ' T</b> for <b>' + DS_.esc(proj.name) + '</b>: ' +
+            cnt.renumber + ' Pi tickets to renumber, ' + cnt.new + ' to add, ' + cnt.already + ' already in' + (cnt.ambiguous ? ', <span style="color:var(--warning)">' + cnt.ambiguous + ' need a look</span>' : '') + '</div>' +
+            '<table style="width:100%;font-size:.68rem;border-collapse:collapse"><tr style="text-align:left;color:var(--text-dim)"><th>Date</th><th>Ticket</th><th>Tons</th><th>Zone</th><th>What happens</th></tr>';
+        plan.forEach(function (p) {
+            var what = p.action === 'renumber' ? p.ticket.ticket_number + ' (' + p.ticket.net_tons + ' T) → #' + p.r.num + (p.r.zone ? ', zone ' + p.r.zone : '') :
+                       p.action === 'already' ? '#' + p.ticket.ticket_number + ' - ' + p.note : p.action === 'ambiguous' ? p.note : 'new load at ' + p.r.tons + ' T';
+            html += '<tr style="border-top:1px solid var(--border)"><td>' + p.r.date.substring(5) + '</td><td>' + DS_.esc(p.r.num) + '</td><td>' + p.r.tons + '</td><td>' + (p.r.zone || '') + '</td>' +
+                '<td style="color:' + color[p.action] + '"><b>' + label[p.action] + '</b> · ' + DS_.esc(what) + '</td></tr>';
+        });
+        html += '</table>';
+        var bad = rows.filter(function (r) { return r.bad; });
+        if (bad.length) html += '<div style="font-size:.68rem;color:var(--danger);margin-top:6px">Skipped (couldn\'t read): ' + bad.map(function (b) { return DS_.esc(b.raw) + ' - ' + b.bad; }).join('<br>') + '</div>';
+        if (leftover.length) html += '<div style="font-size:.68rem;color:var(--warning);margin-top:6px">Pi tickets in these dates that are NOT on the list (left alone): ' + leftover.map(function (t) { return DS_.esc(t.ticket_number) + ' ' + t.ticket_date.substring(5) + ' ' + t.net_tons + ' T'; }).join(', ') + '</div>';
+        out.innerHTML = html;
+        if ((cnt.renumber + cnt.new) && applyBtn) { applyBtn.classList.remove('hidden'); applyBtn.disabled = false; applyBtn.textContent = 'Apply: renumber ' + cnt.renumber + ', add ' + cnt.new; }
+    },
+
+    async applyHaulerList() {
+        var P = this._hlPlan, btn = document.getElementById('hlApplyBtn');
+        if (!P || !P.plan) return;
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        var proj = P.project, today = DS._todayLocal(), DS_ = this, done = { renumber: 0, new: 0, failed: [] };
+        var haulerName = (await this._resolveHauler(proj.waste_hauler || '')) || proj.waste_hauler || null;
+        for (var i = 0; i < P.plan.length; i++) {
+            var p = P.plan[i], r = p.r;
+            try {
+                if (p.action === 'renumber') {
+                    var patch = { ticket_number: r.num, notes: (p.ticket.notes ? p.ticket.notes + ' | ' : '') + today + ': was ' + p.ticket.ticket_number +
+                        ' (made from the Pi reading). Renumbered to #' + r.num + ' per the hauler list (same day, same tons). List time ' + (r.minutes != null ? DS_._fmtClock(r.minutes) : 'n/a') + ' (not the scale time).' };
+                    if (r.zone) patch.zone = r.zone;
+                    var rr = await this.supabase('tickets?id=eq.' + p.ticket.id + '&ticket_number=eq.' + encodeURIComponent(p.ticket.ticket_number), 'PATCH', patch);
+                    if (Array.isArray(rr) && rr.length === 1) done.renumber++; else done.failed.push(r.num);
+                } else if (p.action === 'new') {
+                    var exists = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(r.num) + '&select=id&limit=1');
+                    if (!Array.isArray(exists) || exists.length) { done.failed.push(r.num); continue; }
+                    var mix = this._getDefaultMaterials(this.state.tickets, proj.name), nonDiv = new Set(mix._non_diverted || []), divPct = 0, co2e = 0;
+                    var t = { project_id: proj.id, ticket_number: r.num, ticket_date: r.date, captured_at: this._chicagoIso(r.date, r.minutes != null ? r.minutes : 720),
+                        gross_lbs: null, tare_lbs: null, net_lbs: Math.round(r.tons * 2000), net_tons: r.tons, hauler: haulerName, zone: r.zone,
+                        scan_type: 'hauler_list', mix_source: 'estimated',
+                        notes: '⚠ PROVISIONAL — from the hauler list pasted ' + today + '. Ticket #' + r.num + (r.metro ? ' (received at Metropolitan)' : '') +
+                            '. Net per the hauler list; no gross/tare given. List time ' + (r.minutes != null ? DS_._fmtClock(r.minutes) : 'n/a') + ' (not the scale time). Starting mix - confirm in Material Mix Review.' };
+                    Object.keys(this.MATERIALS).forEach(function (k) {
+                        var pct = mix[k] || 0; t[k + '_pct'] = pct; t[k + '_tons'] = +(r.tons * pct / 100).toFixed(4);
+                        if (k !== 'landfill' && !nonDiv.has(k)) { divPct += pct; co2e += t[k + '_tons'] * (DS_.MATERIALS[k].gwp || 0); }
+                    });
+                    t.diversion_pct = divPct; t.diverted_tons = +(r.tons * divPct / 100).toFixed(4); t.landfill_tons = +(r.tons - t.diverted_tons).toFixed(4); t.co2e_avoided = +co2e.toFixed(4);
+                    var cr = await this.supabase('tickets', 'POST', t);
+                    if (Array.isArray(cr) && cr.length) { done.new++; this.state.tickets.unshift(cr[0]); } else done.failed.push(r.num);
+                }
+            } catch (e) { done.failed.push(r.num); }
+        }
+        this.addAuditEntry('HAULER_LIST', proj.name + ': renumbered ' + done.renumber + ', added ' + done.new + (done.failed.length ? ', failed ' + done.failed.join(',') : ''));
+        var out = document.getElementById('hlResults');
+        if (out) out.insertAdjacentHTML('afterbegin', '<div style="font-size:.75rem;font-weight:700;color:' + (done.failed.length ? 'var(--warning)' : 'var(--success)') + ';margin-bottom:6px">Done: ' + done.renumber + ' renumbered, ' + done.new + ' added' + (done.failed.length ? '. Not done (check by hand): ' + done.failed.join(', ') : '') + '. Confirm the new loads in Material Mix Review.</div>');
+        if (btn) btn.classList.add('hidden');
+        this._hlPlan = null;
+        try { if (this.state.currentProject) await this.loadTickets(this.state.currentProject.id); } catch (e) {}
     },
 
     // Compress image to max dimension to reduce API payload
