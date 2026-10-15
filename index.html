@@ -1953,11 +1953,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.50.4',
+    VERSION: '7.50.6',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-09-23',
+    BUILD: '2026-10-14',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -9276,6 +9276,7 @@ const DS = {
                         } else {
                         // Auto-create from OCR data
                         var photoGross2 = parseInt(parsed.gross_lbs || parsed.gross) || 0;
+                        var mergeNote_ = '', piCands_ = [];
                         var photoTare2 = parseInt(parsed.tare_lbs || parsed.tare) || 0;
                         var photoNet2 = photoGross2 - photoTare2;
                         var photoTons2 = +(photoNet2 / 2000).toFixed(4);
@@ -9299,15 +9300,58 @@ const DS = {
                                     mm2 = p0; dd2 = p1;
                                 }
                                 if (mm2 >= 1 && mm2 <= 12 && dd2 >= 1 && dd2 <= 31) {
-                                    tktDate2 = '2026-' + String(mm2).padStart(2,'0') + '-' + String(dd2).padStart(2,'0');
+                                    tktDate2 = DS._smartYearDate(mm2, dd2);  // v7.50.6: this year, or last year if that date is still ahead
                                 }
                             }
                         }
                         // Final validation — if date is still bad, use today
                         var testDate = new Date(tktDate2);
-                        if (isNaN(testDate.getTime()) || tktDate2.substring(0,4) !== '2026') {
+                        if (isNaN(testDate.getTime())) {
                             tktDate2 = DS._todayLocal();
-                            if (tktDate2.substring(0,4) !== '2026') tktDate2 = '2026' + tktDate2.substring(4);
+                        }
+                        // v7.50.6 — paper for a truck the Pi already made a ticket for: merge, don't duplicate
+                        if (photoTons2 > 0 && !parsed._autoNumbered) {
+                            var piHit_ = await this._findPiTicketFor(this.state.currentProject.id, tktDate2, photoGross2);
+                            // auto-merge only on a clean read: date read, project agrees, number unused anywhere
+                            var cleanRead_ = !!parsed.date && !DS._ocrProjectMismatch(parsed.project, this.state.currentProject.name);
+                            if (piHit_.status === 'match' && cleanRead_) {
+                                var usedElsewhere_ = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(ticketNum) + '&select=id&limit=1');
+                                if (!Array.isArray(usedElsewhere_) || usedElsewhere_.length) cleanRead_ = false;
+                            }
+                            if (piHit_.status === 'match' && !cleanRead_) {
+                                piCands_ = [piHit_.ticket];
+                                mergeNote_ = 'Looks like Pi ticket ' + piHit_.ticket.ticket_number + ' (same day, same weight) - confirm on the card';
+                            } else if (piHit_.status === 'error') {
+                                mergeNote_ = 'Could not check for a matching Pi ticket (connection) - check before approving';
+                            } else if (piHit_.status === 'match') {
+                                var piOldNum_ = piHit_.ticket.ticket_number;
+                                var mUrl_ = null;
+                                if (this._batchBase64[idx]) {
+                                    try { mUrl_ = await this.supabaseUpload('ticket-photos', this.state.currentProject.id + '/' + ticketNum + '_scale_' + Date.now() + '.jpg', this.base64ToBlob(this._batchBase64[idx])); } catch (eU) {}
+                                }
+                                var merged_ = await this._mergePaperIntoPiTicket(piHit_.ticket, {
+                                    number: ticketNum, gross: photoGross2, tare: photoTare2, url: mUrl_,
+                                    driver: parsed.driver, zone: parsed.zone, time: parsed.time });
+                                if (merged_) {
+                                    this._batchProcessed[idx] = true; matched++;
+                                    var mi_ = this.state.tickets.findIndex(function (x) { return x.id === merged_.id; });
+                                    if (mi_ >= 0) this.state.tickets[mi_] = merged_; else this.state.tickets.unshift(merged_);
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '<strong>#' + this.esc(ticketNum) + '</strong> — merged into Pi ticket ' + this.esc(piOldNum_) +
+                                            ' (same truck, same day). Renumbered to #' + this.esc(ticketNum) + ', paper weights applied (' + photoTons2 + ' T), photo attached. No duplicate.';
+                                        statusEl.style.color = 'var(--success)';
+                                    }
+                                    if (rowEl) { rowEl.style.background = 'var(--success-light)'; }
+                                    await this._batchPairPi(idx, merged_, parsed.time, photoGross2, {});
+                                    continue;
+                                }
+                                // merge failed (changed underneath, or connection): never create a second ticket
+                                piCands_ = [piHit_.ticket];
+                                mergeNote_ = 'Matched Pi ticket ' + piOldNum_ + ' but could not merge - confirm on the card';
+                            } else if (piHit_.status === 'ambiguous') {
+                                piCands_ = piHit_.candidates;
+                                mergeNote_ = 'Pi tickets ' + piHit_.candidates.map(function (c) { return c.ticket_number; }).join(', ') + ' weigh about the same that day - pick which one this load is on the card, or None';
+                            }
                         }
                         if (photoTons2 > 0) {
                             try {
@@ -9356,6 +9400,7 @@ const DS = {
                                     hauler: null,  // v7.50.0: set below, never a silent default
                                     scan_type: 'batch_ocr',
                                     mix_source: 'estimated',  // v7.50.0: so it reaches Material Mix Review
+                                    tare_source: DS._isStandardTare(photoTare2) ? 'estimated' : null,  // v7.50.6
                                     diversion_pct: divPct2,
                                     diverted_tons: divTons2,
                                     landfill_tons: +(photoTons2 * lfPct2 / 100).toFixed(4),
@@ -9421,6 +9466,7 @@ const DS = {
                                 }
 
                                 this._batchSeen[idx] = { date: tktDate2, gross: photoGross2, number: ticketNum };  // v7.50.0
+                                if (mergeNote_) suspicions.push(mergeNote_);  // v7.50.6
 
                                 // Check 2: Driver name
                                 if (!parsed.driver || !String(parsed.driver).trim()) {
@@ -9467,6 +9513,7 @@ const DS = {
                                         photoUrl: scaleUrl,
                                         ocr: parsed,
                                         suspicions: suspicions,
+                                        piCandidates: piCands_,  // v7.50.6
                                         skipped: false
                                     });
                                     this._batchProcessed[idx] = true;
@@ -9724,8 +9771,28 @@ const DS = {
                             '<input type="number" inputmode="numeric" id="rv_gross_' + ri + '" class="form-input" value="' + (t.gross_lbs || '') + '" placeholder="Gross lbs" style="flex:1;font-size:.75rem">' +
                             '<input type="number" inputmode="numeric" id="rv_tare_' + ri + '" class="form-input" value="' + (t.tare_lbs || '') + '" placeholder="Tare lbs" style="flex:1;font-size:.75rem">' +
                         '</div>' +
+                        // v7.50.5 — Weigher + Tare Source on the card (Tare Source starts blank, must be picked)
+                        '<div style="display:flex;gap:4px;margin-top:6px">' +
+                            '<div style="flex:1"><div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">Weigher</div>' +
+                            '<input type="text" id="rv_weigher_' + ri + '" class="form-input" value="' + DS.esc(t.weigher || '') + '" placeholder="Who weighed it" style="font-size:.75rem"></div>' +
+                            '<div style="flex:1"><div style="font-size:.6rem;color:var(--text-muted);margin-bottom:1px">Tare source</div>' +
+                            '<select id="rv_tsrc_' + ri + '" class="form-input" style="font-size:.75rem">' +
+                                '<option value=""' + (t.tare_source ? '' : ' selected') + '>Pick</option>' +
+                                '<option value="measured"' + (t.tare_source === 'measured' ? ' selected' : '') + '>Measured</option>' +
+                                '<option value="estimated"' + (t.tare_source === 'estimated' ? ' selected' : '') + '>Estimated</option>' +
+                            '</select></div>' +
+                        '</div>' +
                     '</div>' +
                 '</div>' +
+                // v7.50.6 — this paper may be a truck the Pi already made a ticket for
+                ((item.piCandidates && item.piCandidates.length) ?
+                    '<div style="margin-top:8px;padding:6px 8px;border:1px solid var(--warning);border-radius:6px">' +
+                    '<div style="font-size:.6rem;color:var(--warning);font-weight:700;margin-bottom:2px">Same truck as a Pi ticket?</div>' +
+                    '<select id="rv_pi_' + ri + '" class="form-input" style="font-size:.75rem">' +
+                        '<option value="">Pick</option>' +
+                        item.piCandidates.map(function (c) { return '<option value="' + DS.esc(c.id) + '">' + DS.esc(c.ticket_number) + ' · ' + Number(c.gross_lbs || 0).toLocaleString() + ' lb · ' + (c.net_tons || 0) + ' T</option>'; }).join('') +
+                        '<option value="new">None - a different truck (new ticket)</option>' +
+                    '</select></div>' : '') +
                 '<div id="rv_err_' + ri + '" style="font-size:.65rem;color:var(--danger);font-weight:700;margin-top:4px"></div>' +
             '</div>';
         });
@@ -9811,6 +9878,9 @@ const DS = {
 
             // Read edited values from inputs
             var editedDate = document.getElementById('rv_date_' + ri).value;
+            // v7.50.6 — a date read about a year back is moved to this year (before anything uses it)
+            var fixedDate_ = DS._fixOldYear(editedDate);
+            if (fixedDate_ !== editedDate) { editedDate = fixedDate_; var dEl_ = document.getElementById('rv_date_' + ri); if (dEl_) dEl_.value = editedDate; }
             var editedNum = document.getElementById('rv_num_' + ri).value.trim();
             var editedProj = document.getElementById('rv_proj_' + ri).value;
             var editedDriver = document.getElementById('rv_driver_' + ri).value.trim();
@@ -9818,13 +9888,17 @@ const DS = {
             var editedTare = parseInt(document.getElementById('rv_tare_' + ri).value) || 0;
             var editedNet = editedGross - editedTare;
             var editedTons = +(editedNet / 2000).toFixed(4);
+            var weigherEl_ = document.getElementById('rv_weigher_' + ri);
+            var editedWeigher = weigherEl_ ? weigherEl_.value.trim() : '';
+            var tsrcEl_ = document.getElementById('rv_tsrc_' + ri);
+            var editedTareSrc = tsrcEl_ ? tsrcEl_.value : (item.ticketData.tare_source || '');
             var haulerEl_ = document.getElementById('rv_hauler_' + ri);
             var editedHauler = haulerEl_ ? haulerEl_.value : (item.ticketData.hauler || '');
             var errEl_ = document.getElementById('rv_err_' + ri);
             if (errEl_) errEl_.textContent = '';
 
-            if (editedNet <= 0 || !editedDate || !editedNum || !editedHauler) {
-                if (errEl_) errEl_.textContent = !editedHauler ? 'Pick a hauler' : (!editedNum ? 'Ticket # is blank' : (!editedDate ? 'Date is blank' : 'Gross must be more than tare'));
+            if (editedNet <= 0 || !editedDate || !editedNum || !editedHauler || !editedTareSrc) {
+                if (errEl_) errEl_.textContent = !editedHauler ? 'Pick a hauler' : (!editedNum ? 'Ticket # is blank' : (!editedDate ? 'Date is blank' : (editedNet <= 0 ? 'Gross must be more than tare' : 'Pick a tare source (Measured or Estimated)')));
                 if (rowEl) {
                     rowEl.style.background = 'rgba(220,38,38,0.15)';
                     rowEl.style.borderColor = 'var(--danger)';
@@ -9872,6 +9946,8 @@ const DS = {
                 co2e_avoided: +co2e.toFixed(4),
                 driver_name: editedDriver || null,
                 hauler: editedHauler,
+                weigher: editedWeigher || null,
+                tare_source: editedTareSrc,
                 human_verified: true,
                 signed_by: 'Batch review approved'
             }, matData);
@@ -9885,6 +9961,76 @@ const DS = {
                 } catch(dErr) { /* non-fatal */ }
             } else {
                 delete newTicket.driver_id;
+            }
+
+            // v7.50.6 — merge into the Pi ticket for this truck instead of creating a duplicate
+            var piPickEl_ = document.getElementById('rv_pi_' + ri);
+            var piPick_ = piPickEl_ ? piPickEl_.value : '';
+            if (piPickEl_ && !piPick_) {
+                var errP_ = document.getElementById('rv_err_' + ri);
+                if (errP_) errP_.textContent = 'Pick which Pi ticket this load is, or "None - a different truck"';
+                if (rowEl) { rowEl.style.background = 'rgba(220,38,38,0.15)'; rowEl.style.borderColor = 'var(--danger)'; }
+                failed++; continue;
+            }
+            // v7.50.6 — a picked Pi ticket needs a tare to merge, and the paper number must be free everywhere
+            if (piPick_ && piPick_ !== 'new') {
+                var errT_ = document.getElementById('rv_err_' + ri);
+                if (!(editedTare > 0)) {
+                    if (errT_) errT_.textContent = 'Enter the tare to merge into the Pi ticket';
+                    if (rowEl) { rowEl.style.background = 'rgba(220,38,38,0.15)'; rowEl.style.borderColor = 'var(--danger)'; }
+                    failed++; continue;
+                }
+            }
+            if (piPick_ !== 'new' && editedProj && editedGross > 0 && editedTare > 0) {
+                var numUsed_ = await this.supabase('tickets?ticket_number=eq.' + encodeURIComponent(editedNum) + '&select=id,project_id&limit=1');
+                if (!Array.isArray(numUsed_) || numUsed_.length) {
+                    if (piPick_) {
+                        var errU_ = document.getElementById('rv_err_' + ri);
+                        if (errU_) errU_.textContent = !Array.isArray(numUsed_) ? 'Could not check the ticket number (connection) - try again' : 'Ticket #' + editedNum + ' is already in DivertScan - nothing merged';
+                        if (rowEl) { rowEl.style.background = 'rgba(220,38,38,0.15)'; rowEl.style.borderColor = 'var(--danger)'; }
+                        failed++; continue;
+                    }
+                }
+                var rvHit_ = { status: 'none' };
+                if (!Array.isArray(numUsed_) || numUsed_.length) piPick_ = 'skip';  // number taken or unknown: no auto-merge; the duplicate check below handles it
+                if (piPick_ === 'skip') {
+                    rvHit_ = { status: 'none' };
+                } else if (piPick_) {
+                    // fresh copy of the picked Pi ticket, and it must be on this project and day
+                    var fresh_ = await this.supabase('tickets?id=eq.' + encodeURIComponent(piPick_) + '&select=*');
+                    var ft_ = Array.isArray(fresh_) ? fresh_[0] : null;
+                    if (!ft_ || !/^(DX-|ORPH-)/.test(ft_.ticket_number) || ft_.project_id !== editedProj || ft_.ticket_date !== editedDate) {
+                        var errF_ = document.getElementById('rv_err_' + ri);
+                        if (errF_) errF_.textContent = !ft_ ? 'That Pi ticket could not be read - try again' : (!/^(DX-|ORPH-)/.test(ft_.ticket_number) ? 'That Pi ticket was already merged (now #' + ft_.ticket_number + ')' : 'That Pi ticket is on a different project or date than this card');
+                        if (rowEl) { rowEl.style.background = 'rgba(220,38,38,0.15)'; rowEl.style.borderColor = 'var(--danger)'; }
+                        failed++; continue;
+                    }
+                    rvHit_ = { status: 'match', ticket: ft_ };
+                } else if (!(item.ocr && item.ocr._autoNumbered)) {
+                    rvHit_ = await this._findPiTicketFor(editedProj, editedDate, editedGross);
+                }
+                if (rvHit_.status === 'match' && rvHit_.ticket) {
+                    var rvOldNum_ = rvHit_.ticket.ticket_number;
+                    var rvMerged_ = await this._mergePaperIntoPiTicket(rvHit_.ticket, {
+                        number: editedNum, gross: editedGross, tare: editedTare, url: item.photoUrl || null, hauler: editedHauler,
+                        driver: editedDriver, weigher: editedWeigher, tareSource: editedTareSrc, time: item.ocr && item.ocr.time, humanVerified: true });
+                    if (!rvMerged_) {
+                        var errN_ = document.getElementById('rv_err_' + ri);
+                        if (errN_) errN_.textContent = 'Could not merge into ' + rvOldNum_ + ' (it changed or the connection dropped) - nothing saved; tap again';
+                        if (rowEl) { rowEl.style.background = 'rgba(220,38,38,0.15)'; rowEl.style.borderColor = 'var(--danger)'; }
+                        failed++; continue;
+                    }
+                    if (rvMerged_) {
+                        var si_ = this.state.tickets.findIndex(function (x) { return x.id === rvMerged_.id; });
+                        if (si_ >= 0) this.state.tickets[si_] = rvMerged_; else this.state.tickets.unshift(rvMerged_);
+                        item.done = true; created++;
+                        var errM_ = document.getElementById('rv_err_' + ri);
+                        if (errM_) { errM_.style.color = 'var(--success)'; errM_.textContent = 'Merged into Pi ticket ' + rvOldNum_ + ' (renumbered to #' + editedNum + ') - no duplicate'; }
+                        if (rowEl) { rowEl.style.background = 'rgba(34,197,94,0.15)'; rowEl.style.borderColor = 'var(--success)'; }
+                        await this._batchPairPi(item.idx, rvMerged_, item.ocr && item.ocr.time, editedGross, {});
+                        continue;
+                    }
+                }
             }
 
             // v7.50.0 — a retry must never create the same ticket twice
@@ -10311,6 +10457,105 @@ const DS = {
         } catch (e) {
             if (st) st.innerHTML += '<br><span style="color:var(--danger)">Photo not attached (' + this.esc(e.message || 'error') + ') - tap "Attach photos" to retry</span>';
         }
+    },
+
+    // ============================================================
+    // v7.50.6 — AUTOMATION HELPERS
+    // ============================================================
+    // Same test as the batch suspicion check: does the project written on the paper share a word with the selected one?
+    _ocrProjectMismatch(ocrProj, selName) {
+        if (!ocrProj) return false;
+        var o = String(ocrProj).toLowerCase().trim(), sel = String(selName || '').toLowerCase();
+        var ow = o.split(/[\s\/\-,]+/).filter(function (w) { return w.length >= 4; });
+        var sw = sel.split(/[\s\/\-,]+/).filter(function (w) { return w.length >= 4; });
+        var hit = false;
+        ow.forEach(function (w) { if (sel.indexOf(w) >= 0) hit = true; });
+        sw.forEach(function (w) { if (o.indexOf(w) >= 0) hit = true; });
+        return !hit && o.length > 0;
+    },
+
+    // A tare that is a standard number (reused on many loads) is an estimate, not a
+    // weighing. One-off tares are left blank for a person: never claim "measured".
+    _STANDARD_TARES: [33000, 32540],
+    _isStandardTare(tare) {
+        tare = parseInt(tare) || 0;
+        if (!tare) return false;
+        if (this._STANDARD_TARES.indexOf(tare) >= 0) return true;
+        var n = 0;
+        (this.state.tickets || []).forEach(function (t) { if ((parseInt(t.tare_lbs) || 0) === tare) n++; });
+        return n >= 3;
+    },
+
+    // Month/day with this year, or last year when that date hasn't happened yet (scanning
+    // December paper in January).
+    _smartYearDate(mm, dd) {
+        var today = DS._todayLocal(), y = parseInt(today.substring(0, 4), 10);
+        var cand = y + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
+        if (cand > today && this._dayDiff(today, cand) > 31) cand = (y - 1) + cand.substring(4);
+        return cand;
+    },
+
+    // A date ~a year or more in the past (88348 came in as 2025-10-13) -> same month/day, smart year.
+    _fixOldYear(dateStr) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return dateStr;
+        var today = DS._todayLocal();
+        if (this._dayDiff(dateStr, today) < 300) return dateStr;
+        var moved = this._smartYearDate(parseInt(dateStr.substring(5, 7), 10), parseInt(dateStr.substring(8, 10), 10));
+        return moved > today ? dateStr : moved;  // never move a date into the future
+    },
+
+    // The Pi-made ticket (DX-/ORPH-) for this truck: same project, same day, gross within 100 lb.
+    async _findPiTicketFor(projectId, date, gross) {
+        if (!projectId || !date || !(gross > 0)) return { status: 'none', candidates: [] };
+        var rows = await this.supabase('tickets?project_id=eq.' + projectId + '&ticket_date=eq.' + date +
+            '&or=(ticket_number.like.DX-*,ticket_number.like.ORPH-*)&select=*');
+        if (!Array.isArray(rows)) return { status: 'error', candidates: [] };
+        var c = rows.filter(function (t) { return Math.abs((parseInt(t.gross_lbs) || 0) - gross) <= 100; });
+        if (c.length === 1) return { status: 'match', ticket: c[0], candidates: c };
+        return { status: c.length ? 'ambiguous' : 'none', candidates: c };
+    },
+
+    // Paper is the record: renumber the Pi ticket to the paper number and use the paper's
+    // weights. Its split stays (material tons rescaled to the new net). Blanks filled, note kept.
+    async _mergePaperIntoPiTicket(pi, p) {
+        var gross = parseInt(p.gross) || 0, tare = parseInt(p.tare) || 0;
+        var patch = { ticket_number: String(p.number) };
+        var oldTons = parseFloat(pi.net_tons) || 0, tons = oldTons;
+        if (gross > tare && tare > 0) {
+            tons = +((gross - tare) / 2000).toFixed(4);
+            patch.gross_lbs = gross; patch.tare_lbs = tare; patch.net_lbs = gross - tare; patch.net_tons = tons;
+            var self = this, divPct = parseFloat(pi.diversion_pct) || 0;
+            Object.keys(this.MATERIALS).forEach(function (k) {
+                var pct = parseFloat(pi[k + '_pct']) || 0;
+                if (pct) patch[k + '_tons'] = +(tons * pct / 100).toFixed(4);
+            });
+            var ratio = oldTons > 0 ? tons / oldTons : 0;
+            if (ratio && pi.diverted_tons != null) {
+                patch.diverted_tons = +((parseFloat(pi.diverted_tons) || 0) * ratio).toFixed(4);
+                patch.landfill_tons = +(tons - patch.diverted_tons).toFixed(4);
+            } else {
+                patch.diverted_tons = +(tons * divPct / 100).toFixed(4);
+                patch.landfill_tons = +(tons * (100 - divPct) / 100).toFixed(4);
+            }
+            if (oldTons > 0 && pi.co2e_avoided != null) patch.co2e_avoided = +((parseFloat(pi.co2e_avoided) || 0) * tons / oldTons).toFixed(4);
+            patch.tare_source = p.tareSource || (tare === (parseInt(pi.tare_lbs) || 0) ? (pi.tare_source || null) : (this._isStandardTare(tare) ? 'estimated' : null));
+        }
+        if (p.url && !pi.scale_ticket_image) patch.scale_ticket_image = p.url;
+        if (p.driver && !pi.driver_name) patch.driver_name = String(p.driver).trim();
+        if (p.zone && !pi.zone) patch.zone = String(p.zone).trim().toUpperCase();
+        if (p.weigher && !pi.weigher) patch.weigher = p.weigher;
+        if (p.hauler && !pi.hauler) patch.hauler = p.hauler;
+        if (p.humanVerified) { patch.human_verified = true; patch.signed_by = 'Batch review approved (merged into Pi ticket)'; }
+        var times = this._parseTicketTime(p.time);
+        patch.notes = (pi.notes ? pi.notes + ' | ' : '') + DS._todayLocal() + ': was ' + pi.ticket_number +
+            ' (made from the Pi reading). Paper ticket #' + p.number + ' scanned - same truck, same day - so renumbered to it' +
+            (patch.net_tons != null ? '; weights from the paper (was ' + (pi.gross_lbs || '?') + '/' + (pi.tare_lbs || '?') + ' = ' + oldTons + ' T, now ' + gross + '/' + tare + ' = ' + tons + ' T)' : '') +
+            '. Batch Upload.';
+        var rows = await this.supabase('tickets?id=eq.' + pi.id + '&ticket_number=eq.' + encodeURIComponent(pi.ticket_number), 'PATCH', patch);
+        if (!Array.isArray(rows) || rows.length !== 1) return null;
+        if (times.length === 1) this._fillLoadTime(pi.id, times[0]);
+        this.addAuditEntry('PI_MERGE', pi.ticket_number + ' -> #' + p.number + ' (paper scanned; ' + oldTons + ' T -> ' + tons + ' T)');
+        return Object.assign({}, pi, rows[0], patch);
     },
 
     // Compress image to max dimension to reduce API payload
@@ -12486,7 +12731,7 @@ const DS = {
             var tare = parseInt((document.getElementById('mt_tare_'+i)||{}).value) || 0;
             var netLbs = gross - tare;
             var netTons = +(netLbs / 2000).toFixed(4);
-            var tktDate = ((document.getElementById('mt_date_'+i)||{}).value) || DS._todayLocal();
+            var tktDate = DS._fixOldYear(((document.getElementById('mt_date_'+i)||{}).value) || DS._todayLocal());  // v7.50.6
             // Block future dates at save time
             if (new Date(tktDate).getTime() > Date.now() + 86400000) {
                 tktDate = DS._todayLocal();
