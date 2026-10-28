@@ -1990,7 +1990,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.1',
+    VERSION: '7.51.2',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -10987,6 +10987,9 @@ const DS = {
             matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
         var landfill=Math.max(0,tons-div);
         var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
+        // v7.51.2 — Non-LEED projects have no target, so no pass/fail colours:
+        // diversion % and landfill print in plain ink. LEED reports unchanged.
+        var nonLeed=(ver==='none'||proj.leed_target===0);var INK='#18181b';
         // v7.48.2 — a month already reported shows its reported rate and verdict
         // (whole number). From RATE_EXACT_FROM on: ON TRACK / BELOW TARGET on the
         // exact rate, rate shown at one decimal. All Time is a running total.
@@ -11015,7 +11018,7 @@ const DS = {
             var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
             var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td>'+(t.zone||'')+'</td><td class=r>'+DS.fmt(g)+'</td><td class=r>'+DS.fmt(ta)+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';
             matKeys.forEach(function(k){r+='<td class=r>'+(t[k+'_pct']||0)+'%</td>';});
-            r+='<td class=r style="font-weight:bold;color:'+(dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
+            r+='<td class=r style="font-weight:bold;color:'+(nonLeed?INK:dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
             rows+=r;});
 
         // Material rows
@@ -11031,8 +11034,8 @@ const DS = {
         var tn=+(t.net_tons)||0,dv=+(t.diverted_tons)||0;zoneData[z].tons+=tn;zoneData[z].div+=dv;zoneData[z].lf+=tn-dv;});
         var zoneRows='';if(hasZones){var zKeys=Object.keys(zoneData).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
         zKeys.forEach(function(z){var d=zoneData[z];var zx=d.tons>0?d.div/d.tons*100:0;var zr=DS.rateText(zx,rKey,[tgt,50]);var zv=DS.rateVal(zx,rKey);  // v7.51.1: same rule as the month rate
-        var zc=zv>=75?'#059669':zv>=50?'#d97706':'#dc2626';
-        zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:#a1a1aa">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+DS.fmt(d.tons)+'</td><td class=r style="color:#059669">'+DS.fmt(d.div)+'</td><td class=r style="color:#dc2626">'+DS.fmt(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
+        var zc=nonLeed?INK:zv>=75?'#059669':zv>=50?'#d97706':'#dc2626';
+        zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:#a1a1aa">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+DS.fmt(d.tons)+'</td><td class=r style="color:#059669">'+DS.fmt(d.div)+'</td><td class=r style="color:'+(nonLeed?INK:'#dc2626')+'">'+DS.fmt(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
 
         var w=window.open('','_blank');
         w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+DS.esc(proj.name)+'</title>'+
@@ -11062,22 +11065,22 @@ const DS = {
         '<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
         '<div class="stat"><b>'+DS.fmt(tons)+'</b><span>Generated (T)</span></div>'+
         '<div class="stat"><b style="color:#059669">'+DS.fmt(div)+'</b><span>Diverted (T)</span></div>'+
-        '<div class="stat"><b style="color:#dc2626">'+DS.fmt(landfill)+'</b><span>Landfill (T)</span></div>'+
-        '<div class="stat"><b style="color:'+(ok?'#059669':'#dc2626')+'">'+rate+'%</b><span>Diversion Rate</span></div>'+
+        '<div class="stat"><b style="color:'+(nonLeed?INK:'#dc2626')+'">'+DS.fmt(landfill)+'</b><span>Landfill (T)</span></div>'+
+        '<div class="stat"><b style="color:'+(nonLeed?INK:ok?'#059669':'#dc2626')+'">'+rate+'%</b><span>Diversion Rate</span></div>'+
         '<div class="stat"><b>'+streams+'</b><span>Material Streams</span></div></div>'+
         '<div class="note"><b>Calculation:</b> Total Generated ('+DS.fmt(tons)+' T) = Diverted ('+DS.fmt(div)+' T) + Landfill ('+DS.fmt(landfill)+' T) | Diversion Rate = '+DS.fmt(div)+' / '+DS.fmt(tons)+' × 100 = '+rate+'% | Method: weight-based tracking via commercial scale</div>'+
         '<h2>Project-to-Date Cumulative</h2>'+
         '<div class="stats"><div class="stat"><b>'+allTix.length+'</b><span>Total Tickets</span></div>'+
         '<div class="stat"><b>'+DS.fmt(ptdTons)+'</b><span>Generated (T)</span></div>'+
         '<div class="stat"><b style="color:#059669">'+DS.fmt(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
-        '<div class="stat"><b style="color:#dc2626">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
-        '<div class="stat"><b style="color:'+(ptdOk?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
-        '<h2>Tonnage by Zone — '+label+'</h2>'+
-        (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>')+
+        '<div class="stat"><b style="color:'+(nonLeed?INK:'#dc2626')+'">'+DS.fmt(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
+        '<div class="stat"><b style="color:'+(nonLeed?INK:ptdOk?'#059669':'#dc2626')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+        ((nonLeed&&!zoneRows)?'':'<h2>Tonnage by Zone — '+label+'</h2>'+
+        (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>'))+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
         '<h2>Scale Tickets — '+label+'</h2>'+
         '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=2>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=3>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
         '<div class="footer"><b>'+DS.FACILITY.name+'</b> • TCEQ '+DS.FACILITY.tceq_rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • '+DS.FACILITY.email+' • '+DS.FACILITY.phone+'</div>'+
         '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
         '<div style="display:flex;gap:8px;max-width:600px;margin:0 auto">'+
@@ -11158,6 +11161,8 @@ const DS = {
         var altRow = 'F9FAFB';
         var borderClr = 'D4D4D8';
         var redText = 'DC2626';
+        // v7.51.2 — Non-LEED (or target 0): no pass/fail colours on diversion % or landfill.
+        var nonLeedX = !!proj && (proj.leed_version === 'none' || proj.leed_target === 0);
 
         // Column widths
         ws.columns = [
@@ -11276,7 +11281,7 @@ const DS = {
             // Diversion % color coding
             var divCell = r.getCell(10);
             var pctVal = Math.round(divPct * 100);
-            divCell.font = {bold:true, size:10, color:{argb: pctVal >= 75 ? medGreen : pctVal >= 50 ? 'D97706' : redText}};
+            divCell.font = {bold:true, size:10, color:{argb: nonLeedX ? '18181B' : pctVal >= 75 ? medGreen : pctVal >= 50 ? 'D97706' : redText}};
 
             // Number formats
             [10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0%'; });
@@ -11330,7 +11335,7 @@ const DS = {
         summaryData.forEach(function(d) {
             var r = ws.addRow(d);
             r.getCell(1).font = {bold:true, size:10, color:{argb:'52525B'}};
-            r.getCell(2).font = {bold:true, size:11, color:{argb: d[0]==='Landfill' ? redText : dkGreen}};
+            r.getCell(2).font = {bold:true, size:11, color:{argb: d[0]==='Landfill' ? (nonLeedX ? '18181B' : redText) : dkGreen}};
             if (d[0]==='Recycled Material %') r.getCell(2).numFmt = rateFmt;   // v7.48.2 rule
             else if (d[0]!=='Material Streams') r.getCell(2).numFmt = '0.00';
         });
