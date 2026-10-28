@@ -10997,7 +10997,7 @@ const DS = {
         var rLines=DS._rateLines(proj);
         var rKey=monthKey||DS._lastMonthKey(tix);
         var rate=monthKey?DS.rateText(rateExact,monthKey,rLines):DS.runText(rateExact,rKey,rLines);
-        var ok=DS.rateMet(rateExact,rKey,tgt);var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+        var ok=DS.rateMet(rateExact,rKey,tgt);
         var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 
         // Cumulative project-to-date
@@ -11020,7 +11020,7 @@ const DS = {
             // v7.51.3 — every % in the ticket table at one decimal (was 34.85% next to 20%)
             matKeys.forEach(function(k){r+='<td class=r>'+(+(t[k+'_pct'])||0).toFixed(1)+'%</td>';});
             var tn1=+(t.net_tons)||0,dv1=t.diverted_tons;var dpShow=(tn1>0&&dv1!=null&&dv1!=='')?(+dv1/tn1*100):(+dp||0);
-            r+='<td class=r style="font-weight:bold;color:'+(nonLeed?INK:dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dpShow.toFixed(1)+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
+            r+='<td class=r style="font-weight:bold;color:'+(nonLeed?INK:dp>=75?'#059669':dp>=50?'#d97706':'#dc2626')+'">'+dpShow.toFixed(1)+'%</td></tr>';
             rows+=r;});
 
         // Material rows
@@ -11081,8 +11081,8 @@ const DS = {
         (zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet. Zones can be assigned from the ticket detail view.</div>'))+
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
         '<h2>Scale Tickets — '+label+'</h2>'+
-        '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=3>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+        '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th></tr>'+rows+
+        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=3>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
         '<div class="footer"><b>'+DS.FACILITY.name+'</b> • TCEQ '+DS.FACILITY.tceq_rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • '+DS.FACILITY.email+' • '+DS.FACILITY.phone+'</div>'+
         '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
         '<div style="display:flex;gap:8px;max-width:600px;margin:0 auto">'+
@@ -11170,7 +11170,7 @@ const DS = {
         ws.columns = [
             {width:12},{width:10},{width:7},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},
             {width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},
-            {width:7},{width:7},{width:9},{width:7},{width:7},{width:7},{width:14}
+            {width:7},{width:7},{width:9},{width:7},{width:7},{width:7}
         ];
 
         // Helper: style a row
@@ -11228,7 +11228,7 @@ const DS = {
         // Column headers
         var headers = ['Date','Ticket No','Zone','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
             'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
-            'Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo'];
+            'Metal%','Metal','Concrete%','Concrete','Block%','Block'];
         var hdrRow = ws.addRow(headers);
         hdrRow.height = 20;
         styleRow(hdrRow, {
@@ -11265,13 +11265,11 @@ const DS = {
                 dateFmt = parseInt(dp[1]) + '/' + parseInt(dp[2]) + '/' + dp[0];
             }
 
-            var photoUrl = t.scale_ticket_image || '';
             var r = ws.addRow([
                 dateFmt, (t.ticket_number == null ? '' : String(t.ticket_number)), t.zone||'',
                 gross, gross/2000, tare, tare/2000, net, tons,
                 divPct, diverted,
-                wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt,
-                photoUrl ? 'View Photo' : ''
+                wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt
             ]);
 
             // Alternating row shading
@@ -11286,15 +11284,10 @@ const DS = {
             divCell.font = {bold:true, size:10, color:{argb: nonLeedX ? '18181B' : pctVal >= 75 ? medGreen : pctVal >= 50 ? 'D97706' : redText}};
 
             // Number formats
-            [10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0%'; });
+            [10,12,14,16,18,20,22,24].forEach(function(c){ r.getCell(c).numFmt = '0.0%'; });  // v7.51.4: one decimal, as the PDF
             [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ r.getCell(c).numFmt = '0.00'; });
             [4,6,8].forEach(function(c){ r.getCell(c).numFmt = '#,##0'; });
 
-            // Photo hyperlink
-            if (photoUrl) {
-                r.getCell(26).value = {text:'View Photo', hyperlink: photoUrl};
-                r.getCell(26).font = {size:9, color:{argb:'3B82F6'}, underline:true};
-            }
         });
 
         // Totals row
@@ -11313,14 +11306,13 @@ const DS = {
             sumTons>0?sumMats.occ/sumTons:0, sumMats.occ,
             sumTons>0?sumMats.metal/sumTons:0, sumMats.metal,
             sumTons>0?sumMats.concrete/sumTons:0, sumMats.concrete,
-            sumTons>0?sumMats.block/sumTons:0, sumMats.block,
-            '']);
+            sumTons>0?sumMats.block/sumTons:0, sumMats.block]);
         styleRow(totRow, {
             fill: dkGreen,
             font: {bold:true, size:10, color:{argb:hdrFont}},
             border: thinBorder
         });
-        [10,12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0%'; });
+        [12,14,16,18,20,22,24].forEach(function(c){ totRow.getCell(c).numFmt = '0.0%'; });  // col 10 = month rate, set below
         totRow.getCell(10).numFmt = rateFmt;   // month's diversion rate (v7.48.2 rule)
         [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
         [4,6,8].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
@@ -11363,7 +11355,7 @@ const DS = {
         var zKeys=Object.keys(zd).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
         zKeys.forEach(function(z){var dd=zd[z];var lf=dd.tons-dd.div;if(lf<0)lf=0;var zrt=dd.tons>0?Math.round(dd.div/dd.tons*100)/100:0;
         var zr=ws.addRow([z,dd.count,+dd.tons.toFixed(2),+dd.div.toFixed(2),+lf.toFixed(2),zrt]);
-        zr.getCell(6).numFmt='0%';if(z==='Unassigned')zr.getCell(1).font={italic:true,color:{argb:'FFA1A1AA'}};});
+        zr.getCell(6).numFmt='0.0%';if(z==='Unassigned')zr.getCell(1).font={italic:true,color:{argb:'FFA1A1AA'}};});
 
         // Download
         wb.xlsx.writeBuffer().then(function(buffer) {
