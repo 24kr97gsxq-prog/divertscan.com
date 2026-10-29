@@ -555,7 +555,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.2', BUILD:'2026-10-28',
+VERSION:'2.9.3', BUILD:'2026-10-28',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -1706,8 +1706,8 @@ el.innerHTML='<div class="topnav" style="z-index:201"><div class="topnav-brand" 
 // shape as the zone card: pick a known name or type a new one, Save closes.
 '<div class="c" id="drvCard"><div class="ct">Driver</div>'+
 '<div style="display:flex;gap:6px;align-items:center">'+
-'<input class="fi" id="drvInp" list="drvList" autocomplete="off" placeholder="Driver name" value="'+P.esc(t.driver_name||'')+'" style="flex:1;padding:10px">'+
-'<datalist id="drvList"></datalist>'+
+'<select class="fi" id="drvSel" onchange="P.onDrvPick()" style="flex:1;padding:10px"><option value="">Loading...</option></select>'+
+'<input class="fi hidden" id="drvInp" autocomplete="off" placeholder="Type the driver\'s name" value="'+P.esc(t.driver_name||'')+'" style="flex:1;padding:10px">'+
 '<div class="b bp" id="drvSaveBtn" onclick="P.saveDriver(\''+t.id+'\')" style="width:auto;padding:10px 18px;flex:0 0 auto">Save</div></div>'+
 '<div id="drvMsg" style="font-size:.6rem;color:var(--text-m);margin-top:6px">'+(t.driver_name?'':'No driver on this ticket yet.')+'</div></div>'+
 (mats?'<div class="c"><div class="ct">Materials</div>'+mats+'</div>':'')+(photos?'<div class="c">'+photos+'</div>':'')+
@@ -1785,7 +1785,7 @@ P.toast(newZone?('Zone set to '+newZone):'Zone cleared');},
 // one, plus any name already on this client's tickets. Free text is allowed:
 // a new driver on a paper ticket is exactly the case this is for.
 async loadDriverList(t){
-var dl=document.getElementById('drvList');if(!dl)return;
+var sel=document.getElementById('drvSel');if(!sel)return;
 var names={};
 (P._allTixCache||P.tx||[]).forEach(function(x){if(x.driver_name)names[x.driver_name]=1;});
 try{
@@ -1793,12 +1793,23 @@ var rows=await P.api('drivers?select=driver_name,hauler&is_active=eq.true&order=
 if(rows===null)rows=await P.api('drivers?select=driver_name,hauler&order=driver_name');
 (rows||[]).forEach(function(d){if(!d.driver_name)return;if(t.hauler&&d.hauler&&d.hauler!==t.hauler)return;names[d.driver_name]=1;});
 }catch(x){}
-dl.innerHTML=Object.keys(names).sort(function(a,b){return a.localeCompare(b);}).map(function(n){return '<option value="'+P.esc(n)+'">';}).join('');},
+if(t.driver_name)names[t.driver_name]=1;
+var list=Object.keys(names).sort(function(a,b){return a.localeCompare(b);});
+sel.innerHTML='<option value="">-- No driver --</option>'+
+list.map(function(n){return '<option value="'+P.esc(n)+'"'+(t.driver_name===n?' selected':'')+'>'+P.esc(n)+'</option>';}).join('')+
+'<option value="__new__">+ Add a new driver...</option>';},
+
+// "+ Add a new driver" swaps the dropdown for a text box (and back on Escape/blank).
+onDrvPick(){
+var sel=document.getElementById('drvSel'),inp=document.getElementById('drvInp');
+if(!sel||!inp)return;
+if(sel.value==='__new__'){sel.classList.add('hidden');inp.classList.remove('hidden');inp.value='';inp.focus();}},
 
 async saveDriver(id){
-var inp=document.getElementById('drvInp'),btn=document.getElementById('drvSaveBtn');
-if(!inp||!btn)return;
-var val=inp.value.trim();
+var inp=document.getElementById('drvInp'),sel=document.getElementById('drvSel'),btn=document.getElementById('drvSaveBtn');
+if(!inp||!sel||!btn)return;
+var val=sel.classList.contains('hidden')?inp.value.trim():sel.value.trim();
+if(val==='__new__')val='';
 btn.style.opacity='.5';btn.style.pointerEvents='none';btn.textContent='Saving...';
 // Same path as saveZone: raw fetch so the RPC's own message reaches the toast.
 var rows=null,errText='';
