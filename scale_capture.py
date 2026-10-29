@@ -34,6 +34,7 @@ STABLE_TOLERANCE = 20
 RECAPTURE_RISE_LBS = 1000  # Oct 14 2026: locked truck settles this much heavier -> capture again
 NEW_TRUCK_DROP_LBS = 5000  # Oct 14 2026: falls this far below the capture -> next truck coming on
 SAME_TRUCK_LBS = 200       # Oct 14 2026: after a dip, settling within this of the capture = same truck
+NEXT_TRUCK_RISE_LBS = 1000 # Oct 29 2026: a next truck must settle this far ABOVE the lowest reading since the dip (roll-on), not just below the capture (roll-off)
 SYNC_INTERVAL = 10
 RETRY_INTERVAL = 30
 MAX_RETRIES = 100
@@ -142,12 +143,18 @@ class StabilityDetector:
       * pulled forward: settles RECAPTURE_RISE_LBS+ heavier -> capture again (88281)
       * back-to-back: weight falls NEW_TRUCK_DROP_LBS+ below the capture, then
         settles at a different weight -> capture the new truck (88284)
+    Oct 29 2026 - the back-to-back rule also fired on a truck ROLLING OFF
+    (43,550 captured, then 30,290 as the rear axles left the deck). A real
+    next truck rises into its plateau; a departing truck only falls. So the
+    settled weight must be NEXT_TRUCK_RISE_LBS above the lowest reading seen
+    since the dip.
     """
     def __init__(self):
         self.readings = []
         self.locked = False
         self.captured_weight = 0
         self.dipped = False
+        self.dip_floor = None
         self.last_state = "empty"
 
     def add_reading(self, weight_lbs, is_stable):
@@ -157,10 +164,13 @@ class StabilityDetector:
             self.locked = False
             self.captured_weight = 0
             self.dipped = False
+            self.dip_floor = None
             self.last_state = "empty"
             return None
         if self.locked and weight_lbs <= self.captured_weight - NEW_TRUCK_DROP_LBS:
             self.dipped = True
+        if self.dipped:  # Oct 29 2026: remember how low it went, to tell roll-on from roll-off
+            self.dip_floor = weight_lbs if self.dip_floor is None else min(self.dip_floor, weight_lbs)
         # Accumulate rolling window (also while locked, to spot the two exceptions)
         self.readings.append(weight_lbs)
         if len(self.readings) > STABLE_READINGS:
@@ -174,13 +184,19 @@ class StabilityDetector:
                 new_w = round(avg / 10) * 10
                 if new_w >= self.captured_weight + RECAPTURE_RISE_LBS:
                     why = "pulled forward"
-                elif self.dipped and abs(new_w - self.captured_weight) > SAME_TRUCK_LBS:
+                elif (self.dipped and abs(new_w - self.captured_weight) > SAME_TRUCK_LBS
+                      and self.dip_floor is not None and new_w >= self.dip_floor + NEXT_TRUCK_RISE_LBS):
                     why = "next truck"
+                elif self.dipped and abs(new_w - self.captured_weight) > SAME_TRUCK_LBS:
+                    why = None  # Oct 29 2026: settled at or near the floor = rolling off, not a new truck
+                    self.last_state = "locked, rolling off @ %.0f lbs" % new_w
+                    return None
                 else:
                     why = None
                 if why:
                     self.captured_weight = new_w
                     self.dipped = False
+                    self.dip_floor = None
                     self.readings = []
                     self.last_state = "captured %.0f lbs (%s)" % (new_w, why)
                     return new_w
