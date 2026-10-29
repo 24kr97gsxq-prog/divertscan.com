@@ -5,130 +5,143 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Dalmex Recycling — Client Portal</title>
-<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-/* DalMex tokens v1 — 2026-08-25.  Shared with the admin app and DFW1.
-   The portal defaults to LIGHT: a facility manager may print this.
-   Light accents are NOT the dark ones inverted — amber #FFB627 on white
-   is 1.75:1, unusable as text. Verified on --card #F7F9F6:
-   text 16.7 · muted 7.0 · dim 4.8 · amber 5.6 · green 5.1 · alert 5.8 */
---bg:#EDF0EC;--card:#F7F9F6;--card-hi:#FFFFFF;--inset:#E4E9E2;
---nav:#0B1210;--nav-text:#E2ECE6;--nav-dim:#9AAEA4;
---jag:#8A5A00;--dal:#1E7A47;
---primary:#8A5A00;--primary-glow:rgba(138,90,0,.06);
+/* Client portal design — 2026-10-18.
+   Warm paper surfaces, a serif for names and headings, calm spacing, one
+   terracotta accent for anything you can press. Dalmex green keeps its
+   meaning (us / diverted / good). Customer-facing: weight-based only, prints
+   as a clean one-pager.
+   Light contrast on --card #FFFFFF: text 17.4 · muted 7.2 · dim 4.6 ·
+   accent #B8532F 5.5 · green #1E7A47 5.1 · alert #B3341A 6.1  — all pass. */
+--bg:#F5F4ED;--card:#FFFFFF;--card-hi:#FFFFFF;--inset:#F0EEE6;
+--nav:#FAF9F5;--nav-text:#141413;--nav-dim:#6B6A64;
+--jag:#B8532F;--dal:#1E7A47;
+--primary:#B8532F;--primary-hover:#A2482A;--primary-glow:rgba(184,83,47,.08);--primary-ring:rgba(184,83,47,.22);
 --success:#1E7A47;--success-bg:rgba(30,122,71,.08);
---warning:#7A5C2E;--warning-bg:rgba(122,92,46,.08);
+--warning:#8F6418;--warning-bg:rgba(143,100,24,.10);
 --danger:#B3341A;--danger-bg:rgba(179,52,26,.08);
---text:#141A16;--text-m:#4A5952;--text-d:#657268;--border:#C9D3C8;
+--text:#141413;--text-m:#5E5D59;--text-d:#7F7E77;--border:#E6E3D9;--border-strong:#D6D2C4;
 --ticket:#F2EDE3;--ticket-ink:#1A1410;
---r:4px;--font:'IBM Plex Sans',system-ui,sans-serif;
---mono:'IBM Plex Mono',ui-monospace,monospace;
---display:'Saira Condensed','Arial Narrow',sans-serif;
+--shadow-sm:0 1px 2px rgba(20,20,19,.04);--shadow-md:0 8px 28px rgba(20,20,19,.10);
+--r:12px;--r-sm:8px;
+--font:'Inter',system-ui,-apple-system,sans-serif;
+--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+--display:'Source Serif 4',Georgia,'Times New Roman',serif;
 }
 html,body{height:100%}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;-webkit-font-smoothing:antialiased;
+font-size:15px;line-height:1.5;
 /* iPhone fix 2026-06-01: kill horizontal overflow so an over-wide topnav can't force
    the entire page to zoom-out to fit. Layout stays at viewport width; the nav becomes
    horizontally scrollable instead of pushing the document wider than the screen. */
 overflow-x:hidden}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.01em;line-height:1.2}
+a{color:var(--primary)}
+::selection{background:var(--primary-ring)}
 
 /* ═══ TOP NAV ═══ */
 .topnav{background:var(--nav);display:flex;align-items:center;position:sticky;top:0;z-index:100;
-padding:0 12px;height:54px;gap:2px;
+padding:0 16px;height:56px;gap:2px;border-bottom:1px solid var(--border);
 /* Allow horizontal scrolling INSIDE the nav on narrow viewports (iPhone) so tabs
    overflow gracefully via swipe instead of breaking the whole page layout. */
 overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .topnav::-webkit-scrollbar{display:none}
-.topnav-brand{font-size:.9rem;font-weight:700;color:var(--nav-text);padding-right:12px;
-white-space:nowrap;flex-shrink:0;letter-spacing:-.02em;border-right:1px solid var(--border);margin-right:6px}
-.topnav-link{height:54px;padding:0 12px;font-size:.78rem;font-weight:500;color:var(--nav-dim);
+.topnav-brand{font-family:var(--display);font-size:1.05rem;font-weight:600;color:var(--nav-text);padding-right:14px;
+white-space:nowrap;flex-shrink:0;letter-spacing:-.01em;border-right:1px solid var(--border);margin-right:8px;line-height:1.1}
+.topnav-link{height:56px;padding:0 12px;font-size:.82rem;font-weight:500;color:var(--nav-dim);
 border:none;background:none;font-family:var(--font);cursor:pointer;white-space:nowrap;flex-shrink:0;
-border-bottom:2px solid transparent;transition:color .15s;display:flex;align-items:center;gap:5px}
+border-bottom:2px solid transparent;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:6px}
 .topnav-link.active{color:var(--nav-text);border-bottom-color:var(--primary)}
 .topnav-link:hover{color:var(--nav-text)}
-.topnav-badge{background:var(--danger);color:#fff;font-size:.6rem;font-weight:700;
-padding:1px 5px;border-radius:8px;min-width:16px;text-align:center}
+.topnav-badge{background:var(--primary);color:#fff;font-size:.62rem;font-weight:600;
+padding:1px 6px;border-radius:999px;min-width:18px;text-align:center;font-family:var(--mono)}
 .topnav-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .topnav-btn{background:none;border:none;color:var(--nav-dim);font-size:1rem;padding:10px;cursor:pointer;
-transition:color .15s}
-.topnav-btn:hover{color:var(--nav-text)}
-.signout-btn{background:var(--border);border:1px solid var(--border);color:var(--nav-dim);font-size:.75rem;
-font-weight:500;font-family:var(--font);padding:6px 14px;border-radius:6px;cursor:pointer;white-space:nowrap;
+transition:color .15s;border-radius:var(--r-sm)}
+.topnav-btn:hover{color:var(--nav-text);background:var(--inset)}
+.signout-btn{background:transparent;border:1px solid var(--border-strong);color:var(--nav-dim);font-size:.78rem;
+font-weight:500;font-family:var(--font);padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;
 transition:all .15s}
-.signout-btn:hover{color:var(--nav-text);border-color:var(--text-m)}
+.signout-btn:hover{color:var(--nav-text);border-color:var(--text-d);background:var(--inset)}
 
 /* ═══ LAYOUT ═══ */
-.wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 56px}
 
 /* ═══ CARDS ═══ */
-.c{background:var(--card);border-radius:var(--r);padding:20px;margin-bottom:12px;
-border:1px solid var(--border);transition:border-color .15s}
-.ct{font-size:.72rem;font-weight:700;color:var(--text-m);text-transform:uppercase;
-letter-spacing:.08em;margin-bottom:10px}
+.c{background:var(--card);border-radius:var(--r);padding:22px;margin-bottom:14px;
+border:1px solid var(--border);box-shadow:var(--shadow-sm);transition:border-color .15s}
+.ct{font-size:.72rem;font-weight:600;color:var(--text-m);text-transform:uppercase;
+letter-spacing:.09em;margin-bottom:12px}
 
 /* ═══ FORMS ═══ */
-.fi{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;
-font-family:var(--font);font-size:.9rem;color:var(--text);background:var(--bg);
--webkit-appearance:none;transition:border-color .15s}
-.fi:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
-.fl{display:block;font-size:.7rem;font-weight:600;color:var(--text-m);margin-bottom:4px}
+.fi{width:100%;padding:11px 13px;border:1px solid var(--border-strong);border-radius:var(--r-sm);
+font-family:var(--font);font-size:.92rem;color:var(--text);background:var(--card);
+-webkit-appearance:none;transition:border-color .15s,box-shadow .15s}
+.fi::placeholder{color:var(--text-d)}
+.fi:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+select.fi{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237F7E77' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.fl{display:block;font-size:.74rem;font-weight:500;color:var(--text-m);margin-bottom:5px}
 .fg{margin-bottom:14px}
 
 /* ═══ BUTTONS ═══ */
-.b{display:block;width:100%;padding:11px;border:none;border-radius:8px;font-family:var(--font);
-font-size:.85rem;font-weight:600;cursor:pointer;text-align:center;transition:all .12s}
-.b:active{transform:scale(.98)}
-.bp{background:var(--primary);color:#fff}.bp:hover{background:var(--primary)}
-.bs{background:var(--success);color:#fff}
-.bo{background:var(--card);color:var(--text);border:1px solid var(--border)}
-.bo:hover{border-color:var(--text-d)}
-.bsm{padding:6px 12px;font-size:.7rem;display:inline-flex;align-items:center;gap:4px;width:auto;border-radius:6px}
+.b{display:block;width:100%;padding:12px;border:none;border-radius:var(--r-sm);font-family:var(--font);
+font-size:.88rem;font-weight:500;cursor:pointer;text-align:center;transition:background .12s,border-color .12s,transform .08s;line-height:1.3}
+.b:active{transform:scale(.985)}
+.bp{background:var(--primary);color:#fff}.bp:hover{background:var(--primary-hover)}
+.bs{background:var(--success);color:#fff}.bs:hover{filter:brightness(.94)}
+.bo{background:var(--card);color:var(--text);border:1px solid var(--border-strong)}
+.bo:hover{border-color:var(--text-d);background:var(--inset)}
+.bsm{padding:7px 13px;font-size:.74rem;display:inline-flex;align-items:center;gap:5px;width:auto;border-radius:999px}
 
 /* ═══ STATS ═══ */
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
-.sc{background:var(--bg);border-radius:8px;padding:10px 6px;text-align:center;border:1px solid transparent}
-.sv{font-size:1.1rem;font-weight:700;font-family:var(--mono);letter-spacing:-.02em}
-.sl{font-size:.5rem;font-weight:500;color:var(--text-d);margin-top:2px;text-transform:uppercase;letter-spacing:.06em}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+.sc{background:var(--inset);border-radius:var(--r-sm);padding:12px 8px;text-align:center;border:1px solid transparent}
+.sv{font-size:1.2rem;font-weight:600;font-family:var(--mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.sl{font-size:.56rem;font-weight:500;color:var(--text-d);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
 
 /* ═══ PROJECT PILLS ═══ */
-.pp{border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;
-cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:12px}
-.pp:hover{border-color:var(--text-d);background:var(--primary-glow)}
+.pp{border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:10px;background:var(--card);
+cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm)}
+.pp:hover{border-color:var(--border-strong);box-shadow:var(--shadow-md);transform:translateY(-1px)}
 .pp:active{transform:scale(.99)}
-.pn{font-size:.9rem;font-weight:700;letter-spacing:-.01em}
-.pm{font-size:.65rem;color:var(--text-d);margin-top:2px}
+.pn{font-family:var(--display);font-size:1.08rem;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.pm{font-size:.7rem;color:var(--text-d);margin-top:3px}
 
 /* ═══ TABLE ═══ */
-.t{width:100%;border-collapse:collapse;font-size:.7rem}
-.t th{padding:6px 6px;text-align:left;font-weight:600;color:var(--text-d);font-size:.6rem;
-text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
-.t td{padding:8px 6px;border-bottom:1px solid var(--border)}
+.t{width:100%;border-collapse:collapse;font-size:.74rem}
+.t th{padding:8px 8px;text-align:left;font-weight:500;color:var(--text-d);font-size:.62rem;
+text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border-strong)}
+.t td{padding:10px 8px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
 .t tbody tr{cursor:pointer;transition:background .1s}
-.t tbody tr:hover{background:var(--primary-glow)}
+.t tbody tr:hover{background:var(--inset)}
 .r{text-align:right}.ctr{text-align:center}
-.m{font-family:var(--mono);font-size:.7rem}.bld{font-weight:700}
+.m{font-family:var(--mono);font-size:.72rem}.bld{font-weight:600}
 
 /* ═══ MATERIAL BARS ═══ */
-.mb{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.65rem}
-.ml{width:56px;color:var(--text-d);flex-shrink:0;font-weight:500}
-.mt{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
-.mf{height:100%;border-radius:2px}.mp{width:90px;text-align:right;font-family:var(--mono);font-weight:700;font-size:.65rem;line-height:1.1}.mp .mpt{display:block;font-weight:500;color:var(--text-d);font-size:.6rem}
+.mb{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:.68rem}
+.ml{width:60px;color:var(--text-m);flex-shrink:0;font-weight:500}
+.mt{flex:1;height:6px;background:var(--inset);border-radius:3px;overflow:hidden}
+.mf{height:100%;border-radius:3px}.mp{width:90px;text-align:right;font-family:var(--mono);font-weight:600;font-size:.66rem;line-height:1.15}.mp .mpt{display:block;font-weight:400;color:var(--text-d);font-size:.6rem}
 
 /* ═══ INDICATORS ═══ */
-.hp{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success)}
-.np{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--border)}
+.hp{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success)}
+.np{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
 
 /* ═══ PHOTO STRIP ═══ */
-.pr{display:flex;gap:6px;overflow-x:auto;padding:2px 0;-webkit-overflow-scrolling:touch}
-.pr img{width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)}
+.pr{display:flex;gap:8px;overflow-x:auto;padding:2px 0;-webkit-overflow-scrolling:touch}
+.pr img{width:64px;height:64px;object-fit:cover;border-radius:var(--r-sm);flex-shrink:0;border:1px solid var(--border)}
 
 /* ═══ UPLOAD ═══ */
-.ub{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;border-radius:8px;
-font-weight:600;font-size:.85rem;cursor:pointer;position:relative;overflow:hidden;border:none;width:100%;
+.ub{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;border-radius:var(--r-sm);
+font-weight:500;font-size:.88rem;cursor:pointer;position:relative;overflow:hidden;border:none;width:100%;
 transition:opacity .15s}
 .ub:active{opacity:.85}
 .ub input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:200px}
@@ -138,45 +151,49 @@ transition:opacity .15s}
    The primary action is a single tall target near the bottom of the reach arc;
    choosing from the library is a quiet secondary. Everything the AI can read
    off the ticket has been removed from the form. */
-.ub-hero{padding:26px 14px;font-size:1.05rem;border-radius:12px}
-.ub-alt{background:transparent;border:none;color:var(--text);font-size:.78rem;
-font-weight:600;padding:10px;text-decoration:underline;text-underline-offset:3px}
+.ub-hero{padding:28px 14px;font-size:1.05rem;border-radius:var(--r)}
+.ub-alt{background:transparent;border:none;color:var(--text-m);font-size:.8rem;
+font-weight:500;padding:10px;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border-strong)}
+.ub-alt:hover{color:var(--text)}
 .u-wrap{max-width:520px;margin:0 auto}
-.u-more{border:none;background:none;color:var(--text-m);font-size:.75rem;font-weight:600;
-padding:12px 0;cursor:pointer;width:100%;text-align:center}
+.u-more{border:none;background:none;color:var(--text-m);font-size:.78rem;font-weight:500;
+padding:12px 0;cursor:pointer;width:100%;text-align:center;font-family:var(--font)}
 .u-sticky{position:sticky;bottom:0;padding:10px 0 14px;background:linear-gradient(to top,var(--bg) 72%,transparent);z-index:5}
-@media(max-width:520px){.c{padding:14px}.u-wrap{max-width:none}}
+@media(max-width:520px){.c{padding:16px}.u-wrap{max-width:none}}
 
 /* Exploded ticket view: full-screen, in-app, tap to zoom. window.open kicked
    the user out of the app into a bare Safari tab — this keeps them in it. */
-.tkv{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:300;display:flex;flex-direction:column}
+.tkv{position:fixed;inset:0;background:rgba(20,20,19,.95);z-index:300;display:flex;flex-direction:column}
 .tkv-hd{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;color:#fff;flex-shrink:0}
-.tkv-cap{font-size:.75rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tkv-sub{font-size:.6rem;color:rgba(255,255,255,.65);font-weight:400}
-.tkv-x{background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1rem;line-height:1;padding:10px 14px;border-radius:10px;flex-shrink:0;margin-left:10px}
+.tkv-cap{font-size:.78rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkv-sub{font-size:.62rem;color:rgba(255,255,255,.65);font-weight:400}
+.tkv-x{background:rgba(255,255,255,.15);border:none;color:#fff;font-size:1rem;line-height:1;padding:10px 14px;border-radius:var(--r-sm);flex-shrink:0;margin-left:10px}
 .tkv-bd{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 .tkv-bd img{width:100%;display:block;transition:width .15s}
 .tkv-bd img.zoom{width:250%;max-width:none}
-.tkv-ft{padding:10px 14px calc(10px + env(safe-area-inset-bottom));text-align:center;color:rgba(255,255,255,.55);font-size:.6rem;flex-shrink:0}
+.tkv-ft{padding:10px 14px calc(10px + env(safe-area-inset-bottom));text-align:center;color:rgba(255,255,255,.55);font-size:.62rem;flex-shrink:0}
 
 /* Quick ticket lookup — searches EVERY project the client can see, not just the
-   one currently open. Blue accent matches the review page. */
-.qs-wrap{max-width:900px;margin:0 auto 12px;position:relative}
-.qs{width:100%;padding:14px 16px 14px 42px;border:1.5px solid var(--border);border-radius:11px;
-font-family:var(--font);font-size:.95rem;color:var(--text);background:var(--card);-webkit-appearance:none}
-.qs:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-.qs-ico{position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:.9rem;opacity:.5;pointer-events:none}
+   one currently open. */
+.qs-wrap{max-width:900px;margin:0 auto 14px;position:relative}
+.qs{width:100%;padding:14px 16px 14px 44px;border:1px solid var(--border-strong);border-radius:var(--r);
+font-family:var(--font);font-size:.95rem;color:var(--text);background:var(--card);-webkit-appearance:none;
+box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s}
+.qs::placeholder{color:var(--text-d)}
+.qs:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+.qs-ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:.9rem;opacity:.5;pointer-events:none}
 .qs-x{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;
 color:var(--text-d);font-size:1rem;padding:6px 8px;cursor:pointer}
-.qs-res{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--card);border:1.5px solid var(--primary);
-border-radius:11px;box-shadow:0 12px 32px rgba(0,0,0,.16);max-height:60vh;overflow-y:auto;z-index:40}
-.qs-hit{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.qs-res{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--border-strong);
+border-radius:var(--r);box-shadow:var(--shadow-md);max-height:60vh;overflow-y:auto;z-index:40}
+.qs-hit{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
 .qs-hit:last-child{border-bottom:none}
-.qs-hit:active{background:rgba(37,99,235,.07)}
-.qs-num{font-weight:800;font-size:.9rem;color:var(--primary);min-width:64px}
-.qs-meta{flex:1;min-width:0;font-size:.65rem;color:var(--text-m);line-height:1.4}
-.qs-tons{font-size:.78rem;font-weight:700;white-space:nowrap}
-.qs-none{padding:16px;text-align:center;font-size:.8rem;color:var(--text-m)}
+.qs-hit:hover{background:var(--inset)}
+.qs-hit:active{background:var(--primary-glow)}
+.qs-num{font-family:var(--mono);font-weight:600;font-size:.88rem;color:var(--primary);min-width:64px}
+.qs-meta{flex:1;min-width:0;font-size:.68rem;color:var(--text-m);line-height:1.4}
+.qs-tons{font-family:var(--mono);font-size:.78rem;font-weight:600;white-space:nowrap}
+.qs-none{padding:16px;text-align:center;font-size:.82rem;color:var(--text-m)}
 
 /* Fast-upload layout on wide screens: the 520px phone column left an iPad
    mostly empty and pushed submit below the fold. Side-by-side photo cards,
@@ -190,8 +207,9 @@ border-radius:11px;box-shadow:0 12px 32px rgba(0,0,0,.16);max-height:60vh;overfl
 }
 
 /* ═══ HISTORY ITEMS ═══ */
-.si{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:center}
-.st{width:40px;height:40px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
+.si{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);align-items:center}
+.si:last-child{border-bottom:none}
+.st{width:44px;height:44px;border-radius:var(--r-sm);overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
 .st img{width:100%;height:100%;object-fit:cover}
 
 /* ═══ DARK THEME ═══ */
@@ -200,43 +218,48 @@ border-radius:11px;box-shadow:0 12px 32px rgba(0,0,0,.16);max-height:60vh;overfl
    dark side needs declaring here. Values identical to .th-dark. */
 @media (prefers-color-scheme: dark){
 html.th-auto{
---bg:#0B1210;--card:#16211C;--card-hi:#1E2C26;--inset:#111A16;
---nav:#0B1210;--nav-text:#E2ECE6;--nav-dim:#9AAEA4;
---jag:#FFB627;--dal:#3FA870;
---primary:#FFB627;--primary-glow:rgba(255,182,39,.10);
---success:#3FA870;--success-bg:rgba(63,168,112,.12);
---warning:#C9A46A;--warning-bg:rgba(201,164,106,.12);
---danger:#EF6B42;--danger-bg:rgba(239,107,66,.12);
---text:#E2ECE6;--text-m:#9AAEA4;--text-d:#7E9288;--border:#2E4239;
+--bg:#262624;--card:#30302E;--card-hi:#3A3936;--inset:#2A2A27;
+--nav:#262624;--nav-text:#F2F0E9;--nav-dim:#A8A69E;
+--jag:#D97757;--dal:#4DB37E;
+--primary:#D97757;--primary-hover:#E08A6E;--primary-glow:rgba(217,119,87,.12);--primary-ring:rgba(217,119,87,.30);
+--success:#4DB37E;--success-bg:rgba(77,179,126,.14);
+--warning:#D9B35E;--warning-bg:rgba(217,179,94,.14);
+--danger:#EF6B42;--danger-bg:rgba(239,107,66,.14);
+--text:#F2F0E9;--text-m:#B5B3AA;--text-d:#8C8A82;--border:#3E3D39;--border-strong:#4A4944;
+--shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-md:0 10px 32px rgba(0,0,0,.45);
 }
+html.th-auto .bp{color:#1A1613}
 }
 .build-stamp{display:block;font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;
-color:var(--nav-dim);font-weight:400;margin-top:1px}
+color:var(--nav-dim);font-weight:400;margin-top:2px}
 .th-dark{
---bg:#0B1210;--card:#16211C;--card-hi:#1E2C26;--inset:#111A16;
---nav:#0B1210;--nav-text:#E2ECE6;--nav-dim:#9AAEA4;
---jag:#FFB627;--dal:#3FA870;
---primary:#FFB627;--primary-glow:rgba(255,182,39,.10);
---success:#3FA870;--success-bg:rgba(63,168,112,.12);
---warning:#C9A46A;--warning-bg:rgba(201,164,106,.12);
---danger:#EF6B42;--danger-bg:rgba(239,107,66,.12);
---text:#E2ECE6;--text-m:#9AAEA4;--text-d:#7E9288;--border:#2E4239;
+--bg:#262624;--card:#30302E;--card-hi:#3A3936;--inset:#2A2A27;
+--nav:#262624;--nav-text:#F2F0E9;--nav-dim:#A8A69E;
+--jag:#D97757;--dal:#4DB37E;
+--primary:#D97757;--primary-hover:#E08A6E;--primary-glow:rgba(217,119,87,.12);--primary-ring:rgba(217,119,87,.30);
+--success:#4DB37E;--success-bg:rgba(77,179,126,.14);
+--warning:#D9B35E;--warning-bg:rgba(217,179,94,.14);
+--danger:#EF6B42;--danger-bg:rgba(239,107,66,.14);
+--text:#F2F0E9;--text-m:#B5B3AA;--text-d:#8C8A82;--border:#3E3D39;--border-strong:#4A4944;
+--shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-md:0 10px 32px rgba(0,0,0,.45);
 }
-.th-dark .fi{background:var(--inset);color:var(--card-hi);border-color:var(--border)}
+.th-dark .bp{color:#1A1613}
+.th-dark .fi{background:var(--inset);color:var(--text);border-color:var(--border-strong)}
 .th-dark .fi:focus{border-color:var(--primary)}
 .th-dark .sc{background:var(--inset);border-color:var(--border)}
 .th-dark .pp{border-color:var(--border)}
-.th-dark .pp:hover{border-color:var(--border);background:rgba(37,99,235,.08)}
-.th-dark .t th{border-color:var(--border)}.th-dark .t td{border-color:var(--border)}
+.th-dark .pp:hover{border-color:var(--border-strong);background:var(--card-hi)}
+.th-dark .t th{border-color:var(--border-strong)}.th-dark .t td{border-color:var(--border)}
 .th-dark .si{border-color:var(--border)}
+.th-dark .toast{background:var(--card-hi);color:var(--text);border:1px solid var(--border-strong)}
 
 /* ═══ GREEN THEME ═══ */
 
 
 /* ═══ TOAST ═══ */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);
-color:var(--bg);padding:10px 20px;border-radius:8px;font-weight:600;font-size:.8rem;z-index:999;
-animation:tu .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+color:var(--bg);padding:11px 20px;border-radius:999px;font-weight:500;font-size:.82rem;z-index:999;
+animation:tu .25s ease;box-shadow:var(--shadow-md)}
 @keyframes tu{from{transform:translateX(-50%) translateY(6px);opacity:0}to{transform:translateX(-50%);opacity:1}}
 
 .hidden{display:none!important}
@@ -532,7 +555,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.8.2', BUILD:'2026-09-19',
+VERSION:'2.9.1', BUILD:'2026-10-27',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -1657,7 +1680,7 @@ P.renderTbl(filtered);},
 showTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
 var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
 var mats='';Object.keys(MT).forEach(function(k){var pct=t[k+'_pct']||0;if(pct<=0)return;var matTons=+(t.net_tons||0)*(pct/100);
-mats+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct+'%<span class="mpt">'+P.f(matTons)+' T</span></div></div>';});
+mats+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+(+pct).toFixed(1)+'%<span class="mpt">'+P.f(matTons)+' T</span></div></div>';});
 var photos='';
 if(t.scale_ticket_image)photos+='<div class="ct" style="margin-top:10px">Scale Ticket</div><img src="'+t.scale_ticket_image+'" style="width:100%;border-radius:8px;border:1px solid var(--border)">';
 var da=Array.isArray(t.debris_images)?t.debris_images:[];
@@ -1854,7 +1877,9 @@ var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:
 // number). From RATE_EXACT_FROM on: ON TRACK / BELOW TARGET on the exact rate,
 // rate shown at one decimal (v2.8.1).
 var rateX=tons>0?div/tons*100:0,rate=P.rateText(rateX,key,ver==='none'?null:tgt);
-var ok=P.rateVal(rateX,key)>=tgt;var pc=tix.filter(function(t){return t.scale_ticket_image;}).length;
+var ok=P.rateVal(rateX,key)>=tgt;
+// v2.9.1 — Non-LEED (or target 0): no pass/fail colours on diversion % or landfill.
+var nonLeed=(ver==='none'||proj.leed_target===0),INK='#18181b';
 // Build dynamic material columns from MT
 var matKeys=Object.keys(MT);
 var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
@@ -1862,8 +1887,10 @@ var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
 var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
 var r='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td>'+P.esc(t.driver_name||'—')+'</td><td>'+(t.zone||'')+'</td><td class=r>'+P.f(g)+'</td><td class=r>'+P.f(ta)+'</td><td class=r>'+P.f(t.net_tons)+'</td>';
-matKeys.forEach(function(k){r+='<td class=r>'+(t[k+'_pct']||0)+'%</td>';});
-r+='<td class=r style="font-weight:bold;color:'+(dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)')+'">'+dp+'%</td><td class=c>'+(t.scale_ticket_image?'✓':'—')+'</td></tr>';
+// v2.9.1 — every % in the ticket table at one decimal; Photo column removed
+matKeys.forEach(function(k){r+='<td class=r>'+(+(t[k+'_pct'])||0).toFixed(1)+'%</td>';});
+var tn1=+(t.net_tons)||0,dv1=t.diverted_tons,dpShow=(tn1>0&&dv1!=null&&dv1!=='')?(+dv1/tn1*100):(+dp||0);
+r+='<td class=r style="font-weight:bold;color:'+(nonLeed?INK:dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)')+'">'+dpShow.toFixed(1)+'%</td></tr>';
 rows+=r;});
 // Material rows
 var matRows='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;
@@ -1873,10 +1900,10 @@ var zoneData={},hasZones=false;tix.forEach(function(t){var z=t.zone||'Unassigned
 if(!zoneData[z])zoneData[z]={count:0,tons:0,div:0,lf:0};zoneData[z].count++;
 var tn2=+(t.net_tons)||0,dv2=+(t.diverted_tons)||0;zoneData[z].tons+=tn2;zoneData[z].div+=dv2;zoneData[z].lf+=tn2-dv2;});
 var zoneRows='';if(hasZones){var zKeys=Object.keys(zoneData).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);});
-zKeys.forEach(function(z){var d=zoneData[z];var zr=d.tons>0?Math.round(d.div/d.tons*100):0;
-var zc=zr>=75?'var(--success)':zr>=50?'var(--warning)':'var(--danger)';
-zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:var(--text-d)">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+P.f(d.tons)+'</td><td class=r style="color:var(--success)">'+P.f(d.div)+'</td><td class=r style="color:var(--danger)">'+P.f(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
-var zonePdfHtml='<h2>Tonnage by Zone — '+label+'</h2>'+(zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet.</div>');
+zKeys.forEach(function(z){var d=zoneData[z];var zx=d.tons>0?d.div/d.tons*100:0;var zr=P.rateText(zx,key,ver==='none'?null:tgt),zv=P.rateVal(zx,key);  // v2.9.1: same rule as the month rate
+var zc=nonLeed?INK:zv>=75?'var(--success)':zv>=50?'var(--warning)':'var(--danger)';
+zoneRows+='<tr><td style="font-weight:bold">'+(z==='Unassigned'?'<span style="color:var(--text-d)">'+z+'</span>':z)+'</td><td class=r>'+d.count+'</td><td class=r>'+P.f(d.tons)+'</td><td class=r style="color:var(--success)">'+P.f(d.div)+'</td><td class=r style="color:'+(nonLeed?INK:'var(--danger)')+'">'+P.f(d.lf<0?0:d.lf)+'</td><td class=r style="font-weight:bold;color:'+zc+'">'+zr+'%</td></tr>';});}
+var zonePdfHtml=(nonLeed&&!zoneRows)?'':'<h2>Tonnage by Zone — '+label+'</h2>'+(zoneRows?'<table><tr><th>Zone</th><th class=r>Tickets</th><th class=r>Total (T)</th><th class=r>Diverted (T)</th><th class=r>Landfill (T)</th><th class=r>Div %</th></tr>'+zoneRows+'</table>':'<div class="note">No zones assigned yet.</div>');
 // Project-to-date cumulative (all tickets, not just this month)
 var ptdTons=0,ptdDiv=0,ptdGross=0,ptdTare=0,ptdTix=P.tx.length;
 P.tx.forEach(function(t){ptdTons+=+(t.net_tons)||0;ptdDiv+=+(t.diverted_tons)||0;ptdGross+=+(t.gross_lbs)||0;ptdTare+=+(t.tare_lbs)||0;});
@@ -1885,7 +1912,8 @@ var ptdLandfill=ptdTons-ptdDiv;if(ptdLandfill<0)ptdLandfill=0;
 var ptdX=ptdTons>0?ptdDiv/ptdTons*100:0,ptdKey=P._lastKey(P.tx),ptdRate=P.runText(ptdX,ptdKey,ver==='none'?null:tgt),ptdOk=P.rateVal(ptdX,ptdKey)>=tgt;
 var w=window.open('','_blank');
 w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '+P.esc(proj.name)+'</title>'+
-'<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.6}'+
+'<style>:root{--text:#18181b;--text-m:#52525b;--text-d:#71717a;--border:#d4d4d8;--inset:#f4f4f5;--success:#059669;--warning:#d97706;--danger:#dc2626}'+
+'*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;padding:28px;font-size:13px;line-height:1.6}'+
 'h1{font-size:22px;color:var(--text);border-bottom:3px solid var(--success);padding-bottom:8px;margin-bottom:16px}'+
 'h2{font-size:14px;color:var(--text);margin:18px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}'+
 '.r{text-align:right}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11.5px}'+
@@ -1914,8 +1942,8 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<div class="stats"><div class="stat"><b>'+tix.length+'</b><span>Tickets</span></div>'+
 '<div class="stat"><b>'+P.f(tons)+'</b><span>Generated (T)</span></div>'+
 '<div class="stat"><b style="color:var(--success)">'+P.f(div)+'</b><span>Diverted (T)</span></div>'+
-'<div class="stat"><b style="color:var(--danger)">'+P.f(landfill)+'</b><span>Landfill (T)</span></div>'+
-'<div class="stat"><b style="color:'+(ok?'var(--success)':'var(--danger)')+'">'+rate+'%</b><span>Diversion Rate</span></div>'+
+'<div class="stat"><b style="color:'+(nonLeed?INK:'var(--danger)')+'">'+P.f(landfill)+'</b><span>Landfill (T)</span></div>'+
+'<div class="stat"><b style="color:'+(nonLeed?INK:ok?'var(--success)':'var(--danger)')+'">'+rate+'%</b><span>Diversion Rate</span></div>'+
 '<div class="stat"><b>'+streams+'</b><span>Material Streams</span></div></div>'+
 '<div class="note"><b>Calculation:</b> Total Generated ('+P.f(tons)+' T) = Diverted ('+P.f(div)+' T) + Landfill ('+P.f(landfill)+' T) &nbsp;|&nbsp; Diversion Rate = '+P.f(div)+' / '+P.f(tons)+' × 100 = '+rate+'% &nbsp;|&nbsp; Method: weight-based tracking via commercial scale</div>'+
 // PROJECT TO DATE
@@ -1923,16 +1951,16 @@ w.document.write('<!DOCTYPE html><html><head><title>Waste Diversion Report — '
 '<div class="stats"><div class="stat"><b>'+ptdTix+'</b><span>Total Tickets</span></div>'+
 '<div class="stat"><b>'+P.f(ptdTons)+'</b><span>Generated (T)</span></div>'+
 '<div class="stat"><b style="color:var(--success)">'+P.f(ptdDiv)+'</b><span>Diverted (T)</span></div>'+
-'<div class="stat"><b style="color:var(--danger)">'+P.f(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
-'<div class="stat"><b style="color:'+(ptdOk?'var(--success)':'var(--danger)')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
+'<div class="stat"><b style="color:'+(nonLeed?INK:'var(--danger)')+'">'+P.f(ptdLandfill)+'</b><span>Landfill (T)</span></div>'+
+'<div class="stat"><b style="color:'+(nonLeed?INK:ptdOk?'var(--success)':'var(--danger)')+'">'+ptdRate+'%</b><span>Cumulative Rate</span></div></div>'+
 (ptdRate!==rate?'<div class="note">Cumulative project diversion: '+P.f(ptdDiv)+' T diverted / '+P.f(ptdTons)+' T generated = '+ptdRate+'%'+(ver==='none'?'':ptdOk?' (meets '+tgt+'% target)':' (below '+tgt+'% target)')+'</div>':'')+
 // MATERIALS
 zonePdfHtml+
 '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
 // TICKET TABLE (Driver column added Phase 2.7b)
 '<h2>Scale Tickets — '+label+'</h2>'+
-'<table><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+MT[k].n+'</th>';}).join('')+'<th class=r>Div%</th><th class=c>Photo</th></tr>'+rows+
-'<tr style="border-top:2px solid var(--text);font-weight:bold"><td colspan=3>TOTALS</td><td></td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(0)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td><td class=c>'+pc+'/'+tix.length+'</td></tr></table>'+
+'<table><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+MT[k].n+'</th>';}).join('')+'<th class=r>Div%</th></tr>'+rows+
+'<tr style="border-top:2px solid var(--text);font-weight:bold"><td colspan=3>TOTALS</td><td></td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
 // FOOTER
 '<div class="footer"><b>'+DX.facility+'</b> • TCEQ '+DX.tceq.rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • robert@dalmexrecycling.com • '+DX.phone+'</div>'+
 '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:var(--text);color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
@@ -2158,6 +2186,7 @@ t1.font={bold:true,size:16,color:wht};t1.fill={type:'pattern',pattern:'solid',fg
 ws.mergeCells('A2:Z2');ws.getCell('A2').value=mn+' '+yr+' — '+proj.name;ws.getCell('A2').font={bold:true,size:12,color:dkG};ws.getCell('A2').alignment={horizontal:'center'};
 // Project info
 var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:50;
+var nonLeedX=(ver==='none'||proj.leed_target===0);  // v2.9.1
 [['Project:',proj.name,'',ver==='none'?'Type:':'LEED:',ver==='none'?'Non-LEED — Waste Tracking':ver+' • Target '+tgt+'%'],
 ['GC / Client:',proj.general_contractor||proj.client||'—','','Hauler:',proj.waste_hauler||'—'],
 ['Location:',proj.location||'—','','Recycling Facility:',DX.facility+', '+DX.addr],
@@ -2167,7 +2196,7 @@ if(i%2===0)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor
 ws.addRow([]);
 // Headers (Driver column added Phase 2.7b — column 3, between Ticket No and Zone)
 var hdr=ws.addRow(['Date','Ticket No','Driver','Zone','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons','Div%','Diverted',
-'Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC','Metal%','Metal','Concrete%','Concrete','Block%','Block','Photo']);
+'Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC','Metal%','Metal','Concrete%','Concrete','Block%','Block']);
 hdr.height=20;sR(hdr,{fill:mdG,font:{bold:true,size:9,color:wht}});
 hdr.eachCell(function(c){c.alignment={horizontal:'center',vertical:'middle'};});
 // Data (cell indexes shifted +1 due to Driver column inserted at position 3)
@@ -2177,14 +2206,13 @@ var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op
 var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;var dvp=tn>0?dv/tn:0;
 sG+=g;sT+=ta;sN+=g-ta;sTn+=tn;sDv+=dv;
 var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
-var r=ws.addRow([df,+(t.ticket_number)||t.ticket_number,t.driver_name||'',t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt,t.scale_ticket_image?'View Photo':'']);
+var r=ws.addRow([df,(t.ticket_number==null?'':String(t.ticket_number)),t.driver_name||'',t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);  // v2.9.1: number kept as text (02915 stays 02915); Photo column removed
 r.eachCell(function(c){c.font={size:10};c.border={top:{style:'thin',color:bdr},bottom:{style:'thin',color:bdr},left:{style:'thin',color:bdr},right:{style:'thin',color:bdr}};});
 if(i%2===1)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:alt};});
-var pv=Math.round(dvp*100);r.getCell(11).font={bold:true,size:10,color:{argb:pv>=75?'FF059669':pv>=50?'FFD97706':'FFDC2626'}};
-[11,13,15,17,19,21,23,25].forEach(function(ci){r.getCell(ci).numFmt='0%';});
+var pv=Math.round(dvp*100);r.getCell(11).font={bold:true,size:10,color:{argb:nonLeedX?'FF18181B':pv>=75?'FF059669':pv>=50?'FFD97706':'FFDC2626'}};
+[11,13,15,17,19,21,23,25].forEach(function(ci){r.getCell(ci).numFmt='0.0%';});  // v2.9.1: one decimal, as the PDF
 [6,8,10,12,14,16,18,20,22,24,26].forEach(function(ci){r.getCell(ci).numFmt='0.00';});
 [5,7,9].forEach(function(ci){r.getCell(ci).numFmt='#,##0';});
-if(t.scale_ticket_image){r.getCell(27).value={text:'View Photo',hyperlink:t.scale_ticket_image};r.getCell(27).font={size:9,color:{argb:'FF3B82F6'},underline:true};}
 });
 // Totals
 var tdp=sTn>0?sDv/sTn:0;var _xf=P.xlRateFmtKey(tdp*100,P._lastKey(tix),proj&&proj.leed_version==='none'?null:(proj&&proj.leed_target!=null?proj.leed_target:50));// v2.8.2 — reported months '0%' as reported; one decimal after
@@ -2195,7 +2223,7 @@ tr.getCell(11).numFmt=_xf;[6,8,10,12].forEach(function(ci){tr.getCell(ci).numFmt
 ws.addRow([]);
 [['Total Tonnage',+sTn.toFixed(2)],['Diverted',+sDv.toFixed(2)],['Landfill',+Math.max(0,sTn-sDv).toFixed(2)],['Diversion %',tdp]].forEach(function(d){
 var r=ws.addRow(d);r.getCell(1).font={bold:true,size:10,color:{argb:'FF52525B'}};
-r.getCell(2).font={bold:true,size:11,color:{argb:d[0]==='Landfill'?'FFDC2626':'FF1B5E20'}};
+r.getCell(2).font={bold:true,size:11,color:{argb:d[0]==='Landfill'?(nonLeedX?'FF18181B':'FFDC2626'):'FF1B5E20'}};
 if(d[0]==='Diversion %')r.getCell(2).numFmt=_xf;else r.getCell(2).numFmt='0.00';});
 // Zone breakdown
 ws.addRow([]);var zt=ws.addRow(['TONNAGE BY ZONE']);zt.font={bold:true,size:12,color:wht};zt.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:dkG};
@@ -2203,16 +2231,16 @@ var zh=ws.addRow(['Zone','Tickets','Total (T)','Diverted (T)','Landfill (T)','Di
 var zd={};tix.forEach(function(t){var z=t.zone||'Unassigned';if(!zd[z])zd[z]={c:0,t:0,d:0};zd[z].c++;zd[z].t+=+(t.net_tons)||0;zd[z].d+=+(t.diverted_tons)||0;});
 Object.keys(zd).sort(function(a,b){return a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b);}).forEach(function(z){
 var d=zd[z];var lf=Math.max(0,d.t-d.d);var zr=ws.addRow([z,d.c,+d.t.toFixed(2),+d.d.toFixed(2),+lf.toFixed(2),d.t>0?d.d/d.t:0]);
-zr.getCell(6).numFmt='0%';if(z==='Unassigned')zr.getCell(1).font={italic:true,color:{argb:'FFA1A1AA'}};});
+zr.getCell(6).numFmt='0.0%';if(z==='Unassigned')zr.getCell(1).font={italic:true,color:{argb:'FFA1A1AA'}};});
 // Footer
 ws.addRow([]);var ft=ws.addRow([DX.facility+' • TCEQ '+DX.tceq.rn+' • '+DX.phone+' • robert@dalmexrecycling.com • Powered by DivertScan']);
 ft.getCell(1).font={size:9,italic:true,color:{argb:'FFA1A1AA'}};
 // Column widths + freeze (Driver column added at position 3, width 12)
-ws.columns=[{width:12},{width:10},{width:12},{width:7},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},{width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},{width:7},{width:7},{width:9},{width:7},{width:7},{width:7},{width:14}];
+ws.columns=[{width:12},{width:10},{width:12},{width:7},{width:11},{width:9},{width:11},{width:9},{width:11},{width:8},{width:7},{width:9},{width:7},{width:7},{width:8},{width:7},{width:8},{width:7},{width:7},{width:7},{width:7},{width:7},{width:9},{width:7},{width:7},{width:7}];
 ws.views=[{state:'frozen',ySplit:hdr.number}];
 // Auto-filter on the data table — answers Ross's "can he sort by date" question.
 // Pre-sorted ascending; auto-filter lets him re-sort by ANY column in Excel.
-ws.autoFilter={from:{row:hdr.number,column:1},to:{row:hdr.number+tix.length,column:27}};},
+ws.autoFilter={from:{row:hdr.number,column:1},to:{row:hdr.number+tix.length,column:26}};},
 
 exportAllXLSX(){if(typeof ExcelJS==='undefined'){P.toast('Loading...');return;}if(!P.cp)return;
 var proj=P.cp,wb=new ExcelJS.Workbook();wb.creator='DivertScan';
