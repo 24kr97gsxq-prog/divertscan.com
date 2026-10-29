@@ -529,7 +529,7 @@ var MT={wood:{n:'Wood',i:'',c:'var(--warning)',em:'Dalmex Pallets (REUSE/SALVAGE
 var DX={
 facility:'Dalmex Recycling LLC',addr:'2828 Nagle St, Dallas, TX 75220',phone:'(214) 352-2000',
 tceq:{auth:'TXR05GW18',gp:'TXR050000',type:'TPDES Stormwater Multi-Sector General Permit',sector:'N',sic:'5093',
-rn:'RN103219481',cn:'CN605438985',eff:'November 7, 2025',exp:'August 14, 2026',
+rn:'RN103219481',cn:'CN605438985',eff:'November 7, 2025',exp:'August 14, 2031',
 exempt:'Recycling facility exempt from MSW permit per 30 TAC 330.11(e) — nonputrescible source-separated recyclable materials'},
 endMarkets:[
 {cat:'Fiber',items:[{mat:'OCC/Cardboard',dest:'Georgia Pacific',type:'Mill Direct',doc:'BOL + Weight Ticket'},
@@ -555,7 +555,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.3', BUILD:'2026-10-28',
+VERSION:'2.9.4', BUILD:'2026-10-28',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -2311,7 +2311,7 @@ exportAllXLSX(){if(typeof ExcelJS==='undefined'){P.toast('Loading...');return;}i
 var proj=P.cp,wb=new ExcelJS.Workbook();wb.creator='DivertScan';
 // Summary sheet
 var ws0=wb.addWorksheet('Summary');var dkG={argb:'FF1B5E20'};
-ws0.mergeCells('A1:G1');var st=ws0.getCell('A1');st.value='LEED WASTE DIVERSION REPORT';
+ws0.mergeCells('A1:G1');var st=ws0.getCell('A1');st.value=(proj.leed_version==='none'?'WASTE DIVERSION REPORT':'LEED WASTE DIVERSION REPORT');
 st.font={bold:true,size:16,color:{argb:'FFFFFFFF'}};st.fill={type:'pattern',pattern:'solid',fgColor:dkG};st.alignment={horizontal:'center'};ws0.getRow(1).height=32;
 ws0.addRow([]);
 var ver=proj.leed_version||'v4';
@@ -2474,56 +2474,87 @@ var zones=Object.keys(byZone).sort();
 
 var w=window.open('','_blank');
 if(!w){P.toast('Allow popups to export PDF');return;}
+// v2.9.4 — laid out to match the admin's Waste Diversion Report (project
+// info block, six-tile summary with the diversion rate, calculation line,
+// end markets, ticket table). Popup has no theme vars, so colors are literal.
+var G='#1E7A47',RD='#B3341A',GR='#5E5D59',LT='#F0EEE6';
+var esc=P.esc;
+var landfillT=matTons.landfill||0;
+var streams=Object.keys(matTons).filter(function(k){return k!=='landfill'&&matTons[k]>0;}).length;
 var matRows=Object.keys(matTons).filter(function(k){return matTons[k]>0;})
-  .sort(function(a,b){return matTons[b]-matTons[a];})
-  .map(function(k){var pct=totalTons>0?(matTons[k]/totalTons*100):0;
-    var color=k==='landfill'?'var(--danger)':'var(--success)';
-    return '<tr><td>'+(k.charAt(0).toUpperCase()+k.slice(1))+'</td>'+
-      '<td class="r">'+matTons[k].toFixed(2)+' T</td>'+
-      '<td class="r" style="color:'+color+';font-weight:700">'+pct.toFixed(1)+'%</td></tr>';}).join('');
-var hRows=topH.map(function(h){return '<tr><td>'+P.esc(h.name)+'</td><td class="r">'+h.tons.toFixed(2)+' T</td></tr>';}).join('');
-var dRows=topD.map(function(d){return '<tr><td>'+P.esc(d.name)+'</td><td class="r">'+d.tons.toFixed(2)+' T</td></tr>';}).join('');
-var zRows=zones.map(function(z){return '<tr><td>'+(z==='Unassigned'?'<em>Unassigned</em>':P.esc(z))+'</td><td class="r">'+byZone[z].toFixed(2)+' T</td></tr>';}).join('');
+  .map(function(k){var pct=totalTons>0?(matTons[k]/totalTons*100):0;var m=MT[k]||{};
+    var nm=k==='landfill'?'Landfill':(m.n||k.charAt(0).toUpperCase()+k.slice(1));
+    var em=k==='landfill'?'Landfill Disposal':(m.em||'—');
+    return '<tr><td>'+nm+'</td><td class="r">'+pct.toFixed(1)+'%</td><td class="r">'+matTons[k].toFixed(2)+' T</td><td style="color:'+GR+'">'+esc(em)+'</td></tr>';}).join('');
+var hRows=topH.map(function(h){return '<tr><td>'+esc(h.name)+'</td><td class="r">'+h.tons.toFixed(2)+' T</td></tr>';}).join('');
+var dRows=topD.map(function(d){return '<tr><td>'+esc(d.name)+'</td><td class="r">'+d.tons.toFixed(2)+' T</td></tr>';}).join('');
+var zRows=zones.map(function(z){return '<tr><td>'+(z==='Unassigned'?'<em>Unassigned</em>':esc(z))+'</td><td class="r">'+byZone[z].toFixed(2)+' T</td></tr>';}).join('');
+var tkRows=tix.slice().sort(function(x,y){return (x.ticket_date||'').localeCompare(y.ticket_date||'')||String(x.ticket_number).localeCompare(String(y.ticket_number));})
+  .map(function(t){var tn=+t.net_tons||0,dv=tn>0?((+t.diverted_tons||0)/tn*100):0;
+    return '<tr><td>'+esc(P.fdt(t))+'</td><td class="m">'+esc(t.ticket_number||'')+'</td><td>'+esc(t.driver_name||'—')+'</td><td>'+esc(t.zone||'—')+'</td>'+
+    '<td class="r">'+(t.gross_lbs?P.f(t.gross_lbs):'—')+'</td><td class="r">'+(t.tare_lbs?P.f(t.tare_lbs):'—')+'</td><td class="r"><b>'+tn.toFixed(2)+'</b></td>'+
+    '<td class="r" style="color:'+(dv>=tgt?G:RD)+';font-weight:700">'+dv.toFixed(1)+'%</td></tr>';}).join('');
 var scopeNote=P._getExportFilterSummary();
-var html='<!DOCTYPE html><html><head><meta charset=utf-8><title>'+P.esc(proj.name)+' — Summary</title>'+
+var typeTxt=isNL?'Non-LEED — Waste Tracking':'LEED '+ver+' • Target '+tgt+'%';
+var badge=isNL?'<div class="badge">Non-LEED<span>Tracking Only</span></div>':'<div class="badge">LEED '+esc(ver)+'<span>Target '+tgt+'%</span></div>';
+var today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+var rateTxt=sumRate+'%';
+var html='<!DOCTYPE html><html><head><meta charset=utf-8><title>Waste Diversion Report — '+esc(proj.name)+'</title>'+
 '<style>'+
 '@page{size:letter;margin:0.5in}'+
-'body{font-family:-apple-system,Arial,sans-serif;color:#111;margin:0;padding:24px;font-size:11pt;line-height:1.4}'+
-'h1{font-size:18pt;margin:0 0 4px 0;color:var(--success)}'+
-'h2{font-size:11pt;margin:14px 0 4px 0;color:var(--success);border-bottom:1px solid #ccc;padding-bottom:3px}'+
-'.meta{color:#666;font-size:9pt;margin-bottom:6px}'+
-'.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}'+
-'.kpi{padding:10px;border:1px solid #ddd;border-radius:6px;text-align:center}'+
-'.kpi .v{font-size:18pt;font-weight:800;color:var(--success)}'+
-'.kpi .l{font-size:8pt;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}'+
-'.target{padding:10px;border-radius:6px;text-align:center;margin:10px 0;font-weight:700;font-size:11pt}'+
-'.target.on{background:#dcfce7;color:#166534;border:1px solid #86efac}'+
-'.target.off{background:#fef3c7;color:var(--warning);border:1px solid #fbbf24}'+
-'table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9.5pt}'+
-'th{text-align:left;padding:5px 8px;background:var(--inset);font-weight:600;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}'+
-'td{padding:5px 8px;border-bottom:1px solid #eee}'+
-'.r{text-align:right;font-variant-numeric:tabular-nums}'+
-'.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}'+
-'.foot{margin-top:16px;font-size:8pt;color:#888;text-align:center;border-top:1px solid #eee;padding-top:8px}'+
-'.no-print{margin:14px 0}'+
-'@media print{.no-print{display:none}}'+
+'body{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:#141413;margin:0;padding:28px;font-size:10.5pt;line-height:1.45}'+
+'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+G+';padding-bottom:8px;margin-bottom:6px}'+
+'h1{font-size:18pt;margin:0;font-weight:800}'+
+'.sub{color:'+GR+';font-size:9.5pt;margin:0 0 14px}'+
+'.badge{text-align:right;font-size:9pt;font-weight:700}.badge span{display:block;margin-top:3px;background:#E6F4EC;color:'+G+';padding:2px 8px;border-radius:999px;font-size:8pt}'+
+'h2{font-size:9.5pt;margin:18px 0 6px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #D6D2C4;padding-bottom:4px}'+
+'table{width:100%;border-collapse:collapse;font-size:9.5pt}'+
+'th{text-align:left;padding:6px 8px;background:'+LT+';font-weight:600;font-size:8pt;text-transform:uppercase;letter-spacing:.05em;color:'+GR+'}'+
+'td{padding:6px 8px;border-bottom:1px solid #EEECE4;vertical-align:top}'+
+'.info td{padding:7px 8px}.info td.k{font-weight:700;width:18%;background:#FAF9F5}'+
+'.r{text-align:right;font-variant-numeric:tabular-nums}.m{font-family:ui-monospace,Menlo,monospace}'+
+'.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:8px 0}'+
+'.kpi{background:'+LT+';border-radius:8px;padding:10px 6px;text-align:center}'+
+'.kpi .v{font-family:ui-monospace,Menlo,monospace;font-size:15pt;font-weight:700}.kpi .v.g{color:'+G+'}'+
+'.kpi .l{font-size:7pt;color:'+GR+';text-transform:uppercase;letter-spacing:.06em;margin-top:3px}'+
+'.note{background:#FAF9F5;border:1px solid #E6E3D9;border-radius:6px;padding:8px 10px;font-size:8.5pt;color:'+GR+';margin:8px 0}'+
+'.target{padding:9px;border-radius:6px;text-align:center;margin:8px 0;font-weight:700}'+
+'.target.on{background:#E6F4EC;color:'+G+'}.target.off{background:#FBEFE9;color:'+RD+'}'+
+'.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}'+
+'.foot{margin-top:18px;font-size:8pt;color:#8C8A82;text-align:center;border-top:1px solid #E6E3D9;padding-top:8px}'+
+'.no-print{margin-bottom:14px}@media print{.no-print{display:none}.tk{page-break-inside:avoid}}'+
 '</style></head><body>'+
-'<div class="no-print" style="background:var(--success);color:#fff;padding:12px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'+
+'<div class="no-print" style="background:'+G+';color:#fff;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">'+
 '<span style="font-weight:700">Project Summary</span>'+
-'<button onclick="window.print()" style="background:#fff;color:var(--success);border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">Save as PDF</button></div>'+
-'<h1>'+P.esc(proj.name)+'</h1>'+
-'<div class="meta">'+P.esc(proj.general_contractor||proj.client||'')+(proj.location?' · '+P.esc(proj.location):'')+' · '+(isNL?'Non-LEED tracking':ver.toUpperCase()+' · Target '+tgt+'%')+'</div>'+
-'<div class="meta">Period: '+period+' · '+tix.length+' ticket'+(tix.length===1?'':'s')+(scopeNote?' · Scope: '+scopeNote:'')+'</div>'+
-'<div class="kpi-grid">'+
+'<button onclick="window.print()" style="background:#fff;color:'+G+';border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">Save as PDF</button></div>'+
+'<div class="hd"><h1>Waste Diversion Report</h1>'+badge+'</div>'+
+'<div class="sub">'+esc(period)+' — '+esc(proj.name)+(scopeNote?' · Scope: '+esc(scopeNote):'')+'</div>'+
+'<h2>Project Information</h2>'+
+'<table class="info">'+
+'<tr><td class="k">Project</td><td>'+esc(proj.name)+'</td><td class="k">Type</td><td>'+typeTxt+'</td></tr>'+
+'<tr><td class="k">GC / Client</td><td>'+esc(proj.general_contractor||proj.client||'—')+'</td><td class="k">Hauler</td><td>'+esc(proj.waste_hauler||topH.map(function(h){return h.name;}).join(', ')||'—')+'</td></tr>'+
+'<tr><td class="k">Location</td><td>'+esc(proj.location||'—')+'</td><td class="k">Recycling Facility</td><td>'+DX.facility+', '+DX.addr+'</td></tr>'+
+'<tr><td class="k">TCEQ Registration</td><td>'+DX.tceq.rn+' • SIC '+DX.tceq.sic+'</td><td class="k">Report Date</td><td>'+today+'</td></tr>'+
+'</table>'+
+'<h2>Summary</h2>'+
+'<div class="kpis">'+
 '<div class="kpi"><div class="v">'+tix.length+'</div><div class="l">Tickets</div></div>'+
-'<div class="kpi"><div class="v">'+totalTons.toFixed(2)+'</div><div class="l">Tons</div></div>'+
-(isNL?'':'<div class="kpi"><div class="v">'+totalDiv.toFixed(2)+'</div><div class="l">Diverted (T)</div></div>')+
+'<div class="kpi"><div class="v">'+totalTons.toFixed(2)+'</div><div class="l">Generated (T)</div></div>'+
+'<div class="kpi"><div class="v g">'+totalDiv.toFixed(2)+'</div><div class="l">Diverted (T)</div></div>'+
+'<div class="kpi"><div class="v">'+landfillT.toFixed(2)+'</div><div class="l">Landfill (T)</div></div>'+
+'<div class="kpi"><div class="v g">'+rateTxt+'</div><div class="l">Diversion Rate</div></div>'+
+'<div class="kpi"><div class="v">'+streams+'</div><div class="l">Material Streams</div></div>'+
 '</div>'+
-(isNL?'':'<div class="target '+(onTarget?'on':'off')+'">Diversion '+sumRate+'% — '+(onTarget?'On Target':(sumGap+'% below target'))+'</div>')+
-'<div class="two-col"><div><h2>Materials</h2><table><tr><th>Material</th><th class="r">Tons</th><th class="r">%</th></tr>'+matRows+'</table></div>'+
-'<div><h2>Top Haulers</h2><table><tr><th>Hauler</th><th class="r">Tons</th></tr>'+hRows+'</table>'+
-'<h2 style="margin-top:12px">Top Drivers</h2><table><tr><th>Driver</th><th class="r">Tons</th></tr>'+dRows+'</table></div></div>'+
-(zRows?'<h2>Zone Breakdown</h2><table><tr><th>Zone</th><th class="r">Tons</th></tr>'+zRows+'</table>':'')+
+'<div class="note"><b>Calculation:</b> Total Generated ('+totalTons.toFixed(2)+' T) = Diverted ('+totalDiv.toFixed(2)+' T) + Landfill ('+landfillT.toFixed(2)+' T) | Diversion Rate = '+totalDiv.toFixed(2)+' / '+totalTons.toFixed(2)+' × 100 = '+rateTxt+' | Method: weight-based tracking via commercial scale</div>'+
+(tgt>0?'<div class="target '+(onTarget?'on':'off')+'">Diversion '+rateTxt+' vs '+tgt+'% target — '+(onTarget?'On Target':(sumGap+'% below target'))+'</div>':'')+
+'<h2>Material Breakdown</h2>'+
+'<table><tr><th>Material</th><th class="r">%</th><th class="r">Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
+'<h2>Scale Tickets</h2>'+
+'<table class="tk"><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th>Zone</th><th class="r">Gross (lbs)</th><th class="r">Tare (lbs)</th><th class="r">Net (T)</th><th class="r">Div%</th></tr>'+tkRows+
+'<tr><td colspan="6"><b>TOTALS ('+tix.length+' tickets)</b></td><td class="r"><b>'+totalTons.toFixed(2)+'</b></td><td class="r"><b>'+rateTxt+'</b></td></tr></table>'+
+'<div class="two"><div><h2>Haulers</h2><table><tr><th>Hauler</th><th class="r">Tons</th></tr>'+hRows+'</table>'+
+'<h2>Drivers</h2><table><tr><th>Driver</th><th class="r">Tons</th></tr>'+dRows+'</table></div>'+
+'<div>'+(zRows?'<h2>Zone Breakdown</h2><table><tr><th>Zone</th><th class="r">Tons</th></tr>'+zRows+'</table>':'')+'</div></div>'+
 '<div class="foot">'+DX.facility+' · TCEQ '+DX.tceq.rn+' · '+DX.phone+' · robert@dalmexrecycling.com · Powered by DivertScan · Generated '+new Date().toLocaleString()+'</div>'+
 '</body></html>';
 w.document.open();w.document.write(html);w.document.close();},
