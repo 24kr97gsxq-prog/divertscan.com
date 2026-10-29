@@ -1990,11 +1990,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.6',
+    VERSION: '7.51.7',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-10-28',
+    BUILD: '2026-10-29',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -16375,6 +16375,13 @@ const DS = {
         });
         this._clientProjectMap = clientProjects;
 
+        // v7.51.7: the project list and the client list load at the same time on a
+        // fresh page. If clients finished first, every name lookup below missed and
+        // the list said "0 projects" for everyone (Oct 14). Wait for projects here.
+        if (!this.state.projects || !this.state.projects.length) {
+            try { await this.loadProjects(); } catch (e) { console.error('loadProjects failed', e); }
+        }
+
         if (clients.length === 0) {
             el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim);">No clients yet. Create one to give GCs portal access.</div>';
             return;
@@ -16383,17 +16390,19 @@ const DS = {
         el.innerHTML = clients.map(function(c) {
             var projIds = clientProjects[c.id] || [];
             var projNames = projIds.map(function(pid) {
-                var p = DS.state.projects.find(function(x) { return x.id === pid; });
+                var p = (DS.state.projects || []).find(function(x) { return x.id === pid; });
                 return p ? p.name : '';
             }).filter(Boolean);
+            // v7.51.7: count the links themselves; names are decoration.
+            var projCount = projIds.length;
             return '<div class="ticket-item" style="position:relative;">' +
                 '<div class="ticket-icon" style="background:var(--primary-glow);" onclick="DS.showEditClient(\'' + c.id + '\')">\u{1F3E2}</div>' +
                 '<div class="ticket-info" onclick="DS.showEditClient(\'' + c.id + '\')">'+
                     '<div class="ticket-title">' + DS.esc(c.name) + '</div>' +
                     '<div class="ticket-meta">' + (c.company || '') + (c.email ? ' \u2022 ' + c.email : '') + '</div>' +
                     (c.can_verify ? '<div class="ticket-meta" style="color:var(--success);font-weight:700;">Can verify tickets</div>' : '') +
-                    '<div class="ticket-meta" style="color:var(--primary);">' + projNames.length + ' project' + (projNames.length !== 1 ? 's' : '') +
-                    (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : '') +
+                    '<div class="ticket-meta" style="color:var(--primary);">' + projCount + ' project' + (projCount !== 1 ? 's' : '') +
+                    (projNames.length > 0 ? ' (' + projNames.join(', ') + ')' : (projCount > 0 ? ' (names still loading)' : '')) +
                     (c.last_login ? ' \u2022 Last: ' + DS.fmtDate(c.last_login.split('T')[0]) : '') + '</div>' +
                 '</div>' +
                 '<button class="btn btn-sm btn-outline" style="width:auto;padding:4px 8px;font-size:.65rem;flex-shrink:0" onclick="event.stopPropagation();DS.showEditClient(\'' + c.id + '\')">\u270F\uFE0F</button>' +
@@ -16520,6 +16529,15 @@ const DS = {
             if (el && r && r.length) el.checked = !!r[0].can_verify;
         }).catch(function(){});
         var assignedIds = (this._clientProjectMap && this._clientProjectMap[clientId]) || [];
+        // v7.51.7: an empty project list here meant no checkboxes, and Save then
+        // sent an empty list and wiped the client's access. Load first; refuse if still empty.
+        if (!this.state.projects || !this.state.projects.length) {
+            try { await this.loadProjects(); } catch (e) { console.error('loadProjects failed', e); }
+        }
+        if (!this.state.projects || !this.state.projects.length) {
+            this.showToast('Projects have not loaded yet — refresh the page and try again');
+            return;
+        }
         var html = '';
         // Phase 2.7d: Never offer the walk-in placeholder as a project a client can be assigned to
         var WALKIN_PLACEHOLDER_ID = '6aa0ecd8-814e-4b2f-8fc8-caff9aa59590';
@@ -16548,6 +16566,17 @@ const DS = {
 
         var projIds = [];
         document.querySelectorAll('.editClientProjCb:checked').forEach(function(cb) { projIds.push(cb.value); });
+        // v7.51.7: if the form drew no checkboxes at all, the project list never
+        // loaded — saving now would wipe this client's access. Stop.
+        if (document.querySelectorAll('.editClientProjCb').length === 0) {
+            this.showToast('Project list is empty — not saving. Refresh and try again.');
+            return;
+        }
+        var hadBefore = ((this._clientProjectMap && this._clientProjectMap[id]) || []).length;
+        if (projIds.length === 0 && hadBefore > 0 &&
+            !confirm('This removes all ' + hadBefore + ' project(s) from this client. They will lose portal access to everything. Continue?')) {
+            return;
+        }
 
         this.showLoading('Saving...');
         var result = await this.supabase('rpc/admin_upsert_client', 'POST', {
