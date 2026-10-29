@@ -1990,11 +1990,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.4',
+    VERSION: '7.51.5',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-10-27',
+    BUILD: '2026-10-28',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -3874,14 +3874,19 @@ const DS = {
 
         // AUTO-APPLY the fleet default to the manual field as the starting value
         // User can override by typing a different number
-        if (match.confidence !== 'low') {
+        // v7.51.5: never auto-apply a tare heavier than the gross. A 30,290 lb
+        // reading with Jaguar's 32,800 lb roll-off tare is not a Jaguar load,
+        // and a silently disabled Create button told nobody that.
+        const grossForFleet = Number((this._orphanResolveContext || {}).weight_lbs) || 0;
+        const fleetTooHeavy = grossForFleet > 0 && match.avg_tare >= grossForFleet;
+        if (match.confidence !== 'low' && !fleetTooHeavy) {
             manualField.value = match.avg_tare;
             this._orphanTareSource = 'fleet_default';
         } else {
             manualField.value = '';
             this._orphanTareSource = null;
         }
-        manualField.placeholder = 'Override fleet default if needed';
+        manualField.placeholder = fleetTooHeavy ? 'Enter this truck\'s real tare' : 'Override fleet default if needed';
 
         // Render informational card (no longer a tappable button)
         section.style.display = 'block';
@@ -3895,10 +3900,11 @@ const DS = {
                     '</div>' +
                     '<div style="text-align:right;">' +
                         '<div style="font-size:.65rem;color:' + confColor + ';font-weight:600;">' + confEmoji + ' ' + confLabel + '</div>' +
-                        (match.confidence !== 'low' ? '<div style="font-size:.6rem;color:var(--primary);margin-top:2px;font-weight:600;">↓ Applied to field below</div>' : '<div style="font-size:.6rem;color:var(--danger);margin-top:2px;">Enter manually ↓</div>') +
+                        (fleetTooHeavy ? '<div style="font-size:.6rem;color:var(--danger);margin-top:2px;font-weight:600;">Heavier than this gross — not applied</div>' : match.confidence !== 'low' ? '<div style="font-size:.6rem;color:var(--primary);margin-top:2px;font-weight:600;">↓ Applied to field below</div>' : '<div style="font-size:.6rem;color:var(--danger);margin-top:2px;">Enter manually ↓</div>') +
                     '</div>' +
                 '</div>' +
                 '<div style="font-size:.6rem;color:var(--text-dim);margin-top:8px;font-style:italic;">' + confNote + '</div>' +
+                (fleetTooHeavy ? '<div style="font-size:.65rem;color:var(--danger);margin-top:8px;line-height:1.4;">This hauler\'s trucks tare about ' + match.avg_tare.toLocaleString() + ' lb, more than the ' + grossForFleet.toLocaleString() + ' lb this scale reading shows. Either this is a different hauler or truck (change the hauler above), or enter the tare written on the paper ticket.</div>' : '') +
             '</div>';
 
         this.updateOrphanNetPreview();
@@ -3938,13 +3944,26 @@ const DS = {
             // Track _lastAppliedFleetValue when we auto-apply (done in onOrphanHaulerChange)
         }
 
+        // v7.51.5: the button used to go grey with no explanation.
+        let why = document.getElementById('orphanWhyDisabled');
+        if (!why) {
+            why = document.createElement('div');
+            why.id = 'orphanWhyDisabled';
+            why.style.cssText = 'display:none;font-size:.7rem;color:var(--danger);margin:0 0 8px;line-height:1.4;';
+            btn.parentNode.insertBefore(why, btn);
+        }
         if (!tareLbs || tareLbs <= 0 || tareLbs >= grossLbs) {
             preview.style.display = 'none';
             btn.disabled = true;
             btn.style.opacity = '0.4';
             btn.style.cursor = 'not-allowed';
+            why.textContent = (!tareLbs || tareLbs <= 0)
+                ? 'Enter a tare weight to create the ticket.'
+                : 'Tare ' + tareLbs.toLocaleString() + ' lb is heavier than the gross ' + grossLbs.toLocaleString() + ' lb, so the net would be negative. Check the hauler, or enter the tare from the paper ticket.';
+            why.style.display = 'block';
             return;
         }
+        why.style.display = 'none';
 
         const netLbs = grossLbs - tareLbs;
         const netTons = netLbs / 2000;
