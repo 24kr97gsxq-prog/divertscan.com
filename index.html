@@ -1990,7 +1990,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.8',
+    VERSION: '7.51.9',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -11048,11 +11048,11 @@ const DS = {
     // shows (v7.48.2). Without it (All Time) the rate is a running total.
     _generatePDF(proj, tix, label, monthKey) {
         tix = tix.slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
-        var tons=0,div=0,tGross=0,tTare=0,mc={};
+        var tons=0,div=0,tGross=0,tTare=0,mc={},unweighed=0;
         var matKeys = Object.keys(this.MATERIALS);
         matKeys.forEach(function(k){mc[k]=0;});
         tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;
-            tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
+            if((+t.gross_lbs||0)>0&&(+t.tare_lbs||0)>0){tGross+=+t.gross_lbs;tTare+=+t.tare_lbs;}else unweighed++;  // v7.51.9
             matKeys.forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
         var landfill=Math.max(0,tons-div);
         var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
@@ -11151,7 +11151,8 @@ const DS = {
         '<h2>Material Breakdown — '+label+'</h2><table><tr><th>Material</th><th class=r>%</th><th class=r>Tons</th><th>End Market</th></tr>'+matRows+'</table>'+
         '<h2>Scale Tickets — '+label+'</h2>'+
         '<table><tr><th>Date</th><th>Ticket#</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+matNames[k]+'</th>';}).join('')+'<th class=r>Div%</th></tr>'+rows+
-        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=3>TOTALS</td><td class=r>'+DS.fmt(tGross)+'</td><td class=r>'+DS.fmt(tTare)+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
+        '<tr style="border-top:2px solid #18181b;font-weight:bold"><td colspan=3>TOTALS</td><td class=r>'+(unweighed?'—':DS.fmt(tGross))+'</td><td class=r>'+(unweighed?'—':DS.fmt(tTare))+'</td><td class=r>'+DS.fmt(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
+        (unweighed?'<div class="note">Gross and tare are shown where the load was weighed at the scale; '+unweighed+' load'+(unweighed>1?'s were':' was')+' recorded by net weight only.</div>':'')+
         '<div class="footer"><b>'+DS.FACILITY.name+'</b> • TCEQ '+DS.FACILITY.tceq_rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • '+DS.FACILITY.email+' • '+DS.FACILITY.phone+'</div>'+
         '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:#18181b;color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
         '<div style="display:flex;gap:8px;max-width:600px;margin:0 auto">'+
@@ -11313,11 +11314,17 @@ const DS = {
         var photoLinks = [];
         var dataStartRow = hdrRow.number + 1;
 
+        // v7.51.9 — a load with no scale weights (hauler list) shows blank gross/tare,
+        // Net (lbs) is always tons × 2000 so it agrees with Tons, and the gross/tare
+        // totals are left blank when any load in the month has no weights.
+        var unweighed = 0;
         tickets.forEach(function(t, rowIdx) {
             var gross = parseInt(t.gross_lbs)||0;
             var tare = parseInt(t.tare_lbs)||0;
-            var net = gross - tare;
             var tons = parseFloat(t.net_tons)||0;
+            var weighed = gross > 0 && tare > 0;
+            if (!weighed) { unweighed++; gross = 0; tare = 0; }
+            var net = Math.round(tons * 2000);
             var wp=(t.wood_pct||0)/100, gp=(t.gypsum_pct||0)/100, pp=(t.plastic_pct||0)/100;
             var op=(t.occ_pct||0)/100, mp=(t.metal_pct||0)/100, cp=(t.concrete_pct||0)/100, bp=(t.block_pct||0)/100;
             var wt=tons*wp, gt=tons*gp, pt=tons*pp, ot=tons*op, mt=tons*mp, ct=tons*cp, bt=tons*bp;
@@ -11336,7 +11343,7 @@ const DS = {
 
             var r = ws.addRow([
                 dateFmt, (t.ticket_number == null ? '' : String(t.ticket_number)), t.zone||'',
-                gross, gross/2000, tare, tare/2000, net, tons,
+                weighed ? gross : null, weighed ? gross/2000 : null, weighed ? tare : null, weighed ? tare/2000 : null, net, tons,
                 divPct, diverted,
                 wp, wt, gp, gt, pp, pt, op, ot, mp, mt, cp, ct, bp, bt
             ]);
@@ -11367,7 +11374,7 @@ const DS = {
         var xlLines = DS._rateLines(proj);
         var rateFmt = DS.xlRateFmtKey(totalDivPct * 100, monthKey, xlLines);
         var totRow = ws.addRow(['TOTALS','','',
-            sumGross, sumGross/2000, sumTare, sumTare/2000, sumNet, sumTons,
+            unweighed ? null : sumGross, unweighed ? null : sumGross/2000, unweighed ? null : sumTare, unweighed ? null : sumTare/2000, sumNet, sumTons,
             totalDivPct, sumDiverted,
             sumTons>0?sumMats.wood/sumTons:0, sumMats.wood,
             sumTons>0?sumMats.gypsum/sumTons:0, sumMats.gypsum,
@@ -11385,6 +11392,10 @@ const DS = {
         totRow.getCell(10).numFmt = rateFmt;   // month's diversion rate (v7.48.2 rule)
         [5,7,9,11,13,15,17,19,21,23,25].forEach(function(c){ totRow.getCell(c).numFmt = '0.00'; });
         [4,6,8].forEach(function(c){ totRow.getCell(c).numFmt = '#,##0'; });
+        if (unweighed) {   // v7.51.9
+            var nr = ws.addRow(['Gross/tare shown where weighed at the scale; ' + unweighed + ' load' + (unweighed > 1 ? 's' : '') + ' recorded by net weight only.']);
+            nr.getCell(1).font = {italic:true, size:9, color:{argb:'FF52525B'}};
+        }
 
         // Summary section
         ws.addRow([]);
@@ -11538,21 +11549,23 @@ const DS = {
             d.push(['Date','Ticket No','Zone','Gross (lbs)','GWT (NT)','Tare (lbs)','Tare (NT)','Net (lbs)','Tons',
                 'Div%','Diverted','Wood%','Wood','Gypsum%','Gypsum','Plastic%','Plastic','OCC%','OCC',
                 'Metal%','Metal','Concrete%','Concrete','Block%','Block']);
-            var sG=0,sT=0,sTn=0,sD=0;
+            var sG=0,sT=0,sTn=0,sD=0,unw=0;   // v7.51.9: blank gross/tare when not weighed
             mTix.forEach(function(t) {
                 var g=parseInt(t.gross_lbs)||0, ta=parseInt(t.tare_lbs)||0, tn=parseFloat(t.net_tons)||0;
+                var wgh=g>0&&ta>0; if(!wgh){unw++;g=0;ta=0;}
                 var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
                 var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp;
                 var dv=wt+gt+pt+ot+mt+ct+bt;
                 sG+=g;sT+=ta;sTn+=tn;sD+=dv;
                 var df=t.ticket_date||'';if(df.indexOf('-')>0){var dp2=df.split('-');df=parseInt(dp2[1])+'/'+parseInt(dp2[2])+'/'+dp2[0];}
-                d.push([df,(t.ticket_number == null ? '' : String(t.ticket_number)),t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,
+                d.push([df,(t.ticket_number == null ? '' : String(t.ticket_number)),t.zone||'',wgh?g:'',wgh?g/2000:'',wgh?ta:'',wgh?ta/2000:'',Math.round(tn*2000),tn,
                     tn>0?dv/tn:0,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);
             });
             // v7.48.1 — added the empty Zone cell. Without it every total sat one column
             // to the left (tons under "Net (lbs)", the rate under "Tons", diverted tons
             // under "Div%" showing as 64472%).
-            d.push(['Totals','','',sG,sG/2000,sT,sT/2000,sG-sT,sTn,sTn>0?sD/sTn:0,sD]);
+            d.push(['Totals','','',unw?'':sG,unw?'':sG/2000,unw?'':sT,unw?'':sT/2000,Math.round(sTn*2000),sTn,sTn>0?sD/sTn:0,sD]);
+            if (unw) d.push(['Gross/tare shown where weighed at the scale; '+unw+' load'+(unw>1?'s':'')+' recorded by net weight only.']);
             var mWs = XLSX.utils.aoa_to_sheet(d);
             mWs['!cols']=[{wch:12},{wch:10},{wch:6},{wch:10},{wch:8},{wch:10},{wch:8},{wch:10},{wch:7},{wch:7},{wch:8},{wch:6},{wch:6},{wch:8},{wch:6},{wch:8},{wch:6},{wch:6},{wch:6},{wch:7},{wch:6},{wch:9},{wch:6},{wch:7},{wch:6}];
             // Auto-filter + frozen top row (SheetJS syntax)

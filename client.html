@@ -555,7 +555,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.4', BUILD:'2026-10-28',
+VERSION:'2.9.5', BUILD:'2026-11-04',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -1547,7 +1547,7 @@ html+='</table>';
 html+='<h2>Load Detail ('+tix.length+' tickets)</h2>';
 html+='<table><tr><th>Date</th><th>Ticket #</th><th>Project</th><th>Zone</th><th class="r">Gross Lbs</th><th class="r">Tare Lbs</th><th class="r">Net T</th><th class="r">Div %</th></tr>';
 tix.forEach(function(t){
-  html+='<tr><td>'+P.fdt(t)+'</td><td><b>'+P.esc(t.ticket_number||'')+'</b></td><td>'+P.esc(projNameById[t.project_id]||'')+'</td><td>'+P.esc(t.zone||'')+'</td><td class="r">'+Number(t.gross_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.tare_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.net_tons||0).toFixed(2)+'</td><td class="r">'+(t.diversion_pct||0)+'%</td></tr>';
+  html+='<tr><td>'+P.fdt(t)+'</td><td><b>'+P.esc(t.ticket_number||'')+'</b></td><td>'+P.esc(projNameById[t.project_id]||'')+'</td><td>'+P.esc(t.zone||'')+'</td><td class="r">'+(t.gross_lbs>0&&t.tare_lbs>0?Number(t.gross_lbs).toLocaleString():'—')+'</td><td class="r">'+(t.gross_lbs>0&&t.tare_lbs>0?Number(t.tare_lbs).toLocaleString():'—')+'</td><td class="r">'+Number(t.net_tons||0).toFixed(2)+'</td><td class="r">'+(t.diversion_pct||0)+'%</td></tr>';
   if(t.audit_id){
     // Phase 2.7d Item #3: hash generation timestamp shown alongside hash
     var hashTime=t.captured_at?new Date(t.captured_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'capture time';
@@ -1606,10 +1606,11 @@ var hdr=ws.addRow(['Date','Ticket #','Project','Zone','Gross Lbs','Tare Lbs','Ne
 hdr.height=20;
 hdr.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};c.font={bold:true,size:10,color:dark};c.alignment={horizontal:'center'};c.border=bdrAll;});
 
-var sumG=0,sumT=0,sumN=0;
+var sumG=0,sumT=0,sumN=0,unwD=0;
 tix.forEach(function(t,i){
   var g=Number(t.gross_lbs||0),ta=Number(t.tare_lbs||0),tn=Number(t.net_tons||0);
-  sumG+=g;sumT+=ta;sumN+=tn;
+  if(!(g>0&&ta>0)){unwD++;g=null;ta=null;}  // v2.9.5
+  sumG+=g||0;sumT+=ta||0;sumN+=tn;
   var _d=(t.ticket_date||'');var _dm=_d.match(/^(\d{4})-(\d{2})-(\d{2})/);var _df=_dm?(_dm[2]+'/'+_dm[3]+'/'+_dm[1]):_d;
   var r=ws.addRow([_df,t.ticket_number||'',projNameById[t.project_id]||'',t.zone||'',g,ta,tn,(t.diversion_pct||0)+'%',t.audit_id||'']);
   r.eachCell(function(c){c.font={size:10};c.border=bdrAll;});
@@ -1617,7 +1618,7 @@ tix.forEach(function(t,i){
   r.getCell(5).numFmt='#,##0';r.getCell(6).numFmt='#,##0';r.getCell(7).numFmt='0.00';
   r.getCell(9).font={size:8,name:'Consolas',color:{argb:'FFA16207'}};
 });
-var tr=ws.addRow(['TOTALS','','','',sumG,sumT,sumN,'','']);
+var tr=ws.addRow(['TOTALS','','','',unwD?null:sumG,unwD?null:sumT,sumN,'','']);
 tr.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};c.font={bold:true,size:10,color:dark};c.border=bdrAll;});
 tr.getCell(5).numFmt='#,##0';tr.getCell(6).numFmt='#,##0';tr.getCell(7).numFmt='0.00';
 
@@ -1932,9 +1933,9 @@ document.body.appendChild(el);},
 genPDF(key){var tix=(P._mg[key]||[]).slice().sort(function(a,b){return(a.ticket_date||'').localeCompare(b.ticket_date||'');});
 var pts=key.split('-'),mf=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 var label=mf[+pts[1]]+' '+pts[0];var proj=P.cp;if(!proj)return;
-var tons=0,div=0,mc={},tGross=0,tTare=0;Object.keys(MT).forEach(function(k){mc[k]=0;});
+var tons=0,div=0,mc={},tGross=0,tTare=0,unweighed=0;Object.keys(MT).forEach(function(k){mc[k]=0;});
 tix.forEach(function(t){var tn=+(t.net_tons)||0;tons+=tn;div+=+(t.diverted_tons)||0;
-tGross+=+(t.gross_lbs)||0;tTare+=+(t.tare_lbs)||0;
+if((+t.gross_lbs||0)>0&&(+t.tare_lbs||0)>0){tGross+=+t.gross_lbs;tTare+=+t.tare_lbs;}else unweighed++;  // v2.9.5
 Object.keys(MT).forEach(function(k){mc[k]+=tn*((t[k+'_pct']||0)/100);});});
 var landfill=tons-div;if(landfill<0)landfill=0;
 var ver=proj.leed_version||'v4';var tgt=proj.leed_target!=null?proj.leed_target:(ver==='v5'?75:50);
@@ -1951,7 +1952,7 @@ var streams=matKeys.filter(function(k){return k!=='landfill'&&mc[k]>0;}).length;
 // Ticket rows with Gross/Tare and ALL materials (Driver column added Phase 2.7b)
 var rows='';tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
 var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
-var r='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td>'+P.esc(t.driver_name||'—')+'</td><td>'+(t.zone||'')+'</td><td class=r>'+P.f(g)+'</td><td class=r>'+P.f(ta)+'</td><td class=r>'+P.f(t.net_tons)+'</td>';
+var r='<tr><td>'+df+'</td><td><b>'+t.ticket_number+'</b></td><td>'+P.esc(t.driver_name||'—')+'</td><td>'+(t.zone||'')+'</td><td class=r>'+(g>0&&ta>0?P.f(g):'—')+'</td><td class=r>'+(g>0&&ta>0?P.f(ta):'—')+'</td><td class=r>'+P.f(t.net_tons)+'</td>';
 // v2.9.1 — every % in the ticket table at one decimal; Photo column removed
 matKeys.forEach(function(k){r+='<td class=r>'+(+(t[k+'_pct'])||0).toFixed(1)+'%</td>';});
 var tn1=+(t.net_tons)||0,dv1=t.diverted_tons,dpShow=(tn1>0&&dv1!=null&&dv1!=='')?(+dv1/tn1*100):(+dp||0);
@@ -2025,7 +2026,8 @@ zonePdfHtml+
 // TICKET TABLE (Driver column added Phase 2.7b)
 '<h2>Scale Tickets — '+label+'</h2>'+
 '<table><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th>Zone</th><th class=r>Gross (lbs)</th><th class=r>Tare (lbs)</th><th class=r>Net (T)</th>'+matKeys.map(function(k){return '<th class=r>'+MT[k].n+'</th>';}).join('')+'<th class=r>Div%</th></tr>'+rows+
-'<tr style="border-top:2px solid var(--text);font-weight:bold"><td colspan=3>TOTALS</td><td></td><td class=r>'+P.f(tGross)+'</td><td class=r>'+P.f(tTare)+'</td><td class=r>'+P.f(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
+'<tr style="border-top:2px solid var(--text);font-weight:bold"><td colspan=3>TOTALS</td><td></td><td class=r>'+(unweighed?'—':P.f(tGross))+'</td><td class=r>'+(unweighed?'—':P.f(tTare))+'</td><td class=r>'+P.f(tons)+'</td>'+matKeys.map(function(k){return '<td class=r>'+(tons>0?(mc[k]/tons*100).toFixed(1)+'%':'')+'</td>';}).join('')+'<td class=r>'+rate+'%</td></tr></table>'+
+(unweighed?'<div class="note">Gross and tare are shown where the load was weighed at the scale; '+unweighed+' load'+(unweighed>1?'s were':' was')+' recorded by net weight only.</div>':'')+
 // FOOTER
 '<div class="footer"><b>'+DX.facility+'</b> • TCEQ '+DX.tceq.rn+' — powered by DivertScan • '+new Date().toLocaleDateString()+' • robert@dalmexrecycling.com • '+DX.phone+'</div>'+
 '<div class="toolbar" style="position:fixed;bottom:0;left:0;right:0;background:var(--text);color:#fff;padding:10px;text-align:center;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.15)">'+
@@ -2265,13 +2267,15 @@ var hdr=ws.addRow(['Date','Ticket No','Driver','Zone','Gross (lbs)','GWT (NT)','
 hdr.height=20;sR(hdr,{fill:mdG,font:{bold:true,size:9,color:wht}});
 hdr.eachCell(function(c){c.alignment={horizontal:'center',vertical:'middle'};});
 // Data (cell indexes shifted +1 due to Driver column inserted at position 3)
-var sG=0,sT=0,sN=0,sTn=0,sDv=0;
-tix.forEach(function(t,i){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;
+var sG=0,sT=0,sN=0,sTn=0,sDv=0,unw=0;
+// v2.9.5 — a load with no scale weights shows blank gross/tare; Net (lbs) = tons × 2000
+// so it agrees with Tons; gross/tare totals blank when any load has no weights.
+tix.forEach(function(t,i){var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0,tn=+(t.net_tons)||0;var wgh=g>0&&ta>0;if(!wgh){unw++;g=0;ta=0;}
 var wp=(t.wood_pct||0)/100,gp=(t.gypsum_pct||0)/100,pp=(t.plastic_pct||0)/100,op=(t.occ_pct||0)/100,mp=(t.metal_pct||0)/100,cp=(t.concrete_pct||0)/100,bp=(t.block_pct||0)/100;
 var wt=tn*wp,gt=tn*gp,pt=tn*pp,ot=tn*op,mt=tn*mp,ct=tn*cp,bt=tn*bp,dv=wt+gt+pt+ot+mt+ct+bt;var dvp=tn>0?dv/tn:0;
-sG+=g;sT+=ta;sN+=g-ta;sTn+=tn;sDv+=dv;
+sG+=g;sT+=ta;sN+=Math.round(tn*2000);sTn+=tn;sDv+=dv;
 var df=t.ticket_date||'';if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
-var r=ws.addRow([df,(t.ticket_number==null?'':String(t.ticket_number)),t.driver_name||'',t.zone||'',g,g/2000,ta,ta/2000,g-ta,tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);  // v2.9.1: number kept as text (02915 stays 02915); Photo column removed
+var r=ws.addRow([df,(t.ticket_number==null?'':String(t.ticket_number)),t.driver_name||'',t.zone||'',wgh?g:null,wgh?g/2000:null,wgh?ta:null,wgh?ta/2000:null,Math.round(tn*2000),tn,dvp,dv,wp,wt,gp,gt,pp,pt,op,ot,mp,mt,cp,ct,bp,bt]);  // v2.9.1: number kept as text (02915 stays 02915); Photo column removed
 r.eachCell(function(c){c.font={size:10};c.border={top:{style:'thin',color:bdr},bottom:{style:'thin',color:bdr},left:{style:'thin',color:bdr},right:{style:'thin',color:bdr}};});
 if(i%2===1)r.eachCell(function(c){c.fill={type:'pattern',pattern:'solid',fgColor:alt};});
 var pv=Math.round(dvp*100);r.getCell(11).font={bold:true,size:10,color:{argb:nonLeedX?'FF18181B':pv>=75?'FF059669':pv>=50?'FFD97706':'FFDC2626'}};
@@ -2281,9 +2285,10 @@ var pv=Math.round(dvp*100);r.getCell(11).font={bold:true,size:10,color:{argb:non
 });
 // Totals
 var tdp=sTn>0?sDv/sTn:0;var _xf=P.xlRateFmtKey(tdp*100,P._lastKey(tix),proj&&proj.leed_version==='none'?null:(proj&&proj.leed_target!=null?proj.leed_target:50));// v2.8.2 — reported months '0%' as reported; one decimal after
-var tr=ws.addRow(['TOTALS','','','',sG,sG/2000,sT,sT/2000,sN,sTn,tdp,sDv]);
+var tr=ws.addRow(['TOTALS','','','',unw?null:sG,unw?null:sG/2000,unw?null:sT,unw?null:sT/2000,sN,sTn,tdp,sDv]);
 sR(tr,{fill:dkG,font:{bold:true,size:10,color:wht}});
 tr.getCell(11).numFmt=_xf;[6,8,10,12].forEach(function(ci){tr.getCell(ci).numFmt='0.00';});[5,7,9].forEach(function(ci){tr.getCell(ci).numFmt='#,##0';});
+if(unw){var nr=ws.addRow(['Gross/tare shown where weighed at the scale; '+unw+' load'+(unw>1?'s':'')+' recorded by net weight only.']);nr.getCell(1).font={italic:true,size:9,color:{argb:'FF52525B'}};}
 // Summary
 ws.addRow([]);
 [['Total Tonnage',+sTn.toFixed(2)],['Diverted',+sDv.toFixed(2)],['Landfill',+Math.max(0,sTn-sDv).toFixed(2)],['Diversion %',tdp]].forEach(function(d){
@@ -2412,9 +2417,9 @@ tix.forEach(function(t){
     t.driver_name||'',
     t.hauler||'',
     t.zone||'',
-    t.gross_lbs||0,
-    t.tare_lbs||0,
-    t.net_lbs||0,
+    (t.gross_lbs>0&&t.tare_lbs>0)?t.gross_lbs:'',   // v2.9.5: blank when not weighed
+    (t.gross_lbs>0&&t.tare_lbs>0)?t.tare_lbs:'',
+    Math.round((+t.net_tons||0)*2000),
     (+t.net_tons||0).toFixed(2),
     (t.diversion_pct||0),
     (+t.diverted_tons||0).toFixed(2),
@@ -2693,7 +2698,7 @@ drivers.forEach(function(d){
   }else{
     html+='<table><tr><th>Date</th><th>Ticket #</th><th>Project</th><th>Zone</th><th class="r">Gross</th><th class="r">Tare</th><th class="r">Net (T)</th></tr>';
     dTix.forEach(function(t){
-      html+='<tr><td>'+P.fdt(t)+'</td><td><b>'+P.esc(t.ticket_number||'')+'</b></td><td>'+P.esc(projNameById[t.project_id]||'')+'</td><td>'+P.esc(t.zone||'')+'</td><td class="r">'+Number(t.gross_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.tare_lbs||0).toLocaleString()+'</td><td class="r">'+Number(t.net_tons||0).toFixed(2)+'</td></tr>';
+      html+='<tr><td>'+P.fdt(t)+'</td><td><b>'+P.esc(t.ticket_number||'')+'</b></td><td>'+P.esc(projNameById[t.project_id]||'')+'</td><td>'+P.esc(t.zone||'')+'</td><td class="r">'+(t.gross_lbs>0&&t.tare_lbs>0?Number(t.gross_lbs).toLocaleString():'—')+'</td><td class="r">'+(t.gross_lbs>0&&t.tare_lbs>0?Number(t.tare_lbs).toLocaleString():'—')+'</td><td class="r">'+Number(t.net_tons||0).toFixed(2)+'</td></tr>';
       if(t.audit_id){
         var hashTime=t.captured_at?new Date(t.captured_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'capture time';
         html+='<tr style="background:#fafaf9"><td colspan="7" style="font-family:\'Courier New\',monospace;font-size:8px;color:#a16207;padding:2px 5px 5px;border-bottom:1px solid var(--border)">\ud83d\udd10 <strong>'+t.audit_id+'</strong>  <span style="color:var(--warning)">\u00b7 hashed '+hashTime+'</span></td></tr>';
@@ -2871,10 +2876,11 @@ drivers.forEach(function(d,idx){
     c.border=bdrAll;
   });
 
-  var sumG=0,sumT=0,sumN=0;
+  var sumG=0,sumT=0,sumN=0,unwD=0;
   dTix.forEach(function(t,i){
     var g=Number(t.gross_lbs||0),ta=Number(t.tare_lbs||0),tn=Number(t.net_tons||0);
-    sumG+=g;sumT+=ta;sumN+=tn;
+    if(!(g>0&&ta>0)){unwD++;g=null;ta=null;}  // v2.9.5
+    sumG+=g||0;sumT+=ta||0;sumN+=tn;
     var r=ws.addRow([
       t.ticket_date||'',
       t.ticket_number||'',
@@ -2891,7 +2897,7 @@ drivers.forEach(function(d,idx){
     r.getCell(8).font={size:8,name:'Consolas',color:{argb:'FFA16207'}};
   });
 
-  var totalR=ws.addRow(['TOTALS','','','',sumG,sumT,sumN,'']);
+  var totalR=ws.addRow(['TOTALS','','','',unwD?null:sumG,unwD?null:sumT,sumN,'']);
   totalR.eachCell(function(c){
     c.fill={type:'pattern',pattern:'solid',fgColor:darkCyan};
     c.font={bold:true,size:10,color:dark};
