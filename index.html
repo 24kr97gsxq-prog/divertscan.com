@@ -1990,11 +1990,11 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.6',
+    VERSION: '7.51.7',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
-    BUILD: '2026-10-28',
+    BUILD: '2026-11-04',
 
     // Today's calendar date in Dallas, as YYYY-MM-DD.
     // new Date().toISOString() is UTC and rolls over at 7pm CDT / 6pm CST, so
@@ -4373,7 +4373,7 @@ const DS = {
         const html = `<div style="font-size:1rem;font-weight:800;margin-bottom:12px">Edit ${t.ticket_number || ''}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px"><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Ticket #</label><input id="ste_num" class="manual-input" value="${t.ticket_number||''}"></div><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Date</label><input type="date" id="ste_date" class="manual-input" value="${t.ticket_date||''}"></div></div>
             <div style="margin-bottom:8px"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Project</label><select id="ste_proj" class="manual-input">${projOptions}</select></div>
-            <div style="display:flex;gap:8px;margin-bottom:8px"><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Gross (lbs)</label><input type="number" id="ste_gross" class="manual-input" value="${t.gross_lbs||0}" oninput="DS._calcScaleEditNet()"></div><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Tare (lbs)</label><input type="number" id="ste_tare" class="manual-input" value="${t.tare_lbs||0}" oninput="DS._calcScaleEditNet()"></div></div>
+            <div style="display:flex;gap:8px;margin-bottom:8px"><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Gross (lbs)</label><input type="number" id="ste_gross" class="manual-input" value="${t.gross_lbs||''}" oninput="DS._calcScaleEditNet()"></div><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Tare (lbs)</label><input type="number" id="ste_tare" class="manual-input" value="${t.tare_lbs||''}" oninput="DS._calcScaleEditNet()"></div></div>
             <div style="display:flex;gap:8px;margin-bottom:8px"><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Net (lbs)</label><input id="ste_net" class="manual-input" value="${t.net_lbs||0}" readonly style="color:var(--success);font-weight:700"></div><div style="flex:1"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Net (tons)</label><input id="ste_tons" class="manual-input" value="${t.net_tons||0}" readonly style="color:var(--success);font-weight:700"></div></div>
             <div style="margin:10px 0"><div style="font-size:.6rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;margin-bottom:6px">Material Breakdown</div>${matSliders}<div id="stePctTotal" style="font-family:var(--mono);font-size:.7rem;font-weight:700;text-align:right;margin-top:4px"></div></div>
             <div style="margin-bottom:8px"><label style="display:block;font-size:.6rem;font-weight:600;color:var(--text-dim);margin-bottom:3px;text-transform:uppercase">Notes</label><textarea id="ste_notes" class="manual-input" rows="2" style="resize:vertical">${t.notes||''}</textarea></div>
@@ -4386,6 +4386,12 @@ const DS = {
     _calcScaleEditNet() {
         const g = parseInt(document.getElementById('ste_gross').value) || 0;
         const t = parseInt(document.getElementById('ste_tare').value) || 0;
+        const cur = this._scaleCurrentTicket;
+        if (!g && !t && cur && (+cur.net_tons || 0) > 0) {   // v7.51.7: no weights — keep tons on file
+            document.getElementById('ste_net').value = cur.net_lbs || Math.round(+cur.net_tons * 2000);
+            document.getElementById('ste_tons').value = (+cur.net_tons).toFixed(2);
+            return;
+        }
         document.getElementById('ste_net').value = g - t;
         document.getElementById('ste_tons').value = ((g - t) / 2000).toFixed(2);
     },
@@ -4401,10 +4407,13 @@ const DS = {
     async saveScaleTicket() {
         const t = this._scaleCurrentTicket;
         if (!t) return;
-        const gross = parseInt(document.getElementById('ste_gross').value) || 0;
-        const tare = parseInt(document.getElementById('ste_tare').value) || 0;
-        const net = gross - tare;
-        const netTons = parseFloat((net / 2000).toFixed(4));
+        let gross = parseInt(document.getElementById('ste_gross').value) || 0;
+        let tare = parseInt(document.getElementById('ste_tare').value) || 0;
+        let net = gross - tare;
+        let netTons = parseFloat((net / 2000).toFixed(4));
+        if (!gross && !tare && (+t.net_tons || 0) > 0) {   // v7.51.7: keep tons on file, weights blank
+            netTons = +t.net_tons; net = Math.round(netTons * 2000); gross = null; tare = null;
+        }
         const keys = ['wood','occ','metal','plastic','concrete','block','landfill'];
         const mats = {}; let totalPct = 0;
         const GWP = {wood:.310,occ:.940,metal:1.850,plastic:3.100,concrete:.130,block:.240};
@@ -6627,8 +6636,11 @@ const DS = {
         }).join('');
         document.getElementById('editTktNum').value = t.ticket_number || '';
         document.getElementById('editTktDate').value = t.ticket_date || '';
-        document.getElementById('editTktGross').value = t.gross_lbs || 0;
-        document.getElementById('editTktTare').value = t.tare_lbs || 0;
+        // v7.51.7 — a load with no gross/tare (hauler lists, Curtis's lists) shows blank
+        // fields, and keeps its tons on save. It used to fill 0 and save 0 - 0 = 0 T.
+        this._editTktKeep = { net_lbs: t.net_lbs, net_tons: t.net_tons };
+        document.getElementById('editTktGross').value = t.gross_lbs ? t.gross_lbs : '';
+        document.getElementById('editTktTare').value = t.tare_lbs ? t.tare_lbs : '';
         document.getElementById('editTktNet').value = t.net_lbs || 0;
         document.getElementById('editTktTons').value = t.net_tons || 0;
         // Set hauler dropdown — populate from approved_haulers table (controlled list)
@@ -6788,6 +6800,12 @@ const DS = {
     calcEditNet() {
         const gross = parseInt(document.getElementById('editTktGross').value) || 0;
         const tare = parseInt(document.getElementById('editTktTare').value) || 0;
+        if (!gross && !tare && this._editTktKeep) {   // v7.51.7: no weights — keep tons on file
+            document.getElementById('editTktNet').value = this._editTktKeep.net_lbs || Math.round((+this._editTktKeep.net_tons || 0) * 2000);
+            document.getElementById('editTktTons').value = (+this._editTktKeep.net_tons || 0).toFixed(2);
+            Object.keys(this.MATERIALS).forEach(k => this.updateEditSlider(k));
+            return;
+        }
         const net = gross - tare;
         document.getElementById('editTktNet').value = net;
         document.getElementById('editTktTons').value = (net / 2000).toFixed(2);
@@ -7042,10 +7060,18 @@ const DS = {
         const ticketNum = document.getElementById('editTktNum').value.trim();
         if (!ticketNum) { this.showToast('Ticket number required'); return; }
 
-        const gross = parseInt(document.getElementById('editTktGross').value) || 0;
-        const tare = parseInt(document.getElementById('editTktTare').value) || 0;
-        const net = gross - tare;
-        const netTons = +(net / 2000).toFixed(4);
+        let gross = parseInt(document.getElementById('editTktGross').value) || 0;
+        let tare = parseInt(document.getElementById('editTktTare').value) || 0;
+        let net = gross - tare;
+        let netTons = +(net / 2000).toFixed(4);
+        // v7.51.7 — no gross and no tare entered: keep the tons already on file
+        // (a hauler-list or Curtis-list load), save gross/tare as blank.
+        const keepT = this.state.tickets.find(x => x.id === id);
+        if (!gross && !tare && keepT && (+keepT.net_tons || 0) > 0) {
+            netTons = +keepT.net_tons;
+            net = Math.round(netTons * 2000);
+            gross = null; tare = null;
+        }
 
         // Material percentages
         const mats = {};
