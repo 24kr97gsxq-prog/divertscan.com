@@ -1990,7 +1990,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.7',
+    VERSION: '7.51.8',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -8328,7 +8328,17 @@ const DS = {
     // ============================================================
     // v7.51.0 — receiving-location filter (Metropolitan-received loads carry an MS- number)
     _reportLoc: 'all',
+    // v7.51.8 — reports and exports only ever see the selected project's loads.
+    // After "All Projects" on the Tickets tab, state.tickets holds up to 1,000 loads
+    // from every customer; the Oct PDF for Propak showed them as Project-to-Date.
+    _projTix(list) {
+        var p = this.state.currentProject;
+        list = list || this.state.tickets || [];
+        if (!p || !p.id) return list;
+        return list.filter(function (t) { return t.project_id === p.id; });
+    },
     _filterByLoc(list) {
+        list = this._projTix(list);
         var loc = this._reportLoc || 'all';
         if (loc === 'all') return list;
         return (list || []).filter(function (t) {
@@ -8349,7 +8359,7 @@ const DS = {
         // v7.51.0 — month groups of ALL loads, for the QuickBooks export (never filtered)
         this._monthGroupsAll = {};
         var allGrp_ = this._monthGroupsAll;
-        (this.state.tickets || []).forEach(function (t) { var k = String(t.ticket_date || t.service_date || '').substring(0, 7); if (k.length === 7) (allGrp_[k] = allGrp_[k] || []).push(t); });
+        this._projTix().forEach(function (t) { var k = String(t.ticket_date || t.service_date || '').substring(0, 7); if (k.length === 7) (allGrp_[k] = allGrp_[k] || []).push(t); });
         var locSel_ = document.getElementById('reportLocFilter');
         if (locSel_ && locSel_.value !== (this._reportLoc || 'all')) locSel_.value = this._reportLoc || 'all';
         var locBan_ = document.getElementById('reportLocBanner');
@@ -10973,7 +10983,7 @@ const DS = {
     // EXPORT
     // ============================================================
     exportCSV() {
-        const tickets = this.state.tickets;
+        const tickets = this._projTix();  // v7.51.8
         if (tickets.length === 0) { this.showToast('No tickets to export'); return; }
 
         const headers = ['ticket_number','ticket_date','hauler','gross_lbs','tare_lbs','net_lbs','net_tons',
@@ -10993,7 +11003,7 @@ const DS = {
     },
 
     exportJSON() {
-        const totals = this.calcTicketTotals(this.state.tickets);
+        const totals = this.calcTicketTotals(this._projTix());  // v7.51.8
         const data = {
             project: this.state.currentProject,
             summary: {
@@ -11006,7 +11016,7 @@ const DS = {
                 leed_target_pct: this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75,
                 target_met: totals.divRateExact >= (this.state.currentProject?.leed_target != null ? this.state.currentProject.leed_target : 75)
             },
-            tickets: this.state.tickets,
+            tickets: this._projTix(),
             exported_at: new Date().toISOString(),
             version: this.VERSION
         };
@@ -11075,7 +11085,7 @@ const DS = {
         tix.forEach(function(t){var dp=t.diversion_pct||0;var df=t.ticket_date||'';
             if(df.indexOf('-')>0){var d=df.split('-');df=parseInt(d[1])+'/'+parseInt(d[2])+'/'+d[0];}
             var g=+(t.gross_lbs)||0,ta=+(t.tare_lbs)||0;
-            var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td>'+(t.zone||'')+'</td><td class=r>'+DS.fmt(g)+'</td><td class=r>'+DS.fmt(ta)+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';
+            var r='<tr><td>'+df+'</td><td><b>'+(t.ticket_number||'')+'</b></td><td>'+(t.zone||'')+'</td><td class=r>'+(g?DS.fmt(g):'—')+'</td><td class=r>'+(ta?DS.fmt(ta):'—')+'</td><td class=r>'+DS.fmt(t.net_tons)+'</td>';  // v7.51.8: no weights → —
             // v7.51.3 — every % in the ticket table at one decimal (was 34.85% next to 20%)
             matKeys.forEach(function(k){r+='<td class=r>'+(+(t[k+'_pct'])||0).toFixed(1)+'%</td>';});
             var tn1=+(t.net_tons)||0,dv1=t.diverted_tons;var dpShow=(tn1>0&&dv1!=null&&dv1!=='')?(+dv1/tn1*100):(+dp||0);
@@ -11437,7 +11447,7 @@ const DS = {
         if (typeof XLSX === 'undefined') { this.showToast('SheetJS loading...'); return; }
         var proj = this.state.currentProject;
         if (!proj) { this.showToast('Select a project first'); return; }
-        var allTickets = this.state.tickets;
+        var allTickets = this._projTix();  // v7.51.8
         if (!allTickets.length) { this.showToast('No tickets'); return; }
 
         var wb = XLSX.utils.book_new();
@@ -11647,7 +11657,7 @@ const DS = {
     exportQBOInvoice() {
         const proj = this.state.currentProject;
         if (!proj) { this.showToast('Select a project first'); return; }
-        const tickets = this.state.tickets.filter(t => (parseFloat(t.net_tons) || 0) > 0);
+        const tickets = this._projTix().filter(t => (parseFloat(t.net_tons) || 0) > 0);  // v7.51.8
         if (!tickets.length) { this.showToast('No tickets with weight data'); return; }
         const JAGUAR_NAMES = ['jaguar','jaguar waste','jaguar waste management'];
         const PRODUCT = 'LEED Landfill diversion:Roll Off Service Sorting';
