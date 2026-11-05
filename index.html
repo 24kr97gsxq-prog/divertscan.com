@@ -1990,7 +1990,7 @@ document.addEventListener('keydown', function(e){
      ============================================================ -->
 <script>
 const DS = {
-    VERSION: '7.51.10',
+    VERSION: '7.51.11',
     // STANDING RULE: bump VERSION and set BUILD to the deploy date on
     // EVERY change that ships. It renders in the header sub-line so
     // anyone can tell at a glance which build they are looking at.
@@ -3179,7 +3179,7 @@ const DS = {
             // "Either condition" — broadest catch per design decision
             // Use Supabase 'or' filter syntax
             const url = "tickets?or=(project_id.eq." + PLACEHOLDER_ID + ",scan_type.eq.pi_scale_walkin)"
-                + "&select=id,ticket_number,ticket_date,captured_at,gross_lbs,tare_lbs,net_tons,hauler,driver_name,driver_id,project_id,scan_type,tare_source,zone,notes,audit_id,created_at"
+                + "&select=id,ticket_number,ticket_date,captured_at,gross_lbs,tare_lbs,net_tons,hauler,driver_name,driver_id,project_id,scan_type,tare_source,zone,notes,audit_id,created_at,mix_source"
                 + "&order=created_at.desc&limit=100";
             const tickets = await this.supabase(url) || [];
 
@@ -3277,6 +3277,8 @@ const DS = {
             driver_name: newDriver || current.driver_name,
             // Once reassigned to a real project, scan_type is no longer walk-in
             scan_type: 'pi_scale',
+            // v7.51.11: a walk-in has no split; on a real project it must reach Mix Review.
+            mix_source: current.mix_source || 'estimated',
             notes: (current.notes || '') + ' [Reassigned from Walk-in Inbox on ' + DS._todayLocal() + ']'
         };
 
@@ -4097,8 +4099,11 @@ const DS = {
                 // Aug 8: auto-applied percentages are ESTIMATES until a human has
                 // looked at the load and confirmed them in the Mix Review queue.
                 ticket.mix_source = 'estimated';
-            } else if (!isLeed) {
-                ticket.notes += ' Non-LEED project — no material default configured.';
+            } else {
+                // v7.51.11: no default mix for this project, so the load has no split yet.
+                // 'estimated' puts it in Material Mix Review so a person sets it.
+                ticket.mix_source = 'estimated';
+                if (!isLeed) ticket.notes += ' Non-LEED project — no material default configured.';
             }
         } catch (e) { console.warn('Auto-fill material mix skipped:', e); }
 
@@ -12029,6 +12034,16 @@ const DS = {
             ids.push({ id: q[i].id, idx: i, num: q[i].ticket_number });
         }
         if (!ids.length) { this.showToast(skipped ? 'All remaining rows have adjustments — confirm those individually' : 'Nothing to verify'); return; }
+        // v7.51.11: a load with no split yet can't be stamped verified.
+        var _matKeys = Object.keys(this.MATERIALS);
+        var _noSplit = ids.filter(function (x) {
+            var row = q[x.idx];
+            return row && !_matKeys.some(function (k) { return (row[k + '_pct'] || 0) > 0; });
+        });
+        if (_noSplit.length) {
+            this.showToast(_noSplit.map(function (x) { return x.num; }).join(', ') + ' has no split yet — enter it first');
+            return;
+        }
         // Anything implausible gets NAMED before a bulk stamp, not found after.
         var _odd = [];
         ids.forEach(function (x) {
@@ -12215,6 +12230,8 @@ const DS = {
             upd[k+'_pct'] = v;
         });
         if (edited && Math.abs(total - 100) > 0.5) { this.showToast('Percentages total ' + total + '% — must equal 100'); return; }
+        // v7.51.11: a load with no split yet can't be stamped verified.
+        if (total <= 0) { this.showToast('This load has no split yet — enter the percentages first'); return; }
         // Recompute diversion the same way the auto-apply does, honouring the
         // project's non-diverted streams (e.g. Hayes plastic).
         var proj = this.state.projects.find(function(p){ return p.id === t.project_id; });
