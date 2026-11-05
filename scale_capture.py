@@ -35,6 +35,7 @@ RECAPTURE_RISE_LBS = 1000  # Oct 14 2026: locked truck settles this much heavier
 NEW_TRUCK_DROP_LBS = 5000  # Oct 14 2026: falls this far below the capture -> next truck coming on
 SAME_TRUCK_LBS = 200       # Oct 14 2026: after a dip, settling within this of the capture = same truck
 NEXT_TRUCK_RISE_LBS = 1000 # Oct 29 2026: a next truck must settle this far ABOVE the lowest reading since the dip (roll-on), not just below the capture (roll-off)
+FEED_SILENT_SECS = 300     # Nov 5 2026: no scale data this long -> log SCALE FEED SILENT
 SYNC_INTERVAL = 10
 RETRY_INTERVAL = 30
 MAX_RETRIES = 100
@@ -293,7 +294,18 @@ def _increment_attempts(reading_id):
     except Exception:
         pass
 
+LIVE = {"weight": None, "fed_at": None}  # Nov 5 2026: what the scale is sending right now
+
+def live_status():
+    w = LIVE["weight"]
+    fed = LIVE["fed_at"]
+    return "live=%s feed_age=%s" % (
+        "%.0f lbs" % w if w is not None else "none",
+        "%ds" % (time.time() - fed) if fed is not None else "never")
+
 def print_status():
+    feed_silent = False
+    started = time.time()
     while True:
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -307,9 +319,15 @@ def print_status():
             c.execute("SELECT weight_lbs, timestamp FROM weight_readings ORDER BY id DESC LIMIT 1")
             last = c.fetchone()
             conn.close()
-            log.info("STATUS: total=%d synced=%d pending=%d last=%s",
+            log.info("STATUS: total=%d synced=%d pending=%d last=%s %s",
                      total, synced, pending,
-                     f"{last[0]} lbs at {last[1]}" if last else "none")
+                     f"{last[0]} lbs at {last[1]}" if last else "none", live_status())
+            silent_now = time.time() - (LIVE["fed_at"] or started) > FEED_SILENT_SECS
+            if silent_now and not feed_silent:
+                log.warning("SCALE FEED SILENT: %s", live_status())
+            elif feed_silent and not silent_now:
+                log.warning("SCALE FEED BACK: %s", live_status())
+            feed_silent = silent_now
         except Exception as e:
             log.error("Status error: %s", str(e))
         time.sleep(60)
@@ -387,6 +405,8 @@ def run_live_mode():
             if result is None:
                 continue
             weight_lbs, is_stable, weight_type = result
+            LIVE["weight"] = weight_lbs
+            LIVE["fed_at"] = time.time()
             stable_weight = detector.add_reading(weight_lbs, is_stable)
             if detector.last_state != prev_state:
                 log.info("SCALE: %s", detector.last_state)
