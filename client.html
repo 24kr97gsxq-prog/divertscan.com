@@ -274,20 +274,62 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
   .c,.card{border:1px solid #999!important;box-shadow:none!important;background:#fff!important;page-break-inside:avoid}
   *{color:#111!important}
 }
+
+/* ═══ v2.9.6 look and feel ═══ */
+.topnav-top{display:contents}
+.topnav-tabs{display:flex;align-items:center;gap:2px;position:relative;min-width:0}
+.topnav-menu-btn{display:none;background:none;border:1px solid var(--border-strong);border-radius:var(--r-sm);color:var(--nav-text);font-size:1rem;width:38px;height:34px;align-items:center;justify-content:center;cursor:pointer}
+@media(max-width:860px){
+.topnav{flex-wrap:wrap;height:auto;padding:0;gap:0;overflow:visible}
+.topnav-top{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 16px 2px}
+.topnav-brand{border-right:none;margin:0;padding:0}
+.topnav-menu-btn{display:flex}
+.topnav-tabs{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 28px 0 6px;
+-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+.topnav-tabs::-webkit-scrollbar{display:none}
+.topnav-link{height:42px;padding:0 10px}
+.topnav-right{display:none;position:absolute;right:12px;top:48px;margin:0;flex-direction:column;align-items:stretch;gap:6px;min-width:150px;
+background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-md);padding:8px;z-index:120}
+.topnav-right.open{display:flex}
+.topnav-btn{color:var(--text-m);text-align:left;font-size:.82rem}
+.signout-btn{width:100%}
+}
+.portal-foot{text-align:center;padding:18px 0 26px;font-size:.66rem;color:var(--text-d)}
+.portal-foot .build-stamp{margin-top:3px}
+select.fi{padding-right:30px!important;text-overflow:ellipsis}
+input[type=date].fi{min-height:42px;min-width:0;max-width:100%}
+.bs{background:var(--primary)}.bs:hover{background:var(--primary-hover);filter:none}
+.th-dark .bs{color:#1A1613}
+@media (prefers-color-scheme: dark){html.th-auto .bs{color:#1A1613}}
+.pp{display:block}
+.pp .pn{margin-bottom:2px}
+.pj-older{margin-top:4px}
+.pj-older summary{cursor:pointer;font-size:.78rem;font-weight:500;color:var(--text-m);padding:10px 2px;list-style-position:inside}
+.pj-older[open] summary{margin-bottom:6px}
+.exp-box{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:8px;font-size:.75rem}
+.exp-box summary{cursor:pointer;font-weight:500;color:var(--text-m);font-size:.74rem}
+#expCount{color:var(--text-d);font-weight:400;margin-left:6px}
+.ub-second{background:transparent;color:var(--text);border:1.5px solid var(--border-strong);padding:18px 14px;font-size:.95rem}
+#rcBar{position:static;background:none;padding:2px 0 14px}
 </style>
 </head>
 <body>
 
 <!-- ═══ NAV ═══ -->
 <nav class="topnav" id="nav">
-<div class="topnav-brand">Dalmex Recycling<span class="build-stamp" id="buildStamp"></span></div>
+<div class="topnav-top">
+<div class="topnav-brand">Dalmex Recycling</div>
+<button class="topnav-menu-btn" id="navMenuBtn" onclick="P.toggleNavMenu(event)" aria-label="Menu" aria-expanded="false">&#9776;</button>
+</div>
+<div class="topnav-tabs" id="navTabs">
 <button class="topnav-link active" onclick="P.go('dash')" data-v="dash">Reports</button>
 <button class="topnav-link" onclick="P.go('upload')" data-v="upload">Upload<span class="topnav-badge hidden" id="navBadge">0</span></button>
 <button class="topnav-link hidden" onclick="P.go('verify')" data-v="verify" id="navVerify">Upload &amp; Verify</button>
 <button class="topnav-link" onclick="P.go('drivers')" data-v="drivers">‍Drivers</button>
 <button class="topnav-link" onclick="P.go('recon')" data-v="recon">Reconcile</button>
 <button class="topnav-link" onclick="P.go('history')" data-v="history">History</button>
-<div class="topnav-right">
+</div>
+<div class="topnav-right" id="navMenu">
 <button class="topnav-btn" onclick="P.cycleTheme()" id="themeBtn" title="Auto / Light / Dark">Auto</button>
 <button class="signout-btn" onclick="P.logout()">Sign Out</button>
 </div>
@@ -318,7 +360,7 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 <button class="qs-x hidden" id="qsX" onclick="P.qclear()">✕</button>
 <div class="qs-res hidden" id="qsRes"></div>
 </div>
-<div class="c" id="projBar"><div class="ct">Select Project</div><div id="projList"></div></div>
+<div class="c" id="projBar"><div class="ct">Select Project</div><input class="fi hidden" id="pjFilter" placeholder="Find a project" autocomplete="off" oninput="P.renderPL('projList','dash')" style="margin-bottom:10px"><div id="projList"></div></div>
 <div id="dashContent" class="hidden">
 <div class="c">
 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
@@ -347,11 +389,9 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 </div>
 </div>
 <!-- Export-scope filters (Phase 1) — narrow the dataset before XLSX/CSV/PDF -->
-<div id="expFilters" style="background:rgba(0,201,167,.04);border:1px solid rgba(0,201,167,.2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:.75rem">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-<div style="font-weight:700;color:var(--primary);font-size:.65rem;text-transform:uppercase;letter-spacing:.06em">Export Scope</div>
-<div onclick="P.clearExportFilters()" style="font-size:.65rem;color:var(--text-d);cursor:pointer;text-decoration:underline">Clear</div>
-</div>
+<details id="expFilters" class="exp-box">
+<summary>Export options <span id="expCount"></span></summary>
+<div style="text-align:right;margin:6px 0"><span onclick="P.clearExportFilters()" style="font-size:.65rem;color:var(--text-d);cursor:pointer;text-decoration:underline">Clear</span></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
 <label style="font-size:.65rem;color:var(--text-m);font-weight:600">From</label>
 <input type="date" class="fi" id="expFrom" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
@@ -361,9 +401,8 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 <select class="fi" id="expZone" onchange="P.updateExportScope()" style="padding:5px 7px;font-size:.7rem;width:auto;flex:0 0 auto">
 <option value="">All zones</option><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option><option value="E">Zone E</option><option value="F">Zone F</option><option value="none">No Zone</option>
 </select>
-<span id="expCount" style="margin-left:auto;font-size:.65rem;color:var(--text-m);font-weight:700"></span>
 </div>
-</div>
+</details>
 <div style="display:flex;gap:6px;margin-bottom:8px">
 <input type="text" class="fi" id="dSearch" placeholder="Search ticket #..." oninput="P.searchTix(this.value)" style="padding:8px 10px;font-size:.8rem;flex:1">
 <select class="fi" id="dZoneFilter" onchange="P.searchTix(document.getElementById('dSearch').value)" style="padding:8px;font-size:.75rem;width:auto;flex:0 0 auto">
@@ -386,8 +425,8 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 <div style="font-size:.65rem;color:var(--text-d);margin-top:2px" id="vDriversSubtitle">Loading...</div>
 </div>
 <div style="display:flex;gap:6px;flex-wrap:wrap">
-<div class="b bsm bp" onclick="P.exportDriversPDF()" style="font-size:.7rem">PDF (All)</div>
-<div class="b bsm bp" onclick="P.exportDriversXLSX()" style="font-size:.7rem">XLSX (All)</div>
+<div class="b bsm bo" onclick="P.exportDriversPDF()" style="font-size:.7rem">PDF (All)</div>
+<div class="b bsm bo" onclick="P.exportDriversXLSX()" style="font-size:.7rem">XLSX (All)</div>
 </div>
 </div>
 <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -421,7 +460,7 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 </div>
 <div class="c">
 <div class="ct">Debris Photos <span style="font-size:.5rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-d)">(optional)</span> <span id="dBadge" class="hidden" style="background:var(--success);color:#fff;font-size:.55rem;padding:1px 5px;border-radius:6px">0</span></div>
-<div class="ub ub-hero" style="background:var(--success);color:#fff">Take Photo<input type="file" accept="image/*" capture="environment" onchange="P.addP('d',this)"></div>
+<div class="ub ub-hero ub-second">Take Photo<input type="file" accept="image/*" capture="environment" onchange="P.addP('d',this)"></div>
 <div class="ub ub-alt">Choose from photos<input type="file" accept="image/*" multiple onchange="P.addP('d',this)"></div>
 <div class="pr" id="dGrid"></div>
 </div>
@@ -458,7 +497,7 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 </div>
 <div class="c hidden" id="vfDebrisCard">
 <div class="ct">3 · Debris Photos <span style="font-size:.6rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-d)">(optional)</span> <span id="vfDCnt" style="color:var(--success)"></span></div>
-<div class="ub ub-hero" style="background:var(--success);color:#fff">Take Photo<input type="file" accept="image/*" capture="environment" onchange="P.vfAddD(this)"></div>
+<div class="ub ub-hero ub-second">Take Photo<input type="file" accept="image/*" capture="environment" onchange="P.vfAddD(this)"></div>
 <div class="ub ub-alt">Choose from photos<input type="file" accept="image/*" multiple onchange="P.vfAddD(this)"></div>
 <div class="pr" id="vfDThumbs"></div>
 <div style="font-size:.66rem;color:var(--text-d);margin-top:10px">Pictures of the load itself. These attach to the tickets in this batch.</div>
@@ -478,14 +517,13 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 
 <div class="c">
 <div class="ct">1 &middot; What are we checking?</div>
+<div class="fg"><label class="fl">Project</label>
+  <select class="fi" id="rcProj" onchange="P.rcReset()"></select></div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-  <div class="fg"><label class="fl">Project</label>
-    <select class="fi" id="rcProj" onchange="P.rcReset()"></select></div>
-  <div class="fg"><label class="fl">Hauler list covers</label>
-    <div style="display:flex;gap:6px">
-      <input type="date" class="fi" id="rcFrom" onchange="P.rcReset()">
-      <input type="date" class="fi" id="rcTo" onchange="P.rcReset()">
-    </div></div>
+  <div class="fg" style="margin-bottom:8px;min-width:0"><label class="fl" for="rcFrom">List from</label>
+    <input type="date" class="fi" id="rcFrom" onchange="P.rcReset()"></div>
+  <div class="fg" style="margin-bottom:8px;min-width:0"><label class="fl" for="rcTo">List to</label>
+    <input type="date" class="fi" id="rcTo" onchange="P.rcReset()"></div>
 </div>
 <div style="font-size:.66rem;color:var(--text-d)">Leave these blank and we'll use the first and last date on the list.</div>
 </div>
@@ -519,6 +557,7 @@ animation:tu .25s ease;box-shadow:var(--shadow-md)}
 <div id="hList"><div style="text-align:center;padding:16px;color:var(--text-d)">Loading...</div></div>
 </div></div>
 
+<div class="portal-foot">Dalmex Recycling<span class="build-stamp" id="buildStamp"></span></div>
 </div>
 
 <script>window.onerror=function(m,s,l){var e=document.getElementById('lErr');if(e){e.textContent='Script error line '+l+': '+m;e.style.display='block';}}</script>
@@ -555,7 +594,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.5', BUILD:'2026-11-04',
+VERSION:'2.9.6', BUILD:'2026-11-05',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -683,12 +722,13 @@ var ub=document.querySelector('.topnav-link[data-v="upload"]');if(ub)ub.classLis
 try{var ss=document.getElementById('dSort');if(ss)ss.value=P._getSortPref();}catch(e){}
 P.go('dash');P.loadBadge();},
 
-logout(){P.cl=null;P.pj=[];P.cp=null;P.tx=[];P._allTixCache=null;try{localStorage.removeItem('ds_cid');}catch(x){}
+logout(){P.closeNavMenu();P._pjLast=null;P.cl=null;P.pj=[];P.cp=null;P.tx=[];P._allTixCache=null;try{localStorage.removeItem('ds_cid');}catch(x){}
 document.getElementById('nav').style.display='none';['vDash','vUpload','vVerify','vDrivers','vHistory'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
 document.getElementById('vLogin').classList.remove('hidden');document.getElementById('lPw').value='';},
 
 go(v){['vDash','vUpload','vVerify','vDrivers','vHistory','vRecon'].forEach(function(id){var e=document.getElementById(id);if(e)e.classList.add('hidden');});
 document.querySelectorAll('.topnav-link').forEach(function(b){b.classList.toggle('active',b.dataset.v===v);});
+P.closeNavMenu();try{var nt=document.getElementById('navTabs'),na=nt&&nt.querySelector('.topnav-link.active');if(na)nt.scrollLeft=na.offsetLeft-(nt.clientWidth-na.offsetWidth)/2;}catch(x){}
 if(v==='dash'){document.getElementById('vDash').classList.remove('hidden');
 if(P.cp){document.getElementById('projBar').classList.add('hidden');document.getElementById('dashContent').classList.remove('hidden');}
 else if(P.pj.length===1){P.pickPj('dash',P.pj[0].id);}
@@ -703,10 +743,31 @@ async loadBadge(){var ids=P.pj.map(function(p){return p.id;});if(!ids.length)ret
 var d=await P.api('photo_queue?project_id=in.('+ids.join(',')+')&status=eq.pending&select=id');
 var n=d?d.length:0;var b=document.getElementById('navBadge');if(n>0){b.textContent=n;b.classList.remove('hidden');}else{b.classList.add('hidden');}},
 
-renderPL(el,mode){document.getElementById(el).innerHTML=P.pj.map(function(p){
+// v2.9.6: stacked cards, most recently active first, older projects tucked away.
+_pjCard(p,mode){var last=(P._pjLast||{})[p.id];
+var st=(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%');
+var meta=[p.client,p.location].filter(Boolean).map(P.esc).join(' • ');
 return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\''+mode+'\',\''+p.id+'\')">'+
-'<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');},
+'<div class="pn">'+P.esc(p.name)+'</div>'+(meta?'<div class="pm">'+meta+'</div>':'')+
+'<div class="pm">'+st+(last?' • Last load '+P._pjDate(last):'')+'</div></div>';},
+_pjDate(d){var x=new Date(d+'T12:00:00');var o={month:'short',day:'numeric'};if(x.getFullYear()!==new Date().getFullYear())o.year='numeric';return x.toLocaleDateString('en-US',o);},
+_pjFind(p,q){return [p.name,p.client,p.location,p.waste_hauler].some(function(v){return (v||'').toLowerCase().indexOf(q)>=0;});},
+renderPL(el,mode){var box=document.getElementById(el);if(!box)return;
+var last=P._pjLast||{};
+var list=P.pj.slice().sort(function(a,b){var x=last[a.id]||'',y=last[b.id]||'';return x<y?1:x>y?-1:(a.name||'').localeCompare(b.name||'');});
+var fi=el==='projList'?document.getElementById('pjFilter'):null;
+if(fi)fi.classList.toggle('hidden',P.pj.length<6);
+var q=fi&&!fi.classList.contains('hidden')?fi.value.trim().toLowerCase():'';
+if(q){var hit=list.filter(function(p){return P._pjFind(p,q);});
+box.innerHTML=hit.length?hit.map(function(p){return P._pjCard(p,mode);}).join(''):'<div style="text-align:center;padding:12px;color:var(--text-d);font-size:.75rem">No projects matching "'+P.esc(fi.value.trim())+'"</div>';return;}
+var cut=new Date(Date.now()-60*864e5).toISOString().substring(0,10);
+var isNew=function(p){return (last[p.id]||'')>=cut;};
+var recent=P._pjLast?list.filter(isNew):list,older=P._pjLast?list.filter(function(p){return !isNew(p);}):[];
+if(!recent.length){recent=older;older=[];}
+box.innerHTML=recent.map(function(p){return P._pjCard(p,mode);}).join('')+
+(older.length?'<details class="pj-older"><summary>Older projects ('+older.length+')</summary>'+older.map(function(p){return P._pjCard(p,mode);}).join('')+'</details>':'');
+if(!P._pjLast&&!P._pjLastBusy&&P.cl){P._pjLastBusy=true;P.allTix().then(function(rows){var m={};(rows||[]).forEach(function(t){var d=t.ticket_date||'';if(d&&(!m[t.project_id]||d>m[t.project_id]))m[t.project_id]=d;});
+P._pjLast=m;P._pjLastBusy=false;var bar=document.getElementById('projBar');if(el==='projList'&&bar&&!bar.classList.contains('hidden'))P.renderPL(el,mode);}).catch(function(){P._pjLastBusy=false;});}},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
 P.tx=(await P.allTix()).filter(function(t){return t.project_id===id;});
@@ -1077,6 +1138,7 @@ document.getElementById('dMeta').textContent=[p.client,p.waste_hauler,p.location
 document.getElementById('dStats').innerHTML='<div class="sc"><div class="sv">'+t.length+'</div><div class="sl">Tickets</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(tot)+'</div><div class="sl">Total T</div></div>'+
 (p.leed_version==='none'?'':'<div class="sc"><div class="sv" style="color:var(--success)">'+P.f(dv)+'</div><div class="sl">Diverted</div></div>');
+document.getElementById('dStats').style.gridTemplateColumns='repeat('+(p.leed_version==='none'?2:3)+',1fr)';
 // Data freshness (Aug 30): consultants ask "as of when?" — answer it on the page.
 var lastDate='';t.forEach(function(x){if(x.ticket_date&&x.ticket_date>lastDate)lastDate=x.ticket_date;});
 var stampEl=document.getElementById('dFreshness');
@@ -1243,8 +1305,8 @@ list.innerHTML=filtered.map(function(d){
     'font-family:var(--font);font-weight:700;font-size:.85rem;line-height:1;'+
     'display:inline-flex;align-items:center;justify-content:center;padding:0">i</button>';
   return '<div class="c" onclick="'+rowAction+'" style="cursor:pointer">'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'+
-      '<div style="flex:1;min-width:140px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+      '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           (hasToken?'<span style="font-size:.95rem;line-height:1;flex-shrink:0"></span>':'')+
           '<div style="font-weight:700;color:var(--text);font-size:.95rem;letter-spacing:-.01em">'+P.esc(d.driver_name)+'</div>'+
@@ -1258,9 +1320,6 @@ list.innerHTML=filtered.map(function(d){
         '</div>'+
         infoBtn+
       '</div>'+
-    '</div>'+
-    '<div style="margin-top:8px;font-size:.6rem;color:var(--text-d);text-align:center">'+
-      (hasToken?'Tap row to open loadbook · tap "i" for exports &amp; details':'Tap row for driver details (no loadbook yet)')+
     '</div>'+
   '</div>';
 }).join('');
@@ -2089,10 +2148,8 @@ return '<option value="'+P.esc(h)+'"'+(proj.waste_hauler&&proj.waste_hauler===h?
 sel.onchange=function(){if(sel.value==='__other'){var custom=prompt('Enter hauler name:');if(custom){var opt=document.createElement('option');opt.value=custom;opt.textContent=custom;sel.insertBefore(opt,sel.lastElementChild);sel.value=custom;}}};},
 filterUploadProjects(q){q=(q||'').toLowerCase();var el=document.getElementById('uProjList');
 if(!q){P.renderPL('uProjList','upload');return;}
-var filtered=P.pj.filter(function(p){return (p.name||'').toLowerCase().indexOf(q)>=0||(p.client||'').toLowerCase().indexOf(q)>=0||(p.location||'').toLowerCase().indexOf(q)>=0||(p.waste_hauler||'').toLowerCase().indexOf(q)>=0;});
-el.innerHTML=filtered.map(function(p){return '<div class="pp" onclick="P.pickPj(\'upload\',\''+p.id+'\')">'+
-'<div class="pn">'+P.esc(p.name)+'</div><div class="pm">'+[p.client,p.location].filter(Boolean).join(' • ')+'</div>'+
-'<div class="pm">'+(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_version||'v4')+' • Target: '+(p.leed_target!=null?p.leed_target:50)+'%')+'</div></div>';}).join('');
+var filtered=P.pj.filter(function(p){return P._pjFind(p,q);});
+el.innerHTML=filtered.map(function(p){return P._pjCard(p,'upload');}).join('');
 if(!filtered.length)el.innerHTML='<div style="text-align:center;padding:12px;color:var(--text-d);font-size:.75rem">No projects matching "'+P.esc(q)+'"</div>';},
 // Max 10 per section per submission: keeps the AI review pass ~1 min, matches
 // the admin review grid, and bounds how much one failed cellular upload costs.
@@ -2958,7 +3015,7 @@ var h='<div style="border:1px solid var(--border);border-radius:var(--r);padding
 h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="ct" style="margin:0">Monthly Trend</div>';
 h+='<div style="font-size:.55rem;color:var(--text-d)"><span style="display:inline-block;width:8px;height:8px;background:var(--success);border-radius:2px;vertical-align:middle"></span> Diverted &nbsp;';
 h+='<span style="display:inline-block;width:8px;height:8px;background:var(--danger);border-radius:2px;vertical-align:middle"></span> Landfill</div></div>';
-h+='<div style="display:flex;align-items:flex-end;gap:3px;height:120px;padding-bottom:20px;position:relative">';
+h+='<div style="display:flex;align-items:flex-end;gap:3px;height:160px;position:relative">';
 if(!isNL){h+='<div style="position:absolute;left:0;right:0;bottom:'+(20+100*tgt/100)+'px;border-top:1.5px dashed var(--warning);z-index:1"></div>';
 h+='<div style="position:absolute;right:2px;bottom:'+(22+100*tgt/100)+'px;font-size:.5rem;color:var(--warning);font-weight:700;z-index:2">'+tgt+'% target</div>';}
 keys.forEach(function(k){var d=months[k],pct=d.tons/maxT*100,divPct=d.tons>0?d.div/d.tons:0;
@@ -2983,24 +3040,16 @@ if(k===pym){lst.tons+=+(t.net_tons)||0;lst.div+=+(t.diverted_tons)||0;lst.count+
 if(lst.count===0&&cur.count===0){document.getElementById('dComparison').innerHTML='';return;}
 // v2.8.2 — each month as it is judged: reported months as reported (whole number)
 var curRate=P.rateText(cur.tons>0?cur.div/cur.tons*100:0,ym,P._rateTgt()),lstRate=P.rateText(lst.tons>0?lst.div/lst.tons*100:0,pym,P._rateTgt());
-// the change is shown to as many decimals as the two rates it compares (75 vs 76 → "1")
-var rdDec=Math.max((String(curRate).split('.')[1]||'').length,(String(lstRate).split('.')[1]||'').length);
-var tonsDiff=cur.tons-lst.tons,rateDiff=parseFloat(curRate)-parseFloat(lstRate);
+// v2.9.6: the running month is never scored against a finished one (no red drop on the 1st).
 var h='<div style="display:flex;gap:8px">';
-h+='<div style="flex:1;background:var(--primary-glow);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
-h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[now.getMonth()+1]+' (current)</div>';
+h+='<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
+h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[now.getMonth()+1]+' (so far)</div>';
 h+='<div style="font-family:var(--mono);font-size:1rem;font-weight:800">'+P.f(cur.tons)+'T</div>';
-h+='<div style="font-size:.6rem;color:var(--text-m)">'+cur.count+' tix'+(isNL?'':' • '+curRate+'% div')+'</div></div>';
+h+='<div style="font-size:.6rem;color:var(--text-m)">'+(cur.count?cur.count+' tix'+(isNL?'':' • '+curRate+'% div'):'No loads yet')+'</div></div>';
 h+='<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">';
 h+='<div style="font-size:.55rem;color:var(--text-d);font-weight:600;text-transform:uppercase">'+mn[prev.getMonth()+1]+' (prev)</div>';
 h+='<div style="font-family:var(--mono);font-size:1rem;font-weight:800">'+P.f(lst.tons)+'T</div>';
 h+='<div style="font-size:.6rem;color:var(--text-m)">'+lst.count+' tix'+(isNL?'':' • '+lstRate+'% div')+'</div></div>';
-if(lst.tons>0){h+='<div style="flex:0 0 60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">';
-var ta=tonsDiff>=0?'▲':'▼',tc=tonsDiff>=0?'var(--success)':'var(--danger)';
-h+='<div style="font-size:.7rem;font-weight:800;color:'+tc+'">'+ta+Math.abs(tonsDiff).toFixed(1)+'T</div>';
-if(!isNL){var ra=rateDiff>=0?'▲':'▼',rc=rateDiff>=0?'var(--success)':'var(--danger)';
-h+='<div style="font-size:.6rem;font-weight:700;color:'+rc+'">'+ra+Math.abs(rateDiff).toFixed(rdDec)+'%</div>';}
-h+='</div>';}
 h+='</div>';document.getElementById('dComparison').innerHTML=h;},
 
 renderNewBadge(){if(!P.cl||!P.cl.last_login)return;
@@ -3145,7 +3194,7 @@ rcInit(){
   var sel=document.getElementById('rcProj');
   if(sel&&!sel.options.length){
     sel.innerHTML=P.pj.map(function(p){return '<option value="'+p.id+'">'+P.esc(p.name)+'</option>';}).join('');
-    if(P.cp)sel.value=P.cp;
+    if(P.cp)sel.value=P.cp.id;
   }
   P.rcLoadHist();
 },
@@ -3454,6 +3503,9 @@ try{if(P.cp&&P.tx&&document.getElementById('dTable'))P.renderTbl(P.tx);}catch(e)
 // Re-render month modal if open
 try{if(document.getElementById('moList')&&P._mtx)P.renderMoTix(P._mtx);}catch(e){}
 P.toast('Sorted: '+({added_desc:'Newest added',added_asc:'Oldest added',date_desc:'Date: newest',date_asc:'Date: oldest'}[val]||val));},
+toggleNavMenu(ev){if(ev)ev.stopPropagation();var m=document.getElementById('navMenu'),b=document.getElementById('navMenuBtn');if(!m)return;var o=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',o?'true':'false');},
+closeNavMenu(){var m=document.getElementById('navMenu'),b=document.getElementById('navMenuBtn');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');},
+
 toast(m){var e=document.createElement('div');e.className='toast';e.textContent=m;document.body.appendChild(e);setTimeout(function(){e.remove();},2500);},
 
 async init(){P.loadTheme();document.getElementById('nav').style.display='none';
@@ -3463,6 +3515,7 @@ if(c&&c.length){P.cl=c[0];
 await P.loadPj();P.showApp();return;}}}catch(x){}
 document.getElementById('vLogin').classList.remove('hidden');}
 };
+document.addEventListener('click',function(ev){var m=document.getElementById('navMenu');if(m&&m.classList.contains('open')&&!m.contains(ev.target))P.closeNavMenu();});
 P.init();
 </script>
 </body>
