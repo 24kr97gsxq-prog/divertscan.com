@@ -322,6 +322,31 @@ background:none;border:none;box-shadow:none;padding:0}
 #expGrid{display:grid!important;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}
 #expGrid .fi{width:100%!important;min-width:0}
 #expGrid select.fi{grid-column:1/-1}
+/* v2.9.9 — desktop. Phones are untouched (everything below sits behind min-width queries). */
+@media(min-width:800px){
+  /* full-screen views: line the header up with the 760px content column */
+  .topnav:not(#nav){padding-left:max(12px,calc((100% - 760px)/2 + 16px));padding-right:max(12px,calc((100% - 760px)/2 + 16px))}
+}
+@media(min-width:1100px){
+  /* larger type on big screens */
+  .sv{font-size:1.55rem}.sl{font-size:.66rem}
+  .mb{font-size:.82rem;margin-bottom:9px}.ml{width:84px}.mp{width:110px;font-size:.78rem}.mp .mpt{font-size:.7rem}
+  .mt{height:8px}
+  .t{font-size:.84rem}.t th{font-size:.68rem}
+  .ct{font-size:.76rem}
+  #dMeta{font-size:.78rem!important}#dName{font-size:1.35rem!important}
+  #dFreshness{font-size:.72rem!important}
+  .gbar .gtl{font-size:.66rem}
+  /* project dashboard: two columns, tickets full width underneath */
+  #app:has(#dashContent:not(.hidden)){max-width:1240px}
+  #dashContent:not(.hidden){display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:0 18px;align-items:start}
+  #dashContent>.c:first-child{grid-column:1;grid-row:1}
+  #dMonthly{grid-column:2;grid-row:1}
+  #dashContent>.c:last-child{grid-column:1/-1;grid-row:2}
+  #dMonthly .c{padding:16px 18px;margin-bottom:10px}
+  #dMonthly [style*="font-size:.6rem"]{font-size:.72rem!important}#dMonthly [style*="font-size:.8rem"]{font-size:.92rem!important}
+}
+.tbl-more{text-align:center;padding:12px 0 2px}
 .portal-foot{text-align:center;padding:18px 0 26px;font-size:.66rem;color:var(--text-d)}
 .portal-foot .build-stamp{margin-top:3px}
 select.fi{padding-right:30px!important;text-overflow:ellipsis}
@@ -623,7 +648,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.8', BUILD:'2026-11-08',
+VERSION:'2.9.9', BUILD:'2026-11-08',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -1751,6 +1776,10 @@ document.getElementById('dMonthly').innerHTML=(keys.length?'<div class="ct" styl
 renderTbl(list){var el=document.getElementById('dTable');if(!el)return;
 if(!list||!list.length){el.innerHTML='<div style="text-align:center;padding:10px;color:var(--text-d);font-size:.75rem">No tickets</div>';return;}
 list=this._sortTix(list);
+// v2.9.9 — show the newest 50, then "Show more". A new project or filter starts again at 50.
+var tKey=(P.cp?P.cp.id:'')+'|'+list.length+'|'+(list[0]?list[0].id:'');
+if(P._tblKey!==tKey){P._tblKey=tKey;P._tblN=50;}
+P._tblList=list;var fullN=list.length;list=list.slice(0,P._tblN);
 try{
 var _nl=P.cp&&P.cp.leed_version==='none';
 var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+'<th class="ctr">Zone</th><th class="ctr"></th></tr></thead><tbody>';
@@ -1760,7 +1789,11 @@ var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px">
 h+='<tr onclick="P.showTk(\''+t.id+'\')" style="cursor:pointer"><td style="white-space:nowrap">'+P.fdt(t)+'</td><td class="bld">'+t.ticket_number+'</td>'+
 '<td>'+(t.driver_name||'<span style="color:var(--text-d)">—</span>')+'</td>'+
 '<td class="r m">'+P.f(t.net_tons)+'</td>'+(_nl?'':'<td class="r m bld" style="'+dc+'">'+dp+'%</td>')+'<td class="ctr" style="font-weight:700;color:var(--warning)">'+(t.zone||'')+'</td><td class="ctr">'+pi+'</td></tr>';});
-h+='</tbody></table>';el.innerHTML=h;}catch(e){el.innerHTML='<div style="color:var(--danger);font-size:.75rem;padding:10px">Table error: '+e.message+'</div>';}},
+h+='</tbody></table>';
+if(fullN>list.length)h+='<div class="tbl-more"><div class="b bsm bo" onclick="P.moreTbl()">Show more ('+(fullN-list.length)+' more of '+fullN+')</div></div>';
+else if(fullN>50)h+='<div class="tbl-more" style="font-size:.66rem;color:var(--text-d)">All '+fullN+' tickets shown</div>';
+el.innerHTML=h;}catch(e){el.innerHTML='<div style="color:var(--danger);font-size:.75rem;padding:10px">Table error: '+e.message+'</div>';}},
+moreTbl(){P._tblN=(P._tblN||50)+100;var k=P._tblKey;P.renderTbl(P._tblList||P.tx);P._tblKey=k;},
 searchTix(q){var filtered=P.tx;var zf=document.getElementById('dZoneFilter');
 if(zf&&zf.value){var zv=zf.value;if(zv==='none')filtered=filtered.filter(function(t){return !t.zone;});else filtered=filtered.filter(function(t){return t.zone===zv;});}
 if(q&&q.trim()){var lq=q.toLowerCase();filtered=filtered.filter(function(t){return(t.ticket_number||'').toLowerCase().indexOf(lq)>=0||(t.hauler||'').toLowerCase().indexOf(lq)>=0||(t.driver_name||'').toLowerCase().indexOf(lq)>=0||(t.ticket_date||'').indexOf(lq)>=0;});}
