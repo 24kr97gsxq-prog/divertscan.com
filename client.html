@@ -347,6 +347,45 @@ background:none;border:none;box-shadow:none;padding:0}
   #dMonthly [style*="font-size:.6rem"]{font-size:.72rem!important}#dMonthly [style*="font-size:.8rem"]{font-size:.92rem!important}
 }
 .tbl-more{text-align:center;padding:12px 0 2px}
+/* v2.10.0 — desktop tools */
+.t th.srt{cursor:pointer;user-select:none;white-space:nowrap}
+.t th.srt:hover{color:var(--text)}
+.t th.srt.on{color:var(--primary)}
+.tr-col{cursor:pointer;border-radius:4px;transition:background .12s}
+.tr-col:hover{background:var(--inset)}
+.pj-stat{display:flex;align-items:baseline;gap:10px;margin-top:8px;font-size:.72rem;color:var(--text-m)}
+.pj-rate{font-family:var(--mono);font-weight:600;font-size:1rem}
+.desk-only{display:none!important}
+.print-foot{display:none}.print-only{display:none}
+@media(min-width:1100px){
+  .desk-only{display:inline-flex!important}
+  /* ticket details open as a side panel; the list stays visible on the left */
+  #tkDtl{left:auto!important;width:min(580px,46vw);border-left:1px solid var(--border-strong);box-shadow:-12px 0 32px rgba(20,20,19,.12)}
+  /* project picker: cards in a grid */
+  #app:has(#projBar:not(.hidden)):has(#dashContent.hidden){max-width:1240px}
+  #projList{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  #projList>.pp{margin:0}
+  #projList>.pj-older,#projList>div:not(.pp){grid-column:1/-1}
+}
+@media print{
+  @page{margin:14mm}
+  #nav,.qs-wrap,#projBar,.b,.mo-quick,.tbl-more,.all-note,#expFilters,.portal-foot,#dashContent>.c:last-child{display:none!important}
+  #app{max-width:none!important;padding:0!important}
+  #dashContent:not(.hidden){display:block!important}
+  .gbar .gtick{background:#111!important}
+  .print-only{display:block!important;font-family:var(--display);font-size:15pt;font-weight:600;margin:0 0 10px}
+  #moDtl,#tkDtl{background:#fff!important}
+  .print-foot{display:block;margin-top:14px;font-size:9pt;color:#555!important;text-align:center}
+  /* a month or ticket view that is open prints on its own */
+  body:has(#moDtl) #app,body:has(#tkDtl) #app,body:has(#tkDtl) #moDtl{display:none!important}
+  #moDtl,#tkDtl{position:static!important;overflow:visible!important;width:auto!important;box-shadow:none!important;border:0!important}
+  #moDtl .topnav,#tkDtl .topnav{position:static!important;border:0}
+  #moDtl .topnav .topnav-right,#moDtl .topnav>div:first-child:not(.topnav-brand),#tkDtl .topnav-right{display:none!important}
+  #moDtl .mo-dl,#moDtl #moSearch{display:none!important}
+  #moDtl .c:has(#moSearch),#moDtl .c:has(.mo-dl){display:none!important}
+  .t{font-size:8.5pt}.t th,.t td{padding:4px 6px}
+}
+
 .portal-foot{text-align:center;padding:18px 0 26px;font-size:.66rem;color:var(--text-d)}
 .portal-foot .build-stamp{margin-top:3px}
 select.fi{padding-right:30px!important;text-overflow:ellipsis}
@@ -420,6 +459,7 @@ input[type=date].fi{min-height:42px;min-width:0;max-width:100%}
 <div style="min-width:0"><div id="dName" style="font-weight:700;font-size:1.05rem;letter-spacing:-.02em"></div>
 <div id="dMeta" style="font-size:.65rem;color:var(--text-d);margin-top:2px"></div></div>
 <div style="display:flex;gap:6px;flex-shrink:0">
+<div class="b bsm bo desk-only" onclick="window.print()" title="Print or save as PDF">Print</div>
 <div class="b bsm bo" onclick="P.editProj()">Edit</div>
 <div class="b bsm bo" onclick="P.backToProj()">← Back</div>
 </div></div>
@@ -429,6 +469,7 @@ input[type=date].fi{min-height:42px;min-width:0;max-width:100%}
 <div id="dComparison" style="margin-top:8px"></div>
 <div class="ct" style="margin-top:12px">Materials</div><div id="dMats"></div>
 <div id="dZones"></div>
+<div class="print-foot" id="dPrintFoot"></div>
 </div>
 <div id="dMonthly"></div>
 <div class="c">
@@ -648,7 +689,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.9', BUILD:'2026-11-08',
+VERSION:'2.10.0', BUILD:'2026-11-08',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -803,7 +844,13 @@ var st=(p.leed_version==='none'?'Non-LEED • Tracking Only':'LEED '+(p.leed_ver
 var meta=[p.client,p.location].filter(Boolean).map(P.esc).join(' • ');
 return '<div class="pp'+(P.cp&&P.cp.id===p.id?' act':'')+'" onclick="P.pickPj(\''+mode+'\',\''+p.id+'\')">'+
 '<div class="pn">'+P.esc(p.name)+'</div>'+(meta?'<div class="pm">'+meta+'</div>':'')+
-'<div class="pm">'+st+(last?' • Last load '+P._pjDate(last):'')+'</div></div>';},
+'<div class="pm">'+st+(last?' • Last load '+P._pjDate(last):'')+'</div>'+P._pjStatHtml(p,last)+'</div>';},
+// v2.10.0 — project-to-date rate and size on each card (same rule as the dashboard gauge)
+_pjStatHtml(p,last){var x=(P._pjStat||{})[p.id];if(!x||!x.n)return '';
+var h='<div class="pj-stat">';
+if(p.leed_version!=='none'){var tgt=p.leed_target!=null?p.leed_target:50,k=(last||'').substring(0,7),rx=x.tons>0?x.div/x.tons*100:0,rv=P.rateVal(rx,k);
+var c=rv>=tgt?'var(--success)':rv>=tgt*.67?'var(--warning)':'var(--danger)';h+='<span class="pj-rate" style="color:'+c+'">'+P.runText(rx,k,tgt)+'%</span>';}
+return h+'<span>'+x.n.toLocaleString()+(x.n===1?' load':' loads')+' \u00b7 '+P.f(x.tons)+' T</span></div>';},
 _pjDate(d){var x=new Date(d+'T12:00:00');var o={month:'short',day:'numeric'};if(x.getFullYear()!==new Date().getFullYear())o.year='numeric';return x.toLocaleDateString('en-US',o);},
 _pjFind(p,q){return [p.name,p.client,p.location,p.waste_hauler].some(function(v){return (v||'').toLowerCase().indexOf(q)>=0;});},
 renderPL(el,mode){var box=document.getElementById(el);if(!box)return;
@@ -820,8 +867,9 @@ var recent=P._pjLast?list.filter(isNew):list,older=P._pjLast?list.filter(functio
 if(!recent.length){recent=older;older=[];}
 box.innerHTML=recent.map(function(p){return P._pjCard(p,mode);}).join('')+
 (older.length?'<details class="pj-older"><summary>Older projects ('+older.length+')</summary>'+older.map(function(p){return P._pjCard(p,mode);}).join('')+'</details>':'');
-if(!P._pjLast&&!P._pjLastBusy&&P.cl){P._pjLastBusy=true;P.allTix().then(function(rows){var m={};(rows||[]).forEach(function(t){var d=t.ticket_date||'';if(d&&(!m[t.project_id]||d>m[t.project_id]))m[t.project_id]=d;});
-P._pjLast=m;P._pjLastBusy=false;var bar=document.getElementById('projBar');if(el==='projList'&&bar&&!bar.classList.contains('hidden'))P.renderPL(el,mode);}).catch(function(){P._pjLastBusy=false;});}},
+if(!P._pjLast&&!P._pjLastBusy&&P.cl){P._pjLastBusy=true;P.allTix().then(function(rows){var m={},st={};(rows||[]).forEach(function(t){var d=t.ticket_date||'';if(d&&(!m[t.project_id]||d>m[t.project_id]))m[t.project_id]=d;
+var x=st[t.project_id]||(st[t.project_id]={n:0,tons:0,div:0});x.n++;x.tons+=+(t.net_tons)||0;x.div+=+(t.diverted_tons)||0;});
+P._pjStat=st;P._pjLast=m;P._pjLastBusy=false;var bar=document.getElementById('projBar');if(el==='projList'&&bar&&!bar.classList.contains('hidden'))P.renderPL(el,mode);}).catch(function(){P._pjLastBusy=false;});}},
 
 async pickPj(mode,id){if(mode==='dash'){P.cp=P.pj.find(function(p){return p.id===id;});if(!P.cp)return;
 P.tx=(await P.allTix()).filter(function(t){return t.project_id===id;});
@@ -1207,6 +1255,7 @@ var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tot>0?m
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%<span class="mpt">'+P.f(mc[k])+' T</span></div></div>';});
 document.getElementById('dMats').innerHTML=mh||'<div style="font-size:.7rem;color:var(--text-d)">No data</div>';
 document.getElementById('dZones').innerHTML=P.renderZoneSummary(t);
+try{document.getElementById('dPrintFoot').textContent='Dalmex Recycling \u00b7 Waste diversion summary for '+p.name+' \u00b7 weight-based, from certified truck scale tickets \u00b7 printed '+new Date().toLocaleDateString();}catch(e){}
 try{P.renderTrend();}catch(e){console.error('Trend error:',e);}
 try{P.renderComparison();}catch(e){console.error('Comparison error:',e);}
 try{P.renderNewBadge();}catch(e){console.error('Badge error:',e);}
@@ -1782,7 +1831,7 @@ if(P._tblKey!==tKey){P._tblKey=tKey;P._tblN=50;}
 P._tblList=list;var fullN=list.length;list=list.slice(0,P._tblN);
 try{
 var _nl=P.cp&&P.cp.leed_version==='none';
-var h='<table class="t"><thead><tr><th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Tons</th>'+(_nl?'':'<th class="r">Div%</th>')+'<th class="ctr">Zone</th><th class="ctr"></th></tr></thead><tbody>';
+var h='<table class="t"><thead><tr>'+P._th('date','Date','')+P._th('num','Ticket#','')+P._th('driver','Driver','')+P._th('tons','Tons','r')+(_nl?'':P._th('div','Div%','r'))+P._th('zone','Zone','ctr')+'<th class="ctr"></th></tr></thead><tbody>';
 list.forEach(function(t){var dp=t.diversion_pct||0;var dc=dp>=75?'color:var(--success)':dp>=50?'color:var(--warning)':'color:var(--danger)';
 var hs=t.scale_ticket_image,hd=Array.isArray(t.debris_images)&&t.debris_images.length>0;
 var pi=hs&&hd?'<span class="hp"></span><span class="hp" style="margin-left:1px"></span>':hs||hd?'<span class="hp"></span>':'<span class="np"></span>';
@@ -1801,6 +1850,7 @@ P.renderTbl(filtered);},
 
 // TICKET DETAIL
 showTk(id){var t=P.tx.find(function(x){return x.id===id;});if(!t)return;
+var _old=document.getElementById('tkDtl');if(_old)_old.remove();  // v2.10.0: desktop side panel swaps tickets in place
 var dp=t.diversion_pct||0,dc=dp>=75?'var(--success)':dp>=50?'var(--warning)':'var(--danger)';
 var mats='';Object.keys(MT).forEach(function(k){var pct=t[k+'_pct']||0;if(pct<=0||!P._matShown(+pct))return;var matTons=+(t.net_tons||0)*(pct/100);
 mats+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+(+pct).toFixed(1)+'%<span class="mpt">'+P.f(matTons)+' T</span></div></div>';});
@@ -1814,7 +1864,7 @@ el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overfl
 el.innerHTML='<div class="topnav" style="z-index:201"><div class="topnav-brand" style="border-right:none">Ticket '+t.ticket_number+'</div>'+
 '<div class="topnav-right"><div class="b bsm" onclick="P.shareTk(\''+t.id+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.6rem">Share</div>'+
 '<div onclick="document.getElementById(\'tkDtl\').remove()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕ Close</div></div></div>'+
-'<div class="wrap"><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fdt(t)+' • '+(t.hauler||'')+(t.driver_name?' • Driver: <strong>'+P.esc(t.driver_name)+'</strong>':'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
+'<div class="wrap"><div class="print-only">'+P.esc(P.cp?P.cp.name:'')+' \u2014 Ticket '+P.esc(t.ticket_number||'')+'</div><div class="c"><div style="font-size:.75rem;color:var(--text-m);margin-bottom:8px">'+P.fdt(t)+' • '+(t.hauler||'')+(t.driver_name?' • Driver: <strong>'+P.esc(t.driver_name)+'</strong>':'')+' • '+(P.cp?P.cp.name:'')+'</div>'+
 '<div class="sg"><div class="sc"><div class="sv">'+P.fw(t.gross_lbs)+'</div><div class="sl">Gross lbs</div></div>'+
 '<div class="sc"><div class="sv">'+P.fw(t.tare_lbs)+'</div><div class="sl">Tare lbs</div></div>'+
 '<div class="sc"><div class="sv bld">'+P.f(t.net_tons)+'</div><div class="sl">Net Tons</div></div>'+
@@ -1985,7 +2035,7 @@ el.innerHTML='<div class="topnav" style="z-index:201">'+
 '<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">Excel</div>'+
 '<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">PDF</div>'+
 '</div></div>'+
-'<div class="wrap">'+
+'<div class="wrap"><div class="print-only">'+P.esc(P.cp?P.cp.name:'')+' \u2014 '+label+'</div>'+
 // v2.9.7 — this month's downloads, big enough to tap on a phone
 '<div class="c"><div class="ct" style="margin:0 0 6px">Download '+label+' report</div><div class="mo-dl">'+
 '<div class="b bp" onclick="P.exportMoXLSX(\''+key+'\')">↓ Excel</div>'+
@@ -2012,7 +2062,7 @@ if(!tix.length){el.innerHTML='<div class="c" style="text-align:center;color:var(
 tix=this._sortTix(tix);
 var _nl2=P.cp&&P.cp.leed_version==='none';
 var h='<div class="c" style="padding:8px"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="t"><thead><tr>';
-h+='<th>Date</th><th>Ticket#</th><th>Driver</th><th class="r">Net Tons</th>'+(_nl2?'':'<th class="r">Div%</th>')+'<th class="ctr">Zone</th><th class="ctr"></th>';
+h+=P._th('date','Date','')+P._th('num','Ticket#','')+P._th('driver','Driver','')+P._th('tons','Net Tons','r')+(_nl2?'':P._th('div','Div%','r'))+P._th('zone','Zone','ctr')+'<th class="ctr"></th>';
 h+='</tr></thead><tbody>';
 var sumTons=0,sumDiv=0;
 tix.forEach(function(t){
@@ -3093,7 +3143,8 @@ h+='<div style="position:absolute;right:2px;bottom:'+(22+100*tgt/100)+'px;font-s
 keys.forEach(function(k){var d=months[k],pct=d.tons/maxT*100,divPct=d.tons>0?d.div/d.tons:0;
 var divH=pct*divPct,lfH=pct-divH;var pts=k.split('-');var label=mn[+pts[1]];
 var rateX=d.tons>0?d.div/d.tons*100:0,rate=P.rateText(rateX,k,tgt),rateV=P.rateVal(rateX,k);var rc=rateV>=tgt?'var(--success)':rateV>=tgt*.67?'var(--warning)':'var(--danger)';// v2.8.2 — reported months as reported
-h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">';
+var tip=mn[+pts[1]]+' '+pts[0]+' \u00b7 '+d.count+(d.count===1?' load':' loads')+' \u00b7 '+P.f(d.tons)+' T'+(isNL?'':' \u00b7 '+rate+'% diverted')+' \u2014 click to open';
+h+='<div class="tr-col" title="'+P.esc(tip)+'" onclick="P.openMo(\''+k+'\')" style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">';
 if(!isNL)h+='<div style="font-size:.5rem;font-weight:700;color:'+rc+';margin-bottom:2px">'+rate+'%</div>';
 h+='<div style="width:100%;max-width:32px;display:flex;flex-direction:column;border-radius:3px;overflow:hidden">';
 h+='<div style="height:'+lfH+'px;background:rgba(220,38,38,.25)"></div>';
@@ -3569,19 +3620,28 @@ var av,bv;
 if(pref==='added_desc'||pref==='added_asc'){av=a.created_at||'';bv=b.created_at||'';}
 else if(pref==='num_desc'||pref==='num_asc'){av=String(a.ticket_number||'');bv=String(b.ticket_number||'');}
 else if(pref==='driver_asc'||pref==='driver_desc'){av=String(a.driver_name||'');bv=String(b.driver_name||'');}
+else if(pref==='zone_asc'||pref==='zone_desc'){av=String(a.zone||'');bv=String(b.zone||'');}
 else{av=a.ticket_date||'';bv=b.ticket_date||'';}
 if(!av&&!bv)return 0;if(!av)return 1;if(!bv)return -1;
 var cmp=(pref==='num_desc'||pref==='num_asc')?av.localeCompare(bv,undefined,{numeric:true}):av.localeCompare(bv);
 return pref.endsWith('_desc')?-cmp:cmp;});
 return arr;},
+// v2.10.0 — click a column heading to sort; click again to flip
+_SORTL:{added_desc:'Newest added',added_asc:'Oldest added',date_desc:'Date: newest',date_asc:'Date: oldest',tons_desc:'Heaviest load',tons_asc:'Lightest load',div_desc:'Best diversion %',div_asc:'Worst diversion %',num_desc:'Ticket # high–low',num_asc:'Ticket # low–high',driver_asc:'Driver A–Z',driver_desc:'Driver Z–A',zone_asc:'Zone A–Z',zone_desc:'Zone Z–A'},
+_th(col,label,cls){var pref=P._getSortPref(),on=pref.indexOf(col+'_')===0,arr=on?(pref.slice(-4)==='_asc'?' ↑':' ↓'):'';
+return '<th class="srt'+(cls?' '+cls:'')+(on?' on':'')+'" onclick="event.stopPropagation();P.sortBy(\''+col+'\')" title="Sort by '+label+'">'+label+arr+'</th>';},
+sortBy(col){var pref=P._getSortPref(),first=(col==='driver'||col==='zone')?'_asc':'_desc',other=first==='_asc'?'_desc':'_asc';
+P.setSortPref(pref===col+first?col+other:col+first);},
 setSortPref(val){try{localStorage.setItem('ds_client_sort',val);}catch(e){}
-// Sync any dropdown
-['dSort','moSort'].forEach(function(id){var el=document.getElementById(id);if(el&&el.value!==val)el.value=val;});
+// Sync any dropdown (adds the option when a heading click picked one it doesn't list)
+['dSort','moSort'].forEach(function(id){var el=document.getElementById(id);if(!el)return;
+if(![].some.call(el.options,function(o){return o.value===val;})){var o=document.createElement('option');o.value=val;o.textContent=P._SORTL[val]||val;el.appendChild(o);}
+if(el.value!==val)el.value=val;});
 // Re-render dashboard table if visible
 try{if(P.cp&&P.tx&&document.getElementById('dTable'))P.renderTbl(P.tx);}catch(e){}
 // Re-render month modal if open
 try{if(document.getElementById('moList')&&P._mtx)P.renderMoTix(P._mtx);}catch(e){}
-P.toast('Sorted: '+({added_desc:'Newest added',added_asc:'Oldest added',date_desc:'Date: newest',date_asc:'Date: oldest'}[val]||val));},
+P.toast('Sorted: '+(P._SORTL[val]||val));},
 toggleNavMenu(ev){if(ev)ev.stopPropagation();var m=document.getElementById('navMenu'),b=document.getElementById('navMenuBtn');if(!m)return;var o=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',o?'true':'false');},
 closeNavMenu(){var m=document.getElementById('navMenu'),b=document.getElementById('navMenuBtn');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');},
 
@@ -3607,6 +3667,9 @@ muts.forEach(function(m){
 if(net>0){for(var i=0;i<net;i++)history.pushState({dsOv:1},'');}
 else if(net<0&&history.state&&history.state.dsOv){skip++;history.go(net);}
 }).observe(document.body,{childList:true});
+// v2.10.0 — Escape closes the open view on a keyboard (desktop)
+document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var em=document.getElementById('emailMenu');if(em){em.remove();return;}
+var kids=document.body.children;for(var i=kids.length-1;i>=0;i--){if(isOv(kids[i])){kids[i].remove();return;}}});
 window.addEventListener('popstate',function(){
 if(skip>0){skip--;return;}
 var kids=document.body.children;
