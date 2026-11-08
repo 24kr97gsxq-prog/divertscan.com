@@ -294,6 +294,18 @@ background:var(--card);border:1px solid var(--border);border-radius:var(--r);box
 .topnav-btn{color:var(--text-m);text-align:left;font-size:.82rem}
 .signout-btn{width:100%}
 }
+/* v2.9.7 — full-screen views (Month, Ticket, Driver, Gallery, Edit) reuse .topnav
+   for their header. The phone rule above turns .topnav-right into the hamburger
+   dropdown, which hid their XLSX / PDF / Email / Close buttons on phones. Those
+   headers are not #nav, so keep their buttons in a row, always visible. */
+.topnav:not(#nav){flex-wrap:nowrap;height:auto;min-height:56px;padding:6px 12px;padding-top:max(6px,env(safe-area-inset-top));gap:8px;overflow:visible}
+.topnav:not(#nav) .topnav-brand{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;border-right:none;margin:0;padding:0}
+.topnav:not(#nav) .topnav-right{display:flex;position:static;flex-direction:row;align-items:center;flex-wrap:nowrap;gap:6px;min-width:0;margin-left:auto;
+background:none;border:none;box-shadow:none;padding:0}
+.topnav:not(#nav) .topnav-right>div{min-height:36px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.mo-dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.mo-dl .b{min-height:44px;font-size:.8rem}
+@media(max-width:380px){.topnav:not(#nav) .topnav-right>div{padding-left:9px!important;padding-right:9px!important}}
 .portal-foot{text-align:center;padding:18px 0 26px;font-size:.66rem;color:var(--text-d)}
 .portal-foot .build-stamp{margin-top:3px}
 select.fi{padding-right:30px!important;text-overflow:ellipsis}
@@ -594,7 +606,7 @@ formula:'INBOUND WEIGHT - LANDFILL WEIGHT = DIVERTED WEIGHT'
 var P={
 // STANDING RULE: bump VERSION and set BUILD to the deploy date on every
 // change that ships. Rendered in the nav so anyone can see the build.
-VERSION:'2.9.6', BUILD:'2026-11-05',
+VERSION:'2.9.7', BUILD:'2026-11-08',
 
 // v2.8.2 — MONTHS ALREADY REPORTED DO NOT CHANGE. Robert, Sep 19 2026:
 // "Do not change any previous percentages that we have already reported
@@ -1369,7 +1381,7 @@ el.innerHTML='<div class="topnav" style="z-index:201">'+
   '<div class="topnav-right">'+
     '<div class="b bsm" onclick="P.exportDriverDtlXLSX()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">XLSX</div>'+
     '<div class="b bsm" onclick="P.exportDriverDtlPDF()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">PDF</div>'+
-    '<div class="b bsm" onclick="P.emailDriverDtl()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem"></div>'+
+    '<div class="b bsm" onclick="P.emailDriverDtl()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">Email</div>'+
     (hasToken?'<div class="b bsm" onclick="P.openDriverLoadbook(\''+d.token+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">Loadbook</div>':'')+
     '<div onclick="document.getElementById(\'drvDtl\').remove()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕</div>'+
   '</div></div>'+
@@ -1915,13 +1927,20 @@ var mh='';Object.keys(MT).forEach(function(k){if(mc[k]<=0)return;var pct=tons>0?
 mh+='<div class="mb"><div class="ml">'+MT[k].i+' '+MT[k].n+'</div><div class="mt"><div class="mf" style="width:'+pct+'%;background:'+MT[k].c+'"></div></div><div class="mp">'+pct.toFixed(1)+'%<span class="mpt">'+P.f(mc[k])+' T</span></div></div>';});
 var el=document.createElement('div');el.id='moDtl';
 el.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch';
-el.innerHTML='<div class="topnav" style="z-index:201"><div class="topnav-brand" style="border-right:none">'+label+'</div>'+
+el.innerHTML='<div class="topnav" style="z-index:201">'+
+'<div onclick="document.getElementById(\'moDtl\').remove()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;min-height:36px;display:inline-flex;align-items:center;flex-shrink:0">‹ Back</div>'+
+'<div class="topnav-brand" style="border-right:none">'+label+'</div>'+
 '<div class="topnav-right">'+
-'<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">XLSX</div>'+
+'<div class="b bsm" onclick="P.exportMoXLSX(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">Excel</div>'+
 '<div class="b bsm" onclick="P.genPDF(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem">PDF</div>'+
-'<div class="b bsm" onclick="P.emailRpt(\''+key+'\')" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem"></div>'+
-'<div onclick="document.getElementById(\'moDtl\').remove()" style="background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-size:.7rem;font-weight:700;padding:6px 12px;border-radius:6px;cursor:pointer">✕</div></div></div>'+
+'</div></div>'+
 '<div class="wrap">'+
+// v2.9.7 — this month's downloads, big enough to tap on a phone
+'<div class="c"><div class="ct" style="margin:0 0 6px">Download '+label+' report</div><div class="mo-dl">'+
+'<div class="b bp" onclick="P.exportMoXLSX(\''+key+'\')">↓ Excel</div>'+
+'<div class="b bo" onclick="P.genPDF(\''+key+'\')">↓ PDF</div>'+
+'<div class="b bo" onclick="P.emailRpt(\''+key+'\')">Email</div>'+
+'</div></div>'+
 '<div class="c"><div class="sg">'+
 '<div class="sc"><div class="sv">'+tix.length+'</div><div class="sl">Tickets</div></div>'+
 '<div class="sc"><div class="sv">'+P.f(tons)+'</div><div class="sl">Total T</div></div>'+
@@ -3516,6 +3535,24 @@ await P.loadPj();P.showApp();return;}}}catch(x){}
 document.getElementById('vLogin').classList.remove('hidden');}
 };
 document.addEventListener('click',function(ev){var m=document.getElementById('navMenu');if(m&&m.classList.contains('open')&&!m.contains(ev.target))P.closeNavMenu();});
+// v2.9.7 — phone Back (swipe or button) closes the open full-screen view instead
+// of leaving the portal. Each view opened adds one history step; closing it with
+// its own button removes that step again. Nothing here touches data.
+(function(){try{
+var OV=['tkDtl','moDtl','drvDtl','galleryDtl','editProjDtl'],skip=0,isOv=function(n){return n&&n.nodeType===1&&OV.indexOf(n.id)>=0;};
+new MutationObserver(function(muts){var net=0;
+muts.forEach(function(m){
+  m.addedNodes.forEach(function(n){if(isOv(n))net++;});
+  m.removedNodes.forEach(function(n){if(isOv(n)&&!n._byBack)net--;});});
+if(net>0){for(var i=0;i<net;i++)history.pushState({dsOv:1},'');}
+else if(net<0&&history.state&&history.state.dsOv){skip++;history.go(net);}
+}).observe(document.body,{childList:true});
+window.addEventListener('popstate',function(){
+if(skip>0){skip--;return;}
+var kids=document.body.children;
+for(var i=kids.length-1;i>=0;i--){if(isOv(kids[i])){kids[i]._byBack=true;kids[i].remove();return;}}
+});
+}catch(e){}})();
 P.init();
 </script>
 </body>
